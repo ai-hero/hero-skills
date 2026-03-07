@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: validate-plugin
+        name: Validate hero-skills plugin
+        entry: ./scripts/validate.sh
+        language: script
+        pass_filenames: false
+        always_run: true

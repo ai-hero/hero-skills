@@ -1,11 +1,11 @@
 ---
-name: hero-skill
+name: hero-new-skill
 # prettier-ignore
 description: Create Claude Code skills, subagents, rules, or hooks. Guides through creating well-structured, reusable components that extend Claude's capabilities. Use for "create a skill", "add guidelines", "slash command", or teaching Claude new behaviors.
 argument-hint: <description of what you want Claude to do>
 ---
 
-# Hero Skill - Create Claude Code Components
+# Hero New Skill - Create Claude Code Components
 
 Create skills and other components that extend Claude's capabilities.
 

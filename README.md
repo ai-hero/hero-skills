@@ -43,7 +43,7 @@ Skills are immediately available in any Claude Code session. No restart needed.
 | `/hero-health` | Kubernetes cluster health check (nodes, pods, deployments, ArgoCD) |
 | `/hero-secure` | Scan dependencies (Dependabot) and containers (Docker Scout) for CVEs |
 | `/hero-architect` | Generate architecture specs with Mermaid diagrams in `specs/` |
-| `/hero-skill` | Create new Claude Code skills, rules, or hooks |
+| `/hero-new-skill` | Create new Claude Code skills, rules, or hooks |
 
 ## HERO.md
 
