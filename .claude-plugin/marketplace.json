@@ -1,0 +1,10 @@
+{
+  "name": "hero-skills",
+  "owner": { "name": "ai-hero" },
+  "metadata": { "description": "AI Hero skills for agent development and consulting" },
+  "plugins": [{
+    "name": "hero-skills",
+    "source": "./",
+    "description": "AI Hero agent patterns and workflows"
+  }]
+}

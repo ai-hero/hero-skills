@@ -1,0 +1,8 @@
+{
+  "name": "hero-skills",
+  "description": "AI Hero agent patterns and workflows for consulting and development",
+  "version": "1.0.0",
+  "author": { "name": "AI Hero Inc", "url": "https://github.com/ai-hero" },
+  "keywords": ["agents", "consulting", "bot-methodology", "ai-hero"],
+  "skills": "./skills/"
+}
