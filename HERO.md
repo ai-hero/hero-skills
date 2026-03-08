@@ -20,7 +20,7 @@
 - argocd: false
 
 ## Code Quality
-- pre-commit: false
+- pre-commit: true
 
 ## Projects
 
