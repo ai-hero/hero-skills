@@ -1,5 +1,5 @@
 ---
-name: hero-new
+name: hero-new-project
 # prettier-ignore
 description: Initialize a new project. Supports standalone repos or adding a subproject to an existing monorepo. Scaffolds Python (uv), full-stack (FastAPI + Next.js/Vite with shadcn), or Node.js projects with CLAUDE.md and pre-commit config.
 argument-hint: <project-name> [description]
