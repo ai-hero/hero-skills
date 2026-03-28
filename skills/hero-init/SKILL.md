@@ -24,15 +24,16 @@ Each `/hero-*` skill needs specific information to work well. This skill figures
 
 | Skill | Needs |
 |-------|-------|
-| `/hero-commit` | Commit convention, linters/formatters, issue prefix |
-| `/hero-push` | Default branch, branch convention, CI platform, issue prefix |
-| `/hero-plan` | PM tool + MCP server, branch naming, project list |
-| `/hero-implement` | Linters, formatters, type-checkers, test commands, framework |
-| `/hero-test` | Language, framework, test/dev commands, ports |
-| `/hero-cicd` | CI platform, workflow names, registry |
-| `/hero-health` | Deployment platform, namespaces, ArgoCD |
-| `/hero-secure` | Registry, language/framework, dependency files |
+| `/hero-commit` | Commit convention, pre-commit run command, issue prefix |
+| `/hero-push` | Default branch, branch convention, hosting platform (`gh`/`glab`), issue prefix |
+| `/hero-plan` | PM tool + MCP server name, branch template, issue prefix, project list |
+| `/hero-implement` | Lint/format/typecheck commands, test command, framework, install command |
+| `/hero-test` | Language, framework, test/dev/install commands, ports, dependency file |
+| `/hero-cicd` | CI platform, workflow names, registry, required status checks |
+| `/hero-health` | Deployment platform, namespaces, ArgoCD, health check endpoints |
+| `/hero-secure` | Registry, language/framework, dependency files per project |
 | `/hero-architect` | Repo type, project list, deployment platform |
+| `/hero-new-project` | Repo type, coding conventions, code quality tools, project scaffold patterns |
 | `/hero-setup` | Required tools, recommended tools, MCP servers |
 
 ## Instructions
@@ -103,11 +104,12 @@ ls LICENSE CONTRIBUTING.md CODE_OF_CONDUCT.md CODEOWNERS .github/PULL_REQUEST_TE
 ```
 
 **What to look for:**
+- Remote URL → hosting platform: `github.com` → GitHub (`gh`), `gitlab.com` → GitLab (`glab`), `bitbucket.org` → Bitbucket
 - Multiple contributors in git log → team project with shared conventions
 - LICENSE + CONTRIBUTING.md → open-source, may need DCO sign-off
 - CODEOWNERS → enforced code review ownership
 - PR templates → structured PR process
-- Branch naming patterns in `git branch -r` (e.g., `feature/PROJ-123-*`, `fix/*`)
+- Branch naming patterns in `git branch -r` → extract the **branch template** (e.g., `feature/PROJ-123-<desc>`, `fix/<desc>`, `<prefix>/<issue-id>-<desc>`)
 - Commit message patterns in `git log` (e.g., `feat:`, `fix:`, `PROJ-123:`)
 
 #### 2b: Project Management & Issue Tracking
@@ -256,8 +258,8 @@ ls .editorconfig 2>/dev/null
 #### 2g: Project Structure & Tech Stack
 
 ```bash
-# Root project files
-ls pyproject.toml package.json go.mod Cargo.toml build.gradle pom.xml 2>/dev/null
+# Root project files (dependency files)
+ls pyproject.toml package.json go.mod Cargo.toml build.gradle pom.xml requirements.txt 2>/dev/null
 
 # Monorepo indicators
 ls pnpm-workspace.yaml lerna.json nx.json turbo.json 2>/dev/null
@@ -271,9 +273,30 @@ ls apps/*/package.json packages/*/package.json services/*/pyproject.toml 2>/dev/
 grep -E "fastapi|django|flask|starlette" pyproject.toml 2>/dev/null
 grep -E "next|vite|remix|astro|nuxt|svelte|express|nestjs|hono" package.json 2>/dev/null
 
+# Task runners / command wrappers (these define canonical commands)
+ls Makefile justfile Taskfile.yml 2>/dev/null
+cat Makefile 2>/dev/null | grep -E "^[a-zA-Z_-]+:" | head -20
+cat justfile 2>/dev/null | grep -E "^[a-zA-Z_-]+:" | head -20
+
+# Package scripts (canonical command source for JS/TS)
+grep -A30 '"scripts"' package.json 2>/dev/null
+
+# Python scripts (canonical command source)
+grep -A10 "\[project.scripts\]\|\[tool.poetry.scripts\]" pyproject.toml 2>/dev/null
+
+# Install commands
+# Python: look for uv, pip, poetry, conda
+grep -E "uv sync|pip install|poetry install|conda" Makefile justfile README.md 2>/dev/null | head -5
+# JS: look for which package manager
+ls pnpm-lock.yaml yarn.lock package-lock.json bun.lockb 2>/dev/null
+
 # Test setup
 ls pytest.ini conftest.py jest.config* vitest.config* playwright.config* cypress.config* 2>/dev/null
 grep -E "test-command\|scripts.*test\|pytest\|jest\|vitest" pyproject.toml package.json 2>/dev/null
+
+# Lint / format / typecheck commands
+grep -E "lint|format|check|typecheck|mypy|ruff|eslint|prettier|biome" Makefile justfile 2>/dev/null | head -10
+grep -E '"lint"|"format"|"check"|"typecheck"' package.json 2>/dev/null
 
 # Dev server
 grep -E "dev.*command\|scripts.*dev\|scripts.*start\|uvicorn\|gunicorn" pyproject.toml package.json 2>/dev/null
@@ -285,6 +308,11 @@ grep -E "port\|PORT\|:3000\|:8000\|:8080\|:5173\|:4000" pyproject.toml package.j
 **What to look for:**
 - Language and framework from dependency files
 - Monorepo structure (workspaces, nx, turborepo, multiple pyproject.toml)
+- **Dependency file** per project (pyproject.toml, package.json, go.mod, etc.) — needed by `/hero-secure` and `/hero-test`
+- **Lock file** → identifies the package manager (pnpm-lock.yaml → pnpm, yarn.lock → yarn, etc.)
+- **Install command** (e.g., `uv sync`, `pnpm install`) — needed by `/hero-test` and `/hero-implement` before running
+- **Task runner** (Makefile, justfile, Taskfile) — if present, prefer its targets as canonical commands (e.g., `make test` over `uv run pytest`)
+- **Exact lint/format/typecheck commands** — not just tool names; `/hero-implement` needs runnable commands
 - Test commands from scripts section or config files
 - Dev server commands and default ports
 - Entry points for CLIs
@@ -405,11 +433,13 @@ Based on your investigation, present findings grouped by **what the hero skills 
 **Group findings into these categories, presented in this order:**
 
 #### Group 1: "For committing and pushing code" (`/hero-commit`, `/hero-push`)
+- Hosting platform (GitHub, GitLab, Bitbucket — from remote URL)
 - Commit convention (evidence from git log patterns)
-- Branch naming convention (evidence from branch -r patterns)
+- Branch naming convention and branch template (evidence from branch -r patterns)
 - Default branch
 - Pre-commit hooks and what they run
 - Linters, formatters
+- Task runner (if Makefile/justfile provides commit/push/lint targets)
 
 #### Group 2: "For planning and tracking work" (`/hero-plan`)
 - PM tool (evidence from templates, commit messages, integrations)
@@ -417,8 +447,11 @@ Based on your investigation, present findings grouped by **what the hero skills 
 - MCP server name if applicable
 
 #### Group 3: "For implementing and testing" (`/hero-implement`, `/hero-test`)
-- Per-project: language, framework, test command, dev command, port
+- Per-project: language, framework, dependency file, install command
+- Per-project: test, lint, format, typecheck commands (prefer task runner targets if available)
+- Per-project: dev command, port
 - Type checkers
+- Task runner (Makefile, justfile, etc.) and its available targets
 - Monorepo vs single repo structure
 
 #### Group 4: "For CI/CD and deployment" (`/hero-cicd`, `/hero-health`, `/hero-secure`)
@@ -558,15 +591,19 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 
 ## Repository
 - type: <single|monorepo>
+- hosting: <github|gitlab|bitbucket|other>
 - default-branch: <detected>
 - branch-convention: <detected-or-confirmed>
+- branch-template: <e.g., "feature/<issue-prefix>-<issue-id>-<desc>", "fix/<desc>">
 - commit-convention: <detected-or-confirmed>
+- task-runner: <make|just|taskfile|npm-scripts|none>
 
 ## CI/CD
 - platform: <detected>
 - workflows:
   - <workflow-1>
   - <workflow-2>
+- required-checks: <list of status checks that must pass before merge, if detectable>
 
 ## Deployment
 - platform: <detected-or-confirmed>
@@ -671,7 +708,12 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - path: <detected>
 - language: <detected>
 - framework: <detected>
+- dependency-file: <pyproject.toml|package.json|go.mod|Cargo.toml>
+- install-command: <e.g., "uv sync", "pnpm install", "go mod download">
 - test-command: <detected-or-confirmed>
+- lint-command: <e.g., "ruff check .", "pnpm lint", "make lint">
+- format-command: <e.g., "ruff format .", "pnpm format", "make format">
+- typecheck-command: <e.g., "mypy .", "pnpm typecheck", "make check">
 - dev-command: <detected-or-confirmed>
 - port: <detected-or-confirmed>
 ```
@@ -719,12 +761,16 @@ Show the generated file and a one-line-per-skill summary:
 HERO.md written to <root>/HERO.md
 
 How your hero skills will use this:
-  /hero-commit  → conventional commits, ruff + black pre-commit
-  /hero-push    → PRs against main, link LIN-### issues
-  /hero-plan    → fetch from Linear (mcp__linear), branch as LIN-###-<desc>
-  /hero-test    → uv run pytest on :8000
-  /hero-cicd    → check GitHub Actions: ci, build, deploy
-  /hero-health  → k8s namespaces: staging, production
+  /hero-commit    → conventional commits, pre-commit runs ruff + black + mypy
+  /hero-push      → PRs via gh against main, link LIN-### issues
+  /hero-plan      → fetch from Linear (mcp__linear), branch as feature/LIN-###-<desc>
+  /hero-implement → uv sync, then ruff check + ruff format + mypy for verification
+  /hero-test      → uv run pytest on :8000, install via uv sync
+  /hero-cicd      → check GitHub Actions: ci, build, deploy
+  /hero-health    → k8s namespaces: staging, production
+  /hero-secure    → scan pyproject.toml, check ghcr.io registry
+  /hero-architect → single repo, Python + FastAPI, k8s deployment
+  /hero-setup     → require node, uv, gh, docker; recommend pre-commit, linear CLI
 
 Does this look right? [Y/n]
 ```
@@ -751,13 +797,13 @@ Should HERO.md be committed to the repo?
 
 When `--update` is passed:
 
-1. Read existing `HERO.md`
-2. Re-run investigation (Step 2)
-3. Compare findings against current config
-4. Show only what changed or what's new
+1. Read existing `HERO.md` and `CLAUDE.md`
+2. Re-run full investigation (Step 3, all sub-steps)
+3. Compare findings against current config — flag what changed, what's new, and what was removed
+4. Show only deltas: `[CHANGED]`, `[NEW]`, `[REMOVED]` markers
 5. Ask user to confirm updates
-6. Preserve any custom content or comments the user added
-7. Write updated file
+6. Preserve any custom content or comments the user added to both files
+7. Write updated `HERO.md` and refresh `CLAUDE.md` summary sections
 
 ## Key Principles
 
