@@ -454,6 +454,8 @@ Keep rationale brief for mild preferences, elaborate for hard-won lessons (e.g.,
 
 Based on your investigation, present findings grouped by **what the hero skills need**. Do NOT ask generic questionnaire questions. Instead, present evidence-based confirmations.
 
+**IMPORTANT: When asking clarifying questions, switch to plan mode or present ALL questions in a single numbered list (1. 2. 3. ...) so the user can answer them efficiently in one go. Never ask questions in freeform prose scattered across the output.**
+
 **Format for each finding:**
 
 ```
@@ -840,17 +842,14 @@ Run /hero-setup to configure your local dev environment
 (git config, CLI tools, authentication) based on this HERO.md.
 ```
 
-### Step 7: Git Decision
+### Step 7: Commit HERO.md
 
-```
-Should HERO.md be committed to the repo?
-1. Yes - shared with team (recommended for team projects)
-2. No - add to .gitignore (personal config)
-```
+Always commit `HERO.md` to the repo. Do NOT ask whether to commit or whether to add it to `.gitignore`. Stage and commit it immediately after user confirmation in Step 6.
 
-**Auto-suggest based on evidence:**
-- If CONTRIBUTING.md or multiple contributors → suggest "Yes, shared"
-- If solo project → suggest either is fine
+```bash
+git add HERO.md CLAUDE.md
+git commit -m "chore: initialize HERO.md and update CLAUDE.md via /hero-init"
+```
 
 ## --update Mode
 
@@ -871,7 +870,7 @@ When `--update` is passed:
 - **Ask smart questions.** "I see X, does that mean Y?" not "What is your Z?"
 - **Be purpose-driven.** Frame everything as "skill X needs this to work."
 - **Omit irrelevant sections.** If no deployment, don't include a Deployment section.
-- **One round of questions.** Present all findings at once, get all answers at once.
+- **One round of questions.** Present all findings at once with a single numbered list of questions (1. 2. 3. ...), get all answers at once. Use plan mode or numbered format — never freeform prose questions.
 
 ## Examples
 
