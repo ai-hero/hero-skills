@@ -35,6 +35,8 @@ Each `/hero-*` skill needs specific information to work well. This skill figures
 | `/hero-architect` | Repo type, project list, deployment platform |
 | `/hero-new-project` | Repo type, coding conventions, code quality tools, project scaffold patterns |
 | `/hero-setup` | Required tools, recommended tools, MCP servers |
+| `/hero-reflect` | Coding agent, coding conventions, lint/format/typecheck commands |
+| `/hero-meta` | (internal) Plugin structure validation |
 
 ## Instructions
 
@@ -86,7 +88,47 @@ If `HERO.md` exists and `--update` was not passed, show current config and ask i
 
 Launch a thorough investigation of the repository. Use an Explore subagent or do it yourself — the goal is to gather **evidence** for every configuration decision.
 
-#### 2a: Repository & Collaboration Model
+#### 2a: Coding Agent & AI Tooling
+
+Detect which AI coding agent(s) the team uses. This must come first — it determines what hooks, configs, and integrations are possible.
+
+```bash
+# Claude Code
+ls .claude/ .claude-plugin/ CLAUDE.md .claude/settings.json 2>/dev/null
+ls .claude/hooks/ 2>/dev/null
+cat .claude/settings.json 2>/dev/null
+
+# Cursor
+ls .cursor/ .cursorrules .cursor/rules/ 2>/dev/null
+cat .cursorrules 2>/dev/null | head -20
+
+# Windsurf
+ls .windsurf/ .windsurfrules 2>/dev/null
+
+# Copilot
+ls .github/copilot-instructions.md .copilot/ 2>/dev/null
+
+# Aider
+ls .aider* 2>/dev/null
+
+# Other signals
+ls .ai/ .llm/ 2>/dev/null
+grep -r "claude\|cursor\|copilot\|windsurf\|aider" .pre-commit-config.yaml 2>/dev/null | head -5
+```
+
+**What to look for:**
+- `.claude/` directory or `CLAUDE.md` → Claude Code user — can use hooks, skills, MCP servers
+- `.cursorrules` or `.cursor/rules/` → Cursor user — rules files, no hook system
+- `.github/copilot-instructions.md` → Copilot user — instructions file
+- `.windsurfrules` → Windsurf user — rules file
+- Multiple signals → team uses different agents — note all of them
+- Pre-commit hooks referencing AI tools → existing self-review or lint integration
+
+**If no coding agent detected**, ask:
+*"What AI coding agent does your team use? (Claude Code, Cursor, Windsurf, Copilot, other)"*
+This determines what hooks and integrations hero skills can set up (e.g., pre-commit self-review, agent-specific rules files).
+
+#### 2b: Repository & Collaboration Model
 
 ```bash
 # Basic structure
@@ -112,7 +154,7 @@ ls LICENSE CONTRIBUTING.md CODE_OF_CONDUCT.md CODEOWNERS .github/PULL_REQUEST_TE
 - Branch naming patterns in `git branch -r` → extract the **branch template** (e.g., `feature/PROJ-123-<desc>`, `fix/<desc>`, `<prefix>/<issue-id>-<desc>`)
 - Commit message patterns in `git log` (e.g., `feat:`, `fix:`, `PROJ-123:`)
 
-#### 2b: Project Management & Issue Tracking
+#### 2c: Project Management & Issue Tracking
 
 ```bash
 # Issue templates often reveal the PM tool
@@ -134,7 +176,7 @@ grep -r "linear\|jira\|asana\|shortcut" .github/ 2>/dev/null | head -5
 - Linear/Jira mentions in templates → identifies PM tool
 - GitHub issue references (`#123`, `Fixes #123`) → GitHub Issues
 
-#### 2c: CI/CD Platform & Workflows
+#### 2d: CI/CD Platform & Workflows
 
 ```bash
 # GitHub Actions
@@ -157,7 +199,7 @@ grep -l "test\|lint\|build\|deploy\|release" .github/workflows/*.yml 2>/dev/null
 - Whether CI runs on PR, push to main, or both
 - Required status checks (signals what must pass before merge)
 
-#### 2d: Required CLI Tools & Developer Toolchain
+#### 2e: Required CLI Tools & Developer Toolchain
 
 ```bash
 # Version control & hosting
@@ -200,7 +242,7 @@ which pre-commit 2>/dev/null && pre-commit --version
 - Note minimum versions if the project depends on specific features
 - These go into HERO.md `## Developer Setup` as team-shared requirements — individual installation/auth is handled by `/hero-setup`
 
-#### 2e: Deployment & Infrastructure
+#### 2f: Deployment & Infrastructure
 
 ```bash
 # Container
@@ -231,7 +273,7 @@ grep -r "namespace\|environment\|staging\|production" k8s/ .github/workflows/ 2>
 - ArgoCD references → GitOps workflow
 - Environment names → staging, production, etc.
 
-#### 2f: Code Quality & Developer Tooling
+#### 2g: Code Quality & Developer Tooling
 
 ```bash
 # Pre-commit
@@ -255,7 +297,7 @@ ls .editorconfig 2>/dev/null
 - mypy/pyright/tsc strict → type checker
 - What's enforced in CI vs. just local
 
-#### 2g: Project Structure & Tech Stack
+#### 2h: Project Structure & Tech Stack
 
 ```bash
 # Root project files (dependency files)
@@ -317,7 +359,7 @@ grep -E "port\|PORT\|:3000\|:8000\|:8080\|:5173\|:4000" pyproject.toml package.j
 - Dev server commands and default ports
 - Entry points for CLIs
 
-#### 2h: Coding Conventions & Team Patterns
+#### 2i: Coding Conventions & Team Patterns
 
 Investigate the codebase for established conventions the team follows. These are critical — Claude must follow the same patterns the team uses.
 
@@ -431,6 +473,11 @@ Based on your investigation, present findings grouped by **what the hero skills 
 ```
 
 **Group findings into these categories, presented in this order:**
+
+#### Group 0: "Your coding agent" (`/hero-reflect`, `/hero-setup`)
+- Coding agent (Claude Code, Cursor, Windsurf, etc.)
+- Whether hooks/pre-commit integration is possible
+- Whether to set up `/hero-reflect` as a pre-commit self-review
 
 #### Group 1: "For committing and pushing code" (`/hero-commit`, `/hero-push`)
 - Hosting platform (GitHub, GitLab, Bitbucket — from remote URL)
@@ -583,6 +630,16 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 ```markdown
 # Hero Configuration
 <!-- Generated by /hero-init. Re-run with /hero-init --update to refresh. -->
+
+## Coding Agent
+- primary: <claude-code|cursor|windsurf|copilot|aider|other>
+- agents: <list all if team uses multiple>
+- hooks: <true|false — whether the agent supports pre-commit/hook integration>
+- rules-file: <CLAUDE.md|.cursorrules|.windsurfrules|copilot-instructions.md|none>
+- self-review: <true|false — whether /hero-reflect is wired into pre-commit>
+<!-- If self-review is enabled, the pre-commit hook runs:
+     claude -p "/hero-reflect" (for Claude Code)
+-->
 
 ## Project Management
 - tool: <detected-or-confirmed>
@@ -771,6 +828,7 @@ How your hero skills will use this:
   /hero-secure    → scan pyproject.toml, check ghcr.io registry
   /hero-architect → single repo, Python + FastAPI, k8s deployment
   /hero-setup     → require node, uv, gh, docker; recommend pre-commit, linear CLI
+  /hero-reflect   → self-review via claude -p "/hero-reflect" in pre-commit
 
 Does this look right? [Y/n]
 ```
