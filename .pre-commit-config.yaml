@@ -19,8 +19,8 @@ repos:
 
       - id: hero-update
         name: "Hero Update: sync HERO.md"
-        entry: claude -p "/hero-update --staged-only"
-        language: system
+        entry: ./scripts/hero-update-precommit.sh
+        language: script
         pass_filenames: false
         always_run: true
         stages: [pre-commit]

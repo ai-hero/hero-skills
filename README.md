@@ -104,7 +104,7 @@ That's it. Each command reads your `HERO.md` config and adapts to your stack aut
 
 Every skill reads `HERO.md` from your repo root. It declares your stack so skills don't have to guess. **HERO.md is committed to the repo** — it's team-shared, so every developer and every hero skill works from the same config.
 
-To keep it in sync automatically, wire `/hero-update` into your pre-commit hooks. Whenever you commit code that changes your dependencies, CI config, or project structure, HERO.md updates alongside it.
+To keep it in sync automatically, wire `/hero-update` into your pre-commit hooks. A fast bash gate script checks staged files first — most commits skip Claude entirely and finish in milliseconds. Only when you change dependencies, CI config, or project structure does it invoke Claude to sync HERO.md.
 
 Here's what a minimal config looks like:
 

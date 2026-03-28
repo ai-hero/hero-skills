@@ -21,20 +21,22 @@ Investigate the current codebase and update `HERO.md` so it always reflects the 
 
 ## Pre-commit Integration
 
-Add to `.pre-commit-config.yaml` so HERO.md stays in sync on every commit:
+For fast pre-commit, use the gate script that checks staged files first and only invokes Claude when something HERO.md-relevant changed. Most commits skip Claude entirely and finish in milliseconds.
 
 ```yaml
   - repo: local
     hooks:
       - id: hero-update
         name: "Hero Update: sync HERO.md"
-        entry: claude -p "/hero-update --staged-only"
-        language: system
+        entry: ./scripts/hero-update-precommit.sh
+        language: script
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
         verbose: true
 ```
+
+The gate script (`scripts/hero-update-precommit.sh`) pattern-matches staged file names against HERO.md-relevant patterns (dependency files, CI configs, Dockerfiles, linter configs, coding agent configs, task runners). If nothing matches, it exits 0 instantly. If something matches, it runs `claude -p "/hero-update --staged-only"`.
 
 **Requires:** Claude Code CLI installed and authenticated. Only works with Claude Code as the coding agent.
 
