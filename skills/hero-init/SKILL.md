@@ -33,6 +33,7 @@ Each `/hero-*` skill needs specific information to work well. This skill figures
 | `/hero-health` | Deployment platform, namespaces, ArgoCD |
 | `/hero-secure` | Registry, language/framework, dependency files |
 | `/hero-architect` | Repo type, project list, deployment platform |
+| `/hero-setup` | Required tools, recommended tools, MCP servers |
 
 ## Instructions
 
@@ -154,7 +155,50 @@ grep -l "test\|lint\|build\|deploy\|release" .github/workflows/*.yml 2>/dev/null
 - Whether CI runs on PR, push to main, or both
 - Required status checks (signals what must pass before merge)
 
-#### 2d: Deployment & Infrastructure
+#### 2d: Required CLI Tools & Developer Toolchain
+
+```bash
+# Version control & hosting
+which gh 2>/dev/null && gh --version
+which git 2>/dev/null && git --version
+
+# Project management CLIs
+which linear 2>/dev/null && linear --version 2>/dev/null
+which jira 2>/dev/null && jira --version 2>/dev/null
+
+# Language runtimes & package managers
+which node 2>/dev/null && node --version
+which python 2>/dev/null && python --version
+which python3 2>/dev/null && python3 --version
+which go 2>/dev/null && go version
+which rustc 2>/dev/null && rustc --version
+which uv 2>/dev/null && uv --version
+which pnpm 2>/dev/null && pnpm --version
+which yarn 2>/dev/null && yarn --version
+which bun 2>/dev/null && bun --version
+which cargo 2>/dev/null && cargo --version
+
+# Infrastructure tools
+which docker 2>/dev/null && docker --version
+which kubectl 2>/dev/null && kubectl version --client 2>/dev/null
+which helm 2>/dev/null && helm version --short 2>/dev/null
+which tofu 2>/dev/null && tofu --version 2>/dev/null
+which terraform 2>/dev/null && terraform --version 2>/dev/null
+which aws 2>/dev/null && aws --version 2>/dev/null
+which gcloud 2>/dev/null && gcloud --version 2>/dev/null | head -1
+which az 2>/dev/null && az --version 2>/dev/null | head -1
+
+# Code quality
+which pre-commit 2>/dev/null && pre-commit --version
+```
+
+**What to look for:**
+- Which tools the project actually requires (cross-reference with deps, CI, Dockerfiles, Makefiles)
+- Distinguish between **required** (project won't build/run without it) vs. **recommended** (nice to have)
+- Note minimum versions if the project depends on specific features
+- These go into HERO.md `## Developer Setup` as team-shared requirements — individual installation/auth is handled by `/hero-setup`
+
+#### 2e: Deployment & Infrastructure
 
 ```bash
 # Container
@@ -185,7 +229,7 @@ grep -r "namespace\|environment\|staging\|production" k8s/ .github/workflows/ 2>
 - ArgoCD references → GitOps workflow
 - Environment names → staging, production, etc.
 
-#### 2e: Code Quality & Developer Tooling
+#### 2f: Code Quality & Developer Tooling
 
 ```bash
 # Pre-commit
@@ -209,7 +253,7 @@ ls .editorconfig 2>/dev/null
 - mypy/pyright/tsc strict → type checker
 - What's enforced in CI vs. just local
 
-#### 2f: Project Structure & Tech Stack
+#### 2g: Project Structure & Tech Stack
 
 ```bash
 # Root project files
@@ -245,7 +289,7 @@ grep -E "port\|PORT\|:3000\|:8000\|:8080\|:5173\|:4000" pyproject.toml package.j
 - Dev server commands and default ports
 - Entry points for CLIs
 
-#### 2g: Coding Conventions & Team Patterns
+#### 2h: Coding Conventions & Team Patterns
 
 Investigate the codebase for established conventions the team follows. These are critical — Claude must follow the same patterns the team uses.
 
@@ -537,6 +581,37 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - formatters: <detected>
 - type-checkers: <detected>
 
+## Developer Setup
+<!-- What every developer needs installed to work on this project.
+     This is team-shared — individual auth/config is handled by /hero-setup. -->
+
+### Required Tools
+<!-- Only tools the project won't build/run/test without -->
+- <tool>: <minimum-version-if-known> — <what it's used for>
+<!-- Examples:
+- node: >=20 — runtime
+- pnpm: >=9 — package manager (NOT npm)
+- uv: >=0.4 — Python package manager
+- docker: any — local dev containers
+- gh: any — PR workflows, CI checks
+- tofu: >=1.6 — infrastructure (NOT terraform)
+- kubectl: any — deployment
+-->
+
+### Recommended Tools
+<!-- Nice to have, but project works without them -->
+<!-- Examples:
+- pre-commit: auto-runs linters on commit
+- linear: CLI for issue management
+-->
+
+### MCP Servers
+<!-- MCP servers that hero skills or Claude need to interact with external tools -->
+<!-- Examples:
+- linear (mcp__linear) — for /hero-plan issue management
+- slack (mcp__slack) — for notifications
+-->
+
 ## Coding Conventions
 <!-- Detected patterns from the codebase. Adapt to the project's language/framework. -->
 <!-- Rationale rules:
@@ -652,6 +727,12 @@ How your hero skills will use this:
   /hero-health  → k8s namespaces: staging, production
 
 Does this look right? [Y/n]
+```
+
+After confirmation, suggest:
+```
+Run /hero-setup to configure your local dev environment
+(git config, CLI tools, authentication) based on this HERO.md.
 ```
 
 ### Step 7: Git Decision
