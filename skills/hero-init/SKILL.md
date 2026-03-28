@@ -36,16 +36,51 @@ Each `/hero-*` skill needs specific information to work well. This skill figures
 
 ## Instructions
 
-### Step 1: Check for Existing Configuration
+### Step 1: Ensure Claude Code is Initialized
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+ls "$ROOT/CLAUDE.md" 2>/dev/null && echo "CLAUDE_EXISTS" || echo "CLAUDE_NEW"
+```
+
+**If `CLAUDE.md` does NOT exist:**
+- Create `CLAUDE.md` at the repo root with a scaffold that includes Tech Stack and Best Practices sections (content will be filled in Step 5 after investigation).
+- For now, create the file with placeholder sections:
+
+```markdown
+# CLAUDE.md
+
+## Tech Stack
+<!-- Auto-managed by /hero-init. See HERO.md for full configuration. -->
+See [HERO.md](./HERO.md) for the full tech stack configuration detected by `/hero-init`.
+
+## Best Practices
+<!-- Auto-managed by /hero-init. See HERO.md for full configuration. -->
+See [HERO.md](./HERO.md) for project conventions, code quality tools, and CI/CD configuration.
+
+## Coding Conventions
+<!-- Auto-managed by /hero-init. See HERO.md for full configuration. -->
+See [HERO.md](./HERO.md) for coding conventions detected from the codebase.
+```
+
+**If `CLAUDE.md` DOES exist:**
+- Read it and check whether it already has `## Tech Stack`, `## Best Practices`, and `## Coding Conventions` sections.
+- If either section is **missing**, append it to the end of the file.
+- If a section exists but does **not** reference `HERO.md`, add a reference line:
+  `See [HERO.md](./HERO.md) for details managed by /hero-init.`
+- **Do not** remove or overwrite any existing content the user has written in these sections — only add the HERO.md pointer if absent.
+
+**Why this matters:** CLAUDE.md is loaded into Claude's context at conversation start. Without a reference to HERO.md here, Claude won't know to consult HERO.md for tech stack decisions (e.g., using OpenTofu instead of Terraform, or a specific framework) or coding conventions (e.g., snake_case, structured logging, no DB mocks in tests). The pointer ensures Claude always reads HERO.md for authoritative project configuration.
+
+### Step 2: Check for Existing HERO.md Configuration
+
+```bash
 ls "$ROOT/HERO.md" 2>/dev/null && echo "EXISTS" || echo "NEW"
 ```
 
 If `HERO.md` exists and `--update` was not passed, show current config and ask if user wants to update it. If `--update`, read the existing file to compare against new findings.
 
-### Step 2: Deep Investigation
+### Step 3: Deep Investigation
 
 Launch a thorough investigation of the repository. Use an Explore subagent or do it yourself — the goal is to gather **evidence** for every configuration decision.
 
@@ -210,7 +245,98 @@ grep -E "port\|PORT\|:3000\|:8000\|:8080\|:5173\|:4000" pyproject.toml package.j
 - Dev server commands and default ports
 - Entry points for CLIs
 
-### Step 3: Synthesize Findings into Smart Questions
+#### 2g: Coding Conventions & Team Patterns
+
+Investigate the codebase for established conventions the team follows. These are critical — Claude must follow the same patterns the team uses.
+
+```bash
+# Existing style guides or contributing docs
+ls CONTRIBUTING.md STYLE_GUIDE.md docs/CONVENTIONS.md docs/STYLE*.md 2>/dev/null
+cat CONTRIBUTING.md 2>/dev/null | head -80
+
+# Existing CLAUDE.md for conventions already documented
+cat CLAUDE.md 2>/dev/null
+
+# Import style — relative vs absolute, aliased paths
+# (sample 5-10 source files from different directories)
+head -20 src/**/*.{ts,tsx,py,go,rs} 2>/dev/null | head -60
+grep -r "from \.\|from src\|from @/\|from ~/\|import \.\|import src" --include="*.py" --include="*.ts" --include="*.tsx" -l 2>/dev/null | head -5
+
+# Naming conventions — sample function/class/variable names
+grep -rE "^(def |class |function |const |export (const|function|class))" --include="*.py" --include="*.ts" --include="*.tsx" --include="*.go" --include="*.rs" 2>/dev/null | head -20
+
+# Error handling patterns
+grep -rE "(try:|except |catch\(|\.catch\(|Result<|anyhow::|thiserror)" --include="*.py" --include="*.ts" --include="*.tsx" --include="*.go" --include="*.rs" 2>/dev/null | head -10
+
+# Logging patterns
+grep -rE "(logger\.|logging\.|console\.(log|error|warn)|log\.(info|error|warn|debug)|slog\.|tracing::)" --include="*.py" --include="*.ts" --include="*.tsx" --include="*.go" --include="*.rs" 2>/dev/null | head -10
+
+# Test patterns — naming, structure, fixtures vs mocks
+ls tests/ test/ __tests__/ spec/ 2>/dev/null
+grep -rE "(describe\(|it\(|test\(|def test_|func Test|#\[test\]|#\[cfg\(test\)\])" --include="*.py" --include="*.ts" --include="*.tsx" --include="*.go" --include="*.rs" 2>/dev/null | head -10
+
+# Dependency injection / configuration patterns
+grep -rE "(Depends\(|@inject|@Inject|providers\.|Container)" --include="*.py" --include="*.ts" --include="*.tsx" 2>/dev/null | head -5
+
+# API patterns — REST conventions, response shapes
+grep -rE "(router\.|@app\.(get|post|put|delete|patch)|app\.(get|post|put|delete|patch)|@(Get|Post|Put|Delete|Patch))" --include="*.py" --include="*.ts" --include="*.tsx" 2>/dev/null | head -10
+
+# Database / ORM patterns
+grep -rE "(Base\.metadata|declarative_base|mapped_column|Column\(|prisma\.|drizzle|knex|sqlx|diesel)" --include="*.py" --include="*.ts" --include="*.tsx" --include="*.go" --include="*.rs" 2>/dev/null | head -10
+
+# Documentation patterns — docstrings, JSDoc, etc.
+grep -rE '("""|\/\*\*|/// |//!)' --include="*.py" --include="*.ts" --include="*.tsx" --include="*.go" --include="*.rs" 2>/dev/null | head -10
+```
+
+**What to look for — adapt to detected tech stack:**
+
+For **Python** projects:
+- snake_case vs camelCase for functions/variables
+- Import style: absolute (`from app.models`) vs relative (`from .models`)
+- Docstring format: Google, NumPy, or Sphinx style
+- Async patterns: `async def` usage, asyncio vs trio
+- Error handling: custom exception classes, bare except usage
+- Type hints: inline vs stub files, Optional vs `| None`
+
+For **TypeScript/JavaScript** projects:
+- Named exports vs default exports
+- Path aliases (`@/`, `~/`) vs relative imports
+- Interface vs Type for object shapes
+- Barrel files (`index.ts` re-exports) usage
+- `async/await` vs `.then()` chains
+- Error handling: custom error classes, error boundaries
+
+For **Go** projects:
+- Package naming and layout (standard vs flat)
+- Error wrapping style: `fmt.Errorf("...: %w", err)` vs custom
+- Interface placement: consumer-side vs provider-side
+- Context propagation patterns
+
+For **Rust** projects:
+- Error handling: `anyhow` vs `thiserror` vs custom
+- Module structure: `mod.rs` vs file-based
+- Trait patterns and generics usage
+
+**Cross-language patterns to detect:**
+- File/folder naming: kebab-case, snake_case, PascalCase
+- API response shape conventions (envelope pattern, error format)
+- Logging approach: structured vs unstructured, which library
+- Config management: env vars, config files, secrets handling
+- Test organization: co-located vs separate directory, naming patterns (`test_*`, `*.test.ts`, `*_test.go`)
+
+**Rationale detection — when to ask "why":**
+
+Most conventions are self-evident (snake_case in Python, PascalCase classes) — don't ask why for those. But flag and ask about anything that is:
+- **An exception to the language/framework default** (e.g., no default exports in TS, relative imports in a flat Python project)
+- **A deliberate avoidance** (e.g., no ORM, no mocks, no barrel files)
+- **A tool choice that has a common alternative** (e.g., OpenTofu over Terraform, pnpm over npm, Bun over Node)
+- **A pattern that would surprise a new team member or Claude**
+
+For these, ask the user: *"I noticed you use X instead of Y — is there a specific reason? This helps Claude avoid suggesting Y in the future."*
+
+Keep rationale brief for mild preferences, elaborate for hard-won lessons (e.g., "mocks hid a migration bug").
+
+### Step 4: Synthesize Findings into Smart Questions
 
 Based on your investigation, present findings grouped by **what the hero skills need**. Do NOT ask generic questionnaire questions. Instead, present evidence-based confirmations.
 
@@ -257,6 +383,15 @@ Based on your investigation, present findings grouped by **what the hero skills 
 - Container registry
 - ArgoCD / GitOps
 - Namespaces / environments
+
+#### Group 5: "Coding conventions for consistent code" (all skills that write code)
+- Naming conventions (functions, files, folders)
+- Import style and organization
+- Error handling patterns
+- Logging approach
+- Test structure and naming
+- API patterns (if applicable)
+- Any other strong patterns detected in the codebase
 
 Present ALL findings at once, clearly marking what's confirmed vs. what needs input. Ask the user to confirm or correct.
 
@@ -330,11 +465,41 @@ FOR CI/CD & DEPLOYMENT (/hero-cicd, /hero-health)
 [--] Namespaces: not detected
      → What k8s namespaces do you deploy to?
 
+CODING CONVENTIONS (/hero-implement, /hero-commit)
+───────────────────────────────────────────────────
+[OK] Naming: snake_case functions, PascalCase classes
+     Evidence: 40+ function defs follow snake_case, all classes PascalCase
+
+[OK] Imports: absolute (from app.models import ...), grouped stdlib/third-party/local
+     Evidence: consistent across 15 source files sampled
+
+[OK] Error handling: custom exceptions in app/exceptions.py, no bare except
+     Evidence: AppError, NotFoundError, ValidationError classes found
+     → All exceptions inherit AppError — is there a reason? (e.g., global handler mapping)
+
+[OK] Logging: structlog with bound loggers
+     Evidence: structlog in deps, logger = structlog.get_logger() in 8 files
+     → Using structured logging — is this for a specific observability stack? (Datadog, ELK, etc.)
+
+[OK] Tests: tests/ mirror src/, test_*.py naming, pytest fixtures (no mocks for DB)
+     Evidence: tests/test_users.py, tests/test_auth.py, conftest.py with DB fixtures
+     → I notice no DB mocks anywhere — is this intentional? If so, why?
+
+[??] Docstrings: mixed — some Google-style, some missing
+     Evidence: 6/15 public functions have docstrings, all Google format
+     → Should all public functions have Google-style docstrings?
+
+EXCEPTIONS & GOTCHAS
+─────────────────────
+[??] OpenTofu instead of Terraform
+     Evidence: Found opentofu in deps, no terraform references
+     → Is this a licensing decision? Claude would default to suggesting Terraform otherwise.
+
 Please confirm or correct the [??] items, and fill in the [--] items.
 Everything marked [OK] will be used as-is unless you say otherwise.
 ```
 
-### Step 4: Incorporate Answers & Generate HERO.md
+### Step 5: Incorporate Answers & Generate HERO.md
 
 After the user responds, merge confirmed findings + user answers and write `HERO.md`:
 
@@ -372,6 +537,59 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - formatters: <detected>
 - type-checkers: <detected>
 
+## Coding Conventions
+<!-- Detected patterns from the codebase. Adapt to the project's language/framework. -->
+<!-- Rationale rules:
+     - Standard/expected conventions: one-liner or omit rationale entirely
+     - Non-obvious choices or exceptions to common defaults: explain WHY in a
+       "reason:" line so Claude (and new team members) understand the intent -->
+
+### Naming
+- functions: <snake_case|camelCase>
+- classes: <PascalCase>
+- files: <snake_case|kebab-case|PascalCase>
+- folders: <snake_case|kebab-case>
+
+### Imports
+- style: <absolute|relative|aliases>
+- ordering: <stdlib, third-party, local>
+
+### Error Handling
+- pattern: <description of how errors are handled>
+- custom-exceptions: <true|false, location if true>
+- reason: <only if non-standard — e.g., "all exceptions inherit AppError so the global handler can map them to HTTP status codes">
+
+### Logging
+- library: <detected>
+- style: <structured|unstructured>
+- reason: <only if non-obvious — e.g., "structured JSON for Datadog ingestion">
+
+### Tests
+- location: <tests/|co-located|__tests__/>
+- naming: <test_*|*.test.ts|*_test.go>
+- fixtures: <description of fixture/mock approach>
+- reason: <only if non-obvious — e.g., "no DB mocks — we hit a real test DB because mocked tests missed a migration bug in Q3">
+
+### API Patterns
+<!-- Only include if the project has APIs -->
+- style: <REST|GraphQL|gRPC>
+- response-format: <description if consistent pattern found>
+- reason: <only if non-obvious — e.g., "envelope pattern with {data, error, meta} because the mobile team parses it that way">
+
+### Documentation
+- docstrings: <Google|NumPy|JSDoc|none>
+- required-for: <public functions|all|none>
+
+### Exceptions & Gotchas
+<!-- List anything that deviates from what Claude or a new developer would assume.
+     These MUST have a reason. Keep the list short — only genuine exceptions. -->
+<!-- Examples:
+- Use OpenTofu, NOT Terraform — reason: licensing; the team migrated after the BSL change
+- Use pnpm, NOT npm or yarn — reason: strict dependency resolution required for monorepo
+- No default exports — reason: refactoring tools can't track default exports across the codebase
+- DB tests hit real Postgres, never mock — reason: mocked tests passed but prod migration failed in Q3
+-->
+
 ## Projects
 
 ### <project-name>
@@ -385,7 +603,40 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 
 **Only include sections that are relevant.** If there's no CI/CD, no deployment, etc., omit those sections entirely rather than filling them with "none". Keep it clean.
 
-### Step 5: Validate & Confirm
+**Also update CLAUDE.md Tech Stack and Best Practices sections** with a human-readable summary of the key findings. This ensures Claude has immediate context without needing to parse HERO.md. Example:
+
+```markdown
+## Tech Stack
+<!-- Auto-managed by /hero-init. See HERO.md for full configuration. -->
+- **Language:** Python 3.12
+- **Framework:** FastAPI
+- **Infrastructure:** OpenTofu (NOT Terraform), Kubernetes
+- **Database:** PostgreSQL via SQLAlchemy
+- **CI/CD:** GitHub Actions
+See [HERO.md](./HERO.md) for the full tech stack configuration.
+
+## Best Practices
+<!-- Auto-managed by /hero-init. See HERO.md for full configuration. -->
+- **Commits:** Conventional commits (`feat:`, `fix:`, `chore:`)
+- **Branches:** `feature/*`, `fix/*` off `main`
+- **Code Quality:** ruff (linter), black (formatter), mypy (type checker)
+- **Pre-commit:** Enabled — runs ruff, black, mypy
+- **Tests:** `uv run pytest` — always run before pushing
+
+## Coding Conventions
+<!-- Auto-managed by /hero-init. See HERO.md for full configuration. -->
+- **Naming:** snake_case functions, PascalCase classes, kebab-case files
+- **Imports:** Absolute (`from app.models import ...`), grouped stdlib → third-party → local
+- **Error handling:** Custom exceptions in `app/exceptions.py`, no bare `except`
+- **Logging:** structlog with bound loggers
+- **Tests:** `tests/` mirrors `src/`, pytest fixtures, no DB mocks
+- **Docstrings:** Google-style for all public functions
+See [HERO.md](./HERO.md) for full coding conventions.
+```
+
+Tailor the bullet points to what was actually detected. Include anything that Claude might otherwise get wrong (e.g., "OpenTofu NOT Terraform", "pnpm NOT npm", "Bun NOT Node").
+
+### Step 6: Validate & Confirm
 
 Show the generated file and a one-line-per-skill summary:
 
@@ -403,7 +654,7 @@ How your hero skills will use this:
 Does this look right? [Y/n]
 ```
 
-### Step 6: Git Decision
+### Step 7: Git Decision
 
 ```
 Should HERO.md be committed to the repo?
