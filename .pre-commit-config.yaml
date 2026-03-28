@@ -7,3 +7,21 @@ repos:
         language: script
         pass_filenames: false
         always_run: true
+
+      - id: hero-meta
+        name: "Hero Meta: audit plugin quality"
+        entry: claude -p "/hero-meta"
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        verbose: true
+
+      - id: hero-update
+        name: "Hero Update: sync HERO.md"
+        entry: claude -p "/hero-update --staged-only"
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        verbose: true

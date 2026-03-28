@@ -35,7 +35,7 @@ Each `/hero-*` skill needs specific information to work well. This skill figures
 | `/hero-architect` | Repo type, project list, deployment platform |
 | `/hero-new-project` | Repo type, coding conventions, code quality tools, project scaffold patterns |
 | `/hero-setup` | Required tools, recommended tools, MCP servers |
-| `/hero-reflect` | Coding agent, coding conventions, lint/format/typecheck commands |
+| `/hero-update` | All sections — keeps HERO.md in sync via pre-commit |
 | `/hero-meta` | (internal) Plugin structure validation |
 
 ## Instructions
@@ -474,10 +474,10 @@ Based on your investigation, present findings grouped by **what the hero skills 
 
 **Group findings into these categories, presented in this order:**
 
-#### Group 0: "Your coding agent" (`/hero-reflect`, `/hero-setup`)
+#### Group 0: "Your coding agent" (`/hero-update`, `/hero-setup`)
 - Coding agent (Claude Code, Cursor, Windsurf, etc.)
 - Whether hooks/pre-commit integration is possible
-- Whether to set up `/hero-reflect` as a pre-commit self-review
+- Whether to set up `/hero-update` as a pre-commit hook to keep HERO.md in sync
 
 #### Group 1: "For committing and pushing code" (`/hero-commit`, `/hero-push`)
 - Hosting platform (GitHub, GitLab, Bitbucket — from remote URL)
@@ -636,9 +636,10 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - agents: <list all if team uses multiple>
 - hooks: <true|false — whether the agent supports pre-commit/hook integration>
 - rules-file: <CLAUDE.md|.cursorrules|.windsurfrules|copilot-instructions.md|none>
-- self-review: <true|false — whether /hero-reflect is wired into pre-commit>
-<!-- If self-review is enabled, the pre-commit hook runs:
-     claude -p "/hero-reflect" (for Claude Code)
+- hero-update: <true|false — whether /hero-update is wired into pre-commit>
+<!-- If hero-update is enabled, the pre-commit hook runs:
+     claude -p "/hero-update --staged-only" (for Claude Code)
+     This keeps HERO.md in sync with the codebase on every commit.
 -->
 
 ## Project Management
@@ -828,7 +829,7 @@ How your hero skills will use this:
   /hero-secure    → scan pyproject.toml, check ghcr.io registry
   /hero-architect → single repo, Python + FastAPI, k8s deployment
   /hero-setup     → require node, uv, gh, docker; recommend pre-commit, linear CLI
-  /hero-reflect   → self-review via claude -p "/hero-reflect" in pre-commit
+  /hero-update    → sync HERO.md via claude -p "/hero-update --staged-only" in pre-commit
 
 Does this look right? [Y/n]
 ```

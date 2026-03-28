@@ -68,7 +68,7 @@ SIZE & COMPLEXITY
 ─────────────────
 [OK] hero-commit: 180 lines, 1200 words
 [!!] hero-init: 830 lines, 6200 words — consider splitting investigation steps into references/
-[OK] hero-reflect: 150 lines, 1100 words
+[OK] hero-update: 150 lines, 1100 words
 ```
 
 #### 2c: DRY Violations
@@ -90,7 +90,7 @@ DRY VIOLATIONS
      Suggestion: This is expected — each skill needs to independently read HERO.md.
      No action needed (skills run independently, not as a pipeline).
 
-[!!] "Present findings in [OK]/[??]/[--] format" — in hero-init, hero-setup, hero-reflect
+[!!] "Present findings in [OK]/[??]/[--] format" — in hero-init, hero-setup, hero-update
      Suggestion: Consistent by design. No action needed.
 
 [??] Investigation bash blocks in hero-init are 40+ lines each
@@ -108,7 +108,7 @@ HERO.MD FIELD COVERAGE
 ──────────────────────
 Field                          | Produced by  | Consumed by
 ───────────────────────────────|──────────────|────────────────────
-Coding Agent → primary         | hero-init    | hero-reflect, hero-setup
+Coding Agent → primary         | hero-init    | hero-update, hero-setup
 Repository → hosting           | hero-init    | hero-push
 Repository → branch-template   | hero-init    | hero-plan
 Projects → lint-command         | hero-init    | hero-implement
@@ -182,4 +182,4 @@ If `--fix` is passed, automatically fix:
 - **DRY is not always better.** Skills run independently — some repetition is by design.
 - **Field coverage matters.** Every HERO.md field should be produced by hero-init and consumed by at least one skill.
 - **Size awareness.** Skills consume context window. Large skills slow down every invocation.
-- **Be specific.** File, line, what's wrong, how to fix. Same standard as hero-reflect.
+- **Be specific.** File, line, what's wrong, how to fix.
