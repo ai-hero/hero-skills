@@ -27,6 +27,7 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 ```
 
 Read `HERO.md` if it exists. This skill uses:
+
 - **Repository** → default branch (for PR base), branch convention
 - **CI/CD** → platform name for PR description context
 - **Project Management** → issue prefix for linking PRs to issues
@@ -44,18 +45,19 @@ git rev-list --count origin/$BRANCH..$BRANCH 2>/dev/null || echo "NEW_BRANCH"
 git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo "NO_UPSTREAM"
 ```
 
-**If uncommitted changes exist:**
+**If uncommitted changes exist, STOP and show:**
 
 ```
-Warning: You have uncommitted changes.
+You have uncommitted changes:
+
+  (list changed files from git status)
 
 Options:
-1. Run /hero-commit review first
-2. Stash changes and proceed
-3. Cancel
+1. Run /hero-commit to review and commit first (recommended)
+2. Cancel — go back and handle changes first
 ```
 
-Stop and let user decide.
+**STOP and wait for user to choose.** Do NOT offer to stash here — pushing with uncommitted changes is almost always a mistake. The user should commit or explicitly handle their changes first.
 
 ### Step 2: Determine Workflow
 
@@ -110,22 +112,29 @@ if [ "$ARGUMENTS" = "draft" ]; then
 fi
 ```
 
+**Generate the PR title from commit history** (use the most descriptive commit, or summarize if multiple):
+
+```bash
+# Default to first commit subject; override with a better summary if needed
+PR_TITLE="$(git log origin/$DEFAULT_BRANCH..HEAD --pretty=%s | head -1)"
+```
+
 **Generate PR content by listing each commit as a changeset with its files and description:**
 
 ```bash
-gh pr create $DRAFT_FLAG --base "$DEFAULT_BRANCH" --title "<title>" --body "$(cat <<'EOF'
+gh pr create $DRAFT_FLAG --base "$DEFAULT_BRANCH" --title "$PR_TITLE" --body "$(cat <<'EOF'
 ## Summary
 [1-3 sentence overview of what this PR accomplishes]
 
 ## Changesets
 
-### 1. `<commit-type>(<scope>): <commit-message>`
+### 1. `commit-type(scope): commit-message`
 **Files:** `file1.ts`, `file2.ts` (+A -D)
-<Brief description of what this commit does and why>
+Brief description of what this commit does and why
 
-### 2. `<commit-type>(<scope>): <commit-message>`
+### 2. `commit-type(scope): commit-message`
 **Files:** `file3.py` (+A -D)
-<Brief description of what this commit does and why>
+Brief description of what this commit does and why
 
 [...repeat for each commit on the branch]
 
@@ -147,12 +156,12 @@ EOF
 ```
 Hero Push Summary
 =================
-Branch: <branch-name>
+Branch: {branch-name}
 Action: Push + Create PR
 
 Commits pushed: N
-PR created: #42
-URL: <pr-url>
+PR created: #{number}
+URL: {pr-url}
 ```
 
 ---
@@ -167,16 +176,24 @@ git push -u origin $(git branch --show-current)
 
 ### B2: Switch to Target and Pull
 
+Before switching, verify the working tree is clean (Step 1 should have caught this, but double-check):
+
 ```bash
 FEATURE_BRANCH=$(git branch --show-current)
-git checkout <target>
-git pull origin <target>
+git status --porcelain
+```
+
+**If uncommitted changes exist at this point, STOP.** Do not switch branches. Ask the user to commit or cancel.
+
+```bash
+git checkout $TARGET_BRANCH
+git pull origin $TARGET_BRANCH
 ```
 
 ### B3: Merge Feature Branch
 
 ```bash
-git merge $FEATURE_BRANCH --no-ff -m "Merge branch '$FEATURE_BRANCH' into <target>"
+git merge $FEATURE_BRANCH --no-ff -m "Merge branch '$FEATURE_BRANCH' into $TARGET_BRANCH"
 ```
 
 **If merge conflicts:** Stop and let user resolve.
@@ -184,7 +201,7 @@ git merge $FEATURE_BRANCH --no-ff -m "Merge branch '$FEATURE_BRANCH' into <targe
 ### B4: Push Target
 
 ```bash
-git push origin <target>
+git push origin $TARGET_BRANCH
 ```
 
 ### B5: Report and Suggest Cleanup
@@ -192,14 +209,14 @@ git push origin <target>
 ```
 Hero Push Summary
 =================
-Source: <feature-branch>
-Target: <target>
+Source: {feature-branch}
+Target: {target-branch}
 
 Merged successfully!
 
 Suggestion: Delete the feature branch?
-  git branch -d <feature-branch>
-  git push origin --delete <feature-branch>
+  git branch -d {feature-branch}
+  git push origin --delete {feature-branch}
 ```
 
 ---
@@ -210,6 +227,24 @@ Suggestion: Delete the feature branch?
 - [ ] No uncommitted changes (or user acknowledged)
 - [ ] Not force pushing
 - [ ] Merge commits (not fast-forward) for traceability
+
+### Pre-push Hook Awareness
+
+If `.pre-commit-config.yaml` exists, check for `pre-push` stage hooks:
+
+```bash
+if [ -f .pre-commit-config.yaml ]; then
+  grep -B2 "pre-push" .pre-commit-config.yaml
+fi
+```
+
+Pre-push hooks often run tests, builds, and security scans which can take minutes. If heavy hooks are detected, warn the user before pushing:
+
+```
+Note: Pre-push hooks will run before push completes.
+Detected: [pytest, eslint, build, semgrep, trivy, etc.]
+This may take a few minutes.
+```
 
 ### Never Do
 

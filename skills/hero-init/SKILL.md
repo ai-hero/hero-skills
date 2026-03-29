@@ -48,6 +48,7 @@ ls "$ROOT/CLAUDE.md" 2>/dev/null && echo "CLAUDE_EXISTS" || echo "CLAUDE_NEW"
 ```
 
 **If `CLAUDE.md` does NOT exist:**
+
 - Create `CLAUDE.md` at the repo root with a scaffold that includes Tech Stack and Best Practices sections (content will be filled in Step 5 after investigation).
 - For now, create the file with placeholder sections:
 
@@ -68,6 +69,7 @@ See [HERO.md](./HERO.md) for coding conventions detected from the codebase.
 ```
 
 **If `CLAUDE.md` DOES exist:**
+
 - Read it and check whether it already has `## Tech Stack`, `## Best Practices`, and `## Coding Conventions` sections.
 - If either section is **missing**, append it to the end of the file.
 - If a section exists but does **not** reference `HERO.md`, add a reference line:
@@ -117,6 +119,7 @@ grep -r "claude\|cursor\|copilot\|windsurf\|aider" .pre-commit-config.yaml 2>/de
 ```
 
 **What to look for:**
+
 - `.claude/` directory or `CLAUDE.md` → Claude Code user — can use hooks, skills, MCP servers
 - `.cursorrules` or `.cursor/rules/` → Cursor user — rules files, no hook system
 - `.github/copilot-instructions.md` → Copilot user — instructions file
@@ -146,6 +149,7 @@ ls LICENSE CONTRIBUTING.md CODE_OF_CONDUCT.md CODEOWNERS .github/PULL_REQUEST_TE
 ```
 
 **What to look for:**
+
 - Remote URL → hosting platform: `github.com` → GitHub (`gh`), `gitlab.com` → GitLab (`glab`), `bitbucket.org` → Bitbucket
 - Multiple contributors in git log → team project with shared conventions
 - LICENSE + CONTRIBUTING.md → open-source, may need DCO sign-off
@@ -172,6 +176,7 @@ grep -r "linear\|jira\|asana\|shortcut" .github/ 2>/dev/null | head -5
 ```
 
 **What to look for:**
+
 - Ticket IDs like `PROJ-123` in commits/branches → extract the prefix
 - Linear/Jira mentions in templates → identifies PM tool
 - GitHub issue references (`#123`, `Fixes #123`) → GitHub Issues
@@ -195,6 +200,7 @@ grep -l "test\|lint\|build\|deploy\|release" .github/workflows/*.yml 2>/dev/null
 ```
 
 **What to look for:**
+
 - Which workflows exist and what they do (test, lint, build images, deploy)
 - Whether CI runs on PR, push to main, or both
 - Required status checks (signals what must pass before merge)
@@ -237,6 +243,7 @@ which pre-commit 2>/dev/null && pre-commit --version
 ```
 
 **What to look for:**
+
 - Which tools the project actually requires (cross-reference with deps, CI, Dockerfiles, Makefiles)
 - Distinguish between **required** (project won't build/run without it) vs. **recommended** (nice to have)
 - Note minimum versions if the project depends on specific features
@@ -267,6 +274,7 @@ grep -r "namespace\|environment\|staging\|production" k8s/ .github/workflows/ 2>
 ```
 
 **What to look for:**
+
 - Dockerfile → containerized app, look for registry in CI
 - K8s manifests → Kubernetes deployment, look for namespaces
 - vercel.json / netlify.toml → serverless/static deployment
@@ -291,6 +299,7 @@ ls .editorconfig 2>/dev/null
 ```
 
 **What to look for:**
+
 - Pre-commit config → which hooks run (linters, formatters, type checks)
 - ruff/eslint → linter
 - black/prettier/biome → formatter
@@ -348,6 +357,7 @@ grep -E "port\|PORT\|:3000\|:8000\|:8080\|:5173\|:4000" pyproject.toml package.j
 ```
 
 **What to look for:**
+
 - Language and framework from dependency files
 - Monorepo structure (workspaces, nx, turborepo, multiple pyproject.toml)
 - **Dependency file** per project (pyproject.toml, package.json, go.mod, etc.) — needed by `/hero-secure` and `/hero-test`
@@ -405,6 +415,7 @@ grep -rE '("""|\/\*\*|/// |//!)' --include="*.py" --include="*.ts" --include="*.
 **What to look for — adapt to detected tech stack:**
 
 For **Python** projects:
+
 - snake_case vs camelCase for functions/variables
 - Import style: absolute (`from app.models`) vs relative (`from .models`)
 - Docstring format: Google, NumPy, or Sphinx style
@@ -413,6 +424,7 @@ For **Python** projects:
 - Type hints: inline vs stub files, Optional vs `| None`
 
 For **TypeScript/JavaScript** projects:
+
 - Named exports vs default exports
 - Path aliases (`@/`, `~/`) vs relative imports
 - Interface vs Type for object shapes
@@ -421,17 +433,20 @@ For **TypeScript/JavaScript** projects:
 - Error handling: custom error classes, error boundaries
 
 For **Go** projects:
+
 - Package naming and layout (standard vs flat)
 - Error wrapping style: `fmt.Errorf("...: %w", err)` vs custom
 - Interface placement: consumer-side vs provider-side
 - Context propagation patterns
 
 For **Rust** projects:
+
 - Error handling: `anyhow` vs `thiserror` vs custom
 - Module structure: `mod.rs` vs file-based
 - Trait patterns and generics usage
 
 **Cross-language patterns to detect:**
+
 - File/folder naming: kebab-case, snake_case, PascalCase
 - API response shape conventions (envelope pattern, error format)
 - Logging approach: structured vs unstructured, which library
@@ -441,6 +456,7 @@ For **Rust** projects:
 **Rationale detection — when to ask "why":**
 
 Most conventions are self-evident (snake_case in Python, PascalCase classes) — don't ask why for those. But flag and ask about anything that is:
+
 - **An exception to the language/framework default** (e.g., no default exports in TS, relative imports in a flat Python project)
 - **A deliberate avoidance** (e.g., no ORM, no mocks, no barrel files)
 - **A tool choice that has a common alternative** (e.g., OpenTofu over Terraform, pnpm over npm, Bun over Node)
@@ -477,11 +493,13 @@ Based on your investigation, present findings grouped by **what the hero skills 
 **Group findings into these categories, presented in this order:**
 
 #### Group 0: "Your coding agent" (`/hero-update`, `/hero-setup`)
+
 - Coding agent (Claude Code, Cursor, Windsurf, etc.)
 - Whether hooks/pre-commit integration is possible
 - Whether to set up `/hero-update` as a pre-commit hook to keep HERO.md in sync
 
 #### Group 1: "For committing and pushing code" (`/hero-commit`, `/hero-push`)
+
 - Hosting platform (GitHub, GitLab, Bitbucket — from remote URL)
 - Commit convention (evidence from git log patterns)
 - Branch naming convention and branch template (evidence from branch -r patterns)
@@ -491,11 +509,13 @@ Based on your investigation, present findings grouped by **what the hero skills 
 - Task runner (if Makefile/justfile provides commit/push/lint targets)
 
 #### Group 2: "For planning and tracking work" (`/hero-plan`)
+
 - PM tool (evidence from templates, commit messages, integrations)
 - Issue ID prefix (evidence from commit/branch patterns)
 - MCP server name if applicable
 
 #### Group 3: "For implementing and testing" (`/hero-implement`, `/hero-test`)
+
 - Per-project: language, framework, dependency file, install command
 - Per-project: test, lint, format, typecheck commands (prefer task runner targets if available)
 - Per-project: dev command, port
@@ -504,6 +524,7 @@ Based on your investigation, present findings grouped by **what the hero skills 
 - Monorepo vs single repo structure
 
 #### Group 4: "For CI/CD and deployment" (`/hero-cicd`, `/hero-health`, `/hero-secure`)
+
 - CI platform and workflow names
 - Deployment platform
 - Container registry
@@ -511,6 +532,7 @@ Based on your investigation, present findings grouped by **what the hero skills 
 - Namespaces / environments
 
 #### Group 5: "Coding conventions for consistent code" (all skills that write code)
+
 - Naming conventions (functions, files, folders)
 - Import style and organization
 - Error handling patterns
@@ -837,6 +859,7 @@ Does this look right? [Y/n]
 ```
 
 After confirmation, suggest:
+
 ```
 Run /hero-setup to configure your local dev environment
 (git config, CLI tools, authentication) based on this HERO.md.

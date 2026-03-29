@@ -31,6 +31,7 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 ```
 
 Read `HERO.md` if it exists. This skill uses:
+
 - **Repository** → commit convention
 - **Code Quality** → linters, formatters, pre-commit
 
@@ -60,15 +61,45 @@ CURRENT=$(git branch --show-current)
 PR_BRANCH=$(gh pr view $PR_NUMBER --json headRefName --jq '.headRefName')
 ```
 
-If not on the PR branch:
+If not on the PR branch, first check for uncommitted changes:
+
+```bash
+git status --porcelain
+```
+
+**If uncommitted changes exist, STOP and show:**
+
+```
+You have uncommitted changes on '$CURRENT':
+
+  (list changed files from git status)
+
+Need to switch to '$PR_BRANCH' to address PR comments.
+
+Options:
+1. Stash changes (saved as "hero-pr-respond: WIP on $CURRENT") — will NOT auto-restore since you're moving to a different branch
+2. Cancel — go back and commit or handle changes first
+```
+
+**STOP and wait for user to choose.** Do NOT switch branches without explicit confirmation.
+
+**If user chooses option 1 (stash):**
+
+```bash
+git stash push -m "hero-pr-respond: WIP on $CURRENT"
+```
+
+Report: `Stashed as: stash@{0} — "hero-pr-respond: WIP on $CURRENT". Restore later with: git checkout $CURRENT && git stash pop`
+
+Note: Since the user is switching to a different branch to do PR work, do NOT auto-pop the stash. Remind the user in the final summary how to restore.
+
+**Then switch to the PR branch:**
 
 ```bash
 git fetch origin $PR_BRANCH
 git checkout $PR_BRANCH
 git pull origin $PR_BRANCH
 ```
-
-**If there are uncommitted changes:** Warn and let user decide (stash, commit, or cancel).
 
 ### Step 3: Fetch All Review Comments
 
@@ -146,6 +177,7 @@ Already resolved: K threads
 ```
 
 Ask the user to confirm the plan before proceeding. The user may:
+
 - Agree with all actionable items
 - Disagree with specific comments (skip those)
 - Provide answers to questions
@@ -251,21 +283,28 @@ gh api graphql -f query='
 ```
 Hero PR Respond Summary
 =======================
-PR: #123 - <title>
-Branch: <branch-name>
+PR: #{number} - {pr-title}
+Branch: {pr-branch}
 
 Comments Addressed:
-  ✅ Fixed: X (code changes made)
-  💬 Replied: Y (questions answered)
-  ✅ Acknowledged: Z (resolved without changes)
-  ⏭ Skipped: W (user chose to skip)
+  Fixed: X (code changes made)
+  Replied: Y (questions answered)
+  Acknowledged: Z (resolved without changes)
+  Skipped: W (user chose to skip)
 
 Commits: N new commits pushed
 Threads Resolved: M of T
 
 Remaining unresolved: [list any, if applicable]
 
-URL: <pr-url>
+URL: {pr-url}
+```
+
+**If changes were stashed in Step 2, remind the user:**
+
+```
+Note: You have stashed changes from {original-branch}.
+To restore: git checkout {original-branch} && git stash pop
 ```
 
 ## Notes

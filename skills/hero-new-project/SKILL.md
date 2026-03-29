@@ -24,6 +24,7 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 ```
 
 Read `HERO.md` if it exists. This skill uses:
+
 - **Repository** → type (single vs monorepo) to decide where to scaffold
 - **Code Quality** → pre-commit, linters, formatters to configure in new project
 - **Repository** → commit convention for initial commit
@@ -70,7 +71,7 @@ Ask the user:
 
 #### Python Backend (FastAPI)
 
-Read uv FastAPI guide at https://docs.astral.sh/uv/guides/integration/fastapi/
+Read uv FastAPI guide at <https://docs.astral.sh/uv/guides/integration/fastapi/>
 
 ```bash
 # Standalone or subproject
@@ -145,7 +146,7 @@ Create the FastAPI app structure inside `backend/app/`.
 
 **Frontend (ask Next.js or Vite):**
 
-- Next.js: Follow https://ui.shadcn.com/docs/installation/next
+- Next.js: Follow <https://ui.shadcn.com/docs/installation/next>
 
   ```bash
   npx create-next-app@latest frontend --typescript --tailwind --eslint --app --src-dir --import-alias "@/*"
@@ -161,7 +162,7 @@ Create the FastAPI app structure inside `backend/app/`.
   }
   ```
 
-- Vite: Follow https://ui.shadcn.com/docs/installation/vite
+- Vite: Follow <https://ui.shadcn.com/docs/installation/vite>
 
   Add API proxy in `vite.config.ts`:
 

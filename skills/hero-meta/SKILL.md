@@ -25,6 +25,7 @@ ls -1 "$ROOT/skills/"
 ```
 
 Read every `skills/*/SKILL.md` file. For each, extract:
+
 - Name (from frontmatter)
 - Description (from frontmatter)
 - Line count, word count
@@ -45,6 +46,7 @@ All skills should follow a consistent structure. Check for:
 - **Sub-step numbering within a step**: If a step has sub-steps like `2a`, `2b`, `2c`, verify they're sequential with no gaps or duplicates.
 
 Report template:
+
 ```
 STRUCTURE CONSISTENCY
 ─────────────────────
@@ -63,6 +65,7 @@ Flag skills that are too large or too small:
 - **Deep nesting** (h4+ headings beyond investigation sub-steps): May need restructuring
 
 Report template:
+
 ```
 SIZE & COMPLEXITY
 ─────────────────
@@ -83,6 +86,7 @@ Look for instructions that are repeated across multiple skills. Common patterns:
 Flag when the **same substantive instruction** (not just similar phrasing) appears in 3+ skills.
 
 Report template:
+
 ```
 DRY VIOLATIONS
 ──────────────
@@ -124,11 +128,13 @@ Projects → dependency-file     | hero-init    | hero-secure, hero-test
 #### 2e: Description Quality
 
 Check every skill's frontmatter `description` for:
+
 - **Trigger clarity**: Does it say when to use the skill? ("Use when...", "Use for...", "Use before...")
 - **Length**: Should be 50-200 chars. Too short = unclear triggers. Too long = wastes context.
 - **Specificity**: Vague descriptions like "helps with code" are useless for Claude's skill matching.
 
 Report template:
+
 ```
 DESCRIPTION QUALITY
 ───────────────────
@@ -169,6 +175,7 @@ Overall health: Good / Needs Attention / Critical
 ### Step 4: Auto-Fix (if `--fix`)
 
 If `--fix` is passed, automatically fix:
+
 - Alphabetical ordering in tables
 - Frontmatter field ordering (name, description, argument-hint, disable-model-invocation)
 - Step renumbering gaps

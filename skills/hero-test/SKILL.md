@@ -30,6 +30,7 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 ```
 
 Read `HERO.md` if it exists. This skill uses:
+
 - **Projects** → language, framework, test commands, dev commands, ports (skips auto-detection)
 
 If `HERO.md` is missing, suggest `/hero-init` but proceed with auto-detection below.
@@ -79,7 +80,7 @@ For full-stack with subdirs, install in each.
 uv run <script-name> --help
 ```
 
-3. For libraries with no CLI:
+1. For libraries with no CLI:
 
 ```bash
 uv run python -c "import <package>; print('OK')"
@@ -93,14 +94,14 @@ uv run python -c "import <package>; print('OK')"
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
-2. Wait for ready, then smoke test:
+1. Wait for ready, then smoke test:
 
 ```bash
 curl -s http://localhost:8000/health
 curl -s http://localhost:8000/openapi.json | head -50
 ```
 
-3. Note: Swagger UI at `http://localhost:8000/docs`
+1. Note: Swagger UI at `http://localhost:8000/docs`
 
 #### Frontend App
 
@@ -112,7 +113,7 @@ mcp__playwright__browser_navigate to http://localhost:<port>
 mcp__playwright__browser_snapshot
 ```
 
-3. Interact with elements using refs from snapshot
+1. Interact with elements using refs from snapshot
 
 #### MCP Server
 

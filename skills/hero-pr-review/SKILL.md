@@ -32,6 +32,7 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 ```
 
 Read `HERO.md` if it exists. This skill uses:
+
 - **Repository** → default branch, commit convention
 - **Code Quality** → linters, formatters, pre-commit context
 - **Projects** → language, framework for language-specific review guidance
@@ -73,29 +74,34 @@ Also read the PR description carefully — it often explains design decisions.
 Review every changed file in the diff. For each file, assess:
 
 **Correctness**
+
 - Logic errors, off-by-one, null/undefined handling
 - Race conditions or concurrency issues
 - Edge cases not handled
 - API contract mismatches
 
 **Security**
+
 - Injection vulnerabilities (SQL, XSS, command)
 - Hardcoded secrets or credentials
 - Improper input validation at system boundaries
 - Insecure defaults
 
 **Code Quality**
+
 - Naming clarity and consistency
 - Dead code, commented-out code, leftover debug statements
 - Unnecessary complexity or premature abstraction
 - Missing error handling where it matters
 
 **Design**
+
 - Does the approach fit the codebase patterns?
 - Are there simpler alternatives?
 - Will this be maintainable?
 
 **Tests**
+
 - Are new behaviors covered by tests?
 - Do test names describe what they verify?
 - Are edge cases tested?
@@ -113,6 +119,7 @@ For each issue found, classify its severity:
 | Praise | `👍` | Good pattern worth calling out — use sparingly |
 
 **Comment guidelines:**
+
 - Be specific: reference the exact code and explain why it's an issue
 - Be constructive: suggest a fix or alternative, not just "this is wrong"
 - Be respectful: assume the author made reasonable choices given their context
@@ -185,6 +192,7 @@ EOF
 ```
 
 **Review decision guidance:**
+
 - Use `--approve` only if there are no critical or suggestion-level issues
 - Use `--request-changes` if there are critical issues that must be fixed
 - Use `--comment` (default) for suggestions and nits that don't block merging

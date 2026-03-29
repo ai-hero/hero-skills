@@ -24,6 +24,7 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 ```
 
 Read `HERO.md` if it exists. This skill uses:
+
 - **Project Management** → which tool/MCP to fetch issues from (Linear, Jira, Asana, GitHub Issues)
 - **Repository** → branch naming convention, default branch
 - **Projects** → which subproject the issue relates to
@@ -66,9 +67,33 @@ Present a summary of the issue to the user.
 ### Step 3: Prepare Workspace
 
 ```bash
-git branch --show-current
+CURRENT=$(git branch --show-current)
 git status --porcelain
 ```
+
+**If uncommitted changes exist, STOP and show:**
+
+```
+You have uncommitted changes on '$CURRENT':
+
+  (list changed files from git status)
+
+Options:
+1. Stash changes (saved as "hero-plan: WIP on $CURRENT") — will auto-restore after branch creation
+2. Cancel — go back and commit or handle changes first
+```
+
+**STOP and wait for user to choose.** Do NOT switch branches with uncommitted changes without explicit confirmation.
+
+**If user chooses option 1 (stash):**
+
+```bash
+git stash push -m "hero-plan: WIP on $CURRENT"
+```
+
+Report: `Stashed as: stash@{0} — "hero-plan: WIP on $CURRENT"`
+
+Track that a stash was created (for restore after branch creation).
 
 **Branch logic:**
 
@@ -82,10 +107,18 @@ git status --porcelain
 
 ```bash
 git checkout main && git pull
-git checkout -b <issue-id>-<short-description>
+git checkout -b "${ISSUE_ID}-short-description"
 ```
 
 Use the issue ID and 2-3 descriptive words from the title.
+
+**If changes were stashed, restore them on the new branch:**
+
+```bash
+git stash pop
+```
+
+If the stash pop has conflicts, report them clearly and let the user resolve.
 
 ### Step 4: Enter Plan Mode
 
@@ -185,7 +218,7 @@ Plan is ready for review.
 
 - Plan mode is analysis-only - no code modifications
 - Always fetch full issue details from Linear
-- Create branches with consistent naming: `<issue-id>-<short-description>`
+- Create branches with consistent naming: `{issue-id}-{short-description}`
 - Ask questions rather than assume
 - The plan should be specific enough that implementation is straightforward
 - Include testing approach in every plan

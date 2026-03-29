@@ -33,6 +33,7 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 ```
 
 Read `HERO.md` if it exists. This skill uses:
+
 - **Deployment** → platform (kubernetes, ecs, etc.), namespaces, argocd flag
 
 If `HERO.md` is missing, suggest `/hero-init` but proceed with auto-detection.
@@ -54,6 +55,7 @@ kubectl top nodes 2>/dev/null || echo "Metrics server not available"
 ```
 
 Check for:
+
 - Nodes in `NotReady` state
 - High resource utilization (>85% CPU or memory)
 - Node conditions (MemoryPressure, DiskPressure, PIDPressure)
@@ -120,6 +122,7 @@ kubectl get applications -n argocd -o json 2>/dev/null | jq -r '.items[] | "\(.m
 ```
 
 Flag any apps that are:
+
 - `OutOfSync`
 - `Degraded` or `Missing` health
 - `Unknown` status

@@ -17,6 +17,7 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 ```
 
 Read `HERO.md` if it exists. This skill uses:
+
 - **Code Quality** → linters, formatters
 - **Repository** → commit convention (conventional, angular, none)
 - **Project Management** → issue prefix for `Fixes:` / `Relates to:` trailers
@@ -31,10 +32,11 @@ echo "Current branch: $BRANCH"
 ```
 
 **If on main/master:** Warn the user. Ask if they want to:
+
 1. Create a new branch first (ask for branch name)
 2. Proceed on main anyway
 
-Do NOT continue until the user responds. If they choose to create a branch, run `git checkout -b <name>` before proceeding.
+Do NOT continue until the user responds. If they choose to create a branch, run `git checkout -b $BRANCH_NAME` before proceeding.
 
 ## Step 2: Run Pre-commit (if available)
 
@@ -61,21 +63,25 @@ For each changed file: read the diff, understand purpose, assess quality.
 Review every change:
 
 **Naming Consistency**
+
 - Same concepts use same names throughout
 - Imports match exports
 
 **Code Quality**
+
 - [ ] No debug code (print, console.log, debugger)
 - [ ] No commented-out code
 - [ ] No TODO/FIXME without associated issue
 - [ ] No obvious security issues
 
 **Simplicity**
+
 - [ ] No premature abstractions
 - [ ] No over-engineering
 - [ ] Could this be simpler?
 
 **Completeness**
+
 - [ ] All renames updated everywhere
 - [ ] Imports correct
 - [ ] Tests updated if behavior changed
@@ -112,12 +118,12 @@ Group logically related changes:
 ## Step 7: Commit Each Changeset
 
 ```bash
-git add <file1> <file2> ...
+git add file1 file2 ...
 git diff --cached --stat
 git commit -m "$(cat <<'EOF'
-<type>(<scope>): <description>
+{type}({scope}): {description}
 
-<body if needed>
+{body if needed}
 
 Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
@@ -139,10 +145,10 @@ which pre-commit && pre-commit run --hook-stage pre-push --all-files || echo "NO
 ```
 Hero Commit Summary
 ======================
-Branch: <branch-name>
+Branch: {branch-name}
 Commits Created: N
 
-1. <type>(<scope>): <description>
+1. {type}({scope}): {description}
    Files: file1, file2 (+X -Y)
 
 Pre-commit: PASSED (or SKIPPED)

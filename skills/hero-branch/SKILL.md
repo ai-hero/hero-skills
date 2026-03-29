@@ -27,6 +27,7 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 ```
 
 Read `HERO.md` if it exists. This skill uses:
+
 - **Repository** → default-branch (branch from here), branch-convention
 - **Project Management** → issue-prefix (for linking to issues)
 
@@ -40,18 +41,37 @@ BRANCH=$(git branch --show-current)
 echo "Current branch: $BRANCH"
 ```
 
-**If uncommitted changes exist:**
+**If uncommitted changes exist, STOP and show:**
 
 ```
-Warning: You have uncommitted changes on $BRANCH.
+⚠ You have uncommitted changes on '$BRANCH':
+
+  (list changed files from git status)
+
+These changes will be affected by switching branches.
 
 Options:
-1. Stash changes, create branch, then pop stash
-2. Carry changes to the new branch (default git behavior)
-3. Cancel
+1. Stash changes (saved as "hero-branch: WIP on $BRANCH") — will auto-restore when done
+2. Carry changes to the new branch (default git behavior — changes stay unstaged)
+3. Cancel — go back and commit or handle changes first
 ```
 
-Stop and let user decide.
+**STOP and wait for user to choose.** Do NOT proceed without explicit confirmation.
+
+**If user chooses option 1 (stash):**
+
+```bash
+git stash push -m "hero-branch: WIP on $BRANCH"
+```
+
+Report the stash ref so the user can find it later:
+
+```
+Stashed as: stash@{0} — "hero-branch: WIP on $BRANCH"
+Will auto-restore after branch creation.
+```
+
+Track that a stash was created (for Step 5 restore).
 
 ### Step 2: Ensure on Default Branch
 
@@ -88,11 +108,13 @@ git pull origin "$DEFAULT_BRANCH"
 Based on the branch-convention from HERO.md:
 
 **github-standard** (default):
+
 ```
-<type>/<short-description>
+{type}/{short-description}
 ```
 
 **Examples by work type:**
+
 | Description | Branch Name |
 |-------------|-------------|
 | add user authentication | feat/add-user-authentication |
@@ -101,6 +123,7 @@ Based on the branch-convention from HERO.md:
 | update CI pipeline | chore/update-ci-pipeline |
 
 **Rules:**
+
 - Infer type from description: `add/create/implement` → `feat/`, `fix/repair/resolve` → `fix/`, `refactor/clean/restructure` → `refactor/`, `update/bump/upgrade` → `chore/`
 - Lowercase, hyphens instead of spaces
 - Max 50 characters for the description part
@@ -117,25 +140,54 @@ Proposed branch: feat/add-user-authentication
 Enter to confirm, or type a different name:
 ```
 
-### Step 4: Create Branch
+### Step 4: Validate Branch Name Against Pre-commit
+
+If `.pre-commit-config.yaml` exists, check for branch-related hooks:
+
+```bash
+if [ -f .pre-commit-config.yaml ]; then
+  grep -A10 "no-commit-to-branch" .pre-commit-config.yaml
+fi
+```
+
+The `no-commit-to-branch` hook restricts which branches you can commit to (not branch naming). If the hook defines a `--pattern`, verify the proposed branch name is allowed by that pattern. If it would be blocked, warn the user and suggest a compliant name before creating the branch. This prevents frustrating commit rejections later.
+
+### Step 5: Create Branch
 
 ```bash
 # Check that the branch does not already exist (local or remote)
-if git branch --list "<branch-name>" | grep -q .; then
-  echo "Branch '<branch-name>' already exists locally. Please choose a different name."
+if git branch --list "$BRANCH_NAME" | grep -q .; then
+  echo "Branch '$BRANCH_NAME' already exists locally. Please choose a different name."
   # Ask user to rename or append a number
 fi
 
-git checkout -b <branch-name>
+git checkout -b $BRANCH_NAME
 ```
 
-### Step 5: Report
+### Step 6: Restore Stash (if applicable)
+
+If changes were stashed in Step 1:
+
+```bash
+git stash pop
+```
+
+Report the restore:
+
+```
+Restored stashed changes from "hero-branch: WIP on $BRANCH"
+```
+
+If the stash pop has conflicts, report them clearly and let the user resolve.
+
+### Step 7: Report
 
 ```
 Hero Branch Summary
 ===================
-Created: <branch-name>
-From: <default-branch> (up to date)
+Created: {branch-name}
+From: {default-branch} (up to date)
+Stash: [restored / carried over / n/a]
 
 Ready to work. When done:
   /hero-commit  - review and commit changes
