@@ -62,8 +62,6 @@ CURRENT=$(git branch --show-current)
 if [ "$CURRENT" != "$DEFAULT_BRANCH" ]; then
   echo "Currently on $CURRENT, not $DEFAULT_BRANCH"
 fi
-
-git pull origin $DEFAULT_BRANCH
 ```
 
 If not on the default branch, ask:
@@ -75,6 +73,15 @@ Options:
 1. Switch to $DEFAULT_BRANCH first, then branch (recommended)
 2. Branch from $CURRENT instead
 ```
+
+**If option 1 (switch to default branch):**
+
+```bash
+git checkout "$DEFAULT_BRANCH"
+git pull origin "$DEFAULT_BRANCH"
+```
+
+**If option 2 (branch from current):** Skip the pull — branch from `$CURRENT` as-is.
 
 ### Step 3: Generate Branch Name
 
@@ -113,6 +120,12 @@ Enter to confirm, or type a different name:
 ### Step 4: Create Branch
 
 ```bash
+# Check that the branch does not already exist (local or remote)
+if git branch --list "<branch-name>" | grep -q .; then
+  echo "Branch '<branch-name>' already exists locally. Please choose a different name."
+  # Ask user to rename or append a number
+fi
+
 git checkout -b <branch-name>
 ```
 

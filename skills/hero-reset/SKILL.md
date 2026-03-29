@@ -1,7 +1,7 @@
 ---
 name: hero-reset
 # prettier-ignore
-description: Reset to main branch, pull latest, and clear conversation context. Use when starting fresh or switching tasks.
+description: Reset to the default branch, pull latest, and clear conversation context. Use when starting fresh or switching tasks.
 disable-model-invocation: true
 ---
 
@@ -67,7 +67,7 @@ git pull origin $DEFAULT_BRANCH
 List local branches that have been merged and could be cleaned:
 
 ```bash
-git branch --merged $DEFAULT_BRANCH | grep -v "^\*\|$DEFAULT_BRANCH"
+git branch --merged "$DEFAULT_BRANCH" | grep -vE '^\*' | grep -vE "^[[:space:]]*${DEFAULT_BRANCH}$"
 ```
 
 If there are merged branches, suggest cleanup but don't delete without confirmation.

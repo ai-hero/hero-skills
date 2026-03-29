@@ -95,9 +95,10 @@ gh pr list --head $(git branch --show-current) --json number,url,title,state
 ### A3: Create Pull Request
 
 ```bash
-git log origin/main..HEAD --pretty=format:"%s%n%b" --reverse
-git diff origin/main..HEAD --stat
-git diff origin/main..HEAD --name-only
+DEFAULT_BRANCH=main  # or from HERO.md
+git log origin/$DEFAULT_BRANCH..HEAD --pretty=format:"%s%n%b" --reverse
+git diff origin/$DEFAULT_BRANCH..HEAD --stat
+git diff origin/$DEFAULT_BRANCH..HEAD --name-only
 ```
 
 Determine the draft flag:
@@ -112,7 +113,7 @@ fi
 **Generate PR content by listing each commit as a changeset with its files and description:**
 
 ```bash
-gh pr create $DRAFT_FLAG --title "<title>" --body "$(cat <<'EOF'
+gh pr create $DRAFT_FLAG --base "$DEFAULT_BRANCH" --title "<title>" --body "$(cat <<'EOF'
 ## Summary
 [1-3 sentence overview of what this PR accomplishes]
 
