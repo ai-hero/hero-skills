@@ -46,7 +46,7 @@ echo "Current branch: $BRANCH"
 ```
 ⚠ You have uncommitted changes on '$BRANCH':
 
-  <list changed files from git status>
+  (list changed files from git status)
 
 These changes will be affected by switching branches.
 
@@ -142,15 +142,15 @@ Enter to confirm, or type a different name:
 
 ### Step 4: Validate Branch Name Against Pre-commit
 
-If `.pre-commit-config.yaml` exists, check for a `no-commit-to-branch` hook:
+If `.pre-commit-config.yaml` exists, check for branch-related hooks:
 
 ```bash
 if [ -f .pre-commit-config.yaml ]; then
-  grep -A5 "no-commit-to-branch" .pre-commit-config.yaml
+  grep -A10 "no-commit-to-branch" .pre-commit-config.yaml
 fi
 ```
 
-If a branch pattern is enforced (e.g., `feature/*`, `fix/*`, etc.), verify the proposed branch name matches. If it doesn't, warn the user and suggest a compliant name before creating the branch. This prevents frustrating commit rejections later.
+The `no-commit-to-branch` hook restricts which branches you can commit to (not branch naming). If the hook defines a `--pattern`, verify the proposed branch name is allowed by that pattern. If it would be blocked, warn the user and suggest a compliant name before creating the branch. This prevents frustrating commit rejections later.
 
 ### Step 5: Create Branch
 
@@ -175,7 +175,7 @@ git stash pop
 Report the restore:
 
 ```
-Restored stashed changes from "hero-branch: WIP on $ORIGINAL_BRANCH"
+Restored stashed changes from "hero-branch: WIP on $BRANCH"
 ```
 
 If the stash pop has conflicts, report them clearly and let the user resolve.

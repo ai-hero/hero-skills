@@ -7,13 +7,19 @@ on:
 permissions:
   pull-requests: write
   contents: read
+  issues: write
 
 jobs:
   claude-approve:
     runs-on: ubuntu-latest
     if: |
       github.event.issue.pull_request &&
-      contains(github.event.comment.body, '@auto-approve')
+      contains(github.event.comment.body, '@auto-approve') &&
+      (
+        github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'COLLABORATOR'
+      )
 
     steps:
       - name: Get PR details
@@ -33,7 +39,8 @@ jobs:
             /repos/${{ github.repository }}/pulls/$PR_NUMBER \
             > pr.diff
 
-          head -c 40000 pr.diff > pr_truncated.diff
+          # Send full diff — Claude supports up to 1M tokens
+          cp pr.diff pr_truncated.diff
 
           gh api /repos/${{ github.repository }}/pulls/$PR_NUMBER/files \
             --jq '.[].filename' > changed_files.txt
@@ -111,19 +118,26 @@ jobs:
               messages: [{role: "user", content: $prompt}]
             }')
 
-          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+          # Note: This sends PR content to the Anthropic API for AI review.
+          # Only authorized team members (OWNER/MEMBER/COLLABORATOR) can trigger this.
+          if ! RESPONSE=$(curl -fsS https://api.anthropic.com/v1/messages \
             -H "Content-Type: application/json" \
             -H "x-api-key: $ANTHROPIC_API_KEY" \
             -H "anthropic-version: 2023-06-01" \
-            -d "$PAYLOAD")
+            -d "$PAYLOAD"); then
+            echo "Error: Anthropic API call failed" > review.md
+            echo "verdict=request_changes" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           REVIEW=$(echo "$RESPONSE" | jq -r '.content[0].text // "Error: Could not get review from Claude"')
           echo "$REVIEW" > review.md
 
-          if echo "$REVIEW" | grep -q "REQUEST_CHANGES"; then
-            echo "verdict=request_changes" >> "$GITHUB_OUTPUT"
-          else
+          # Fail-closed: default to request_changes unless explicitly approved
+          if echo "$REVIEW" | grep -q "APPROVE"; then
             echo "verdict=approve" >> "$GITHUB_OUTPUT"
+          else
+            echo "verdict=request_changes" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Post result

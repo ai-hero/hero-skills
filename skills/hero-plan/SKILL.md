@@ -107,7 +107,7 @@ Track that a stash was created (for restore after branch creation).
 
 ```bash
 git checkout main && git pull
-git checkout -b $ISSUE_ID-short-description
+git checkout -b "${ISSUE_ID}-short-description"
 ```
 
 Use the issue ID and 2-3 descriptive words from the title.

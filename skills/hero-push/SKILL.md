@@ -112,6 +112,13 @@ if [ "$ARGUMENTS" = "draft" ]; then
 fi
 ```
 
+**Generate the PR title from commit history** (use the most descriptive commit, or summarize if multiple):
+
+```bash
+# Default to first commit subject; override with a better summary if needed
+PR_TITLE="$(git log origin/$DEFAULT_BRANCH..HEAD --pretty=%s | head -1)"
+```
+
 **Generate PR content by listing each commit as a changeset with its files and description:**
 
 ```bash

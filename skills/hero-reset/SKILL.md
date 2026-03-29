@@ -73,7 +73,7 @@ Otherwise, check whether the current branch has been merged:
 
 ```bash
 git fetch origin $DEFAULT_BRANCH
-git branch --merged origin/$DEFAULT_BRANCH | grep -q "^\s*$CURRENT$" && echo "MERGED" || echo "NOT_MERGED"
+git branch --merged origin/$DEFAULT_BRANCH | grep -Eq "^[[:space:]]*$CURRENT$" && echo "MERGED" || echo "NOT_MERGED"
 ```
 
 **If the current branch is merged into the default branch:**
