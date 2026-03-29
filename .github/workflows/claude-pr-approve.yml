@@ -1,0 +1,185 @@
+name: Claude PR Approve
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  claude-approve:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '@auto-approve')
+
+    steps:
+      - name: Get PR details
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=${{ github.event.issue.number }}
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+          gh api /repos/${{ github.repository }}/pulls/$PR_NUMBER > pr.json
+          jq -r '.title' pr.json > pr_title.txt
+          jq -r '.body // ""' pr.json > pr_body.txt
+
+          gh api \
+            -H "Accept: application/vnd.github.v3.diff" \
+            /repos/${{ github.repository }}/pulls/$PR_NUMBER \
+            > pr.diff
+
+          head -c 40000 pr.diff > pr_truncated.diff
+
+          gh api /repos/${{ github.repository }}/pulls/$PR_NUMBER/files \
+            --jq '.[].filename' > changed_files.txt
+
+      - name: Acknowledge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method POST \
+            /repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            -f content="eyes"
+
+      - name: Claude verification
+        id: verify
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          PR_TITLE=$(cat pr_title.txt)
+          PR_BODY=$(cat pr_body.txt | head -c 4000)
+          DIFF=$(cat pr_truncated.diff)
+          CHANGED_FILES=$(cat changed_files.txt)
+
+          PAYLOAD=$(jq -n \
+            --arg model "claude-sonnet-4-6" \
+            --arg prompt "You are a gatekeeper deciding whether to APPROVE a pull request. A human developer has already reviewed the code. Your job is strictly to verify the PR metadata is honest and complete. Be concise.
+
+          CHECK 1 — PR DESCRIPTION INTEGRITY
+          - Does the description accurately reflect what the diff does?
+          - Are there claims NOT backed by the diff? (e.g. says 'Added error handling' but diff has none)
+          - Are there significant diff changes the description fails to mention?
+
+          CHECK 2 — TEST VERIFICATION
+          - If the description claims tests were added/updated, do test files appear in the diff?
+          - If critical logic is touched (auth, payments, data mutations, APIs) and NO tests are changed, flag it.
+          - Skip this for trivial changes (docs, config, formatting).
+
+          CHECK 3 — COMPLETENESS
+          - New API route but no validation?
+          - New DB column but no migration?
+          - TODO/FIXME added without a tracking issue?
+          - Hardcoded secrets or values that should be config?
+
+          ---
+
+          PR Title: $PR_TITLE
+
+          PR Description:
+          $PR_BODY
+
+          Changed Files:
+          $CHANGED_FILES
+
+          Diff:
+          $DIFF
+
+          ---
+
+          Respond in this exact format:
+
+          ## PR Description: ✅ or ❌
+          One line explanation.
+
+          ## Tests: ✅ or ❌ or ⏭️ (skipped if trivial)
+          One line explanation.
+
+          ## Completeness: ✅ or ❌
+          One line explanation.
+
+          ## Verdict
+          APPROVE or REQUEST_CHANGES
+          One sentence reason." \
+            '{
+              model: $model,
+              max_tokens: 1024,
+              messages: [{role: "user", content: $prompt}]
+            }')
+
+          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -d "$PAYLOAD")
+
+          REVIEW=$(echo "$RESPONSE" | jq -r '.content[0].text // "Error: Could not get review from Claude"')
+          echo "$REVIEW" > review.md
+
+          if echo "$REVIEW" | grep -q "REQUEST_CHANGES"; then
+            echo "verdict=request_changes" >> "$GITHUB_OUTPUT"
+          else
+            echo "verdict=approve" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post result
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          REVIEW_BODY=$(cat review.md)
+          TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M UTC")
+
+          COMMENT_BODY="<!-- claude-approve -->
+          🤖 **Claude Pre-Approve Check**
+
+          $REVIEW_BODY
+
+          ---
+          *Verified by Claude (claude-sonnet-4-6) • $TIMESTAMP*"
+
+          # Update existing or create new
+          EXISTING=$(gh api \
+            /repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
+            --jq '.[] | select(.body | startswith("<!-- claude-approve -->")) | .id' \
+            | head -1)
+
+          if [ -n "$EXISTING" ]; then
+            gh api --method PATCH \
+              /repos/${{ github.repository }}/issues/comments/$EXISTING \
+              -f body="$COMMENT_BODY"
+          else
+            gh api --method POST \
+              /repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
+              -f body="$COMMENT_BODY"
+          fi
+
+      - name: Submit verdict
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          if [ "${{ steps.verify.outputs.verdict }}" = "approve" ]; then
+            VERDICT="APPROVE"
+            BODY="✅ Approved — PR description is accurate, test claims verified, no critical gaps."
+          else
+            VERDICT="REQUEST_CHANGES"
+            BODY="❌ Changes requested — see Claude's verification comment above."
+          fi
+          gh api --method POST \
+            /repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews \
+            -f event="$VERDICT" \
+            -f body="$BODY"
+
+      - name: React with result
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EMOJI=${{ steps.verify.outputs.verdict == 'approve' && 'rocket' || '-1' }}
+          gh api --method POST \
+            /repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            -f content="$EMOJI"
