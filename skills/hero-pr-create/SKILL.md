@@ -113,16 +113,24 @@ if [ "$ARGUMENTS" = "draft" ]; then
 fi
 ```
 
-Generate a title from commits — keep under 70 characters. Generate a body from the diff and commit messages:
+Generate a title from commits — keep under 70 characters. Generate the body by listing each commit as a changeset with its files and a one-line description:
 
 ```bash
 gh pr create $DRAFT_FLAG --title "<title>" --body "$(cat <<'EOF'
 ## Summary
-- [Key change 1]
-- [Key change 2]
+[1-3 sentence overview of what this PR accomplishes]
 
-## Changes
-- [Detailed change list from commits and diff]
+## Changesets
+
+### 1. `<commit-type>(<scope>): <commit-message>`
+**Files:** `file1.ts`, `file2.ts` (+A -D)
+<Brief description of what this commit does and why>
+
+### 2. `<commit-type>(<scope>): <commit-message>`
+**Files:** `file3.py` (+A -D)
+<Brief description of what this commit does and why>
+
+[...repeat for each commit on the branch]
 
 ## Test Plan
 - [ ] [Test step 1]

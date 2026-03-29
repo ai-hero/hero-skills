@@ -98,16 +98,24 @@ git diff origin/main..HEAD --stat
 git diff origin/main..HEAD --name-only
 ```
 
-**Generate PR content from commits and diff, then create:**
+**Generate PR content by listing each commit as a changeset with its files and description:**
 
 ```bash
 gh pr create --title "<title>" --body "$(cat <<'EOF'
 ## Summary
-- [Key change 1]
-- [Key change 2]
+[1-3 sentence overview of what this PR accomplishes]
 
-## Changes
-- [Detailed change list]
+## Changesets
+
+### 1. `<commit-type>(<scope>): <commit-message>`
+**Files:** `file1.ts`, `file2.ts` (+A -D)
+<Brief description of what this commit does and why>
+
+### 2. `<commit-type>(<scope>): <commit-message>`
+**Files:** `file3.py` (+A -D)
+<Brief description of what this commit does and why>
+
+[...repeat for each commit on the branch]
 
 ## Test Plan
 - [ ] [Test step 1]
