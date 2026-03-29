@@ -18,6 +18,7 @@ Guide an individual developer through setting up their local environment based o
 ## Prerequisites
 
 `HERO.md` must exist. If it doesn't, tell the user:
+
 ```
 No HERO.md found. Run /hero-init first to configure the project.
 ```
@@ -68,6 +69,7 @@ GIT CONFIGURATION
 ```
 
 **If local config is missing**, offer to set it:
+
 ```bash
 git config --local user.name "<name>"
 git config --local user.email "<email>"
@@ -99,6 +101,7 @@ REQUIRED TOOLS
 ```
 
 For missing tools, provide **platform-appropriate install commands**:
+
 - macOS: `brew install <tool>`
 - Linux: distro-appropriate (apt, dnf, pacman) or official install script
 - Suggest the user's package manager if detectable

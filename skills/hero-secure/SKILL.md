@@ -33,6 +33,7 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 ```
 
 Read `HERO.md` if it exists. This skill uses:
+
 - **Deployment** → registry for Docker Scout image scanning
 - **Projects** → language/framework to know which dependency files to check
 - **Code Quality** → linters/tools context

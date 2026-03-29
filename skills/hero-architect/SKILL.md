@@ -32,6 +32,7 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 ```
 
 Read `HERO.md` if it exists. This skill uses:
+
 - **Repository** → type (single vs monorepo) to know project layout
 - **Projects** → list of subprojects, languages, frameworks for architecture context
 - **Deployment** → platform and registry for deployment architecture diagrams
@@ -108,12 +109,15 @@ If `HERO.md` is missing, suggest `/hero-init` but proceed with auto-detection.
 ## Components
 
 ### [Component Name]
+
 - **Purpose**: [What it does]
 - **Location**: `path/to/code`
 - **Dependencies**: [What it depends on]
 
 ## Key Decisions
+
 - **[Decision]**: [Rationale]
+
 ```
 
 ## Markdown Linting

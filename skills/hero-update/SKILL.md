@@ -50,9 +50,11 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 ```
 
 If `HERO.md` does not exist:
+
 ```
 No HERO.md found. Run /hero-init to create one.
 ```
+
 Exit — this skill updates, it does not create from scratch.
 
 Parse the existing `HERO.md` into sections. Track every field and its current value.
@@ -66,6 +68,7 @@ git diff --cached --name-only
 ```
 
 Only investigate changes relevant to staged files:
+
 - Dependency file changed (`pyproject.toml`, `package.json`, `go.mod`, `Cargo.toml`) → re-detect dependencies, tools, versions
 - New directory with its own dependency file → potential new project/subproject
 - CI config changed (`.github/workflows/`, `.gitlab-ci.yml`) → re-detect CI/CD
@@ -92,6 +95,7 @@ find "$ROOT" -maxdepth 3 -name "pyproject.toml" -o -name "package.json" -o -name
 ```
 
 For each project in HERO.md `## Projects`:
+
 - Verify the path still exists
 - Check if dependency file changed (new dependencies, removed dependencies)
 - Detect if language/framework changed (e.g., added FastAPI to a plain Python project)
@@ -166,6 +170,7 @@ Show the diff of what would change and exit.
 ### Step 6: Update CLAUDE.md
 
 If HERO.md changed, also update the corresponding sections in CLAUDE.md:
+
 - `## Tech Stack` — human-readable summary of language, framework, infra
 - `## Best Practices` — commits, branches, code quality, testing
 - `## Coding Conventions` — naming, imports, error handling, etc.
@@ -198,6 +203,7 @@ HERO.md synced: updated Code Quality (added biome), Projects → api (new deps)
 ```
 
 If nothing changed:
+
 ```
 HERO.md is up to date.
 ```

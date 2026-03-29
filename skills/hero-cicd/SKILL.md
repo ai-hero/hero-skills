@@ -31,6 +31,7 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 ```
 
 Read `HERO.md` if it exists. This skill uses:
+
 - **CI/CD** → platform (github-actions, gitlab-ci, jenkins, circleci) and workflow names
 - **Deployment** → registry and platform for image/deploy status checks
 

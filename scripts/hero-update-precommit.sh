@@ -43,7 +43,7 @@ while IFS= read -r file; do
 
     # Code quality
     .pre-commit-config.yaml) RELEVANT=true ;;
-    ruff.toml|pyproject.toml) RELEVANT=true ;;
+    ruff.toml) RELEVANT=true ;;
     .eslintrc*|eslint.config.*) RELEVANT=true ;;
     tsconfig.json|*/tsconfig.json) RELEVANT=true ;;
     biome.json|*/biome.json) RELEVANT=true ;;

@@ -30,6 +30,7 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 ```
 
 Read `HERO.md` if it exists. This skill uses:
+
 - **Code Quality** → linters, formatters, type-checkers for verification commands
 - **Projects** → test commands, framework-specific patterns
 - **Repository** → commit convention for any intermediate commits
@@ -147,6 +148,7 @@ git diff
 ```
 
 Check for:
+
 - Debug code left in
 - Commented-out code
 - Missing error handling at system boundaries

@@ -1,4 +1,90 @@
+# =============================================================================
+# Hero Skills Plugin - Pre-commit Configuration
+# =============================================================================
+# Tech stack: Markdown (SKILL.md files), Shell scripts, JSON, YAML
+# =============================================================================
+
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+
 repos:
+  # ===========================================================================
+  # General safety checks
+  # ===========================================================================
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: check-json
+      - id: check-yaml
+      - id: check-toml
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+
+  # ===========================================================================
+  # Secret detection
+  # ===========================================================================
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: [--exclude-files, '.*\.lock$']
+
+  # ===========================================================================
+  # Markdown linting
+  # ===========================================================================
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.44.0
+    hooks:
+      - id: markdownlint
+        args:
+          - --fix
+          - --disable=MD013  # line length — impractical for skill docs
+          - --disable=MD024  # duplicate headings — skills reuse step headers
+          - --disable=MD033  # inline HTML — needed for comments in HERO.md
+          - --disable=MD036  # emphasis as heading
+          - --disable=MD040  # fenced code block language — not all blocks need it
+          - --disable=MD041  # first line heading — frontmatter comes first
+
+  # ===========================================================================
+  # Typo detection
+  # ===========================================================================
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        args: [--skip, '*.lock']
+
+  # ===========================================================================
+  # Shell script linting
+  # ===========================================================================
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: [--severity=warning]
+        files: \.sh$
+
+  # ===========================================================================
+  # Commit message convention (conventional commits)
+  # ===========================================================================
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.0.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+
+  # ===========================================================================
+  # Local hooks (hero-skills specific)
+  # ===========================================================================
   - repo: local
     hooks:
       - id: validate-plugin
