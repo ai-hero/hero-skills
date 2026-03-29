@@ -2,7 +2,7 @@
 name: hero-push
 # prettier-ignore
 description: Push current work to remote, create PRs, or merge to target branches. Handles the complete push/PR/merge workflow for any repository.
-argument-hint: [target-branch]
+argument-hint: [draft|target-branch]
 disable-model-invocation: true
 ---
 
@@ -12,9 +12,10 @@ Push your current work to the remote repository. Handles pushing, PR creation, a
 
 ## Arguments
 
-- `$ARGUMENTS` - Optional target branch to merge into (e.g., `main`, `develop`)
+- `$ARGUMENTS` - Optional modifier or target branch:
+  - `draft` - Push and create a **draft** PR
   - If not provided: Push current branch and create PR if needed
-  - If provided: Push, then merge into the target branch
+  - If a branch name (e.g., `main`, `develop`): Push, then merge into that target branch
 
 ## Instructions
 
@@ -58,9 +59,10 @@ Stop and let user decide.
 
 ### Step 2: Determine Workflow
 
-| Target | Workflow |
-|--------|----------|
+| Argument | Workflow |
+|----------|----------|
 | (none) | Push + PR |
+| `draft` | Push + Draft PR |
 | `main`/`master` | Push + Merge to main |
 | Other branch | Push + Merge to target |
 
@@ -98,10 +100,19 @@ git diff origin/main..HEAD --stat
 git diff origin/main..HEAD --name-only
 ```
 
+Determine the draft flag:
+
+```bash
+DRAFT_FLAG=""
+if [ "$ARGUMENTS" = "draft" ]; then
+  DRAFT_FLAG="--draft"
+fi
+```
+
 **Generate PR content by listing each commit as a changeset with its files and description:**
 
 ```bash
-gh pr create --title "<title>" --body "$(cat <<'EOF'
+gh pr create $DRAFT_FLAG --title "<title>" --body "$(cat <<'EOF'
 ## Summary
 [1-3 sentence overview of what this PR accomplishes]
 
