@@ -1,18 +1,18 @@
 ---
 name: hero-plan
 # prettier-ignore
-description: Plan implementation for a ticket. Fetches issue details from Linear, creates feature branch, analyzes codebase, and drafts implementation approach for approval. Works with any project structure (single repo or monorepo).
-argument-hint: <issue-id> [additional-context]
+description: Plan implementation for a task. Accepts a Linear issue ID or a plain description. Fetches issue details if given an ID, analyzes codebase, enters Plan Mode, and drafts implementation approach for approval.
+argument-hint: ISSUE_ID_OR_DESCRIPTION [additional-context]
 disable-model-invocation: true
 ---
 
-# Hero Plan - Issue Implementation Planning
+# Hero Plan - Implementation Planning
 
-Plan the implementation for a Linear issue by fetching details, analyzing the codebase, and drafting an implementation approach for user approval.
+Plan the implementation for a task by analyzing the codebase and drafting an implementation approach for user approval. Accepts either a Linear issue ID or a plain-text description.
 
 ## Arguments
 
-- `$ARGUMENTS` - The Linear issue identifier (e.g., `PROJ-123`) and optional additional context
+- `$ARGUMENTS` - Either a Linear issue identifier (e.g., `PROJ-123`) or a plain-text description of the task, plus optional additional context
 
 ## Instructions
 
@@ -35,17 +35,20 @@ If `HERO.md` is missing, suggest `/hero-init` but proceed with defaults (Linear 
 
 Extract from `$ARGUMENTS`:
 
-- **Issue ID** (required): First argument, e.g., `PROJ-123`
-- **Additional context** (optional): Remaining text provides extra requirements
+- **Issue ID** (optional): If the first token matches a pattern like `PROJ-123` (letters, dash, digits), treat it as a Linear issue ID
+- **Description** (alternative): If no issue ID pattern is found, treat the entire argument as a plain-text task description
+- **Additional context** (optional): Any remaining text after the issue ID provides extra requirements
 
-If no issue ID provided, ask the user for one.
+If `$ARGUMENTS` is empty, ask the user what they want to plan.
 
-### Step 2: Fetch Issue from Linear
+### Step 2: Gather Context
+
+**If an issue ID was provided**, fetch from Linear:
 
 Use the Linear MCP tools to get full issue details:
 
 ```
-mcp__linear-server__get_issue with id: <issue-id>
+mcp__linear-server__get_issue with id: ISSUE_ID
 ```
 
 Extract and summarize:
@@ -59,10 +62,12 @@ Extract and summarize:
 Also fetch comments for additional context:
 
 ```
-mcp__linear-server__list_comments with issueId: <issue-id>
+mcp__linear-server__list_comments with issueId: ISSUE_ID
 ```
 
 Present a summary of the issue to the user.
+
+**If a plain-text description was provided**, use it directly as the task context. Summarize what you understand the task to be and confirm with the user.
 
 ### Step 3: Prepare Workspace
 
@@ -106,11 +111,15 @@ Track that a stash was created (for restore after branch creation).
 **If creating feature branch:**
 
 ```bash
-git checkout main && git pull
-git checkout -b "${ISSUE_ID}-short-description"
+git fetch origin $DEFAULT_BRANCH
+git checkout $DEFAULT_BRANCH && git pull origin $DEFAULT_BRANCH
+git checkout -b "BRANCH_NAME"
 ```
 
-Use the issue ID and 2-3 descriptive words from the title.
+Branch naming:
+
+- **If issue ID exists**: `{issue-id}-short-description` (e.g., `PROJ-123-add-auth`)
+- **If description only**: `feat/short-description` or `fix/short-description` based on context (e.g., `feat/add-dark-mode`)
 
 **If changes were stashed, restore them on the new branch:**
 
@@ -122,16 +131,21 @@ If the stash pop has conflicts, report them clearly and let the user resolve.
 
 ### Step 4: Enter Plan Mode
 
-```
-Entering plan mode for issue <issue-id>.
+**IMPORTANT: Use the `EnterPlanMode` tool to switch into Plan Mode.** This ensures Claude cannot modify files while planning and the user must approve the plan before implementation begins.
 
-In this mode I will:
+After entering Plan Mode, announce:
+
+```
+Now in Plan Mode for: TASK_SUMMARY
+
+I will:
 - Analyze the codebase
 - Identify affected files and systems
 - Draft an implementation approach
 - Ask clarifying questions
 
 I will NOT write any code until the plan is approved.
+To exit Plan Mode and start implementing, say "implement" or "let's go".
 ```
 
 ### Step 5: Analyze the Codebase
@@ -154,7 +168,7 @@ Based on the issue, explore relevant areas:
 ### Step 6: Draft Implementation Plan
 
 ```markdown
-## Implementation Plan for <issue-id>
+## Implementation Plan for TASK_TITLE
 
 ### Summary
 [1-2 sentence description of what will be built]
@@ -208,17 +222,20 @@ Plan is ready for review.
 ## Integration
 
 ```
-/hero-plan PROJ-123    # Plan the work
-# ... implement ...
-/hero-commit review           # Review and commit
-/hero-push             # Push and create PR
+/hero-plan PROJ-123              # Plan from a Linear issue
+/hero-plan add dark mode toggle  # Plan from a description
+# ... approve plan, then implement ...
+/hero-commit review              # Review and commit
+/hero-push                       # Push and create PR
 ```
 
 ## Notes
 
-- Plan mode is analysis-only - no code modifications
-- Always fetch full issue details from Linear
-- Create branches with consistent naming: `{issue-id}-{short-description}`
+- Uses the `EnterPlanMode` tool to enforce read-only analysis — no code modifications until the user approves
+- Accepts either a Linear issue ID or a plain-text description
+- If an issue ID is provided, fetches full details from Linear
+- Create branches with consistent naming: `{issue-id}-{short-description}` or `feat/{short-description}`
 - Ask questions rather than assume
 - The plan should be specific enough that implementation is straightforward
 - Include testing approach in every plan
+- When the user approves (says "implement", "let's go", etc.), use `ExitPlanMode` to leave Plan Mode and begin coding
