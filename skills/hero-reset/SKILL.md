@@ -67,12 +67,17 @@ Note: hero-reset does NOT auto-pop the stash since the purpose is to switch away
 DEFAULT_BRANCH=main  # or from HERO.md
 ```
 
+**First, always update the local default branch from remote:**
+
+```bash
+git fetch origin $DEFAULT_BRANCH
+```
+
 If already on the default branch, skip to Step 3.
 
 Otherwise, check whether the current branch has been merged:
 
 ```bash
-git fetch origin $DEFAULT_BRANCH
 git branch --merged origin/$DEFAULT_BRANCH | grep -Eq "^[[:space:]]*$CURRENT$" && echo "MERGED" || echo "NOT_MERGED"
 ```
 
@@ -127,7 +132,7 @@ git pull origin $DEFAULT_BRANCH
 List any other local branches that have been merged and could be cleaned:
 
 ```bash
-git branch --merged "$DEFAULT_BRANCH" | grep -vE '^\*' | grep -vE "^[[:space:]]*${DEFAULT_BRANCH}$"
+git branch --merged "origin/$DEFAULT_BRANCH" | grep -vE '^\*' | grep -vE "^[[:space:]]*${DEFAULT_BRANCH}$"
 ```
 
 If there are merged branches, suggest cleanup but don't delete without confirmation.
