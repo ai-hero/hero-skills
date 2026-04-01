@@ -5,6 +5,7 @@
 
 - tool: github-issues
 - issue-prefix: none
+- issue-tracker: github
 
 ## Repository
 
@@ -15,7 +16,8 @@
 
 ## CI/CD
 
-- platform: none
+- platform: github-actions
+- workflows: claude-pr-approve
 
 ## Deployment
 
@@ -23,9 +25,16 @@
 - registry: none
 - argocd: false
 
+## Coding Agent
+
+- agent: claude-code
+- config: .claude/
+
 ## Code Quality
 
 - pre-commit: true
+- linters: markdownlint, shellcheck, codespell
+- hooks: detect-secrets, validate-plugin, hero-meta, hero-update
 
 ## Projects
 

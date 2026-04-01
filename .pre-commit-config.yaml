@@ -96,8 +96,8 @@ repos:
 
       - id: hero-meta
         name: "Hero Meta: audit plugin quality"
-        entry: claude -p "/hero-meta"
-        language: system
+        entry: ./scripts/hero-meta-precommit.sh
+        language: script
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
