@@ -30,7 +30,7 @@ fi
 DIFF=$(git diff --cached -- "${RELEVANT_FILES[@]}")
 
 # Send only the diff to Haiku for a fast, scoped audit
-echo "$DIFF" | claude --model haiku --max-turns 10 -p "$(cat <<'EOF'
+OUTPUT=$(echo "$DIFF" | claude --model haiku --max-turns 10 -p "$(cat <<'EOF'
 You are reviewing a diff to a Claude Code skills plugin. Only check what changed in this diff — do not audit the entire plugin.
 
 For the changed lines, verify:
@@ -46,4 +46,10 @@ If everything looks good, output: "hero-meta: PASSED"
 If there are issues, output: "hero-meta: ISSUES FOUND" followed by a brief list.
 Keep output under 10 lines.
 EOF
-)"
+)")
+
+echo "$OUTPUT"
+
+if echo "$OUTPUT" | grep -q "ISSUES FOUND"; then
+  exit 1
+fi
