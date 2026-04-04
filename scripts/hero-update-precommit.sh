@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fast pre-commit gate for hero-update.
+# Fast pre-commit gate for hero-init --update.
 # Checks if any staged files could affect HERO.md. If not, exits instantly.
 # Only invokes Claude when something relevant changed.
 
@@ -66,5 +66,20 @@ if ! $RELEVANT; then
   exit 0
 fi
 
-# Something relevant changed — invoke Claude to sync HERO.md
-exec claude -p "/hero-update --staged-only"
+# Something relevant changed — build diff and ask Claude to sync HERO.md
+DIFF=$(git diff --cached)
+HERO=$(cat "$ROOT/HERO.md")
+
+echo "$DIFF" | claude --model sonnet --max-turns 3 -p "$(cat <<EOF
+You are syncing HERO.md with codebase changes. Here is the current HERO.md:
+
+$HERO
+
+The staged diff above shows what changed. If any changes affect HERO.md fields
+(dependencies, CI workflows, linters, coding agent, code review agent, etc.),
+update HERO.md to reflect the new state. Stage the updated file with git add HERO.md.
+
+If nothing in the diff affects HERO.md, output: "HERO.md is up to date" and exit.
+Keep output under 5 lines.
+EOF
+)"

@@ -82,7 +82,13 @@ That's it. Each command reads your `HERO.md` config and adapts to your stack aut
 | `/hero-test` | Auto-detect project type and run smoke tests |
 | `/hero-commit` | Self-review, pre-commit checks, grouped conventional commits |
 | `/hero-push` | Push, create PR with generated description, or merge |
-| `/hero-update` | Sync HERO.md with codebase changes (wire into pre-commit) |
+
+### Code Review
+
+| Command | What it does |
+|---------|-------------|
+| `/hero-review-pr` | Review a PR and leave inline comments (quality, bugs, security, style) |
+| `/hero-respond-to-pr` | Fix PR review comments, resolve threads, optionally loop with external review agent |
 
 ### Operations
 
@@ -104,7 +110,7 @@ That's it. Each command reads your `HERO.md` config and adapts to your stack aut
 
 Every skill reads `HERO.md` from your repo root. It declares your stack so skills don't have to guess. **HERO.md is committed to the repo** — it's team-shared, so every developer and every hero skill works from the same config.
 
-To keep it in sync automatically, wire `/hero-update` into your pre-commit hooks. A fast bash gate script checks staged files first — most commits skip Claude entirely and finish in milliseconds. Only when you change dependencies, CI config, or project structure does it invoke Claude to sync HERO.md.
+To keep it in sync automatically, wire `/hero-init --update` into your pre-commit hooks. A fast bash gate script checks staged files first — most commits skip Claude entirely and finish in milliseconds. Only when you change dependencies, CI config, or project structure does it invoke Claude to sync HERO.md.
 
 Here's what a minimal config looks like:
 
@@ -139,6 +145,7 @@ No `HERO.md`? Skills fall back to auto-detection. Run `/hero-init` to generate o
 `HERO.md` supports these sections:
 
 - **Project Management** — Linear, Jira, Asana, GitHub Issues
+- **Code Review Agent** — Greptile, CodeRabbit, Copilot (trigger, poll method, bot username)
 - **CI/CD** — GitHub Actions, GitLab CI, Jenkins, CircleCI
 - **Deployment** — Kubernetes, Vercel, ECS, Fly.io, container registries
 - **Code Quality** — pre-commit, linters, formatters, type checkers

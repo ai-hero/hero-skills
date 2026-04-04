@@ -29,8 +29,9 @@ fi
 # Build a focused diff of only the relevant staged changes
 DIFF=$(git diff --cached -- "${RELEVANT_FILES[@]}")
 
-# Send only the diff to Haiku for a fast, scoped audit
-OUTPUT=$(echo "$DIFF" | claude --model haiku --max-turns 10 -p "$(cat <<'EOF'
+# Send only the diff to Sonnet for a fast, scoped audit
+set +e
+OUTPUT=$(echo "$DIFF" | claude --model sonnet --max-turns 5 -p "$(cat <<'EOF'
 You are reviewing a diff to a Claude Code skills plugin. Only check what changed in this diff — do not audit the entire plugin.
 
 For the changed lines, verify:
@@ -47,6 +48,7 @@ If there are issues, output: "hero-meta: ISSUES FOUND" followed by a brief list.
 Keep output under 10 lines.
 EOF
 )")
+set -e
 
 echo "$OUTPUT"
 
