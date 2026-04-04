@@ -75,7 +75,14 @@ git fetch origin $DEFAULT_BRANCH
 
 If already on the default branch, skip to Step 3.
 
-Otherwise, check whether the current branch has been merged:
+Otherwise, check whether the current branch has been merged **remotely** (handles squash-and-merge):
+
+```bash
+gh pr list --head "$CURRENT" --state merged --json number --jq 'length' 2>/dev/null
+```
+
+If the result is `>= 1`, the branch has a merged PR — treat it as **MERGED**.
+If `0` or the command fails, fall back to the local check:
 
 ```bash
 git branch --merged origin/$DEFAULT_BRANCH | grep -Eq "^[[:space:]]*$CURRENT$" && echo "MERGED" || echo "NOT_MERGED"
@@ -129,10 +136,24 @@ git pull origin $DEFAULT_BRANCH
 
 ### Step 4: Clean Up Other Merged Branches (Optional)
 
-List any other local branches that have been merged and could be cleaned:
+List any other local branches that have been merged and could be cleaned. For each local branch, check for a merged PR remotely first (handles squash-and-merge), then fall back to the local merge check:
 
 ```bash
-git branch --merged "origin/$DEFAULT_BRANCH" | grep -vE '^\*' | grep -vE "^[[:space:]]*${DEFAULT_BRANCH}$"
+# Collect candidates from local merged check
+LOCAL_MERGED=$(git branch --merged "origin/$DEFAULT_BRANCH" | grep -vE '^\*' | grep -vE "^[[:space:]]*${DEFAULT_BRANCH}$" | sed 's/^[[:space:]]*//')
+
+# Also check all local branches for merged PRs on remote
+ALL_LOCAL=$(git branch | grep -vE '^\*' | grep -vE "^[[:space:]]*${DEFAULT_BRANCH}$" | sed 's/^[[:space:]]*//')
+REMOTE_MERGED=""
+for branch in $ALL_LOCAL; do
+  count=$(gh pr list --head "$branch" --state merged --json number --jq 'length' 2>/dev/null)
+  if [ "$count" -ge 1 ] 2>/dev/null; then
+    REMOTE_MERGED="$REMOTE_MERGED $branch"
+  fi
+done
+
+# Combine and deduplicate
+echo "$LOCAL_MERGED $REMOTE_MERGED" | tr ' ' '\n' | sort -u | grep -v '^$'
 ```
 
 If there are merged branches, suggest cleanup but don't delete without confirmation.
