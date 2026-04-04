@@ -75,7 +75,14 @@ git fetch origin $DEFAULT_BRANCH
 
 If already on the default branch, skip to Step 3.
 
-Otherwise, check whether the current branch has been merged:
+Otherwise, check whether the current branch has been merged **remotely** (handles squash-and-merge):
+
+```bash
+gh pr list --head "$CURRENT" --base "$DEFAULT_BRANCH" --state merged --json number --jq 'length' 2>/dev/null
+```
+
+If the result is `>= 1`, the branch has a merged PR — treat it as **MERGED**.
+If `0` or the command fails, fall back to the local check:
 
 ```bash
 git branch --merged origin/$DEFAULT_BRANCH | grep -Eq "^[[:space:]]*$CURRENT$" && echo "MERGED" || echo "NOT_MERGED"
@@ -129,10 +136,26 @@ git pull origin $DEFAULT_BRANCH
 
 ### Step 4: Clean Up Other Merged Branches (Optional)
 
-List any other local branches that have been merged and could be cleaned:
+List any other local branches that have been merged and could be cleaned. Fetch all merged PRs targeting the default branch in a single API call (avoids per-branch requests and rate limits), then combine with the local merge check:
 
 ```bash
-git branch --merged "origin/$DEFAULT_BRANCH" | grep -vE '^\*' | grep -vE "^[[:space:]]*${DEFAULT_BRANCH}$"
+# Collect candidates from local merged check
+LOCAL_MERGED=$(git branch --merged "origin/$DEFAULT_BRANCH" | grep -vE '^\*' | grep -vE "^[[:space:]]*${DEFAULT_BRANCH}$" | sed 's/^[[:space:]]*//')
+
+# Fetch all merged PR head branches targeting the default branch in one call
+REMOTE_MERGED=$(gh pr list --base "$DEFAULT_BRANCH" --state merged --json headRefName --jq '.[].headRefName' 2>/dev/null)
+
+# Filter to only branches that exist locally
+ALL_LOCAL=$(git branch | grep -vE '^\*' | grep -vE "^[[:space:]]*${DEFAULT_BRANCH}$" | sed 's/^[[:space:]]*//')
+REMOTE_LOCAL_MERGED=""
+for branch in $ALL_LOCAL; do
+  if echo "$REMOTE_MERGED" | grep -qx "$branch"; then
+    REMOTE_LOCAL_MERGED="$REMOTE_LOCAL_MERGED $branch"
+  fi
+done
+
+# Combine and deduplicate
+echo "$LOCAL_MERGED $REMOTE_LOCAL_MERGED" | tr ' ' '\n' | sort -u | grep -v '^$'
 ```
 
 If there are merged branches, suggest cleanup but don't delete without confirmation.
