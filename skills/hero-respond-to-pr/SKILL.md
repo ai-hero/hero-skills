@@ -1,12 +1,12 @@
 ---
-name: hero-pr-respond
+name: hero-respond-to-pr
 # prettier-ignore
 description: Read PR review comments, fix the code issues they raise, and resolve the conversations on GitHub. Handles the full respond-to-feedback cycle.
 argument-hint: [pr-number]
 disable-model-invocation: true
 ---
 
-# Hero PR Respond - Fix Issues and Resolve PR Comments
+# Hero Respond to PR - Fix Issues and Resolve PR Comments
 
 Read review comments on your pull request, update the code to address them, and resolve the conversations on GitHub.
 
@@ -34,6 +34,7 @@ Read `HERO.md` if it exists. This skill uses:
 
 - **Repository** → commit convention
 - **Code Quality** → linters, formatters, pre-commit
+- **Code Review Agent** → agent name, trigger method, poll method, bot username (for review loop)
 
 If `HERO.md` is missing, suggest `/hero-init` but proceed with defaults.
 
@@ -77,7 +78,7 @@ You have uncommitted changes on '$CURRENT':
 Need to switch to '$PR_BRANCH' to address PR comments.
 
 Options:
-1. Stash changes (saved as "hero-pr-respond: WIP on $CURRENT") — will NOT auto-restore since you're moving to a different branch
+1. Stash changes (saved as "hero-respond-to-pr: WIP on $CURRENT") — will NOT auto-restore since you're moving to a different branch
 2. Cancel — go back and commit or handle changes first
 ```
 
@@ -86,10 +87,10 @@ Options:
 **If user chooses option 1 (stash):**
 
 ```bash
-git stash push -m "hero-pr-respond: WIP on $CURRENT"
+git stash push -m "hero-respond-to-pr: WIP on $CURRENT"
 ```
 
-Report: `Stashed as: stash@{0} — "hero-pr-respond: WIP on $CURRENT". Restore later with: git checkout $CURRENT && git stash pop`
+Report: `Stashed as: stash@{0} — "hero-respond-to-pr: WIP on $CURRENT". Restore later with: git checkout $CURRENT && git stash pop`
 
 Note: Since the user is switching to a different branch to do PR work, do NOT auto-pop the stash. Remind the user in the final summary how to restore.
 
@@ -217,7 +218,7 @@ If checks fail, fix the issues before committing.
 ### Step 7: Commit the Fixes
 
 ```bash
-git add <changed-files>
+git add CHANGED_FILES
 git commit -m "$(cat <<'EOF'
 fix: address PR review feedback
 
@@ -281,7 +282,7 @@ gh api graphql -f query='
 ### Step 10: Summary
 
 ```
-Hero PR Respond Summary
+Hero Respond to PR Summary
 =======================
 PR: #{number} - {pr-title}
 Branch: {pr-branch}
@@ -305,6 +306,162 @@ URL: {pr-url}
 ```
 Note: You have stashed changes from {original-branch}.
 To restore: git checkout {original-branch} && git stash pop
+```
+
+### Step 11: Review Loop (when Code Review Agent is configured)
+
+After completing the initial respond cycle (Steps 3-10), check if `HERO.md` has a **Code Review Agent** configured (agent is not `none`). If so, and the user passed `--loop` or confirms they want to loop, enter the iterative review loop.
+
+**Skip this step entirely if:**
+
+- No Code Review Agent is configured in HERO.md
+- The user explicitly declines the loop
+
+#### Loop Setup
+
+```bash
+ITERATION=1
+MAX_ITERATIONS=5
+REVIEW_AGENT=$(grep '^\- agent:' "$ROOT/HERO.md" | sed 's/- agent: //' | head -1)
+TRIGGER=$(grep '^\- trigger:' "$ROOT/HERO.md" | sed 's/- trigger: //' | head -1)
+POLL_METHOD=$(grep '^\- poll-method:' "$ROOT/HERO.md" | sed 's/- poll-method: //' | head -1)
+```
+
+Report to user:
+
+```
+Review Loop enabled (agent: REVIEW_AGENT, max iterations: 5)
+Starting iteration 1...
+```
+
+#### Loop Body (repeat until exit condition)
+
+**11a. Trigger external review**
+
+Trigger depends on the configured method:
+
+- **Comment trigger** (e.g., Greptile): Post a comment on the PR
+
+  ```bash
+  gh pr comment $PR_NUMBER --body "TRIGGER_TEXT"
+  ```
+
+- **Label trigger** (e.g., some CodeRabbit setups): Add a label
+
+  ```bash
+  gh pr edit $PR_NUMBER --add-label "TRIGGER_LABEL"
+  ```
+
+- **Auto on push**: No action needed — the push from Step 8 already triggers it
+
+**11b. Poll for review completion**
+
+Poll every 30 seconds based on configured `poll-method`:
+
+- **check-runs**: Wait for the review agent's check run to complete
+
+  ```bash
+  gh api repos/OWNER/REPO/commits/HEAD_SHA/check-runs \
+    --jq '.check_runs[] | select(.app.slug == "AGENT_SLUG") | {status: .status, conclusion: .conclusion}'
+  ```
+
+- **comments**: Wait for a new comment from the review agent bot
+
+  ```bash
+  gh api repos/OWNER/REPO/pulls/$PR_NUMBER/comments \
+    --jq '[.[] | select(.user.login == "AGENT_BOT_USERNAME")] | last | {id: .id, created_at: .created_at, body: .body}'
+  ```
+
+- **pipeline-status**: Wait for pipeline job to finish
+
+  ```bash
+  gh api repos/OWNER/REPO/actions/runs?head_sha=HEAD_SHA \
+    --jq '.workflow_runs[] | select(.name | contains("AGENT_NAME")) | {status: .status, conclusion: .conclusion}'
+  ```
+
+**Timeout:** If no result after 5 minutes of polling, report timeout and ask user whether to retry or exit the loop.
+
+**11c. Parse results**
+
+After the external review completes:
+
+```bash
+# Count unresolved review threads from the agent
+gh api graphql -f query='
+  query($owner: String!, $repo: String!, $pr: Int!) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $pr) {
+        reviewThreads(first: 100) {
+          nodes {
+            id
+            isResolved
+            comments(first: 10) {
+              nodes {
+                body
+                author { login }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+' -f owner="$OWNER" -f repo="$REPO" -F pr=$PR_NUMBER
+```
+
+Filter for threads authored by the review agent bot that are unresolved. Count them.
+
+If the agent provides a confidence score (e.g., `5/5` in PR description or comment), extract it.
+
+**11d. Check exit conditions**
+
+Exit the loop if ANY of these are true:
+
+- Zero unresolved comments from the review agent
+- Confidence score is perfect (e.g., `5/5`)
+- Iteration count >= MAX_ITERATIONS (5)
+
+If exiting due to max iterations with remaining issues, warn the user:
+
+```
+Review loop reached maximum iterations (5).
+Remaining unresolved comments: N
+Manual review may be needed for the remaining items.
+```
+
+**11e. Fix, commit, push, resolve**
+
+If not exiting, repeat the respond cycle for the new comments:
+
+1. Categorize the agent's new comments (same as Step 4)
+2. Present to user for confirmation
+3. Fix actionable items (same as Step 5)
+4. Run quality checks (same as Step 6)
+5. Commit fixes (same as Step 7)
+6. Push (same as Step 8)
+7. Reply to and resolve addressed threads (same as Step 9)
+
+Increment iteration counter and loop back to 11a.
+
+**11f. Loop summary**
+
+After exiting the loop, report:
+
+```
+Review Loop Complete
+====================
+Agent: REVIEW_AGENT
+Iterations: N of MAX_ITERATIONS
+Total comments addressed: X
+Total commits: Y
+
+Per-iteration breakdown:
+  Iteration 1: A comments fixed, B resolved
+  Iteration 2: C comments fixed, D resolved
+  ...
+
+Final status: [Clean / N unresolved comments remain]
+URL: PR_URL
 ```
 
 ## Notes

@@ -30,11 +30,15 @@
 - agent: claude-code
 - config: .claude/
 
+## Code Review Agent
+
+- agent: none
+
 ## Code Quality
 
 - pre-commit: true
 - linters: markdownlint, shellcheck, codespell
-- hooks: detect-secrets, validate-plugin, hero-meta, hero-update
+- hooks: detect-secrets, validate-plugin, hero-meta, hero-init-update
 
 ## Projects
 

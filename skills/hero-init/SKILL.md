@@ -35,7 +35,9 @@ Each `/hero-*` skill needs specific information to work well. This skill figures
 | `/hero-architect` | Repo type, project list, deployment platform |
 | `/hero-new-project` | Repo type, coding conventions, code quality tools, project scaffold patterns |
 | `/hero-setup` | Required tools, recommended tools, MCP servers |
-| `/hero-update` | All sections — keeps HERO.md in sync via pre-commit |
+| `/hero-respond-to-pr` | Code Review Agent (agent, trigger, poll-method, bot-username) |
+| `/hero-review-pr` | Repository, Code Quality, Projects, Code Review Agent |
+| `/hero-init --update` | All sections — keeps HERO.md in sync via pre-commit |
 | `/hero-meta` | (internal) Plugin structure validation |
 
 ## Instructions
@@ -131,7 +133,36 @@ grep -r "claude\|cursor\|copilot\|windsurf\|aider" .pre-commit-config.yaml 2>/de
 *"What AI coding agent does your team use? (Claude Code, Cursor, Windsurf, Copilot, other)"*
 This determines what hooks and integrations hero skills can set up (e.g., pre-commit self-review, agent-specific rules files).
 
-#### 2b: Repository & Collaboration Model
+#### 2b: Code Review Agent
+
+Detect which external code review bot the team uses for automated PR reviews.
+
+```bash
+# Config files for known review agents
+ls .greptile/ .greptile.yaml .greptile.yml 2>/dev/null
+ls .coderabbit.yaml .coderabbit.yml 2>/dev/null
+ls .github/copilot-review.yml 2>/dev/null
+
+# Check recent PR comments for bot activity (last 5 PRs)
+gh pr list --state merged --limit 5 --json number --jq '.[].number' 2>/dev/null | while read pr; do
+  gh api "repos/{owner}/{repo}/pulls/$pr/comments" --jq '.[].user.login' 2>/dev/null
+done | sort | uniq -c | sort -rn | head -5
+
+# Check the repository's GitHub App installation (look for review bots)
+gh api "/repos/{owner}/{repo}/installation" --jq '{app_slug, app_name}' 2>/dev/null
+```
+
+**What to look for:**
+
+- `.coderabbit.yaml` → CodeRabbit — trigger: auto on push, poll-method: comments, bot-username: `coderabbitai`
+- `.greptile/` or `.greptile.yaml` → Greptile — trigger: `@greptile review` comment, poll-method: check-runs, bot-username: `greptile-bot`
+- Bot usernames in recent PR comments → identifies active review agent
+- GitHub Copilot code review enabled → trigger: auto on push, poll-method: comments, bot-username: `copilot`
+
+**If no review agent detected**, set `agent: none`. Optionally ask:
+*"Does your team use an automated code review bot (Greptile, CodeRabbit, Copilot review, etc.)?"*
+
+#### 2c: Repository & Collaboration Model
 
 ```bash
 # Basic structure
@@ -158,7 +189,7 @@ ls LICENSE CONTRIBUTING.md CODE_OF_CONDUCT.md CODEOWNERS .github/PULL_REQUEST_TE
 - Branch naming patterns in `git branch -r` → extract the **branch template** (e.g., `feature/PROJ-123-<desc>`, `fix/<desc>`, `<prefix>/<issue-id>-<desc>`)
 - Commit message patterns in `git log` (e.g., `feat:`, `fix:`, `PROJ-123:`)
 
-#### 2c: Project Management & Issue Tracking
+#### 2d: Project Management & Issue Tracking
 
 ```bash
 # Issue templates often reveal the PM tool
@@ -181,7 +212,7 @@ grep -r "linear\|jira\|asana\|shortcut" .github/ 2>/dev/null | head -5
 - Linear/Jira mentions in templates → identifies PM tool
 - GitHub issue references (`#123`, `Fixes #123`) → GitHub Issues
 
-#### 2d: CI/CD Platform & Workflows
+#### 2e: CI/CD Platform & Workflows
 
 ```bash
 # GitHub Actions
@@ -205,7 +236,7 @@ grep -l "test\|lint\|build\|deploy\|release" .github/workflows/*.yml 2>/dev/null
 - Whether CI runs on PR, push to main, or both
 - Required status checks (signals what must pass before merge)
 
-#### 2e: Required CLI Tools & Developer Toolchain
+#### 2f: Required CLI Tools & Developer Toolchain
 
 ```bash
 # Version control & hosting
@@ -249,7 +280,7 @@ which pre-commit 2>/dev/null && pre-commit --version
 - Note minimum versions if the project depends on specific features
 - These go into HERO.md `## Developer Setup` as team-shared requirements — individual installation/auth is handled by `/hero-setup`
 
-#### 2f: Deployment & Infrastructure
+#### 2g: Deployment & Infrastructure
 
 ```bash
 # Container
@@ -281,7 +312,7 @@ grep -r "namespace\|environment\|staging\|production" k8s/ .github/workflows/ 2>
 - ArgoCD references → GitOps workflow
 - Environment names → staging, production, etc.
 
-#### 2g: Code Quality & Developer Tooling
+#### 2h: Code Quality & Developer Tooling
 
 ```bash
 # Pre-commit
@@ -306,7 +337,7 @@ ls .editorconfig 2>/dev/null
 - mypy/pyright/tsc strict → type checker
 - What's enforced in CI vs. just local
 
-#### 2h: Project Structure & Tech Stack
+#### 2i: Project Structure & Tech Stack
 
 ```bash
 # Root project files (dependency files)
@@ -369,7 +400,7 @@ grep -E "port\|PORT\|:3000\|:8000\|:8080\|:5173\|:4000" pyproject.toml package.j
 - Dev server commands and default ports
 - Entry points for CLIs
 
-#### 2i: Coding Conventions & Team Patterns
+#### 2j: Coding Conventions & Team Patterns
 
 Investigate the codebase for established conventions the team follows. These are critical — Claude must follow the same patterns the team uses.
 
@@ -492,11 +523,11 @@ Based on your investigation, present findings grouped by **what the hero skills 
 
 **Group findings into these categories, presented in this order:**
 
-#### Group 0: "Your coding agent" (`/hero-update`, `/hero-setup`)
+#### Group 0: "Your coding agent" (`/hero-init --update`, `/hero-setup`)
 
 - Coding agent (Claude Code, Cursor, Windsurf, etc.)
 - Whether hooks/pre-commit integration is possible
-- Whether to set up `/hero-update` as a pre-commit hook to keep HERO.md in sync
+- Whether to set up `/hero-init --update` as a pre-commit hook to keep HERO.md in sync
 
 #### Group 1: "For committing and pushing code" (`/hero-commit`, `/hero-push`)
 
@@ -660,11 +691,19 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - agents: <list all if team uses multiple>
 - hooks: <true|false — whether the agent supports pre-commit/hook integration>
 - rules-file: <CLAUDE.md|.cursorrules|.windsurfrules|copilot-instructions.md|none>
-- hero-update: <true|false — whether /hero-update is wired into pre-commit>
-<!-- If hero-update is enabled, the pre-commit hook runs:
-     claude -p "/hero-update --staged-only" (for Claude Code)
-     This keeps HERO.md in sync with the codebase on every commit.
+- hero-init-update: <true|false — whether /hero-init --update is wired into pre-commit>
+<!-- If hero-init-update is enabled, the pre-commit hook runs
+     scripts/hero-update-precommit.sh, which invokes claude --model sonnet
+     to check and update HERO.md fields on every commit.
 -->
+
+## Code Review Agent
+<!-- External code review bot that reviews PRs automatically.
+     Used by /hero-respond-to-pr --loop to trigger, poll, and fix feedback iteratively. -->
+- agent: AGENT_TYPE (greptile|coderabbit|copilot|none)
+- trigger: TRIGGER_METHOD (e.g., "@greptile review" comment, auto on push, label)
+- poll-method: POLL_METHOD (check-runs|comments|pipeline-status)
+- bot-username: BOT_USERNAME (GitHub username of the bot, for filtering comments)
 
 ## Project Management
 - tool: <detected-or-confirmed>
@@ -853,7 +892,7 @@ How your hero skills will use this:
   /hero-secure    → scan pyproject.toml, check ghcr.io registry
   /hero-architect → single repo, Python + FastAPI, k8s deployment
   /hero-setup     → require node, uv, gh, docker; recommend pre-commit, linear CLI
-  /hero-update    → sync HERO.md via claude -p "/hero-update --staged-only" in pre-commit
+  /hero-init --update → sync HERO.md via claude -p "/hero-init --update" in pre-commit
 
 Does this look right? [Y/n]
 ```

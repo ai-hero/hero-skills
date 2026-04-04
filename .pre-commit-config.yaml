@@ -103,8 +103,8 @@ repos:
         stages: [pre-commit]
         verbose: true
 
-      - id: hero-update
-        name: "Hero Update: sync HERO.md"
+      - id: hero-init-update
+        name: "Hero Init: update HERO.md"
         entry: ./scripts/hero-update-precommit.sh
         language: script
         pass_filenames: false

@@ -71,7 +71,7 @@ SIZE & COMPLEXITY
 ─────────────────
 [OK] hero-commit: 180 lines, 1200 words
 [!!] hero-init: 830 lines, 6200 words — consider splitting investigation steps into references/
-[OK] hero-update: 150 lines, 1100 words
+[OK] hero-respond-to-pr: 200 lines, 1500 words
 ```
 
 #### 2c: DRY Violations
@@ -94,7 +94,7 @@ DRY VIOLATIONS
      Suggestion: This is expected — each skill needs to independently read HERO.md.
      No action needed (skills run independently, not as a pipeline).
 
-[!!] "Present findings in [OK]/[??]/[--] format" — in hero-init, hero-setup, hero-update
+[!!] "Present findings in [OK]/[??]/[--] format" — in hero-init, hero-setup
      Suggestion: Consistent by design. No action needed.
 
 [??] Investigation bash blocks in hero-init are 40+ lines each
@@ -112,7 +112,7 @@ HERO.MD FIELD COVERAGE
 ──────────────────────
 Field                          | Produced by  | Consumed by
 ───────────────────────────────|──────────────|────────────────────
-Coding Agent → primary         | hero-init    | hero-update, hero-setup
+Coding Agent → primary         | hero-init    | hero-setup
 Repository → hosting           | hero-init    | hero-push
 Repository → branch-template   | hero-init    | hero-plan
 Projects → lint-command         | hero-init    | hero-implement

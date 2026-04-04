@@ -1,12 +1,12 @@
 ---
-name: hero-pr-review
+name: hero-review-pr
 # prettier-ignore
 description: Review a pull request and leave inline comments. Analyzes code changes for quality, bugs, security, and style issues. Works with any GitHub repository.
-argument-hint: <pr-number-or-url>
+argument-hint: PR_NUMBER_OR_URL
 disable-model-invocation: true
 ---
 
-# Hero PR Review - Review and Comment on Pull Requests
+# Hero Review PR - Review and Comment on Pull Requests
 
 Review someone else's pull request thoroughly and leave constructive inline comments on GitHub.
 
@@ -35,6 +35,7 @@ Read `HERO.md` if it exists. This skill uses:
 
 - **Repository** → default branch, commit convention
 - **Code Quality** → linters, formatters, pre-commit context
+- **Code Review Agent** → external review bot info (for context on existing bot reviews)
 - **Projects** → language, framework for language-specific review guidance
 
 If `HERO.md` is missing, suggest `/hero-init` but proceed with defaults.
@@ -202,7 +203,7 @@ EOF
 ```
 Hero PR Review Summary
 ======================
-PR: #123 - <title>
+PR: #123 - PR_TITLE
 Author: @username
 Files: N changed (+A -D)
 
@@ -213,7 +214,7 @@ Comments Left:
   ❓ Questions: W
 
 Decision: [Comment / Approve / Request Changes]
-URL: <pr-url>
+URL: PR_URL
 ```
 
 ## Large PR Warning
