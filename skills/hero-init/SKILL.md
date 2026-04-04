@@ -148,8 +148,8 @@ gh pr list --state merged --limit 5 --json number --jq '.[].number' 2>/dev/null 
   gh api "repos/{owner}/{repo}/pulls/$pr/comments" --jq '.[].user.login' 2>/dev/null
 done | sort | uniq -c | sort -rn | head -5
 
-# Check GitHub App installations (look for review bots)
-gh api repos/{owner}/{repo}/installation/repositories 2>/dev/null | head -5
+# Check the repository's GitHub App installation (look for review bots)
+gh api "/repos/{owner}/{repo}/installation" --jq '{app_slug, app_name}' 2>/dev/null
 ```
 
 **What to look for:**
@@ -692,9 +692,9 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - hooks: <true|false — whether the agent supports pre-commit/hook integration>
 - rules-file: <CLAUDE.md|.cursorrules|.windsurfrules|copilot-instructions.md|none>
 - hero-init-update: <true|false — whether /hero-init --update is wired into pre-commit>
-<!-- If hero-init-update is enabled, the pre-commit hook runs:
-     claude -p "/hero-init --update" (for Claude Code)
-     This keeps HERO.md in sync with the codebase on every commit.
+<!-- If hero-init-update is enabled, the pre-commit hook runs
+     scripts/hero-update-precommit.sh, which invokes claude --model sonnet
+     to check and update HERO.md fields on every commit.
 -->
 
 ## Code Review Agent

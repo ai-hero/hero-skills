@@ -104,7 +104,7 @@ repos:
         verbose: true
 
       - id: hero-init-update
-        name: "Hero Meta: update HERO.md"
+        name: "Hero Init: update HERO.md"
         entry: ./scripts/hero-update-precommit.sh
         language: script
         pass_filenames: false

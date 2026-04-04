@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fast pre-commit gate for hero-meta.
-# Only runs when skill files are staged. Sends only the diff to Haiku
-# for a quick quality check (~30s target).
+# Only runs when skill files are staged. Sends only the diff to Sonnet
+# for a quick quality check.
 
 set -euo pipefail
 
