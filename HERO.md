@@ -32,7 +32,7 @@
 
 ## Code Review Agent
 
-- agent: none
+- agent: github copilot
 
 ## Code Quality
 
