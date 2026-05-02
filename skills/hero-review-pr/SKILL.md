@@ -8,9 +8,7 @@ disable-model-invocation: true
 
 # Hero Review PR - Review Someone Else's PR
 
-Review a teammate's pull request using the same engine as `/hero-self-review` (the `pr-review-toolkit` review-pr skill), then post the findings as inline review comments and submit an overall review on GitHub.
-
-The two skills share the same review engine but differ in what happens after:
+Same engine as `/hero-self-review`, different output:
 
 | Skill | Used for | After review |
 |-------|----------|--------------|
@@ -41,10 +39,8 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 
 Read `HERO.md` if it exists. This skill uses:
 
-- **Repository** → default branch, commit convention
-- **Code Quality** → linters, formatters, pre-commit context (so review doesn't duplicate CI)
-- **Code Review Agent** → external review bot info (avoid duplicating its comments)
-- **Projects** → language, framework for review context
+- **Code Quality** → linters/formatters in CI, so the review doesn't duplicate them
+- **Code Review Agent** → bot username, to avoid duplicating that bot's existing PR comments
 
 If `HERO.md` is missing, suggest `/hero-init` but proceed with defaults.
 
@@ -94,13 +90,19 @@ If the diff exceeds 1500 lines or 50 files, warn the user and ask whether to rev
 
 ### Step 3: Run the pr-review-toolkit Review
 
-Check out or fetch the PR locally so the review skill can analyze the diff in context:
+The review skill analyzes the diff fetched in Step 2 — no local checkout is required for review-only mode. Skip the checkout block below if you only need the diff.
+
+If you do need a local checkout (e.g., to run the project's tests against the PR), first verify the working tree is clean:
+
+```bash
+git status --porcelain
+```
+
+**If uncommitted changes exist, STOP** and ask the user to commit or cancel — never silently switch branches.
 
 ```bash
 gh pr checkout $PR_NUMBER
 ```
-
-If you have local uncommitted changes on a different branch, **stop** and ask the user to commit/stash before continuing — never silently switch.
 
 Invoke the `pr-review-toolkit` review skill:
 
@@ -125,9 +127,9 @@ Agent(subagent_type="pr-review-toolkit:pr-test-analyzer", ...)
 
 Aggregate the findings.
 
-### Step 4: Map Findings to Severity Prefixes
+### Step 4: Post Inline Review Comments
 
-Each finding becomes an inline comment. Map severity to a prefix the author can scan quickly:
+Map each finding to a severity prefix the author can scan quickly:
 
 | Finding category | Prefix | When |
 |------------------|--------|------|
@@ -137,7 +139,7 @@ Each finding becomes an inline comment. Map severity to a prefix the author can 
 | Question | `❓` | Clarification needed |
 | Strength | `👍` | Worth calling out — use sparingly |
 
-#### Comment guidelines
+Comment guidelines:
 
 - Be specific: reference the exact code and explain why.
 - Be constructive: suggest a fix, not just "this is wrong."
@@ -146,9 +148,7 @@ Each finding becomes an inline comment. Map severity to a prefix the author can 
 - Skip nits the linter/formatter would catch if CI is configured.
 - Group related issues into a single comment when they share lines.
 
-### Step 5: Post Inline Review Comments
-
-For each finding, post an inline comment via the GitHub API:
+For each finding, post an inline comment via the GitHub API. Use `line` (not `original_line`) to comment on the new version of the file, and `side=RIGHT` for additions/modifications:
 
 ```bash
 gh api "repos/$OWNER/$REPO/pulls/$PR_NUMBER/comments" \
@@ -159,22 +159,9 @@ gh api "repos/$OWNER/$REPO/pulls/$PR_NUMBER/comments" \
   -f side="RIGHT"
 ```
 
-For multi-line comments, also pass `start_line` and `start_side`:
+For multi-line comments, also pass `-F start_line=$START_LINE -f start_side="RIGHT"`.
 
-```bash
-gh api "repos/$OWNER/$REPO/pulls/$PR_NUMBER/comments" \
-  -f body="$COMMENT_BODY" \
-  -f commit_id="$HEAD_SHA" \
-  -f path="$FILE_PATH" \
-  -F line=$END_LINE \
-  -f side="RIGHT" \
-  -F start_line=$START_LINE \
-  -f start_side="RIGHT"
-```
-
-**Important:** Use `line` (not `original_line`) to comment on the new version of the file. Use `side=RIGHT` for additions/modifications.
-
-### Step 6: Submit the Overall Review
+### Step 5: Submit the Overall Review
 
 Decide the review type based on the findings:
 
@@ -183,8 +170,6 @@ Decide the review type based on the findings:
 | Yes | — | `--request-changes` |
 | No | Yes | `--comment` |
 | No | No | `--approve` (only if no question/clarification needed) |
-
-Never `--approve` if there are unanswered questions or unresolved important findings — use `--comment` instead.
 
 ```bash
 gh pr review $PR_NUMBER {DECISION_FLAG} --body "$(cat <<'EOF'
@@ -215,7 +200,7 @@ EOF
 
 Where `{DECISION_FLAG}` is `--comment`, `--approve`, or `--request-changes` per the table above.
 
-### Step 7: Report
+### Step 6: Report
 
 ```
 Hero PR Review Summary
@@ -238,9 +223,5 @@ URL: {pr-url}
 ## Notes
 
 - This skill is for **someone else's** PR — to self-review your own draft PR, use `/hero-self-review`.
-- The `pr-review-toolkit` plugin must be installed. If not, suggest installing it before proceeding.
 - Never edit the author's code — this skill only posts review comments.
-- Never `--approve` a PR with critical findings, even if the author asks.
-- Don't duplicate comments already left by other reviewers (human or bot).
-- Don't nitpick style if the project has formatters/linters in CI.
 - Use `gh api .../pulls/.../comments` for inline comments (`gh pr review` only posts top-level).

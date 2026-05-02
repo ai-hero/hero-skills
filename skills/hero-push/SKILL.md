@@ -109,12 +109,13 @@ git diff origin/$DEFAULT_BRANCH..HEAD --stat
 git diff origin/$DEFAULT_BRANCH..HEAD --name-only
 ```
 
-Determine the draft flag (drafts are the default):
+Determine the draft flag (drafts are the default). Parse the first whitespace-separated token of `$ARGUMENTS` so trailing whitespace or extra arguments don't silently fall through:
 
 ```bash
 # Draft is the default; pass `ready` to opt into a non-draft PR
+FIRST_ARG=$(printf '%s' "$ARGUMENTS" | awk '{print $1}')
 DRAFT_FLAG="--draft"
-if [ "$ARGUMENTS" = "ready" ]; then
+if [ "$FIRST_ARG" = "ready" ]; then
   DRAFT_FLAG=""
 fi
 ```

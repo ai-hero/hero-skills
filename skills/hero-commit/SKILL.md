@@ -28,7 +28,7 @@ If `HERO.md` is missing, suggest `/hero-init` but proceed with auto-detection.
 
 ```bash
 BRANCH=$(git branch --show-current)
-DEFAULT_BRANCH=$(grep '^- default-branch:' "$ROOT/HERO.md" 2>/dev/null | sed 's/- default-branch: //' | tr -d ' ')
+DEFAULT_BRANCH=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | xargs)
 DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
 echo "Current branch: $BRANCH (default: $DEFAULT_BRANCH)"
 ```
@@ -163,6 +163,8 @@ EOF
 **If issue ID in branch name:** Add `Fixes: PROJ-123` or `Relates to: PROJ-123`.
 
 ## Step 8: Post-Commit Validation
+
+Dry-run any pre-push hooks now so failures surface before the user runs `/hero-push`:
 
 ```bash
 which pre-commit && pre-commit run --hook-stage pre-push --all-files || echo "NO_PRECOMMIT"

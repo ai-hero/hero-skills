@@ -39,7 +39,8 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 
 Read `HERO.md` if it exists. This skill uses:
 
-- **Projects** → language, framework, test commands, dev commands, ports (skips auto-detection)
+- **Code Quality** → linters, formatters, type checkers (commands run during verification)
+- **Projects** → language, framework, install/test/dev commands, ports (skips auto-detection)
 
 If `HERO.md` is missing, suggest `/hero-init` but proceed with auto-detection below.
 
@@ -81,7 +82,15 @@ For full-stack with subdirs, install in each.
 
 Skip this step if `$ARGUMENTS` is `smoke`, `backend`, `frontend`, `cli`, or `mcp` — those target smoke testing only.
 
-Run static checks and unit tests on the **changed files** (use `git diff --name-only HEAD~1` or `git diff --name-only` for uncommitted work). If no changes are detected, run on all files.
+Capture the list of changed files first (uncommitted, then last commit, fallback to empty):
+
+```bash
+mapfile -t CHANGED_FILES < <(git diff --name-only; git diff --name-only HEAD~1 HEAD 2>/dev/null)
+# Dedupe
+CHANGED_FILES=($(printf "%s\n" "${CHANGED_FILES[@]}" | sort -u))
+```
+
+If `CHANGED_FILES` is empty, run the checks on the whole project (replace `"${CHANGED_FILES[@]}"` with `.` or the project root).
 
 Use commands from `HERO.md` **Code Quality** and **Projects** sections when available. Otherwise auto-detect:
 
@@ -89,10 +98,10 @@ Use commands from `HERO.md` **Code Quality** and **Projects** sections when avai
 
 ```bash
 # Python
-uv run ruff check {changed-files}
+uv run ruff check "${CHANGED_FILES[@]}"
 
 # TypeScript / JavaScript
-npx eslint {changed-files}
+npx eslint "${CHANGED_FILES[@]}"
 
 # Go
 go vet ./...
@@ -102,7 +111,7 @@ go vet ./...
 
 ```bash
 # Python
-uv run mypy {changed-files}
+uv run mypy "${CHANGED_FILES[@]}"
 
 # TypeScript
 npx tsc --noEmit
@@ -125,7 +134,7 @@ If a test file maps directly to a changed source file, prefer running just those
 #### 3d: Pre-commit (if configured)
 
 ```bash
-which pre-commit && pre-commit run --files {changed-files} || echo "NO_PRECOMMIT"
+which pre-commit && pre-commit run --files "${CHANGED_FILES[@]}" || echo "NO_PRECOMMIT"
 ```
 
 #### 3e: Report verification results

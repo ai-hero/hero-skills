@@ -28,7 +28,7 @@ Each `/hero-*` skill needs specific information to work well. This skill figures
 | `/hero-push` | Default branch, branch convention, hosting platform (`gh`/`glab`), issue prefix |
 | `/hero-plan` | PM tool + MCP server name, branch template, issue prefix, project list |
 | `/hero-test` | Language, framework, lint/format/typecheck commands, test/dev/install commands, ports, dependency file |
-| `/hero-self-review` | Code Review Agent (for context), Repository, Code Quality, Projects |
+| `/hero-self-review` | Code Quality (pre-commit), Code Review Agent (bot username — to dedupe its comments) |
 | `/hero-cicd` | CI platform, workflow names, registry, required status checks |
 | `/hero-health` | Deployment platform, namespaces, ArgoCD, health check endpoints |
 | `/hero-secure` | Registry, language/framework, dependency files per project |
@@ -36,7 +36,7 @@ Each `/hero-*` skill needs specific information to work well. This skill figures
 | `/hero-new-project` | Repo type, coding conventions, code quality tools, project scaffold patterns |
 | `/hero-setup` | Required tools, recommended tools, MCP servers |
 | `/hero-respond-to-pr` | Code Review Agent (agent, trigger, poll-method, bot-username) |
-| `/hero-review-pr` | Repository, Code Quality, Projects, Code Review Agent |
+| `/hero-review-pr` | Code Quality (linters in CI), Code Review Agent (bot username — to dedupe its comments) |
 | `/hero-init --update` | All sections — keeps HERO.md in sync via pre-commit |
 | `/hero-meta` | (internal) Plugin structure validation |
 

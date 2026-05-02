@@ -69,7 +69,8 @@ That's it. Each command reads your `HERO.md` config and adapts to your stack aut
 |---------|-------------|
 | `/hero-init` | Investigate your repo, auto-detect stack, create `HERO.md` config |
 | `/hero-setup` | Set up a developer's local environment (tools, auth, dependencies) |
-| `/hero-new` | Scaffold a new project (Python, full-stack, Node.js) in any repo structure |
+| `/hero-new-project` | Scaffold a new project (Python, full-stack, Node.js) in any repo structure |
+| `/hero-new-skill` | Create new Claude Code skills, rules, or hooks |
 
 ### Development Cycle
 
@@ -101,7 +102,6 @@ That's it. Each command reads your `HERO.md` config and adapts to your stack aut
 | Command | What it does |
 |---------|-------------|
 | `/hero-architect` | Generate architecture specs with Mermaid diagrams |
-| `/hero-new-skill` | Create new Claude Code skills, rules, or hooks |
 | `/hero-meta` | Audit the hero-skills plugin itself for quality and consistency |
 
 ## HERO.md

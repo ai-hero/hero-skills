@@ -8,9 +8,7 @@ disable-model-invocation: true
 
 # Hero Self-Review - Automated Self-Review on Draft PRs
 
-Run an automated self-review on your own draft PR before asking for human review. This skill orchestrates the `pr-review-toolkit` review skill, posts the findings as a PR comment, applies fixes with your approval, and finally asks whether to convert the draft into a ready-for-review PR.
-
-This is the loop between push and human review:
+The loop between push and human review:
 
 ```
 /hero-plan → /hero-test → /hero-commit → /hero-push (draft PR) → /hero-self-review → mark ready
@@ -25,7 +23,7 @@ This is the loop between push and human review:
 
 - `gh` CLI installed and authenticated
 - The `pr-review-toolkit` plugin available (provides `/pr-review-toolkit:review-pr`)
-- A draft PR open for the current branch (this skill will offer to create one if missing)
+- A draft PR open for the current branch — if none exists, this skill stops and points you to `/hero-push`
 
 ## Instructions
 
@@ -38,14 +36,12 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 
 Read `HERO.md` if it exists. This skill uses:
 
-- **Repository** → default branch, commit convention
-- **Code Quality** → linters, formatters, pre-commit
-- **Code Review Agent** → for context (this skill is independent of any external review bot)
-- **Projects** → language, framework for review context
+- **Code Quality** → pre-commit (re-run after fixes, since fixes happen post-`/hero-test`)
+- **Code Review Agent** → bot username, to avoid duplicating that bot's existing PR comments
 
 If `HERO.md` is missing, suggest `/hero-init` but proceed with defaults.
 
-### Step 1: Identify or Create the Draft PR
+### Step 1: Identify the Draft PR
 
 ```bash
 BRANCH=$(git branch --show-current)
@@ -86,7 +82,9 @@ If `CURRENT != PR_BRANCH`, check for uncommitted changes:
 git status --porcelain
 ```
 
-**If uncommitted changes exist, STOP.** Show the user what is uncommitted and tell them to commit or cancel — do not silently stash. Then:
+**If uncommitted changes exist, STOP.** Show the user what is uncommitted and tell them to commit or cancel — do not silently stash.
+
+**Only when the working tree is clean**, switch to the PR branch:
 
 ```bash
 git fetch origin "$PR_BRANCH"
@@ -96,17 +94,17 @@ git pull origin "$PR_BRANCH"
 
 ### Step 3: Run the pr-review-toolkit Review
 
-Invoke the `pr-review-toolkit` review skill via the Skill tool:
+Invoke the `pr-review-toolkit` review skill:
 
 ```
 Skill(skill="pr-review-toolkit:review-pr", args="all")
 ```
 
-Capture the structured review output. The skill returns findings categorized as:
+The skill returns findings categorized as:
 
 - **Critical** — must fix before merge (bugs, security, data loss)
 - **Important** — should fix (significant quality, design, or correctness concerns)
-- **Suggestions** — nice to have (style, polish, alternative approaches)
+- **Suggestions** — nice to have (style, polish, alternatives)
 - **Strengths** — what's well-done
 
 If the skill is unavailable, fall back to running the equivalent agents directly:
@@ -117,7 +115,7 @@ Agent(subagent_type="pr-review-toolkit:silent-failure-hunter", ...)
 Agent(subagent_type="pr-review-toolkit:pr-test-analyzer", ...)
 ```
 
-Wait for all agents to finish and aggregate the findings.
+Aggregate the findings.
 
 ### Step 4: Post the Review as a PR Comment
 
@@ -151,7 +149,7 @@ If any of the categories are empty, omit them from the comment to keep it concis
 
 ### Step 5: Ask Permission to Apply Fixes
 
-Show the categorized findings and ask the user which to apply. **The default is all (critical + important + suggestions)** — the user can opt out per category or per finding.
+Show the categorized findings and ask the user which to apply.
 
 ```
 Self-review found:
@@ -171,26 +169,33 @@ Apply fixes? [Default: all]
 
 ### Step 6: Apply Fixes
 
+Capture the set of files the fixes will touch:
+
+```bash
+CHANGED_FILES=()
+```
+
 For each accepted finding:
 
 1. Read the file and surrounding context.
 2. Apply the fix as described in the finding.
-3. Keep changes minimal — fix the specific issue, don't refactor surrounding code unless the finding asks for it.
+3. Append the file to `CHANGED_FILES` (deduped).
+4. Keep changes minimal — fix the specific issue, don't refactor surrounding code unless the finding asks for it.
 
 If a finding is ambiguous or the fix would conflict with another finding, **stop and ask** rather than guessing.
 
 After all fixes are applied, run verification:
 
 ```bash
-which pre-commit && pre-commit run --files {changed-files} || echo "NO_PRECOMMIT"
+which pre-commit && pre-commit run --files "${CHANGED_FILES[@]}" || echo "NO_PRECOMMIT"
 ```
 
 If pre-commit fails, fix the issues before continuing. Re-run until clean.
 
-### Step 7: Commit the Fixes
+### Step 7: Commit and Push the Fixes
 
 ```bash
-git add {changed-files}
+git add "${CHANGED_FILES[@]}"
 git commit -m "$(cat <<'EOF'
 fix: address self-review findings
 
@@ -200,17 +205,12 @@ fix: address self-review findings
 Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
-```
-
-If multiple logically distinct fixes were applied (e.g., a security fix and a docs fix), use separate commits.
-
-### Step 8: Push the Fixes
-
-```bash
 git push origin "$PR_BRANCH"
 ```
 
-### Step 9: Add a Follow-up Comment Summarizing the Fixes
+If multiple logically distinct fixes were applied (e.g., a security fix and a docs fix), commit them separately before pushing.
+
+### Step 8: Add a Follow-up Comment Summarizing the Fixes
 
 ```bash
 gh pr comment $PR_NUMBER --body "$(cat <<'EOF'
@@ -230,7 +230,7 @@ EOF
 )"
 ```
 
-### Step 10: Ask Whether to Mark Ready for Review
+### Step 9: Ask Whether to Mark Ready for Review
 
 ```
 Self-review complete.
@@ -250,7 +250,7 @@ gh pr ready $PR_NUMBER
 
 If no, leave the PR as a draft and note in the summary that the user wants to review further.
 
-### Step 11: Summary
+### Step 10: Summary
 
 ```
 Hero Self-Review Summary
@@ -271,8 +271,5 @@ URL: {pr-url}
 ## Notes
 
 - This skill is for **your own** PRs — to review someone else's PR, use `/hero-review-pr`.
-- The `pr-review-toolkit` plugin must be installed. If not, suggest installing it before proceeding.
-- Default behavior applies all categories of fixes — the user has to opt out, not opt in. This matches the user's stated preference.
 - Never mark a PR ready without explicit user confirmation, even if all findings are fixed.
-- Fixes are committed and pushed; the comment summarizing fixes is posted **after** the push so reviewers see the latest state.
 - Do not auto-resolve other reviewers' comments — this skill only handles findings from the self-review.

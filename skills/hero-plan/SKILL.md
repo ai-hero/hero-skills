@@ -85,22 +85,14 @@ You have uncommitted changes on '$CURRENT':
 
   (list changed files from git status)
 
+These will follow you into the new branch via `git checkout -b` if we branch from $CURRENT, but if we need to fetch the default branch first they cannot follow safely.
+
 Options:
-1. Stash changes (saved as "hero-plan: WIP on $CURRENT") — will auto-restore after branch creation
-2. Cancel — go back and commit or handle changes first
+1. Run /hero-commit to commit first (recommended)
+2. Cancel — handle changes manually
 ```
 
-**STOP and wait for user to choose.** Do NOT switch branches with uncommitted changes without explicit confirmation.
-
-**If user chooses option 1 (stash):**
-
-```bash
-git stash push -m "hero-plan: WIP on $CURRENT"
-```
-
-Report: `Stashed as: stash@{0} — "hero-plan: WIP on $CURRENT"`
-
-Track that a stash was created (for restore after branch creation).
+**STOP and wait for user to choose.** Do NOT silently stash, and do NOT switch branches with uncommitted changes when fetching the default branch first.
 
 **Branch logic:**
 
@@ -122,14 +114,6 @@ Branch naming:
 
 - **If issue ID exists**: `{issue-id}-short-description` (e.g., `PROJ-123-add-auth`)
 - **If description only**: `feat/short-description` or `fix/short-description` based on context (e.g., `feat/add-dark-mode`)
-
-**If changes were stashed, restore them on the new branch:**
-
-```bash
-git stash pop
-```
-
-If the stash pop has conflicts, report them clearly and let the user resolve.
 
 ### Step 4: Enter Plan Mode
 
