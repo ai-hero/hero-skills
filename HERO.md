@@ -17,7 +17,7 @@
 ## CI/CD
 
 - platform: github-actions
-- workflows: claude-pr-approve
+- workflows: auto-approve
 
 ## Deployment
 

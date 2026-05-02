@@ -1,0 +1,222 @@
+name: Auto Approve
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  claude-approve:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '@auto-approve')
+
+    steps:
+      - name: Get PR details
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=${{ github.event.issue.number }}
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+          gh api /repos/${{ github.repository }}/pulls/$PR_NUMBER > pr.json
+          jq -r '.title' pr.json > pr_title.txt
+          jq -r '.body // ""' pr.json > pr_body.txt
+          HEAD_SHA=$(jq -r '.head.sha' pr.json)
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+          gh api \
+            -H "Accept: application/vnd.github.v3.diff" \
+            /repos/${{ github.repository }}/pulls/$PR_NUMBER \
+            > pr.diff
+
+          # Soft cap on the diff. Sonnet 4.6 takes 200K tokens — leaving
+          # headroom for the file tree and full-file bundle below.
+          if [ "$(wc -c < pr.diff)" -gt 200000 ]; then
+            head -c 200000 pr.diff > pr_truncated.diff
+            printf '\n\n[... diff truncated at 200KB ...]\n' >> pr_truncated.diff
+          else
+            cp pr.diff pr_truncated.diff
+          fi
+
+          gh api /repos/${{ github.repository }}/pulls/$PR_NUMBER/files \
+            --jq '.[].filename' > changed_files.txt
+
+          # Recursive repo file tree at HEAD — lets the verifier confirm
+          # claims about files that exist outside the diff (tests,
+          # migrations, indexes, etc.) without re-fetching them all.
+          gh api "/repos/${{ github.repository }}/git/trees/$HEAD_SHA?recursive=1" \
+            --jq '.tree[] | select(.type == "blob") | .path' \
+            > repo_tree.txt
+
+          # Full post-merge content of every changed file at HEAD. The
+          # diff hides surrounding code; verification needs the whole
+          # file to judge correctness, dead code, and missing handling.
+          # Bundled into a single file with markers so the prompt can
+          # ingest it without juggling many --rawfile args.
+          : > full_files.txt
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            printf '\n===== FILE: %s =====\n' "$f" >> full_files.txt
+            if ! gh api -H "Accept: application/vnd.github.raw" \
+              "/repos/${{ github.repository }}/contents/$f?ref=$HEAD_SHA" \
+              >> full_files.txt 2>/dev/null; then
+              printf '(file unavailable — likely deleted in this PR)\n' >> full_files.txt
+            fi
+          done < changed_files.txt
+
+          # Soft cap on the bundle to keep the request inside the model
+          # context. 800KB ≈ ~200K tokens of source.
+          if [ "$(wc -c < full_files.txt)" -gt 800000 ]; then
+            head -c 800000 full_files.txt > full_files.trunc
+            printf '\n\n[... full_files truncated at 800KB; remaining changed files omitted from full content ...]\n' >> full_files.trunc
+            mv full_files.trunc full_files.txt
+          fi
+
+      - name: Acknowledge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method POST \
+            /repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            -f content="eyes"
+
+      - name: Claude verification
+        id: verify
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          PR_TITLE=$(cat pr_title.txt)
+          PR_BODY=$(cat pr_body.txt | head -c 4000)
+          CHANGED_FILES=$(cat changed_files.txt)
+
+          # Build the prompt with --rawfile so the diff, repo tree, and
+          # full file bundle can be larger than argv would normally allow.
+          jq -n \
+            --arg model "claude-sonnet-4-6" \
+            --arg pr_title "$PR_TITLE" \
+            --arg pr_body "$PR_BODY" \
+            --arg changed_files "$CHANGED_FILES" \
+            --rawfile diff pr_truncated.diff \
+            --rawfile repo_tree repo_tree.txt \
+            --rawfile full_files full_files.txt \
+            '{
+              model: $model,
+              max_tokens: 1024,
+              messages: [{
+                role: "user",
+                content: (
+                  "You are a gatekeeper deciding whether to APPROVE a pull request. A human developer has already reviewed the code. Your job is strictly to verify the PR metadata is honest and complete. Be concise.\n\n" +
+                  "You have access to (1) the diff, (2) the full post-merge content of every changed file, and (3) a recursive listing of every file in the repository at the PR head. Before flagging missing tests, missing migrations, missing validation, or missing files: SEARCH the repo tree and read the full file contents. Only flag something as missing after you have confirmed it is not present anywhere in the repo — not just in the diff. Reviewing only the diff causes false positives; do not do that.\n\n" +
+                  "CHECK 1 — PR DESCRIPTION INTEGRITY\n" +
+                  "- Does the description accurately reflect what the diff does?\n" +
+                  "- Are there claims NOT backed by the diff? (e.g. says \"Added error handling\" but diff has none)\n" +
+                  "- Are there significant diff changes the description fails to mention?\n\n" +
+                  "CHECK 2 — TEST VERIFICATION\n" +
+                  "- If the description claims tests were added/updated, do test files appear in the diff OR already exist in the repo tree covering the changed code paths?\n" +
+                  "- If critical logic is touched (auth, payments, data mutations, APIs) and NO tests cover it (in diff OR in tree), flag it. Use the repo tree to find existing tests before claiming none exist.\n" +
+                  "- Skip this for trivial changes (docs, config, formatting).\n\n" +
+                  "CHECK 3 — COMPLETENESS\n" +
+                  "- New API route but no validation? (Check the full file content, not just the diff hunks.)\n" +
+                  "- New DB column / collection / domain type but no migration or index? (Look for migrate.go, migrations/, init scripts in the repo tree before claiming none exist.)\n" +
+                  "- TODO/FIXME added without a tracking issue?\n" +
+                  "- Hardcoded secrets or values that should be config?\n\n" +
+                  "---\n\n" +
+                  "PR Title: " + $pr_title + "\n\n" +
+                  "PR Description:\n" + $pr_body + "\n\n" +
+                  "Changed Files:\n" + $changed_files + "\n\n" +
+                  "Repo File Tree (at PR head — search this before flagging missing files):\n" + $repo_tree + "\n\n" +
+                  "Full Content of Changed Files (post-merge, at PR head):\n" + $full_files + "\n\n" +
+                  "Diff:\n" + $diff + "\n\n" +
+                  "---\n\n" +
+                  "Respond in this exact format:\n\n" +
+                  "## PR Description: ✅ or ❌\n" +
+                  "One line explanation.\n\n" +
+                  "## Tests: ✅ or ❌ or ⏭️ (skipped if trivial)\n" +
+                  "One line explanation. If you mark ❌, name the specific file or path you checked.\n\n" +
+                  "## Completeness: ✅ or ❌\n" +
+                  "One line explanation. If you mark ❌, name the specific file or path you checked.\n\n" +
+                  "## Verdict\n" +
+                  "APPROVE or REQUEST_CHANGES\n" +
+                  "One sentence reason."
+                )
+              }]
+            }' > payload.json
+
+          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -d @payload.json)
+
+          REVIEW=$(echo "$RESPONSE" | jq -r '.content[0].text // "Error: Could not get review from Claude"')
+          echo "$REVIEW" > review.md
+
+          if echo "$REVIEW" | grep -q "REQUEST_CHANGES"; then
+            echo "verdict=request_changes" >> "$GITHUB_OUTPUT"
+          else
+            echo "verdict=approve" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post result
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          REVIEW_BODY=$(cat review.md)
+          TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M UTC")
+
+          COMMENT_BODY="<!-- claude-approve -->
+          🤖 **Claude Pre-Approve Check**
+
+          $REVIEW_BODY
+
+          ---
+          *Verified by Claude (claude-sonnet-4-6) • $TIMESTAMP*"
+
+          # Update existing or create new
+          EXISTING=$(gh api \
+            /repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
+            --jq '.[] | select(.body | startswith("<!-- claude-approve -->")) | .id' \
+            | head -1)
+
+          if [ -n "$EXISTING" ]; then
+            gh api --method PATCH \
+              /repos/${{ github.repository }}/issues/comments/$EXISTING \
+              -f body="$COMMENT_BODY"
+          else
+            gh api --method POST \
+              /repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
+              -f body="$COMMENT_BODY"
+          fi
+
+      - name: Submit verdict
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          if [ "${{ steps.verify.outputs.verdict }}" = "approve" ]; then
+            VERDICT="APPROVE"
+            BODY="✅ Approved — PR description is accurate, test claims verified, no critical gaps."
+          else
+            VERDICT="REQUEST_CHANGES"
+            BODY="❌ Changes requested — see Claude's verification comment above."
+          fi
+          gh api --method POST \
+            /repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews \
+            -f event="$VERDICT" \
+            -f body="$BODY"
+
+      - name: React with result
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EMOJI=${{ steps.verify.outputs.verdict == 'approve' && 'rocket' || '-1' }}
+          gh api --method POST \
+            /repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            -f content="$EMOJI"
