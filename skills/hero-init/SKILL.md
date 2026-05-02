@@ -27,8 +27,8 @@ Each `/hero-*` skill needs specific information to work well. This skill figures
 | `/hero-commit` | Commit convention, pre-commit run command, issue prefix |
 | `/hero-push` | Default branch, branch convention, hosting platform (`gh`/`glab`), issue prefix |
 | `/hero-plan` | PM tool + MCP server name, branch template, issue prefix, project list |
-| `/hero-implement` | Lint/format/typecheck commands, test command, framework, install command |
-| `/hero-test` | Language, framework, test/dev/install commands, ports, dependency file |
+| `/hero-test` | Language, framework, lint/format/typecheck commands, test/dev/install commands, ports, dependency file |
+| `/hero-self-review` | Code Review Agent (for context), Repository, Code Quality, Projects |
 | `/hero-cicd` | CI platform, workflow names, registry, required status checks |
 | `/hero-health` | Deployment platform, namespaces, ArgoCD, health check endpoints |
 | `/hero-secure` | Registry, language/framework, dependency files per project |
@@ -393,9 +393,9 @@ grep -E "port\|PORT\|:3000\|:8000\|:8080\|:5173\|:4000" pyproject.toml package.j
 - Monorepo structure (workspaces, nx, turborepo, multiple pyproject.toml)
 - **Dependency file** per project (pyproject.toml, package.json, go.mod, etc.) — needed by `/hero-secure` and `/hero-test`
 - **Lock file** → identifies the package manager (pnpm-lock.yaml → pnpm, yarn.lock → yarn, etc.)
-- **Install command** (e.g., `uv sync`, `pnpm install`) — needed by `/hero-test` and `/hero-implement` before running
+- **Install command** (e.g., `uv sync`, `pnpm install`) — needed by `/hero-test` before running
 - **Task runner** (Makefile, justfile, Taskfile) — if present, prefer its targets as canonical commands (e.g., `make test` over `uv run pytest`)
-- **Exact lint/format/typecheck commands** — not just tool names; `/hero-implement` needs runnable commands
+- **Exact lint/format/typecheck commands** — not just tool names; `/hero-test` needs runnable commands for verification
 - Test commands from scripts section or config files
 - Dev server commands and default ports
 - Entry points for CLIs
@@ -545,7 +545,7 @@ Based on your investigation, present findings grouped by **what the hero skills 
 - Issue ID prefix (evidence from commit/branch patterns)
 - MCP server name if applicable
 
-#### Group 3: "For implementing and testing" (`/hero-implement`, `/hero-test`)
+#### Group 3: "For testing and verification" (`/hero-test`)
 
 - Per-project: language, framework, dependency file, install command
 - Per-project: test, lint, format, typecheck commands (prefer task runner targets if available)
@@ -609,8 +609,8 @@ FOR PLANNING & TRACKING (/hero-plan)
 [OK] Issue prefix: LIN
      Evidence: 8 commits reference LIN-### pattern
 
-FOR IMPLEMENTING & TESTING (/hero-implement, /hero-test)
-────────────────────────────────────────────────────────
+FOR TESTING & VERIFICATION (/hero-test)
+────────────────────────────────────────
 [OK] Single repo, Python + FastAPI
      Evidence: pyproject.toml with fastapi dependency, no subprojects
 
@@ -644,8 +644,8 @@ FOR CI/CD & DEPLOYMENT (/hero-cicd, /hero-health)
 [--] Namespaces: not detected
      → What k8s namespaces do you deploy to?
 
-CODING CONVENTIONS (/hero-implement, /hero-commit)
-───────────────────────────────────────────────────
+CODING CONVENTIONS (/hero-plan, /hero-commit)
+──────────────────────────────────────────────
 [OK] Naming: snake_case functions, PascalCase classes
      Evidence: 40+ function defs follow snake_case, all classes PascalCase
 
@@ -885,8 +885,7 @@ How your hero skills will use this:
   /hero-commit    → conventional commits, pre-commit runs ruff + black + mypy
   /hero-push      → PRs via gh against main, link LIN-### issues
   /hero-plan      → fetch from Linear (mcp__linear), branch as feature/LIN-###-<desc>
-  /hero-implement → uv sync, then ruff check + ruff format + mypy for verification
-  /hero-test      → uv run pytest on :8000, install via uv sync
+  /hero-test      → uv sync, then ruff check + mypy + pytest, smoke at :8000
   /hero-cicd      → check GitHub Actions: ci, build, deploy
   /hero-health    → k8s namespaces: staging, production
   /hero-secure    → scan pyproject.toml, check ghcr.io registry

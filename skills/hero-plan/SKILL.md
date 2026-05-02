@@ -1,14 +1,16 @@
 ---
 name: hero-plan
 # prettier-ignore
-description: Plan implementation for a task. Accepts a Linear issue ID or a plain description. Fetches issue details if given an ID, analyzes codebase, enters Plan Mode, and drafts implementation approach for approval.
+description: Plan and implement a task. Accepts a Linear issue ID or plain description, creates a feature branch, drafts the approach in Plan Mode, then implements on approval. No separate implement step.
 argument-hint: ISSUE_ID_OR_DESCRIPTION [additional-context]
 disable-model-invocation: true
 ---
 
-# Hero Plan - Implementation Planning
+# Hero Plan - Plan and Implement
 
-Plan the implementation for a task by analyzing the codebase and drafting an implementation approach for user approval. Accepts either a Linear issue ID or a plain-text description.
+Plan an implementation by analyzing the codebase and drafting an approach in Plan Mode. When the user approves, Plan Mode exits and Claude implements the plan directly in the same conversation.
+
+This is the single entry point for "I have a task to do." There is no separate `/hero-implement` step — Plan Mode handles plan-and-approve, and the natural exit from Plan Mode is implementation.
 
 ## Arguments
 
@@ -208,34 +210,64 @@ Before finalizing, ask targeted questions about:
 After getting answers:
 
 1. **Incorporate feedback** into the plan
-2. **Present final plan** for approval
-3. **Remind user**:
+2. **Present final plan** for approval via the `ExitPlanMode` tool — this is the standard Plan Mode handoff. The user either approves (Plan Mode exits, implementation begins) or rejects (stay in Plan Mode and revise).
+
+### Step 9: Implement the Approved Plan
+
+Once Plan Mode exits with user approval, implement each step from the plan in order. Follow these rules during implementation:
+
+- **Read before edit** — Always Read a file before modifying it.
+- **Match existing patterns** — Follow naming, structure, and style already in the codebase. Don't introduce new conventions.
+- **One step at a time** — Announce each step briefly, make the change, then move on. No commentary between steps unless something blocks you.
+- **Stop and ask on ambiguity** — If a step is unclear or the codebase state contradicts the plan, stop and ask the user rather than guess.
+- **No commits, no pushes** — Implementation only writes code. `/hero-commit` and `/hero-push` handle git operations.
+
+Verification (running tests, linters, type checkers, smoke tests) is not part of this skill. Once implementation is complete, the user runs `/hero-test` to verify the changes work end-to-end.
+
+### Step 10: Summary
+
+When all steps are implemented, report:
 
 ```
-Plan is ready for review.
+Hero Plan Summary
+=================
+Task: {plan summary}
+Branch: {branch-name}
+Steps completed: N/N
 
-- To approve and start implementation: "implement" or "let's go"
-- To modify the plan: provide feedback
-- To cancel: "cancel planning"
+Files Modified:
+  - path/to/file1.py
+  - path/to/file2.ts
+
+Files Created:
+  - path/to/new_file.py
+
+Next steps:
+  /hero-test     # Verify the implementation works
+  /hero-commit   # Review and commit
+  /hero-push     # Push and open a draft PR
 ```
 
 ## Integration
 
 ```
-/hero-plan PROJ-123              # Plan from a Linear issue
-/hero-plan add dark mode toggle  # Plan from a description
-# ... approve plan, then implement ...
-/hero-commit review              # Review and commit
-/hero-push                       # Push and create PR
+/hero-plan PROJ-123              # Plan from a Linear issue, then implement
+/hero-plan add dark mode toggle  # Plan from a description, then implement
+# ... user approves plan in Plan Mode, implementation runs ...
+/hero-test                       # Verify the implementation
+/hero-commit                     # Review and commit
+/hero-push                       # Push and open a draft PR
+/hero-self-review                # Run an automated review and address findings
 ```
 
 ## Notes
 
 - Uses the `EnterPlanMode` tool to enforce read-only analysis — no code modifications until the user approves
+- Uses the `ExitPlanMode` tool to hand the plan to the user for approval; on approval Plan Mode exits and implementation begins in the same conversation
 - Accepts either a Linear issue ID or a plain-text description
 - If an issue ID is provided, fetches full details from Linear
 - Create branches with consistent naming: `{issue-id}-{short-description}` or `feat/{short-description}`
 - Ask questions rather than assume
 - The plan should be specific enough that implementation is straightforward
-- Include testing approach in every plan
-- When the user approves (says "implement", "let's go", etc.), use `ExitPlanMode` to leave Plan Mode and begin coding
+- Include testing approach in every plan, but actual verification happens in `/hero-test`
+- Do NOT commit or push from this skill — that's `/hero-commit` and `/hero-push`
