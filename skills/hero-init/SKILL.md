@@ -750,8 +750,8 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - commit-convention: <detected-or-confirmed>
 - merge-method: squash | rebase | merge
 <!-- Preferred PR merge method. Default: squash. Used by /hero-auto-approve
-     and /hero-push when calling `gh pr merge`. Must be one of the methods
-     allowed by the remote (gh repo view --json squashMergeAllowed,...). -->
+     when calling `gh pr merge`. Must be one of the methods allowed by the
+     remote (gh repo view --json squashMergeAllowed,...). -->
 - auto-delete-branches: true | false
 <!-- Whether GitHub auto-deletes merged head branches (deleteBranchOnMerge).
      If false, /hero-auto-approve deletes the remote + local branch after
@@ -945,12 +945,11 @@ Run /hero-setup to configure your local dev environment
 
 ### Step 6.5: Optionally Install Auto-Approve Workflow
 
-If the user agreed to install `.github/workflows/auto-approve.yml` (Group 4 confirmation), copy it into their repo using the bundled installer:
+If the user agreed to install `.github/workflows/auto-approve.yml` (Group 4 confirmation), copy it into their repo using the bundled installer. The installer's exit code is the contract — capture it and branch on it explicitly so an existing customized workflow is never silently overwritten or treated as "installed":
 
 ```bash
-# Locate this plugin's installed root. The conventional path is
-# ~/.claude/plugins/hero-skills, but try a couple of fallbacks for users
-# who installed elsewhere.
+# Locate this plugin's installed root. Tries the two standard locations;
+# bails out if neither matches.
 PLUGIN_ROOT=""
 for candidate in \
   "$HOME/.claude/plugins/hero-skills" \
@@ -961,16 +960,43 @@ for candidate in \
   fi
 done
 
+INSTALL_RC=255
+INSTALL_DID_WRITE=false   # only true when the workflow file was newly created or refreshed
 if [ -z "$PLUGIN_ROOT" ]; then
-  echo "Could not locate hero-skills plugin root. Skipping install."
+  echo "Could not locate hero-skills plugin root in standard locations."
+  echo "Install /hero-skills under ~/.claude/plugins/hero-skills, or copy"
+  echo ".github/workflows/auto-approve.yml from the plugin into this repo manually."
 else
+  set +e
   "$PLUGIN_ROOT/scripts/install-auto-approve.sh" "$ROOT"
+  INSTALL_RC=$?
+  set -e
 fi
+
+case "$INSTALL_RC" in
+  0)
+    # Either freshly installed or already up to date — safe to stage.
+    INSTALL_DID_WRITE=true
+    ;;
+  2)
+    echo ""
+    echo "An existing .github/workflows/auto-approve.yml differs from the plugin's."
+    echo "The plugin's version was written to .github/workflows/auto-approve.yml.new."
+    echo "Diff and decide before committing:"
+    echo "  diff -u .github/workflows/auto-approve.yml .github/workflows/auto-approve.yml.new"
+    echo "  # to apply the plugin's version:  mv .github/workflows/auto-approve.yml{.new,}"
+    echo "Skipping auto-stage of the workflow file."
+    ;;
+  255)
+    # Plugin not found — already explained above.
+    ;;
+  *)
+    echo "Installer failed with exit code $INSTALL_RC. Investigate before committing."
+    ;;
+esac
 ```
 
-If the script reports `EXISTS` (a file was already there), show the user the diff and ask whether to overwrite by moving `.new` over the existing file. Do not silently overwrite a customized workflow.
-
-After installing, remind the user about the two prerequisites before `/hero-auto-approve` works:
+Reminders shown only when the workflow was actually installed (`INSTALL_DID_WRITE=true`):
 
 1. **Merge the workflow to the default branch.** GitHub only honors `issue_comment` workflows that already exist on the default branch.
 2. **Add an `ANTHROPIC_API_KEY` repo secret.** The workflow uses it for Claude verification.
@@ -988,9 +1014,13 @@ Next steps before /hero-auto-approve will work:
 
 Always commit `HERO.md` to the repo. Do NOT ask whether to commit or whether to add it to `.gitignore`. Stage and commit it immediately after user confirmation in Step 6 (and Step 6.5 if the workflow was installed).
 
+Only stage the workflow file when Step 6.5 actually wrote it (`INSTALL_DID_WRITE=true`). When the installer returned exit 2 (`EXISTS`), the working file is still the user's original — committing it now would falsely claim `/hero-init` installed the new version.
+
 ```bash
 FILES_TO_ADD=("HERO.md" "CLAUDE.md")
-[ -f .github/workflows/auto-approve.yml ] && FILES_TO_ADD+=(".github/workflows/auto-approve.yml")
+if [ "${INSTALL_DID_WRITE:-false}" = "true" ] && [ -f .github/workflows/auto-approve.yml ]; then
+  FILES_TO_ADD+=(".github/workflows/auto-approve.yml")
+fi
 git add "${FILES_TO_ADD[@]}"
 git commit -m "chore: initialize HERO.md and update CLAUDE.md via /hero-init"
 ```

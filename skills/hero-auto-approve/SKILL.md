@@ -214,7 +214,7 @@ TRIGGERED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 gh pr comment $PR_NUMBER --body "@auto-approve"
 ```
 
-Capture the head SHA — `Submit verdict` is keyed off the PR, but the workflow run is keyed off the comment event, not a SHA. We use the comment timestamp instead.
+The workflow run is keyed off the `issue_comment` event, not a commit SHA. We capture `TRIGGERED_AT` so Step 5 can disambiguate this run from prior `Auto Approve` runs on the same PR.
 
 ### Step 5: Wait for the Workflow Run
 
@@ -251,6 +251,21 @@ Visit PR_URL/checks to investigate.
 
 Stop here.
 
+Where the `RUN_JSON` lookup above is implemented as two explicit steps, **not** a piped `xargs -I{}`. Empty-input behavior of `xargs` differs between GNU and BSD/macOS — BSD will run the command with `{}` substituted as empty, producing a malformed URL silently. Capture the workflow ID first and bail out loudly if it is empty:
+
+```bash
+WF_ID=$(gh api "/repos/{owner}/{repo}/actions/workflows" \
+  --jq '.workflows[] | select(.name == "Auto Approve") | .id' | head -1)
+
+if [ -z "$WF_ID" ]; then
+  echo "Auto Approve workflow not found in this repo. Did the workflow file land on the default branch yet?"
+  exit 1
+fi
+
+RUN_JSON=$(gh api "/repos/{owner}/{repo}/actions/workflows/$WF_ID/runs?event=issue_comment&per_page=10" \
+  --jq "[.workflow_runs[] | select(.created_at > \"$TRIGGERED_AT\")] | .[0]")
+```
+
 Once `RUN_ID` is found, poll until the run completes:
 
 ```bash
@@ -266,36 +281,54 @@ Time-box the wait at ~5 minutes. If it does not complete by then, ask the user w
 
 ### Step 6: Read the Verdict
 
-The workflow posts a single PR comment marked with `<!-- claude-approve -->` and submits a review. Either is enough to read the verdict.
+The workflow posts a single PR comment marked with `<!-- claude-approve -->` and submits a review. Either is enough to read the verdict — but if **both** are missing the run aborted before posting anything, and we treat it as WORKFLOW_FAILED rather than parsing a `null` value as success.
 
 ```bash
-# Latest auto-approve comment body
-gh api "/repos/{owner}/{repo}/issues/$PR_NUMBER/comments" \
-  --jq '[.[] | select(.body | startswith("<!-- claude-approve -->"))] | last | .body'
+# Latest auto-approve comment body — `// empty` collapses missing/null
+# to an empty string instead of the literal "null".
+COMMENT_BODY=$(gh api "/repos/{owner}/{repo}/issues/$PR_NUMBER/comments" \
+  --jq '[.[] | select(.body | startswith("<!-- claude-approve -->"))] | (last // {}) | (.body // empty)')
 
-# Most recent review submitted by github-actions[bot]
-gh api "/repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews" \
-  --jq '[.[] | select(.user.login == "github-actions[bot]")] | last | {state, submitted_at, body}'
+# Most recent review submitted by github-actions[bot] (state only).
+REVIEW_STATE=$(gh api "/repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews" \
+  --jq '[.[] | select(.user.login == "github-actions[bot]")] | (last // {}) | (.state // empty)')
+
+if [ -z "$COMMENT_BODY" ] && [ -z "$REVIEW_STATE" ]; then
+  echo "Workflow completed but posted neither a verdict comment nor a review."
+  echo "Run conclusion: $CONCLUSION"
+  echo "Run URL:        $(gh api "/repos/{owner}/{repo}/actions/runs/$RUN_ID" --jq '.html_url')"
+  echo "Treating as WORKFLOW_FAILED — see logs for the failing step."
+  VERDICT="WORKFLOW_FAILED"
+elif [ "$REVIEW_STATE" = "APPROVED" ]; then
+  VERDICT="APPROVE"
+elif [ "$REVIEW_STATE" = "CHANGES_REQUESTED" ]; then
+  VERDICT="REQUEST_CHANGES"
+elif [ "$CONCLUSION" != "success" ]; then
+  VERDICT="WORKFLOW_FAILED"
+else
+  # Comment exists but review state was unexpected — fail closed.
+  VERDICT="REQUEST_CHANGES"
+fi
 ```
-
-Parse the verdict:
-
-- Review `state == "APPROVED"` -> **APPROVE**
-- Review `state == "CHANGES_REQUESTED"` -> **REQUEST_CHANGES**
-- Workflow run `conclusion != "success"` -> **WORKFLOW_FAILED** (treat as REQUEST_CHANGES, surface the run logs URL)
 
 Show the comment body to the user verbatim — it contains the gate results and Claude's per-check reasoning the user needs to act on.
 
 ### Step 7a: APPROVE Path — Offer to Merge
 
-Resolve the merge method from HERO.md (default `squash`), then check mergeability:
+Resolve the merge method from HERO.md (default `squash`), normalize the value (lowercase, strip quotes/whitespace) so `Squash`, `"squash"`, ` squash ` all resolve to `squash`, and reject anything else loudly:
 
 ```bash
-MERGE_METHOD=$(awk -F': ' '/^- merge-method:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | tr -d '[:space:]')
-MERGE_METHOD=${MERGE_METHOD:-squash}
+MERGE_METHOD_RAW=$(awk -F': ' '/^- merge-method:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null)
+MERGE_METHOD=$(printf '%s' "${MERGE_METHOD_RAW:-squash}" \
+  | tr -d '[:space:]' | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]')
+
 case "$MERGE_METHOD" in
   squash|rebase|merge) ;;
-  *) echo "HERO.md merge-method='$MERGE_METHOD' is invalid; falling back to squash"; MERGE_METHOD=squash ;;
+  *)
+    echo "ERROR: HERO.md merge-method='$MERGE_METHOD_RAW' is not one of squash|rebase|merge."
+    echo "Fix HERO.md or pass the method explicitly when merging. Aborting."
+    exit 1
+    ;;
 esac
 MERGE_FLAG="--$MERGE_METHOD"
 
@@ -318,60 +351,89 @@ Merge now? [y/N]
   n -> stop here, I will merge manually
 ```
 
-**Wait for explicit confirmation.** If the user says yes:
+**Wait for explicit confirmation.** If the user says yes, attempt `--auto` first. If that fails, **inspect the failure reason** before deciding whether to retry without `--auto`:
 
 ```bash
-gh pr merge $PR_NUMBER $MERGE_FLAG --auto || gh pr merge $PR_NUMBER $MERGE_FLAG
+gh pr merge $PR_NUMBER $MERGE_FLAG --auto 2> merge_err.log
+RC=$?
+
+if [ $RC -ne 0 ]; then
+  if grep -qi "auto.merge.*not.*enabled\|auto-merge is not allowed" merge_err.log; then
+    # Repo has auto-merge disabled — fall back to immediate merge with
+    # the same method. This is safe: branch protection still applies.
+    gh pr merge $PR_NUMBER $MERGE_FLAG
+  else
+    # Branch protection, missing checks, conflicts, permissions — surface
+    # the error and stop. Do NOT retry without --auto, because that path
+    # bypasses the wait-for-checks safety net.
+    cat merge_err.log
+    echo "Merge failed. Resolve the underlying issue and re-run /hero-auto-approve, or merge manually."
+    exit 1
+  fi
+fi
 ```
 
-`--auto` lets GitHub wait for required checks before merging; if auto-merge is disabled on the repo, fall through to an immediate merge with the same method.
-
-**Never force-merge or override branch protection.** Never pass `--admin`. If the merge is blocked, report which check is blocking and stop. Do not retry without the user's explicit instruction.
+**Never force-merge or override branch protection.** Never pass `--admin`. The fallback above is *only* for the specific "auto-merge not enabled on this repo" case; every other failure is surfaced and stops the skill.
 
 ### Step 7b: Clean Up the Merged Branch
 
-GitHub may auto-delete the head branch after merge (repo setting `deleteBranchOnMerge`). If that setting is off, the merged branch lingers on the remote and locally — clean it up.
+GitHub may auto-delete the head branch after merge (repo setting `deleteBranchOnMerge`). If that setting is off, the merged branch lingers on the remote and locally — clean it up. Only runs after Step 7a actually performed a merge.
+
+Wrap the whole block in an `if` so an early return cannot kill the wrapping shell, and surface real errors instead of speculating about their cause.
 
 ```bash
-# Wait for the merge to register, then re-fetch the PR state.
 sleep 3
 MERGED=$(gh pr view $PR_NUMBER --json merged --jq '.merged')
-[ "$MERGED" != "true" ] && { echo "Merge not yet recorded — skipping cleanup."; exit 0; }
 
-AUTO_DELETE=$(gh repo view --json deleteBranchOnMerge --jq '.deleteBranchOnMerge')
-
-# Read HERO.md preference; default true (mirror GitHub's modern default).
-HERO_AUTO_DELETE=$(awk -F': ' '/^- auto-delete-branches:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | tr -d '[:space:]')
-HERO_AUTO_DELETE=${HERO_AUTO_DELETE:-true}
-
-if [ "$AUTO_DELETE" = "true" ]; then
-  echo "GitHub will auto-delete $PR_BRANCH (repo deleteBranchOnMerge=true)."
-elif [ "$HERO_AUTO_DELETE" != "true" ]; then
-  echo "Skipping branch cleanup (HERO.md auto-delete-branches=false)."
+if [ "$MERGED" != "true" ]; then
+  echo "Merge not yet recorded — skipping cleanup."
 else
-  # Remote delete — safe because the branch is merged. gh handles 422
-  # gracefully if GitHub already removed it in a race.
-  gh api -X DELETE "/repos/$OWNER/$REPO/git/refs/heads/$PR_BRANCH" 2>/dev/null \
-    && echo "Deleted remote branch: $PR_BRANCH" \
-    || echo "Remote branch $PR_BRANCH already gone."
-fi
+  # Treat null/empty/unknown deleteBranchOnMerge as "I do not know" and
+  # defer to the HERO.md preference. Non-admins may not see this field.
+  AUTO_DELETE=$(gh repo view --json deleteBranchOnMerge --jq '.deleteBranchOnMerge // empty' 2>/dev/null)
 
-# Local cleanup — only if we are not currently on the deleted branch.
-CURRENT=$(git branch --show-current)
-if [ "$CURRENT" = "$PR_BRANCH" ]; then
-  echo "You are on $PR_BRANCH. Switch off it first (e.g. git checkout $BASE_BRANCH) before deleting locally."
-elif git show-ref --verify --quiet "refs/heads/$PR_BRANCH"; then
-  # -d (not -D) so git refuses if the branch is unmerged locally for any
-  # reason — this protects the user from data loss in odd states.
-  git branch -d "$PR_BRANCH" \
-    && echo "Deleted local branch: $PR_BRANCH" \
-    || echo "Could not delete local $PR_BRANCH (not fully merged locally?). Skipping."
-fi
+  HERO_AUTO_DELETE=$(awk -F': ' '/^- auto-delete-branches:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null \
+    | tr -d '[:space:]' | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]')
+  HERO_AUTO_DELETE=${HERO_AUTO_DELETE:-true}
 
-git fetch --prune origin >/dev/null 2>&1 || true
+  if [ "$AUTO_DELETE" = "true" ]; then
+    echo "GitHub will auto-delete $PR_BRANCH (repo deleteBranchOnMerge=true)."
+  elif [ "$HERO_AUTO_DELETE" != "true" ]; then
+    echo "Skipping branch cleanup (HERO.md auto-delete-branches=$HERO_AUTO_DELETE)."
+  else
+    # Remote delete. Capture status separately so we can distinguish
+    # 404/422 ("branch already gone — fine") from 401/403 ("permission
+    # denied — surface this, do not silently mask").
+    DELETE_STATUS=$(gh api -X DELETE "/repos/$OWNER/$REPO/git/refs/heads/$PR_BRANCH" \
+      -i 2>/dev/null | awk 'NR==1 {print $2; exit}')
+    case "$DELETE_STATUS" in
+      204|200)        echo "Deleted remote branch: $PR_BRANCH" ;;
+      404|422)        echo "Remote branch $PR_BRANCH already gone." ;;
+      401|403)        echo "WARN: cannot delete remote $PR_BRANCH — permission denied (HTTP $DELETE_STATUS). Delete it manually if needed." ;;
+      *)              echo "WARN: remote delete returned HTTP ${DELETE_STATUS:-error}. Re-check $PR_URL and remove the branch manually if needed." ;;
+    esac
+  fi
+
+  # Local cleanup — only if we are not currently on the deleted branch.
+  CURRENT=$(git branch --show-current)
+  if [ "$CURRENT" = "$PR_BRANCH" ]; then
+    echo "You are on $PR_BRANCH. Switch off it first (e.g. git checkout $BASE_BRANCH) before deleting locally."
+  elif git show-ref --verify --quiet "refs/heads/$PR_BRANCH"; then
+    # -d (not -D) so git refuses if the branch is unmerged locally — this
+    # protects the user from data loss in odd states.
+    LOCAL_ERR=$(git branch -d "$PR_BRANCH" 2>&1 1>/dev/null) || true
+    if [ -z "$LOCAL_ERR" ]; then
+      echo "Deleted local branch: $PR_BRANCH"
+    else
+      echo "WARN: could not delete local $PR_BRANCH:"
+      echo "  $LOCAL_ERR"
+      echo "  Investigate before deleting manually with git branch -D."
+    fi
+  fi
+
+  git fetch --prune origin >/dev/null 2>&1 || true
+fi
 ```
-
-If the user merged without confirming `y` in Step 7a, skip cleanup entirely — they may want to do it manually.
 
 ### Step 7c: REQUEST_CHANGES Path — Surface and Offer Next Steps
 

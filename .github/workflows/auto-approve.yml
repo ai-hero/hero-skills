@@ -63,11 +63,26 @@ jobs:
           while IFS= read -r f; do
             [ -z "$f" ] && continue
             printf '\n===== FILE: %s =====\n' "$f" >> full_files.txt
-            if ! gh api -H "Accept: application/vnd.github.raw" \
+            # Capture status separately so 404 (deleted) is reported as
+            # such, while other failures (rate limit, auth, 5xx) are
+            # surfaced rather than masquerading as "deleted".
+            STATUS=$(gh api -H "Accept: application/vnd.github.raw" \
               "/repos/${{ github.repository }}/contents/$f?ref=$HEAD_SHA" \
-              >> full_files.txt 2>/dev/null; then
-              printf '(file unavailable — likely deleted in this PR)\n' >> full_files.txt
-            fi
+              -i 2>>full_files_err.log \
+              | awk 'NR==1 {print $2; exit}')
+            case "$STATUS" in
+              200)
+                gh api -H "Accept: application/vnd.github.raw" \
+                  "/repos/${{ github.repository }}/contents/$f?ref=$HEAD_SHA" \
+                  >> full_files.txt 2>/dev/null
+                ;;
+              404)
+                printf '(file deleted in this PR — 404)\n' >> full_files.txt
+                ;;
+              *)
+                printf '(file unreadable — HTTP %s; verifier should treat its content as unknown)\n' "${STATUS:-error}" >> full_files.txt
+                ;;
+            esac
           done < changed_files.txt
 
           # Soft cap on the bundle to keep the request inside the model
@@ -124,7 +139,7 @@ jobs:
             [.[]
               | select(.user.login != $author)
               | select(.state != "PENDING")
-              | select((.body // "") | test("Approved — PR description is accurate"; "i") | not)
+              | select(.user.login != "github-actions[bot]")
             ] | length
           ' reviews.json)
 
@@ -314,13 +329,28 @@ jobs:
               }]
             }' > payload.json
 
-          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+          # Use -fS so curl exits non-zero on HTTP >=400 and prints
+          # error to stderr; capture both body and exit code so we can
+          # fail closed when the call did not return a usable response.
+          RESPONSE=$(curl -fsS https://api.anthropic.com/v1/messages \
             -H "Content-Type: application/json" \
             -H "x-api-key: $ANTHROPIC_API_KEY" \
             -H "anthropic-version: 2023-06-01" \
-            -d @payload.json)
+            -d @payload.json) || CURL_FAILED=1
 
-          REVIEW=$(echo "$RESPONSE" | jq -r '.content[0].text // "Error: Could not get review from Claude"')
+          # Treat any of the following as a hard failure that must NOT
+          # parse as APPROVE:
+          #   - curl exited non-zero (network, 4xx, 5xx)
+          #   - response body has no .content[0].text (malformed / API error envelope)
+          REVIEW=""
+          if [ -z "${CURL_FAILED:-}" ]; then
+            REVIEW=$(echo "$RESPONSE" | jq -r '.content[0].text // empty')
+          fi
+
+          if [ -z "$REVIEW" ]; then
+            REVIEW=$'## Verdict\nREQUEST_CHANGES\nClaude verification did not return a usable response — failing closed.'
+            echo "verify_error=true" >> "$GITHUB_OUTPUT"
+          fi
 
           # Prepend the gate results so the comment shows the full pass list,
           # not just Claude's checks.
@@ -332,10 +362,15 @@ jobs:
             echo "$REVIEW"
           } > review.md
 
-          if echo "$REVIEW" | grep -q "REQUEST_CHANGES"; then
-            echo "verdict=request_changes" >> "$GITHUB_OUTPUT"
-          else
+          # Anchor on the literal "## Verdict" header so the word
+          # REQUEST_CHANGES quoted inside an explanation cannot flip
+          # the verdict. Default APPROVE only when the verdict line
+          # explicitly says APPROVE.
+          VERDICT_LINE=$(printf '%s\n' "$REVIEW" | awk '/^## Verdict$/ {getline; print; exit}')
+          if printf '%s' "$VERDICT_LINE" | grep -qx "APPROVE"; then
             echo "verdict=approve" >> "$GITHUB_OUTPUT"
+          else
+            echo "verdict=request_changes" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Resolve final verdict
