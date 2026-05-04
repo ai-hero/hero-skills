@@ -210,25 +210,72 @@ git push origin "$PR_BRANCH"
 
 If multiple logically distinct fixes were applied (e.g., a security fix and a docs fix), commit them separately before pushing.
 
-### Step 8: Add a Follow-up Comment Summarizing the Fixes
+### Step 8: Always Post an Improvements Summary Comment
+
+This step is **mandatory** every run, even when no fixes were applied. Reviewers and future code archaeologists need a single comment that says: "self-review ran, here is what changed, and here is what was deliberately left alone." Skipping this comment when there were no fixes hides the fact that the review even ran.
+
+Group the line items by severity. For each fix, name the finding *and* what changed (one sentence each). For each skipped finding, give the reason — "low impact", "user declined", "out of scope" — so a reviewer reading later can tell whether they need to re-raise it.
 
 ```bash
 gh pr comment $PR_NUMBER --body "$(cat <<'EOF'
-## Self-Review Fixes Applied
+## Self-Review Improvements
 
-- {what was changed for finding 1}
-- {what was changed for finding 2}
+**Critical (A / X fixed):**
+- FILE:LINE — FINDING — FIX_DESCRIPTION
 
-Skipped:
-- {finding the user declined and why, if applicable}
+**Important (B / Y fixed):**
+- FILE:LINE — FINDING — FIX_DESCRIPTION
 
-Commits: {sha1}, {sha2}
+**Suggestions (C / Z fixed):**
+- FILE:LINE — FINDING — FIX_DESCRIPTION
+
+**Skipped (with rationale):**
+- FILE:LINE — FINDING — REASON_FOR_SKIPPING
+
+Commits: SHA1, SHA2
 
 ---
 Applied by [Claude Code](https://claude.ai/code)
 EOF
 )"
 ```
+
+If no findings were applied (everything skipped or no findings), still post the comment with the skipped list and the rationale. **Do not fall silent** — the comment is the only durable record that the review ran.
+
+### Step 8.5: Update the PR Description When Scope or Behavior Changed
+
+Self-review fixes can materially change what the PR does — adding new files, hardening a code path, fixing a critical bug. When that happens, the PR title and body must reflect it; reviewers should not have to read commits to discover scope.
+
+Decide whether to update by checking each:
+
+- **New files** added by fixes that weren't in the original PR description → update.
+- **Critical fixes** that change the safety story (e.g., "fail-closed on API error") → update.
+- **Removed features** or **changed defaults** → update.
+- **Pure style / typo / comment fixes** → leave the PR description alone.
+
+When an update is warranted:
+
+```bash
+# Read the current title and body, draft an update, and apply it.
+gh pr view $PR_NUMBER --json title,body --jq '{title, body}'
+
+# After drafting the new title/body (preserving the existing structure
+# — Summary, Changesets, Test Plan — and adding entries for the new
+# work), apply with:
+gh pr edit $PR_NUMBER --title "NEW_TITLE" --body "$(cat <<'EOF'
+... updated body ...
+EOF
+)"
+```
+
+Rules:
+
+- Append new changeset entries; never delete prior ones (the commit history is the source of truth).
+- Update Test Plan checkboxes if fixes added new manual verification steps.
+- Keep the title under 70 chars; use the body for detail.
+- If the PR title's scope shifted (e.g., started as "feat" and now also contains a critical "fix"), update the title to match.
+
+If no update is needed, state in the summary: "PR description left as-is — fixes were limited to internal hardening, no scope change."
 
 ### Step 9: Ask Whether to Mark Ready for Review
 

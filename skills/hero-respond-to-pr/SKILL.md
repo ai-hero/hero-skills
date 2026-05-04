@@ -279,6 +279,71 @@ gh api graphql -f query='
 ' -f threadId="$THREAD_NODE_ID"
 ```
 
+### Step 9.5: Always Post an Improvements Summary Comment
+
+Per-thread replies (Step 9) explain *each* fix in isolation. They do not, on their own, give a reviewer a single place to see what changed across the whole respond cycle. **Always post one consolidated improvements comment**, even when no code changes were made (e.g., all comments were questions or were declined). Skipping this comment when there were no fixes hides the fact that the cycle ran.
+
+Group by category. For each fix, name the file:line, the original feedback, and the change in one sentence. For each declined item, give the reason — "low impact", "out of scope", "would conflict with X" — so reviewers can tell whether to re-raise it.
+
+```bash
+gh pr comment $PR_NUMBER --body "$(cat <<'EOF'
+## Respond-to-PR Improvements
+
+**Code changes (X applied):**
+- FILE:LINE — REVIEWER_FEEDBACK — FIX_DESCRIPTION
+
+**Questions answered (Y):**
+- FILE:LINE — QUESTION — ANSWER_OR_RATIONALE
+
+**Declined (Z, with rationale):**
+- FILE:LINE — REVIEWER_FEEDBACK — REASON_FOR_DECLINING
+
+Commits: SHA1, SHA2
+
+Remaining unresolved threads: N
+ITEM_OR_NONE_INLINE
+
+---
+Applied by [Claude Code](https://claude.ai/code)
+EOF
+)"
+```
+
+If nothing was applied or replied to (rare — the cycle should not run otherwise), still post the comment stating "No changes this cycle" and explaining why. **Do not fall silent.**
+
+### Step 9.6: Update the PR Description When Scope or Behavior Changed
+
+Reviewer feedback often expands a PR's scope — adding new files, hardening a code path, removing an option. When that happens, the PR title and body must reflect the new shape. Reviewers should not have to dig through commits to find what the PR now claims to do.
+
+Decide whether to update by checking each:
+
+- **New files** added in this respond cycle that weren't in the original description → update.
+- **Critical / important** fixes that change the safety or behavior story → update.
+- **Reverted or removed** features → update (and remove the corresponding line from the description).
+- **Pure typo / nit / comment** fixes → leave the PR description alone.
+
+When an update is warranted:
+
+```bash
+gh pr view $PR_NUMBER --json title,body --jq '{title, body}'
+
+# Draft the update preserving the existing structure (Summary,
+# Changesets, Test Plan), append entries for the new work, then apply:
+gh pr edit $PR_NUMBER --title "NEW_TITLE" --body "$(cat <<'EOF'
+... updated body ...
+EOF
+)"
+```
+
+Rules:
+
+- Append new changeset entries; never delete prior ones (commit history is the source of truth).
+- Update Test Plan checkboxes if respond fixes added new verification steps.
+- Keep the title under 70 chars; use the body for detail.
+- If the PR title's scope shifted (e.g., a "feat" PR now also has a critical "fix"), update the title.
+
+If no description update is needed, note it in the Step 10 summary as "PR description left as-is — fixes were limited to surface tweaks, no scope change."
+
 ### Step 10: Summary
 
 ```
@@ -295,6 +360,8 @@ Comments Addressed:
 
 Commits: N new commits pushed
 Threads Resolved: M of T
+
+PR description: [updated | left as-is — reason]
 
 Remaining unresolved: [list any, if applicable]
 
