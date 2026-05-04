@@ -216,8 +216,13 @@ This step is **mandatory** every run, even when no fixes were applied. Reviewers
 
 Group the line items by severity. For each fix, name the finding *and* what changed (one sentence each). For each skipped finding, give the reason — "low impact", "user declined", "out of scope" — so a reviewer reading later can tell whether they need to re-raise it.
 
+**Rendering rules (apply before posting, not as part of the template):**
+
+- Omit any severity whose count is zero, or write `- none` inline. Do not post empty section bodies.
+- Substitute every `FILE:LINE`, `FINDING`, `FIX_DESCRIPTION`, `SHA1`, etc. placeholder with the real value before invoking `gh pr comment`. The literal placeholder strings must never appear in the posted comment.
+
 ```bash
-gh pr comment $PR_NUMBER --body "$(cat <<'EOF'
+COMMENT_BODY=$(cat <<'EOF'
 ## Self-Review Improvements
 
 **Critical (A / X fixed):**
@@ -237,7 +242,17 @@ Commits: SHA1, SHA2
 ---
 Applied by [Claude Code](https://claude.ai/code)
 EOF
-)"
+)
+
+# Substitute the placeholders, drop empty sections, then post.
+# If the post fails (network, gh auth), surface the rendered body so
+# the user can paste it manually — do NOT swallow the error and
+# pretend the comment was posted.
+if ! gh pr comment $PR_NUMBER --body "$COMMENT_BODY"; then
+  echo "ERROR: Failed to post improvements comment. Body follows — paste manually:"
+  printf '%s\n' "$COMMENT_BODY"
+  exit 1
+fi
 ```
 
 If no findings were applied (everything skipped or no findings), still post the comment with the skipped list and the rationale. **Do not fall silent** — the comment is the only durable record that the review ran.
@@ -249,24 +264,28 @@ Self-review fixes can materially change what the PR does — adding new files, h
 Decide whether to update by checking each:
 
 - **New files** added by fixes that weren't in the original PR description → update.
-- **Critical fixes** that change the safety story (e.g., "fail-closed on API error") → update.
+- **Critical fixes** that change observable behavior (security, data-loss, correctness, or fail-closed defaults) → update. ("Critical" here matches Step 5's definition: bugs, security, data loss.)
 - **Removed features** or **changed defaults** → update.
 - **Pure style / typo / comment fixes** → leave the PR description alone.
+- **Tie-breaker:** if uncertain, default to *update*. A spurious changeset entry is cheap; a missing one misleads reviewers.
 
 When an update is warranted:
 
 ```bash
 # Read the current title and body, draft an update, and apply it.
 gh pr view $PR_NUMBER --json title,body --jq '{title, body}'
+```
 
-# After drafting the new title/body (preserving the existing structure
-# — Summary, Changesets, Test Plan — and adding entries for the new
-# work), apply with:
-gh pr edit $PR_NUMBER --title "NEW_TITLE" --body "$(cat <<'EOF'
-... updated body ...
+After drafting the full new body (preserving the existing structure — Summary, Changesets, Test Plan — and appending entries for the new work), apply it. **Do not paste the heredoc literally** — `gh pr edit --body` fully replaces the body, so the heredoc must contain the entire drafted Markdown:
+
+```bash
+gh pr edit $PR_NUMBER --title "NEW_TITLE_UNDER_70_CHARS" --body "$(cat <<'EOF'
+DRAFTED_FULL_BODY_HERE
 EOF
 )"
 ```
+
+Substitute `DRAFTED_FULL_BODY_HERE` with the actual drafted Markdown before running. Never run the snippet with the placeholder still in place — it would overwrite the PR description with the literal string `DRAFTED_FULL_BODY_HERE`.
 
 Rules:
 
@@ -299,6 +318,11 @@ If no, leave the PR as a draft and note in the summary that the user wants to re
 
 ### Step 10: Summary
 
+Substitute the `{...}` placeholders before printing. Concrete examples for the `PR description:` line:
+
+- `PR description: updated (added "fail-closed on API error" to Changesets, refreshed Test Plan)`
+- `PR description: left as-is (typo and comment fixes only, no scope change)`
+
 ```
 Hero Self-Review Summary
 ========================
@@ -311,6 +335,7 @@ Findings:
   Suggestions: D (E fixed, F skipped)
 
 Commits: N pushed
+PR description: {updated | left as-is} ({one-line reason})
 PR state: {Draft / Ready for review}
 URL: {pr-url}
 ```
