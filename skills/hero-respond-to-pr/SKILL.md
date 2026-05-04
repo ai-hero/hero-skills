@@ -279,7 +279,96 @@ gh api graphql -f query='
 ' -f threadId="$THREAD_NODE_ID"
 ```
 
+### Step 9.5: Always Post an Improvements Summary Comment
+
+Per-thread replies (Step 9) explain *each* fix in isolation. They do not, on their own, give a reviewer a single place to see what changed across the whole respond cycle. **Always post one consolidated improvements comment, in addition to (never instead of) the per-thread replies from Step 9.** Even when no code changes were made (e.g., all comments were questions or were declined), still post the comment — silence on a no-fix cycle hides the fact that the cycle ran.
+
+Group by category. For each fix, name the file:line, the original feedback, and the change in one sentence. For each declined item, give the reason — "low impact", "out of scope", "would conflict with X" — so reviewers can tell whether to re-raise it.
+
+**Rendering rules (apply before posting, not as part of the template):**
+
+- Omit any section whose count is zero, or write `- none` inline. Do not post empty section bodies.
+- Substitute every `FILE:LINE`, `REVIEWER_FEEDBACK`, `FIX_DESCRIPTION`, `SHA1`, etc. placeholder with the real value before invoking `gh pr comment`. The literal placeholder strings must never appear in the posted comment.
+
+```bash
+COMMENT_BODY=$(cat <<'EOF'
+## Respond-to-PR Improvements
+
+**Code changes (X applied):**
+- FILE:LINE — REVIEWER_FEEDBACK — FIX_DESCRIPTION
+
+**Questions answered (Y):**
+- FILE:LINE — QUESTION — ANSWER_OR_RATIONALE
+
+**Declined (Z, with rationale):**
+- FILE:LINE — REVIEWER_FEEDBACK — REASON_FOR_DECLINING
+
+Commits: SHA1, SHA2
+
+Remaining unresolved threads: N (LIST_OR_NONE)
+
+---
+Applied by [Claude Code](https://claude.ai/code)
+EOF
+)
+
+# Substitute the placeholders, drop empty sections, then post.
+# If the post fails (network, gh auth), surface the rendered body so
+# the user can paste it manually — do NOT swallow the error and
+# pretend the comment was posted.
+if ! gh pr comment $PR_NUMBER --body "$COMMENT_BODY"; then
+  echo "ERROR: Failed to post improvements comment. Body follows — paste manually:"
+  printf '%s\n' "$COMMENT_BODY"
+  exit 1
+fi
+```
+
+If nothing was applied or replied to (rare — the cycle should not run otherwise), still post the comment stating "No changes this cycle" and explaining why. **Do not fall silent.**
+
+### Step 9.6: Update the PR Description When Scope or Behavior Changed
+
+Reviewer feedback often expands a PR's scope — adding new files, hardening a code path, removing an option. When that happens, the PR title and body must reflect the new shape. Reviewers should not have to dig through commits to find what the PR now claims to do.
+
+Decide whether to update by checking each:
+
+- **New files** added in this respond cycle that weren't in the original description → update.
+- **Critical / important fixes** that change observable behavior (security, data-loss, correctness, fail-closed defaults, API contracts) → update. Reviewer-driven changes are more likely to alter behavior than self-review fixes, so this rule is intentionally broader than `/hero-self-review`'s.
+- **Reverted or removed** features → update (and remove the corresponding line from the description).
+- **Pure typo / nit / comment** fixes → leave the PR description alone.
+- **Tie-breaker:** if uncertain, default to *update*. A spurious changeset entry is cheap; a missing one misleads reviewers.
+
+When an update is warranted:
+
+```bash
+gh pr view $PR_NUMBER --json title,body --jq '{title, body}'
+```
+
+Draft the full new body (preserving the existing structure — Summary, Changesets, Test Plan — and appending entries for this iteration's work). **Do not paste the heredoc literally** — `gh pr edit --body` fully replaces the body, so the heredoc must contain the entire drafted Markdown:
+
+```bash
+gh pr edit $PR_NUMBER --title "NEW_TITLE_UNDER_70_CHARS" --body "$(cat <<'EOF'
+DRAFTED_FULL_BODY_HERE
+EOF
+)"
+```
+
+Substitute `DRAFTED_FULL_BODY_HERE` with the actual drafted Markdown before running. Never run the snippet with the placeholder still in place — it would overwrite the PR description with the literal string `DRAFTED_FULL_BODY_HERE`.
+
+Rules:
+
+- Append new changeset entries; never delete prior ones (commit history is the source of truth).
+- Update Test Plan checkboxes if respond fixes added new verification steps.
+- Keep the title under 70 chars; use the body for detail.
+- If the PR title's scope shifted (e.g., a "feat" PR now also has a critical "fix"), update the title.
+
+If no description update is needed, note it in the Step 10 summary as "PR description left as-is — fixes were limited to surface tweaks, no scope change."
+
 ### Step 10: Summary
+
+Substitute the `{...}` placeholders before printing. Concrete examples for the `PR description:` line:
+
+- `PR description: updated (added entry for "fail-closed on API error" to Changesets, refreshed Test Plan)`
+- `PR description: left as-is (typo and comment fixes only, no scope change)`
 
 ```
 Hero Respond to PR Summary
@@ -296,7 +385,9 @@ Comments Addressed:
 Commits: N new commits pushed
 Threads Resolved: M of T
 
-Remaining unresolved: [list any, if applicable]
+PR description: {updated | left as-is} ({one-line reason})
+
+Remaining unresolved: {list any, if applicable}
 
 URL: {pr-url}
 ```
@@ -431,7 +522,7 @@ Manual review may be needed for the remaining items.
 
 **11e. Fix, commit, push, resolve**
 
-If not exiting, repeat the respond cycle for the new comments:
+If not exiting, repeat the respond cycle for the new comments. The mandatory improvements comment and PR-description decision apply on **every** iteration — silently skipping them inside the loop would defeat the always-post contract.
 
 1. Categorize the agent's new comments (same as Step 4)
 2. Present to user for confirmation
@@ -440,6 +531,8 @@ If not exiting, repeat the respond cycle for the new comments:
 5. Commit fixes (same as Step 7)
 6. Push (same as Step 8)
 7. Reply to and resolve addressed threads (same as Step 9)
+8. Post the consolidated improvements comment (same as Step 9.5)
+9. Update PR title/body if the iteration's fixes shifted scope or behavior (same as Step 9.6)
 
 Increment iteration counter and loop back to 11a.
 

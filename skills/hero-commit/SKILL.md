@@ -24,19 +24,47 @@ Read `HERO.md` if it exists. This skill uses:
 
 If `HERO.md` is missing, suggest `/hero-init` but proceed with auto-detection.
 
-## Step 1: Verify Branch
+## Step 1: Verify Branch — Never Commit to Main
 
 ```bash
 BRANCH=$(git branch --show-current)
-echo "Current branch: $BRANCH"
+DEFAULT_BRANCH=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | xargs)
+DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
+echo "Current branch: $BRANCH (default: $DEFAULT_BRANCH)"
 ```
 
-**If on main/master:** Warn the user. Ask if they want to:
+**If on the default branch (main/master) or any protected branch:** STOP. Never commit directly to main. Show:
 
-1. Create a new branch first (ask for branch name)
-2. Proceed on main anyway
+```
+You are on '$BRANCH', which is the default branch. Hero Commit never commits to the default branch.
 
-Do NOT continue until the user responds. If they choose to create a branch, run `git checkout -b $BRANCH_NAME` before proceeding.
+I will create a feature branch from your current changes. Suggested name: '{suggested-branch}'
+
+Options:
+1. Use suggested name '{suggested-branch}'
+2. Provide your own branch name
+3. Cancel
+```
+
+Generate `{suggested-branch}` from the diff:
+
+- If commit-convention is `conventional`, infer the type from changed files (`docs/` → `docs/`, tests only → `test/`, source code → `feat/` or `fix/` based on heuristics) and append a 3-5 word slug derived from the diff summary, e.g. `feat/add-self-review`, `fix/null-handling-in-auth`.
+- If branch-convention from HERO.md uses an issue prefix and one is mentioned in the diff or commit message draft, prefer `{issue-id}-{slug}`.
+
+**Wait for user choice.** Then:
+
+```bash
+git checkout -b "$BRANCH_NAME"
+```
+
+The uncommitted changes follow the checkout into the new branch automatically — no stash needed. Confirm:
+
+```bash
+git branch --show-current
+git status --porcelain
+```
+
+Proceed with the rest of the skill on the new branch.
 
 ## Step 2: Run Pre-commit (if available)
 
@@ -135,6 +163,8 @@ EOF
 **If issue ID in branch name:** Add `Fixes: PROJ-123` or `Relates to: PROJ-123`.
 
 ## Step 8: Post-Commit Validation
+
+Dry-run any pre-push hooks now so failures surface before the user runs `/hero-push`:
 
 ```bash
 which pre-commit && pre-commit run --hook-stage pre-push --all-files || echo "NO_PRECOMMIT"

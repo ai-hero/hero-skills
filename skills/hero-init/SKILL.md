@@ -27,8 +27,8 @@ Each `/hero-*` skill needs specific information to work well. This skill figures
 | `/hero-commit` | Commit convention, pre-commit run command, issue prefix |
 | `/hero-push` | Default branch, branch convention, hosting platform (`gh`/`glab`), issue prefix |
 | `/hero-plan` | PM tool + MCP server name, branch template, issue prefix, project list |
-| `/hero-implement` | Lint/format/typecheck commands, test command, framework, install command |
-| `/hero-test` | Language, framework, test/dev/install commands, ports, dependency file |
+| `/hero-test` | Language, framework, lint/format/typecheck commands, test/dev/install commands, ports, dependency file |
+| `/hero-self-review` | Code Quality (pre-commit), Code Review Agent (bot username — to dedupe its comments) |
 | `/hero-cicd` | CI platform, workflow names, registry, required status checks |
 | `/hero-health` | Deployment platform, namespaces, ArgoCD, health check endpoints |
 | `/hero-secure` | Registry, language/framework, dependency files per project |
@@ -36,7 +36,8 @@ Each `/hero-*` skill needs specific information to work well. This skill figures
 | `/hero-new-project` | Repo type, coding conventions, code quality tools, project scaffold patterns |
 | `/hero-setup` | Required tools, recommended tools, MCP servers |
 | `/hero-respond-to-pr` | Code Review Agent (agent, trigger, poll-method, bot-username) |
-| `/hero-review-pr` | Repository, Code Quality, Projects, Code Review Agent |
+| `/hero-review-pr` | Code Quality (linters in CI), Code Review Agent (bot username — to dedupe its comments) |
+| `/hero-auto-approve` | CI/CD (auto-approve workflow installed on default branch), Repository (default branch) |
 | `/hero-init --update` | All sections — keeps HERO.md in sync via pre-commit |
 | `/hero-meta` | (internal) Plugin structure validation |
 
@@ -177,6 +178,13 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null || echo "UNKNOWN"
 
 # Collaboration signals
 ls LICENSE CONTRIBUTING.md CODE_OF_CONDUCT.md CODEOWNERS .github/PULL_REQUEST_TEMPLATE* .github/ISSUE_TEMPLATE* 2>/dev/null
+
+# Allowed merge methods on the GitHub remote — the team's PR merge
+# button is constrained by these flags. We surface the allowed set so
+# Step 4 can ask the user to pick one (preferring squash when allowed).
+# Also fetch deleteBranchOnMerge — when false, /hero-auto-approve will
+# delete merged branches itself.
+gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed,deleteBranchOnMerge 2>/dev/null
 ```
 
 **What to look for:**
@@ -188,6 +196,8 @@ ls LICENSE CONTRIBUTING.md CODE_OF_CONDUCT.md CODEOWNERS .github/PULL_REQUEST_TE
 - PR templates → structured PR process
 - Branch naming patterns in `git branch -r` → extract the **branch template** (e.g., `feature/PROJ-123-<desc>`, `fix/<desc>`, `<prefix>/<issue-id>-<desc>`)
 - Commit message patterns in `git log` (e.g., `feat:`, `fix:`, `PROJ-123:`)
+- Allowed merge methods → `merge-method` field. Prefer `squash` when allowed; otherwise `rebase`; otherwise `merge`. If multiple are allowed, ask the user once to pin the team's choice.
+- `deleteBranchOnMerge` → `auto-delete-branches` field. If true, GitHub already deletes merged branches and `/hero-auto-approve` will skip cleanup. If false, the skill will delete the remote and local branch after a successful merge unless `auto-delete-branches: false` overrides it in HERO.md.
 
 #### 2d: Project Management & Issue Tracking
 
@@ -235,6 +245,21 @@ grep -l "test\|lint\|build\|deploy\|release" .github/workflows/*.yml 2>/dev/null
 - Which workflows exist and what they do (test, lint, build images, deploy)
 - Whether CI runs on PR, push to main, or both
 - Required status checks (signals what must pass before merge)
+- Whether `.github/workflows/auto-approve.yml` already exists — needed by `/hero-auto-approve`
+
+```bash
+# Check whether the hero-skills auto-approve workflow is installed
+ls .github/workflows/auto-approve.yml 2>/dev/null && \
+  grep -q '@auto-approve' .github/workflows/auto-approve.yml 2>/dev/null && \
+  echo "AUTO_APPROVE_INSTALLED" || echo "AUTO_APPROVE_MISSING"
+
+# And whether it has been merged to the default branch — issue_comment
+# workflows only trigger from the default branch, so a PR-branch-only
+# install does nothing.
+DEFAULT_BRANCH=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')
+git cat-file -e "origin/$DEFAULT_BRANCH:.github/workflows/auto-approve.yml" 2>/dev/null \
+  && echo "AUTO_APPROVE_ON_DEFAULT" || echo "AUTO_APPROVE_NOT_ON_DEFAULT"
+```
 
 #### 2f: Required CLI Tools & Developer Toolchain
 
@@ -393,9 +418,9 @@ grep -E "port\|PORT\|:3000\|:8000\|:8080\|:5173\|:4000" pyproject.toml package.j
 - Monorepo structure (workspaces, nx, turborepo, multiple pyproject.toml)
 - **Dependency file** per project (pyproject.toml, package.json, go.mod, etc.) — needed by `/hero-secure` and `/hero-test`
 - **Lock file** → identifies the package manager (pnpm-lock.yaml → pnpm, yarn.lock → yarn, etc.)
-- **Install command** (e.g., `uv sync`, `pnpm install`) — needed by `/hero-test` and `/hero-implement` before running
+- **Install command** (e.g., `uv sync`, `pnpm install`) — needed by `/hero-test` before running
 - **Task runner** (Makefile, justfile, Taskfile) — if present, prefer its targets as canonical commands (e.g., `make test` over `uv run pytest`)
-- **Exact lint/format/typecheck commands** — not just tool names; `/hero-implement` needs runnable commands
+- **Exact lint/format/typecheck commands** — not just tool names; `/hero-test` needs runnable commands for verification
 - Test commands from scripts section or config files
 - Dev server commands and default ports
 - Entry points for CLIs
@@ -529,12 +554,14 @@ Based on your investigation, present findings grouped by **what the hero skills 
 - Whether hooks/pre-commit integration is possible
 - Whether to set up `/hero-init --update` as a pre-commit hook to keep HERO.md in sync
 
-#### Group 1: "For committing and pushing code" (`/hero-commit`, `/hero-push`)
+#### Group 1: "For committing and pushing code" (`/hero-commit`, `/hero-push`, `/hero-auto-approve`)
 
 - Hosting platform (GitHub, GitLab, Bitbucket — from remote URL)
 - Commit convention (evidence from git log patterns)
 - Branch naming convention and branch template (evidence from branch -r patterns)
 - Default branch
+- Merge method for PRs — squash, rebase, or merge. Detect with `gh repo view --json squashMergeAllowed,rebaseMergeAllowed,mergeCommitAllowed`; pick the **first allowed in this preference order: squash → rebase → merge**. If multiple are allowed, confirm with the user once and write the choice to `merge-method` in HERO.md.
+- Whether GitHub auto-deletes merged head branches — `gh repo view --json deleteBranchOnMerge`. If false, `/hero-auto-approve` will clean up the remote + local branch after merge. Record as `auto-delete-branches` in HERO.md.
 - Pre-commit hooks and what they run
 - Linters, formatters
 - Task runner (if Makefile/justfile provides commit/push/lint targets)
@@ -545,7 +572,7 @@ Based on your investigation, present findings grouped by **what the hero skills 
 - Issue ID prefix (evidence from commit/branch patterns)
 - MCP server name if applicable
 
-#### Group 3: "For implementing and testing" (`/hero-implement`, `/hero-test`)
+#### Group 3: "For testing and verification" (`/hero-test`)
 
 - Per-project: language, framework, dependency file, install command
 - Per-project: test, lint, format, typecheck commands (prefer task runner targets if available)
@@ -554,13 +581,17 @@ Based on your investigation, present findings grouped by **what the hero skills 
 - Task runner (Makefile, justfile, etc.) and its available targets
 - Monorepo vs single repo structure
 
-#### Group 4: "For CI/CD and deployment" (`/hero-cicd`, `/hero-health`, `/hero-secure`)
+#### Group 4: "For CI/CD and deployment" (`/hero-cicd`, `/hero-health`, `/hero-secure`, `/hero-auto-approve`)
 
 - CI platform and workflow names
 - Deployment platform
 - Container registry
 - ArgoCD / GitOps
 - Namespaces / environments
+- Whether to install `.github/workflows/auto-approve.yml` for `/hero-auto-approve` — if absent, ask:
+  *"`/hero-auto-approve` lets you comment `@auto-approve` on a PR to get a Claude-verified approval (gated by self-review, no unresolved threads, and PR-metadata checks). Install `.github/workflows/auto-approve.yml`? It also requires an `ANTHROPIC_API_KEY` repo secret."*
+  - If the user says yes, run the install in Step 6.5 below.
+  - If the workflow exists locally but is not on the default branch yet, remind the user that `@auto-approve` will be a no-op until that file lands on the default branch.
 
 #### Group 5: "Coding conventions for consistent code" (all skills that write code)
 
@@ -609,8 +640,8 @@ FOR PLANNING & TRACKING (/hero-plan)
 [OK] Issue prefix: LIN
      Evidence: 8 commits reference LIN-### pattern
 
-FOR IMPLEMENTING & TESTING (/hero-implement, /hero-test)
-────────────────────────────────────────────────────────
+FOR TESTING & VERIFICATION (/hero-test)
+────────────────────────────────────────
 [OK] Single repo, Python + FastAPI
      Evidence: pyproject.toml with fastapi dependency, no subprojects
 
@@ -644,8 +675,8 @@ FOR CI/CD & DEPLOYMENT (/hero-cicd, /hero-health)
 [--] Namespaces: not detected
      → What k8s namespaces do you deploy to?
 
-CODING CONVENTIONS (/hero-implement, /hero-commit)
-───────────────────────────────────────────────────
+CODING CONVENTIONS (/hero-plan, /hero-commit)
+──────────────────────────────────────────────
 [OK] Naming: snake_case functions, PascalCase classes
      Evidence: 40+ function defs follow snake_case, all classes PascalCase
 
@@ -717,6 +748,15 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - branch-convention: <detected-or-confirmed>
 - branch-template: <e.g., "feature/<issue-prefix>-<issue-id>-<desc>", "fix/<desc>">
 - commit-convention: <detected-or-confirmed>
+- merge-method: squash | rebase | merge
+<!-- Preferred PR merge method. Default: squash. Used by /hero-auto-approve
+     when calling `gh pr merge`. Must be one of the methods allowed by the
+     remote (gh repo view --json squashMergeAllowed,...). -->
+- auto-delete-branches: true | false
+<!-- Whether GitHub auto-deletes merged head branches (deleteBranchOnMerge).
+     If false, /hero-auto-approve deletes the remote + local branch after
+     a successful merge. Override to false in HERO.md to keep merged
+     branches around (e.g. for downstream tooling). -->
 - task-runner: <make|just|taskfile|npm-scripts|none>
 
 ## CI/CD
@@ -885,8 +925,7 @@ How your hero skills will use this:
   /hero-commit    → conventional commits, pre-commit runs ruff + black + mypy
   /hero-push      → PRs via gh against main, link LIN-### issues
   /hero-plan      → fetch from Linear (mcp__linear), branch as feature/LIN-###-<desc>
-  /hero-implement → uv sync, then ruff check + ruff format + mypy for verification
-  /hero-test      → uv run pytest on :8000, install via uv sync
+  /hero-test      → uv sync, then ruff check + mypy + pytest, smoke at :8000
   /hero-cicd      → check GitHub Actions: ci, build, deploy
   /hero-health    → k8s namespaces: staging, production
   /hero-secure    → scan pyproject.toml, check ghcr.io registry
@@ -904,12 +943,96 @@ Run /hero-setup to configure your local dev environment
 (git config, CLI tools, authentication) based on this HERO.md.
 ```
 
-### Step 7: Commit HERO.md
+### Step 6.5: Optionally Install Auto-Approve Workflow
 
-Always commit `HERO.md` to the repo. Do NOT ask whether to commit or whether to add it to `.gitignore`. Stage and commit it immediately after user confirmation in Step 6.
+If the user agreed to install `.github/workflows/auto-approve.yml` (Group 4 confirmation), copy it into their repo using the bundled installer. The installer's exit code is the contract — capture it and branch on it explicitly so an existing customized workflow is never silently overwritten or treated as "installed":
 
 ```bash
-git add HERO.md CLAUDE.md
+# Locate this plugin's installed root. Tries the two standard locations;
+# bails out if neither matches.
+PLUGIN_ROOT=""
+for candidate in \
+  "$HOME/.claude/plugins/hero-skills" \
+  "$HOME/.config/claude/plugins/hero-skills"; do
+  if [ -x "$candidate/scripts/install-auto-approve.sh" ]; then
+    PLUGIN_ROOT="$candidate"
+    break
+  fi
+done
+
+INSTALL_RC=255
+INSTALL_OK=false           # workflow file is in the right state to be staged
+INSTALL_FRESH_WRITE=false  # the installer actually created or refreshed the file this run
+
+# Capture pre-existence so we can tell "freshly installed" apart from
+# "already up to date" — both produce exit 0, but the user-facing
+# reminder text below should only fire on a fresh write.
+WF_EXISTED_BEFORE=false
+[ -f "$ROOT/.github/workflows/auto-approve.yml" ] && WF_EXISTED_BEFORE=true
+
+if [ -z "$PLUGIN_ROOT" ]; then
+  echo "Could not locate hero-skills plugin root in standard locations."
+  echo "Install /hero-skills under ~/.claude/plugins/hero-skills, or copy"
+  echo ".github/workflows/auto-approve.yml from the plugin into this repo manually."
+else
+  set +e
+  "$PLUGIN_ROOT/scripts/install-auto-approve.sh" "$ROOT"
+  INSTALL_RC=$?
+  set -e
+fi
+
+case "$INSTALL_RC" in
+  0)
+    # Workflow file is in sync with the plugin — safe to stage.
+    INSTALL_OK=true
+    if [ "$WF_EXISTED_BEFORE" = "false" ]; then
+      INSTALL_FRESH_WRITE=true
+    fi
+    ;;
+  2)
+    echo ""
+    echo "An existing .github/workflows/auto-approve.yml differs from the plugin's."
+    echo "The plugin's version was written to .github/workflows/auto-approve.yml.new."
+    echo "Diff and decide before committing:"
+    echo "  diff -u .github/workflows/auto-approve.yml .github/workflows/auto-approve.yml.new"
+    echo "  # to apply the plugin's version:  mv .github/workflows/auto-approve.yml{.new,}"
+    echo "Skipping auto-stage of the workflow file."
+    ;;
+  255)
+    # Plugin not found — already explained above.
+    ;;
+  *)
+    echo "Installer failed with exit code $INSTALL_RC. Investigate before committing."
+    ;;
+esac
+```
+
+Reminders shown only when the workflow was newly created this run (`INSTALL_FRESH_WRITE=true`). For an already-up-to-date repo (`INSTALL_OK=true` but `INSTALL_FRESH_WRITE=false`), skip the "installed at..." text — it would be misleading.
+
+1. **Merge the workflow to the default branch.** GitHub only honors `issue_comment` workflows that already exist on the default branch.
+2. **Add an `ANTHROPIC_API_KEY` repo secret.** The workflow uses it for Claude verification.
+
+```
+Auto-approve installed at .github/workflows/auto-approve.yml.
+
+Next steps before /hero-auto-approve will work:
+  1. git add .github/workflows/auto-approve.yml
+  2. Commit, open a PR, and merge to DEFAULT_BRANCH
+  3. Add ANTHROPIC_API_KEY in repo settings -> Secrets and variables -> Actions
+```
+
+### Step 7: Commit HERO.md
+
+Always commit `HERO.md` to the repo. Do NOT ask whether to commit or whether to add it to `.gitignore`. Stage and commit it immediately after user confirmation in Step 6 (and Step 6.5 if the workflow was installed).
+
+Only stage the workflow file when Step 6.5 reported the file is in sync with the plugin (`INSTALL_OK=true`, covering both the fresh-install and already-up-to-date paths). When the installer returned exit 2 (`EXISTS`, drift detected), the working file is still the user's original — committing it now would falsely claim `/hero-init` installed the new version.
+
+```bash
+FILES_TO_ADD=("HERO.md" "CLAUDE.md")
+if [ "${INSTALL_OK:-false}" = "true" ] && [ -f .github/workflows/auto-approve.yml ]; then
+  FILES_TO_ADD+=(".github/workflows/auto-approve.yml")
+fi
+git add "${FILES_TO_ADD[@]}"
 git commit -m "chore: initialize HERO.md and update CLAUDE.md via /hero-init"
 ```
 

@@ -115,7 +115,7 @@ Field                          | Produced by  | Consumed by
 Coding Agent → primary         | hero-init    | hero-setup
 Repository → hosting           | hero-init    | hero-push
 Repository → branch-template   | hero-init    | hero-plan
-Projects → lint-command         | hero-init    | hero-implement
+Projects → lint-command         | hero-init    | hero-test
 Projects → dependency-file     | hero-init    | hero-secure, hero-test
 ...
 

@@ -1,21 +1,27 @@
 ---
 name: hero-push
 # prettier-ignore
-description: Push current work to remote, create PRs, or merge to target branches. Handles the complete push/PR/merge workflow for any repository.
-argument-hint: [draft|target-branch]
+description: Push current work to remote and open a draft PR by default, so the author can run /hero-self-review before human review. Pass `ready` for a non-draft PR, or a branch name to merge into a target.
+argument-hint: [ready|target-branch]
 disable-model-invocation: true
 ---
 
-# Hero Push - Push, PR, and Merge Workflow
+# Hero Push - Push, Draft PR, and Merge Workflow
 
-Push your current work to the remote repository. Handles pushing, PR creation, and optional merging to target branches.
+Push your current work to the remote repository and open a **draft PR by default**. This skill is part of the hero workflow:
+
+```
+/hero-plan → /hero-test → /hero-commit → /hero-push (draft PR) → /hero-self-review → mark ready
+```
+
+Drafts are the default because the author should run `/hero-self-review` (which calls the `pr-review-toolkit` review-pr skill, applies fixes, and asks for confirmation) before promoting the PR to ready-for-review.
 
 ## Arguments
 
 - `$ARGUMENTS` - Optional modifier or target branch:
-  - `draft` - Push and create a **draft** PR
-  - If not provided: Push current branch and create PR if needed
-  - If a branch name (e.g., `main`, `develop`): Push, then merge into that target branch
+  - (none, default) - Push and create a **draft** PR
+  - `ready` - Push and create a non-draft PR (ready for review immediately) — only use when you have already self-reviewed or for trivial changes
+  - If a branch name (e.g., `main`, `develop`): Push, then merge into that target branch (no PR)
 
 ## Instructions
 
@@ -63,8 +69,8 @@ Options:
 
 | Argument | Workflow |
 |----------|----------|
-| (none) | Push + PR |
-| `draft` | Push + Draft PR |
+| (none, default) | Push + **Draft** PR |
+| `ready` | Push + non-draft PR |
 | `main`/`master` | Push + Merge to main |
 | Other branch | Push + Merge to target |
 
@@ -103,12 +109,14 @@ git diff origin/$DEFAULT_BRANCH..HEAD --stat
 git diff origin/$DEFAULT_BRANCH..HEAD --name-only
 ```
 
-Determine the draft flag:
+Determine the draft flag (drafts are the default). Parse the first whitespace-separated token of `$ARGUMENTS` so trailing whitespace or extra arguments don't silently fall through:
 
 ```bash
-DRAFT_FLAG=""
-if [ "$ARGUMENTS" = "draft" ]; then
-  DRAFT_FLAG="--draft"
+# Draft is the default; pass `ready` to opt into a non-draft PR
+FIRST_ARG=$(printf '%s' "$ARGUMENTS" | awk '{print $1}')
+DRAFT_FLAG="--draft"
+if [ "$FIRST_ARG" = "ready" ]; then
+  DRAFT_FLAG=""
 fi
 ```
 
@@ -157,12 +165,17 @@ EOF
 Hero Push Summary
 =================
 Branch: {branch-name}
-Action: Push + Create PR
+Action: Push + Create Draft PR
 
 Commits pushed: N
-PR created: #{number}
+Draft PR created: #{number}
 URL: {pr-url}
+
+Next steps:
+  /hero-self-review   # Run automated review and fix findings before marking ready
 ```
+
+If the PR was created with `ready` (non-draft), report `PR created` instead of `Draft PR created` and skip the self-review hint.
 
 ---
 

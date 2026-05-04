@@ -191,7 +191,7 @@ Stash: [restored / carried over / n/a]
 
 Ready to work. When done:
   /hero-commit  - review and commit changes
-  /hero-push    - push and create PR
+  /hero-push    - push and open a draft PR
 ```
 
 ## Notes

@@ -29,10 +29,9 @@ Most dev work follows the same loop: grab a ticket, plan, implement, test, revie
 
 Hero Skills gives you **slash commands for the entire dev lifecycle** that adapt to your stack. Configure once with `HERO.md`, then every skill knows your conventions, your tools, and your preferences.
 
-- **Plan from tickets** — Fetch from Linear/Jira/GitHub Issues, create branches, draft implementation plans
-- **Implement with guardrails** — Execute plans step by step with per-step verification
-- **Test anything** — Auto-detect project type (API, frontend, CLI, MCP) and run the right smoke tests
-- **Ship with confidence** — Self-review, pre-commit checks, conventional commits, PR creation
+- **Plan and implement from tickets** — Fetch from Linear/Jira/GitHub Issues, create branches, draft implementation plans in Plan Mode, then implement on approval
+- **Verify changes** — Auto-detect project type (API, frontend, CLI, MCP) and run lint, typecheck, unit tests, and smoke tests
+- **Ship with confidence** — Pre-commit checks, conventional commits, draft PRs by default, automated self-review before requesting human review
 - **Stay informed** — CI/CD status, cluster health, security scans
 
 ## Install
@@ -49,16 +48,18 @@ Skills are immediately available in any Claude Code session. No restart needed.
 # 1. Configure your project (run once per repo)
 /hero-init
 
-# 2. Plan work from a ticket
+# 2. Plan work from a ticket — Plan Mode drafts the approach,
+#    approve it, and Claude implements in the same conversation
 /hero-plan PROJ-123
 
-# 3. Implement the approved plan
-/hero-implement
-
-# 4. Test, review, commit, push
+# 3. Verify, commit, push as draft, self-review
 /hero-test
 /hero-commit
-/hero-push
+/hero-push                 # opens a DRAFT PR
+/hero-self-review          # runs review-pr, fixes findings, asks to mark ready
+
+# 4. Once reviewers (human or bot) sign off, gate the merge with /hero-auto-approve
+/hero-auto-approve         # @auto-approves only if reviewed + all threads resolved, then offers to merge
 ```
 
 That's it. Each command reads your `HERO.md` config and adapts to your stack automatically.
@@ -71,24 +72,26 @@ That's it. Each command reads your `HERO.md` config and adapts to your stack aut
 |---------|-------------|
 | `/hero-init` | Investigate your repo, auto-detect stack, create `HERO.md` config |
 | `/hero-setup` | Set up a developer's local environment (tools, auth, dependencies) |
-| `/hero-new` | Scaffold a new project (Python, full-stack, Node.js) in any repo structure |
+| `/hero-new-project` | Scaffold a new project (Python, full-stack, Node.js) in any repo structure |
+| `/hero-new-skill` | Create new Claude Code skills, rules, or hooks |
 
 ### Development Cycle
 
 | Command | What it does |
 |---------|-------------|
-| `/hero-plan` | Fetch a ticket, create a branch, draft an implementation plan |
-| `/hero-implement` | Execute an approved plan step by step with verification |
-| `/hero-test` | Auto-detect project type and run smoke tests |
-| `/hero-commit` | Self-review, pre-commit checks, grouped conventional commits |
-| `/hero-push` | Push, create PR with generated description, or merge |
+| `/hero-plan` | Fetch a ticket, create a branch, draft a plan in Plan Mode, then implement on approval |
+| `/hero-test` | Verify changes (lint, typecheck, unit tests) and run smoke tests for any project type |
+| `/hero-commit` | Code review, pre-commit checks, grouped conventional commits — never on main |
+| `/hero-push` | Push and open a **draft PR** by default, or merge into a target branch |
 
 ### Code Review
 
 | Command | What it does |
 |---------|-------------|
-| `/hero-review-pr` | Review a PR and leave inline comments (quality, bugs, security, style) |
+| `/hero-self-review` | Run automated review on your draft PR, post findings, apply fixes, ask before marking ready |
+| `/hero-review-pr` | Review someone else's PR and leave inline comments |
 | `/hero-respond-to-pr` | Fix PR review comments, resolve threads, optionally loop with external review agent |
+| `/hero-auto-approve` | Trigger gated `@auto-approve` on a ready PR, wait for the verdict, and offer to merge if it passes |
 
 ### Operations
 
@@ -103,7 +106,6 @@ That's it. Each command reads your `HERO.md` config and adapts to your stack aut
 | Command | What it does |
 |---------|-------------|
 | `/hero-architect` | Generate architecture specs with Mermaid diagrams |
-| `/hero-new-skill` | Create new Claude Code skills, rules, or hooks |
 | `/hero-meta` | Audit the hero-skills plugin itself for quality and consistency |
 
 ## HERO.md

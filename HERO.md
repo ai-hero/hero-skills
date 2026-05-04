@@ -13,11 +13,15 @@
 - default-branch: main
 - branch-convention: github-standard
 - commit-convention: conventional
+- merge-method: squash
+- auto-delete-branches: false
 
 ## CI/CD
 
 - platform: github-actions
-- workflows: claude-pr-approve
+- workflows: auto-approve
+- auto-approve-installed: true
+- auto-approve-gates: prior-review-required, all-threads-resolved, claude-metadata-check
 
 ## Deployment
 
