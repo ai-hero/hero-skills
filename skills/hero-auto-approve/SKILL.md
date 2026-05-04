@@ -97,53 +97,113 @@ Fix:
 
 Do not proceed.
 
-### Step 3: Confirm Prerequisite Reviews Are Present
+### Step 3: Hard Gate — All Comments and Reviews Must Be Answered
 
-Before posting the comment, sanity-check what the workflow's gates require so the user is not surprised by an immediate REQUEST_CHANGES.
+Do not even post `@auto-approve` until every reviewer signal has been addressed. The local checks here mirror the workflow's gates so the user gets an immediate, actionable answer instead of waiting on a CI run that will fail anyway.
 
 ```bash
-# Self-review marker
-gh api "/repos/{owner}/{repo}/issues/$PR_NUMBER/comments" \
-  --jq '[.[] | select(.body | test("Hero Self-Review"; "i"))] | length'
-
-# Reviews from anyone other than the author (filter PENDING)
-PR_AUTHOR=$(gh api "/repos/{owner}/{repo}/pulls/$PR_NUMBER" --jq '.user.login')
-gh api "/repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews" \
-  --jq "[.[] | select(.user.login != \"$PR_AUTHOR\") | select(.state != \"PENDING\")] | length"
-
-# Bot inline review comments (Copilot/CodeRabbit/Greptile/etc.)
-gh api "/repos/{owner}/{repo}/pulls/$PR_NUMBER/comments" \
-  --jq "[.[] | select(.user.login != \"$PR_AUTHOR\") | select((.user.type == \"Bot\") or (.user.login | test(\"(coderabbit|greptile|copilot|sonarcloud|codeball)\"; \"i\")))] | length"
-
-# Unresolved review threads
 OWNER_REPO=$(gh repo view --json owner,name --jq '"\(.owner.login) \(.name)"')
 OWNER=$(echo "$OWNER_REPO" | awk '{print $1}')
 REPO=$(echo "$OWNER_REPO" | awk '{print $2}')
-gh api graphql -f query='
+PR_AUTHOR=$(gh api "/repos/$OWNER/$REPO/pulls/$PR_NUMBER" --jq '.user.login')
+
+# 3a — Prior review present (self-review OR reviewer review OR bot inline)
+SELF_REVIEW=$(gh api "/repos/$OWNER/$REPO/issues/$PR_NUMBER/comments" \
+  --jq '[.[] | select(.body | test("Hero Self-Review"; "i"))] | length')
+
+OTHER_REVIEWS=$(gh api "/repos/$OWNER/$REPO/pulls/$PR_NUMBER/reviews" \
+  --jq "[.[] | select(.user.login != \"$PR_AUTHOR\") | select(.state != \"PENDING\")] | length")
+
+BOT_INLINE=$(gh api "/repos/$OWNER/$REPO/pulls/$PR_NUMBER/comments" \
+  --jq "[.[] | select(.user.login != \"$PR_AUTHOR\") | select((.user.type == \"Bot\") or (.user.login | test(\"(coderabbit|greptile|copilot|sonarcloud|codeball)\"; \"i\")))] | length")
+
+# 3b — No unresolved review threads (inline conversations)
+UNRESOLVED=$(gh api graphql -f query='
   query($owner: String!, $repo: String!, $pr: Int!) {
     repository(owner: $owner, name: $repo) {
       pullRequest(number: $pr) {
         reviewThreads(first: 100) {
-          nodes { isResolved isOutdated }
+          nodes {
+            isResolved
+            isOutdated
+            comments(first: 1) { nodes { path author { login } body } }
+          }
         }
       }
     }
   }
 ' -f owner="$OWNER" -f repo="$REPO" -F pr=$PR_NUMBER \
-  --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | select(.isOutdated == false)] | length'
+  --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | select(.isOutdated == false)] | length')
+
+# 3c — No active CHANGES_REQUESTED review left standing. A
+# CHANGES_REQUESTED is "active" if it is the latest review from that
+# reviewer and has not been dismissed. Use the GraphQL latestReviews
+# field which returns the most recent review per author.
+ACTIVE_CHANGES=$(gh api graphql -f query='
+  query($owner: String!, $repo: String!, $pr: Int!) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $pr) {
+        latestReviews(first: 50) {
+          nodes { state author { login } }
+        }
+      }
+    }
+  }
+' -f owner="$OWNER" -f repo="$REPO" -F pr=$PR_NUMBER \
+  --jq '[.data.repository.pullRequest.latestReviews.nodes[] | select(.state == "CHANGES_REQUESTED")] | length')
+
+# 3d — No unanswered top-level reviewer questions. A top-level issue
+# comment from a non-author with no later comment from the author is a
+# question the author has not answered. We flag any such comment whose
+# id is greater than the author's most recent comment id.
+LAST_AUTHOR_COMMENT_ID=$(gh api "/repos/$OWNER/$REPO/issues/$PR_NUMBER/comments" \
+  --jq "[.[] | select(.user.login == \"$PR_AUTHOR\")] | (last // {id: 0}) | .id")
+UNANSWERED_QUESTIONS=$(gh api "/repos/$OWNER/$REPO/issues/$PR_NUMBER/comments" \
+  --jq "[.[]
+    | select(.user.login != \"$PR_AUTHOR\")
+    | select((.user.type != \"Bot\") and ((.user.login | test(\"(coderabbit|greptile|copilot|sonarcloud|codeball|github-actions)\"; \"i\")) | not))
+    | select(.id > ${LAST_AUTHOR_COMMENT_ID:-0})
+  ] | length")
 ```
 
-Show the user a short summary:
+Show the user the gate result:
 
 ```
-Pre-flight check for PR #PR_NUMBER:
-  Self-review:        N (need >= 1, or another reviewer)
-  Other reviews:      N
-  Bot inline reviews: N
-  Unresolved threads: N (must be 0)
+Pre-flight gates for PR #PR_NUMBER:
+  Prior review present:       SELF_REVIEW self-review + OTHER_REVIEWS reviewer + BOT_INLINE bot
+  Unresolved threads:         UNRESOLVED   (must be 0)
+  Active CHANGES_REQUESTED:   ACTIVE_CHANGES (must be 0 — re-request review or push fixes)
+  Unanswered reviewer Qs:     UNANSWERED_QUESTIONS (must be 0 — reply to each)
 ```
 
-If both review counters are 0 OR unresolved threads > 0, warn the user the workflow will REQUEST_CHANGES and ask whether to proceed anyway. Default: do not proceed; suggest `/hero-self-review` or `/hero-respond-to-pr` first.
+**This is a hard gate, not a warning.** Stop and refuse to post `@auto-approve` if any of the following:
+
+- `(SELF_REVIEW + OTHER_REVIEWS + BOT_INLINE) == 0` — no prior review at all. Run `/hero-self-review`.
+- `UNRESOLVED > 0` — inline review threads still open. Run `/hero-respond-to-pr` to address them and resolve the threads.
+- `ACTIVE_CHANGES > 0` — a reviewer's latest review still says CHANGES_REQUESTED. Address the change request, push fixes, then ask the reviewer to dismiss it or submit a fresh review (a subsequent APPROVED review supersedes it in `latestReviews`).
+- `UNANSWERED_QUESTIONS > 0` — top-level questions from human reviewers with no author reply. List each one (`gh api .../issues/$PR_NUMBER/comments --jq '.[] | select(.id > LAST_AUTHOR_COMMENT_ID) | {user: .user.login, body: .body[0:200], url: .html_url}'`) and tell the user to reply to each before re-running.
+
+Show the offending items inline so the user can act:
+
+```
+Cannot run /hero-auto-approve yet. Address these first:
+
+  Unresolved threads (3):
+    - api/users.ts:42 — @reviewer: "Handle the null case here"
+    - ...
+
+  Active CHANGES_REQUESTED reviews (1):
+    - @reviewer1 — push fixes and ask them to re-review or dismiss
+
+  Unanswered reviewer questions (1):
+    - @reviewer (PR_URL#issuecomment-12345): "Why not use the existing helper?"
+
+Recommended next step: /hero-respond-to-pr
+```
+
+Do not proceed. Do not post `@auto-approve`.
+
+Only when **all four gates pass** continue to Step 4.
 
 ### Step 4: Post the @auto-approve Trigger Comment
 
