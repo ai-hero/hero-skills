@@ -37,6 +37,7 @@ Each `/hero-*` skill needs specific information to work well. This skill figures
 | `/hero-setup` | Required tools, recommended tools, MCP servers |
 | `/hero-respond-to-pr` | Code Review Agent (agent, trigger, poll-method, bot-username) |
 | `/hero-review-pr` | Code Quality (linters in CI), Code Review Agent (bot username — to dedupe its comments) |
+| `/hero-auto-approve` | CI/CD (auto-approve workflow installed on default branch), Repository (default branch) |
 | `/hero-init --update` | All sections — keeps HERO.md in sync via pre-commit |
 | `/hero-meta` | (internal) Plugin structure validation |
 
@@ -235,6 +236,21 @@ grep -l "test\|lint\|build\|deploy\|release" .github/workflows/*.yml 2>/dev/null
 - Which workflows exist and what they do (test, lint, build images, deploy)
 - Whether CI runs on PR, push to main, or both
 - Required status checks (signals what must pass before merge)
+- Whether `.github/workflows/auto-approve.yml` already exists — needed by `/hero-auto-approve`
+
+```bash
+# Check whether the hero-skills auto-approve workflow is installed
+ls .github/workflows/auto-approve.yml 2>/dev/null && \
+  grep -q '@auto-approve' .github/workflows/auto-approve.yml 2>/dev/null && \
+  echo "AUTO_APPROVE_INSTALLED" || echo "AUTO_APPROVE_MISSING"
+
+# And whether it has been merged to the default branch — issue_comment
+# workflows only trigger from the default branch, so a PR-branch-only
+# install does nothing.
+DEFAULT_BRANCH=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')
+git cat-file -e "origin/$DEFAULT_BRANCH:.github/workflows/auto-approve.yml" 2>/dev/null \
+  && echo "AUTO_APPROVE_ON_DEFAULT" || echo "AUTO_APPROVE_NOT_ON_DEFAULT"
+```
 
 #### 2f: Required CLI Tools & Developer Toolchain
 
@@ -554,13 +570,17 @@ Based on your investigation, present findings grouped by **what the hero skills 
 - Task runner (Makefile, justfile, etc.) and its available targets
 - Monorepo vs single repo structure
 
-#### Group 4: "For CI/CD and deployment" (`/hero-cicd`, `/hero-health`, `/hero-secure`)
+#### Group 4: "For CI/CD and deployment" (`/hero-cicd`, `/hero-health`, `/hero-secure`, `/hero-auto-approve`)
 
 - CI platform and workflow names
 - Deployment platform
 - Container registry
 - ArgoCD / GitOps
 - Namespaces / environments
+- Whether to install `.github/workflows/auto-approve.yml` for `/hero-auto-approve` — if absent, ask:
+  *"`/hero-auto-approve` lets you comment `@auto-approve` on a PR to get a Claude-verified approval (gated by self-review, no unresolved threads, and PR-metadata checks). Install `.github/workflows/auto-approve.yml`? It also requires an `ANTHROPIC_API_KEY` repo secret."*
+  - If the user says yes, run the install in Step 6.5 below.
+  - If the workflow exists locally but is not on the default branch yet, remind the user that `@auto-approve` will be a no-op until that file lands on the default branch.
 
 #### Group 5: "Coding conventions for consistent code" (all skills that write code)
 
@@ -903,12 +923,55 @@ Run /hero-setup to configure your local dev environment
 (git config, CLI tools, authentication) based on this HERO.md.
 ```
 
-### Step 7: Commit HERO.md
+### Step 6.5: Optionally Install Auto-Approve Workflow
 
-Always commit `HERO.md` to the repo. Do NOT ask whether to commit or whether to add it to `.gitignore`. Stage and commit it immediately after user confirmation in Step 6.
+If the user agreed to install `.github/workflows/auto-approve.yml` (Group 4 confirmation), copy it into their repo using the bundled installer:
 
 ```bash
-git add HERO.md CLAUDE.md
+# Locate this plugin's installed root. The conventional path is
+# ~/.claude/plugins/hero-skills, but try a couple of fallbacks for users
+# who installed elsewhere.
+PLUGIN_ROOT=""
+for candidate in \
+  "$HOME/.claude/plugins/hero-skills" \
+  "$HOME/.config/claude/plugins/hero-skills"; do
+  if [ -x "$candidate/scripts/install-auto-approve.sh" ]; then
+    PLUGIN_ROOT="$candidate"
+    break
+  fi
+done
+
+if [ -z "$PLUGIN_ROOT" ]; then
+  echo "Could not locate hero-skills plugin root. Skipping install."
+else
+  "$PLUGIN_ROOT/scripts/install-auto-approve.sh" "$ROOT"
+fi
+```
+
+If the script reports `EXISTS` (a file was already there), show the user the diff and ask whether to overwrite by moving `.new` over the existing file. Do not silently overwrite a customized workflow.
+
+After installing, remind the user about the two prerequisites before `/hero-auto-approve` works:
+
+1. **Merge the workflow to the default branch.** GitHub only honors `issue_comment` workflows that already exist on the default branch.
+2. **Add an `ANTHROPIC_API_KEY` repo secret.** The workflow uses it for Claude verification.
+
+```
+Auto-approve installed at .github/workflows/auto-approve.yml.
+
+Next steps before /hero-auto-approve will work:
+  1. git add .github/workflows/auto-approve.yml
+  2. Commit, open a PR, and merge to DEFAULT_BRANCH
+  3. Add ANTHROPIC_API_KEY in repo settings -> Secrets and variables -> Actions
+```
+
+### Step 7: Commit HERO.md
+
+Always commit `HERO.md` to the repo. Do NOT ask whether to commit or whether to add it to `.gitignore`. Stage and commit it immediately after user confirmation in Step 6 (and Step 6.5 if the workflow was installed).
+
+```bash
+FILES_TO_ADD=("HERO.md" "CLAUDE.md")
+[ -f .github/workflows/auto-approve.yml ] && FILES_TO_ADD+=(".github/workflows/auto-approve.yml")
+git add "${FILES_TO_ADD[@]}"
 git commit -m "chore: initialize HERO.md and update CLAUDE.md via /hero-init"
 ```
 
