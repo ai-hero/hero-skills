@@ -86,7 +86,173 @@ jobs:
             /repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
             -f content="eyes"
 
+      - name: Gate — prior review present
+        id: prior_review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          # Auto-approve must NOT be the only review on a PR. Require at
+          # least one of:
+          #   - a Hero Self-Review comment posted by /hero-self-review
+          #   - a review (APPROVED / CHANGES_REQUESTED / COMMENTED) from an
+          #     external code review bot (Copilot, CodeRabbit, Greptile, etc.)
+          #     or a human reviewer
+          #
+          # We accept both /pulls/$N/reviews entries and bot-authored
+          # comments so installations that only post inline comments
+          # (e.g. CodeRabbit configurations) still pass.
+
+          gh api "/repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews" \
+            > reviews.json
+          gh api "/repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+            > issue_comments.json
+          gh api "/repos/${{ github.repository }}/pulls/$PR_NUMBER/comments" \
+            > pr_review_comments.json
+
+          # Self-review marker — produced by /hero-self-review.
+          SELF_REVIEW=$(jq -r '
+            [.[] | select(.body | test("Hero Self-Review"; "i"))] | length
+          ' issue_comments.json)
+
+          # Reviews from anyone other than the PR author. Filter out
+          # PENDING reviews (drafts) and the auto-approve workflow's own
+          # past approvals, so re-running on the same PR cannot
+          # bootstrap itself.
+          PR_AUTHOR=$(jq -r '.user.login' pr.json)
+          OTHER_REVIEWS=$(jq -r --arg author "$PR_AUTHOR" '
+            [.[]
+              | select(.user.login != $author)
+              | select(.state != "PENDING")
+              | select((.body // "") | test("Approved — PR description is accurate"; "i") | not)
+            ] | length
+          ' reviews.json)
+
+          # Inline review comments from review bots (covers CodeRabbit,
+          # Greptile, Copilot inline review). Authors with [bot] suffix
+          # or known bot logins. Excludes the PR author.
+          BOT_INLINE=$(jq -r --arg author "$PR_AUTHOR" '
+            [.[]
+              | select(.user.login != $author)
+              | select(
+                  (.user.type == "Bot")
+                  or (.user.login | test("(coderabbit|greptile|copilot|sonarcloud|codeball)"; "i"))
+                )
+            ] | length
+          ' pr_review_comments.json)
+
+          echo "self_review=$SELF_REVIEW"
+          echo "other_reviews=$OTHER_REVIEWS"
+          echo "bot_inline=$BOT_INLINE"
+
+          if [ "$SELF_REVIEW" -gt 0 ] || [ "$OTHER_REVIEWS" -gt 0 ] || [ "$BOT_INLINE" -gt 0 ]; then
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Prior Review: ✅"
+              echo "Found prior review (self-review: $SELF_REVIEW, other reviews: $OTHER_REVIEWS, bot inline: $BOT_INLINE)."
+            } > prior_review.md
+          else
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Prior Review: ❌"
+              echo "No prior review found. Run \`/hero-self-review\` or wait for a code review agent (Copilot/CodeRabbit/Greptile) before requesting auto-approve."
+            } > prior_review.md
+          fi
+
+      - name: Gate — all review threads resolved
+        id: threads
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          # Refuse to approve if any review thread is still unresolved.
+          # An unresolved thread means a reviewer asked for something and
+          # the author has not pushed a fix or marked the conversation
+          # resolved. Auto-approve must not silently override that.
+
+          OWNER=$(echo "${{ github.repository }}" | cut -d/ -f1)
+          REPO=$(echo "${{ github.repository }}" | cut -d/ -f2)
+
+          gh api graphql \
+            -f query='
+              query($owner: String!, $repo: String!, $pr: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $pr) {
+                    reviewThreads(first: 100) {
+                      nodes {
+                        isResolved
+                        isOutdated
+                        comments(first: 1) {
+                          nodes { path author { login } body }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ' \
+            -f owner="$OWNER" -f repo="$REPO" -F pr=$PR_NUMBER \
+            > threads.json
+
+          UNRESOLVED=$(jq -r '
+            [.data.repository.pullRequest.reviewThreads.nodes[]
+              | select(.isResolved == false)
+              | select(.isOutdated == false)
+            ] | length
+          ' threads.json)
+
+          echo "unresolved=$UNRESOLVED"
+
+          if [ "$UNRESOLVED" -eq 0 ]; then
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Unresolved Comments: ✅"
+              echo "All review threads resolved."
+            } > threads.md
+          else
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+            UNRESOLVED_LIST=$(jq -r '
+              [.data.repository.pullRequest.reviewThreads.nodes[]
+                | select(.isResolved == false)
+                | select(.isOutdated == false)
+                | (.comments.nodes[0].path // "?") + " — @" +
+                  (.comments.nodes[0].author.login // "?") + ": " +
+                  ((.comments.nodes[0].body // "") | gsub("\n"; " ") | .[0:120])
+              ] | .[] | "- " + .
+            ' threads.json)
+            {
+              echo "## Unresolved Comments: ❌"
+              echo "$UNRESOLVED unresolved review thread(s). Address them and mark them resolved before requesting auto-approve."
+              echo ""
+              echo "$UNRESOLVED_LIST"
+            } > threads.md
+          fi
+
+      - name: Short-circuit on gate failure
+        id: gates
+        if: |
+          steps.prior_review.outputs.passed != 'true' ||
+          steps.threads.outputs.passed != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          {
+            cat prior_review.md
+            echo ""
+            cat threads.md
+            echo ""
+            echo "## Verdict"
+            echo "REQUEST_CHANGES"
+            echo "Auto-approve gates failed — fix the items above and re-run \`@auto-approve\`."
+          } > review.md
+          echo "verdict=request_changes" >> "$GITHUB_OUTPUT"
+          echo "skipped_claude=true" >> "$GITHUB_OUTPUT"
+
       - name: Claude verification
+        if: |
+          steps.prior_review.outputs.passed == 'true' &&
+          steps.threads.outputs.passed == 'true'
         id: verify
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -155,12 +321,31 @@ jobs:
             -d @payload.json)
 
           REVIEW=$(echo "$RESPONSE" | jq -r '.content[0].text // "Error: Could not get review from Claude"')
-          echo "$REVIEW" > review.md
+
+          # Prepend the gate results so the comment shows the full pass list,
+          # not just Claude's checks.
+          {
+            cat prior_review.md
+            echo ""
+            cat threads.md
+            echo ""
+            echo "$REVIEW"
+          } > review.md
 
           if echo "$REVIEW" | grep -q "REQUEST_CHANGES"; then
             echo "verdict=request_changes" >> "$GITHUB_OUTPUT"
           else
             echo "verdict=approve" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve final verdict
+        id: final
+        run: |
+          # Gates short-circuited → use their verdict; otherwise use Claude's.
+          if [ "${{ steps.gates.outputs.verdict }}" = "request_changes" ]; then
+            echo "verdict=request_changes" >> "$GITHUB_OUTPUT"
+          else
+            echo "verdict=${{ steps.verify.outputs.verdict }}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Post result
@@ -200,9 +385,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
         run: |
-          if [ "${{ steps.verify.outputs.verdict }}" = "approve" ]; then
+          if [ "${{ steps.final.outputs.verdict }}" = "approve" ]; then
             VERDICT="APPROVE"
-            BODY="✅ Approved — PR description is accurate, test claims verified, no critical gaps."
+            BODY="✅ Approved — prior review present, all comments resolved, PR metadata verified."
           else
             VERDICT="REQUEST_CHANGES"
             BODY="❌ Changes requested — see Claude's verification comment above."
@@ -216,7 +401,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          EMOJI=${{ steps.verify.outputs.verdict == 'approve' && 'rocket' || '-1' }}
+          EMOJI=${{ steps.final.outputs.verdict == 'approve' && 'rocket' || '-1' }}
           gh api --method POST \
             /repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
             -f content="$EMOJI"
