@@ -57,6 +57,9 @@ Skills are immediately available in any Claude Code session. No restart needed.
 /hero-commit
 /hero-push                 # opens a DRAFT PR
 /hero-self-review          # runs review-pr, fixes findings, asks to mark ready
+
+# 4. Once reviewers (human or bot) sign off, gate the merge with /hero-auto-approve
+/hero-auto-approve         # @auto-approves only if reviewed + all threads resolved, then offers to merge
 ```
 
 That's it. Each command reads your `HERO.md` config and adapts to your stack automatically.
@@ -88,6 +91,7 @@ That's it. Each command reads your `HERO.md` config and adapts to your stack aut
 | `/hero-self-review` | Run automated review on your draft PR, post findings, apply fixes, ask before marking ready |
 | `/hero-review-pr` | Review someone else's PR and leave inline comments |
 | `/hero-respond-to-pr` | Fix PR review comments, resolve threads, optionally loop with external review agent |
+| `/hero-auto-approve` | Trigger gated `@auto-approve` on a ready PR, wait for the verdict, and offer to merge if it passes |
 
 ### Operations
 

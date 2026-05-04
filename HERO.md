@@ -18,6 +18,8 @@
 
 - platform: github-actions
 - workflows: auto-approve
+- auto-approve-installed: true
+- auto-approve-gates: prior-review-required, all-threads-resolved, claude-metadata-check
 
 ## Deployment
 
