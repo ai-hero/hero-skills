@@ -288,10 +288,18 @@ Show the comment body to the user verbatim — it contains the gate results and 
 
 ### Step 7a: APPROVE Path — Offer to Merge
 
-Check mergeability before asking:
+Resolve the merge method from HERO.md (default `squash`), then check mergeability:
 
 ```bash
-gh pr view $PR_NUMBER --json mergeable,mergeStateStatus,reviewDecision,statusCheckRollup
+MERGE_METHOD=$(awk -F': ' '/^- merge-method:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | tr -d '[:space:]')
+MERGE_METHOD=${MERGE_METHOD:-squash}
+case "$MERGE_METHOD" in
+  squash|rebase|merge) ;;
+  *) echo "HERO.md merge-method='$MERGE_METHOD' is invalid; falling back to squash"; MERGE_METHOD=squash ;;
+esac
+MERGE_FLAG="--$MERGE_METHOD"
+
+gh pr view $PR_NUMBER --json mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,headRefName
 ```
 
 Then ask:
@@ -303,23 +311,69 @@ Mergeable:        MERGEABLE_VALUE
 Merge state:      MERGE_STATE_STATUS
 Review decision:  REVIEW_DECISION
 Required checks:  SUMMARY (e.g. 5 passing, 0 failing)
+Merge method:     MERGE_METHOD (from HERO.md)
 
 Merge now? [y/N]
-  y -> merge with the repo's default merge method
+  y -> merge with MERGE_METHOD
   n -> stop here, I will merge manually
 ```
 
 **Wait for explicit confirmation.** If the user says yes:
 
 ```bash
-gh pr merge $PR_NUMBER --auto
+gh pr merge $PR_NUMBER $MERGE_FLAG --auto || gh pr merge $PR_NUMBER $MERGE_FLAG
 ```
 
-Use `--auto` so any pending required checks are respected; if `auto-merge` is not enabled on the repo, fall back to the explicit method (`--squash`, `--merge`, or `--rebase`) the team prefers — read it from `HERO.md` if specified, otherwise ask.
+`--auto` lets GitHub wait for required checks before merging; if auto-merge is disabled on the repo, fall through to an immediate merge with the same method.
 
-**Never force-merge or override branch protection.** If the merge is blocked, report which check is blocking and stop.
+**Never force-merge or override branch protection.** Never pass `--admin`. If the merge is blocked, report which check is blocking and stop. Do not retry without the user's explicit instruction.
 
-### Step 7b: REQUEST_CHANGES Path — Surface and Offer Next Steps
+### Step 7b: Clean Up the Merged Branch
+
+GitHub may auto-delete the head branch after merge (repo setting `deleteBranchOnMerge`). If that setting is off, the merged branch lingers on the remote and locally — clean it up.
+
+```bash
+# Wait for the merge to register, then re-fetch the PR state.
+sleep 3
+MERGED=$(gh pr view $PR_NUMBER --json merged --jq '.merged')
+[ "$MERGED" != "true" ] && { echo "Merge not yet recorded — skipping cleanup."; exit 0; }
+
+AUTO_DELETE=$(gh repo view --json deleteBranchOnMerge --jq '.deleteBranchOnMerge')
+
+# Read HERO.md preference; default true (mirror GitHub's modern default).
+HERO_AUTO_DELETE=$(awk -F': ' '/^- auto-delete-branches:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | tr -d '[:space:]')
+HERO_AUTO_DELETE=${HERO_AUTO_DELETE:-true}
+
+if [ "$AUTO_DELETE" = "true" ]; then
+  echo "GitHub will auto-delete $PR_BRANCH (repo deleteBranchOnMerge=true)."
+elif [ "$HERO_AUTO_DELETE" != "true" ]; then
+  echo "Skipping branch cleanup (HERO.md auto-delete-branches=false)."
+else
+  # Remote delete — safe because the branch is merged. gh handles 422
+  # gracefully if GitHub already removed it in a race.
+  gh api -X DELETE "/repos/$OWNER/$REPO/git/refs/heads/$PR_BRANCH" 2>/dev/null \
+    && echo "Deleted remote branch: $PR_BRANCH" \
+    || echo "Remote branch $PR_BRANCH already gone."
+fi
+
+# Local cleanup — only if we are not currently on the deleted branch.
+CURRENT=$(git branch --show-current)
+if [ "$CURRENT" = "$PR_BRANCH" ]; then
+  echo "You are on $PR_BRANCH. Switch off it first (e.g. git checkout $BASE_BRANCH) before deleting locally."
+elif git show-ref --verify --quiet "refs/heads/$PR_BRANCH"; then
+  # -d (not -D) so git refuses if the branch is unmerged locally for any
+  # reason — this protects the user from data loss in odd states.
+  git branch -d "$PR_BRANCH" \
+    && echo "Deleted local branch: $PR_BRANCH" \
+    || echo "Could not delete local $PR_BRANCH (not fully merged locally?). Skipping."
+fi
+
+git fetch --prune origin >/dev/null 2>&1 || true
+```
+
+If the user merged without confirming `y` in Step 7a, skip cleanup entirely — they may want to do it manually.
+
+### Step 7c: REQUEST_CHANGES Path — Surface and Offer Next Steps
 
 Show the verdict comment, then ask:
 
@@ -336,7 +390,7 @@ What would you like to do?
 
 If the user picks 2, return to Step 3 (re-check pre-flight, then post a fresh `@auto-approve` comment). The workflow updates its prior `<!-- claude-approve -->` comment in place, so re-running does not spam the PR.
 
-### Step 7c: WORKFLOW_FAILED Path
+### Step 7d: WORKFLOW_FAILED Path
 
 Surface the run URL and the failing step:
 
@@ -360,7 +414,8 @@ Verdict:   APPROVE | REQUEST_CHANGES | WORKFLOW_FAILED
 Run:       RUN_URL
 
 Action taken:
-  - Merged with METHOD (sha SHORT_SHA)        # APPROVE + user said yes
+  - Merged with MERGE_METHOD (sha SHORT_SHA)    # APPROVE + user said yes
+  - Branch cleanup: deleted remote+local | GitHub auto-delete | skipped (still on branch)
   - Left for manual merge                       # APPROVE + user said no
   - Suggested /hero-respond-to-pr               # REQUEST_CHANGES
   - Stopped, action failure surfaced            # WORKFLOW_FAILED

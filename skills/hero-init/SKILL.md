@@ -178,6 +178,13 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null || echo "UNKNOWN"
 
 # Collaboration signals
 ls LICENSE CONTRIBUTING.md CODE_OF_CONDUCT.md CODEOWNERS .github/PULL_REQUEST_TEMPLATE* .github/ISSUE_TEMPLATE* 2>/dev/null
+
+# Allowed merge methods on the GitHub remote — the team's PR merge
+# button is constrained by these flags. We surface the allowed set so
+# Step 4 can ask the user to pick one (preferring squash when allowed).
+# Also fetch deleteBranchOnMerge — when false, /hero-auto-approve will
+# delete merged branches itself.
+gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed,deleteBranchOnMerge 2>/dev/null
 ```
 
 **What to look for:**
@@ -189,6 +196,8 @@ ls LICENSE CONTRIBUTING.md CODE_OF_CONDUCT.md CODEOWNERS .github/PULL_REQUEST_TE
 - PR templates → structured PR process
 - Branch naming patterns in `git branch -r` → extract the **branch template** (e.g., `feature/PROJ-123-<desc>`, `fix/<desc>`, `<prefix>/<issue-id>-<desc>`)
 - Commit message patterns in `git log` (e.g., `feat:`, `fix:`, `PROJ-123:`)
+- Allowed merge methods → `merge-method` field. Prefer `squash` when allowed; otherwise `rebase`; otherwise `merge`. If multiple are allowed, ask the user once to pin the team's choice.
+- `deleteBranchOnMerge` → `auto-delete-branches` field. If true, GitHub already deletes merged branches and `/hero-auto-approve` will skip cleanup. If false, the skill will delete the remote and local branch after a successful merge unless `auto-delete-branches: false` overrides it in HERO.md.
 
 #### 2d: Project Management & Issue Tracking
 
@@ -545,12 +554,14 @@ Based on your investigation, present findings grouped by **what the hero skills 
 - Whether hooks/pre-commit integration is possible
 - Whether to set up `/hero-init --update` as a pre-commit hook to keep HERO.md in sync
 
-#### Group 1: "For committing and pushing code" (`/hero-commit`, `/hero-push`)
+#### Group 1: "For committing and pushing code" (`/hero-commit`, `/hero-push`, `/hero-auto-approve`)
 
 - Hosting platform (GitHub, GitLab, Bitbucket — from remote URL)
 - Commit convention (evidence from git log patterns)
 - Branch naming convention and branch template (evidence from branch -r patterns)
 - Default branch
+- Merge method for PRs — squash, rebase, or merge. Detect with `gh repo view --json squashMergeAllowed,rebaseMergeAllowed,mergeCommitAllowed`; pick the **first allowed in this preference order: squash → rebase → merge**. If multiple are allowed, confirm with the user once and write the choice to `merge-method` in HERO.md.
+- Whether GitHub auto-deletes merged head branches — `gh repo view --json deleteBranchOnMerge`. If false, `/hero-auto-approve` will clean up the remote + local branch after merge. Record as `auto-delete-branches` in HERO.md.
 - Pre-commit hooks and what they run
 - Linters, formatters
 - Task runner (if Makefile/justfile provides commit/push/lint targets)
@@ -737,6 +748,15 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - branch-convention: <detected-or-confirmed>
 - branch-template: <e.g., "feature/<issue-prefix>-<issue-id>-<desc>", "fix/<desc>">
 - commit-convention: <detected-or-confirmed>
+- merge-method: squash | rebase | merge
+<!-- Preferred PR merge method. Default: squash. Used by /hero-auto-approve
+     and /hero-push when calling `gh pr merge`. Must be one of the methods
+     allowed by the remote (gh repo view --json squashMergeAllowed,...). -->
+- auto-delete-branches: true | false
+<!-- Whether GitHub auto-deletes merged head branches (deleteBranchOnMerge).
+     If false, /hero-auto-approve deletes the remote + local branch after
+     a successful merge. Override to false in HERO.md to keep merged
+     branches around (e.g. for downstream tooling). -->
 - task-runner: <make|just|taskfile|npm-scripts|none>
 
 ## CI/CD

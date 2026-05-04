@@ -13,6 +13,8 @@
 - default-branch: main
 - branch-convention: github-standard
 - commit-convention: conventional
+- merge-method: squash
+- auto-delete-branches: false
 
 ## CI/CD
 
