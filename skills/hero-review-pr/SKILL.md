@@ -46,24 +46,44 @@ If `HERO.md` is missing, suggest `/hero-init` but proceed with defaults.
 
 ### Step 1: Identify the PR
 
-```bash
-# If no argument, list open PRs
-gh pr list --state open --json number,title,author,headRefName,additions,deletions --limit 20
-```
-
-If argument provided, resolve it:
+Resolve `PR_ARG` from `$ARGUMENTS`. If empty, list open PRs and **stop** until the user picks one — do not silently fall through with `PR_ARG=""`, which would make every later `gh pr view` call ambiguous:
 
 ```bash
-gh pr view $PR_ARG --json number,title,body,author,headRefName,baseRefName,additions,deletions,files,url,reviewDecision,state,isDraft
+PR_ARG=$(printf '%s' "$ARGUMENTS" | awk '{print $1}')
+
+if [ -z "$PR_ARG" ]; then
+  echo "No PR specified. Open PRs:"
+  gh pr list --state open --json number,title,author,headRefName,additions,deletions --limit 20
+  echo ""
+  echo "Re-run with /hero-review-pr <number|url|branch>"
+  exit 1
+fi
 ```
 
-**If PR is merged or closed:** Report status and stop.
+Resolve the argument and capture all derived identifiers in one block. `OWNER`/`REPO`/`HEAD_SHA` are needed by Step 2's `gh api` calls and by the inline-comment APIs in Step 6, so capture them here once:
 
-Record `PR_NUMBER`, `PR_URL`, `OWNER`, `REPO`, `HEAD_SHA`.
+```bash
+PR_JSON=$(gh pr view "$PR_ARG" --json number,title,body,author,headRefName,baseRefName,additions,deletions,files,url,reviewDecision,state,isDraft,headRepository,headRepositoryOwner)
+PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
+PR_URL=$(echo "$PR_JSON" | jq -r '.url')
+PR_STATE=$(echo "$PR_JSON" | jq -r '.state')
+
+# OWNER/REPO of the *base* repo (where the PR lives) — comments and
+# reviews go here, even for cross-fork PRs. Derive from the URL so
+# this works for forked-PR reviews too.
+OWNER=$(echo "$PR_URL" | awk -F/ '{print $4}')
+REPO=$(echo "$PR_URL" | awk -F/ '{print $5}')
+
+HEAD_SHA=$(gh pr view "$PR_NUMBER" --json commits --jq '.commits[-1].oid')
+```
+
+**If `PR_STATE` is `MERGED` or `CLOSED`:** Report status and stop.
 
 ### Step 2: Get PR Context
 
 Read the PR description carefully — it often explains design decisions you'd otherwise flag.
+
+`OWNER`, `REPO`, `PR_NUMBER`, `HEAD_SHA` were captured in Step 1 — reuse them rather than re-querying.
 
 ```bash
 gh pr diff $PR_NUMBER
@@ -74,9 +94,6 @@ gh api "repos/$OWNER/$REPO/pulls/$PR_NUMBER/comments" \
 
 # Commit messages for intent
 gh pr view $PR_NUMBER --json commits --jq '.commits[].messageHeadline'
-
-# Latest commit SHA (needed for inline comments)
-HEAD_SHA=$(gh pr view $PR_NUMBER --json commits --jq '.commits[-1].oid')
 ```
 
 #### Large PR check

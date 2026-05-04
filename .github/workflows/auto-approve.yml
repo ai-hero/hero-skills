@@ -5,7 +5,14 @@ on:
     types: [created]
 
 permissions:
+  # `pull-requests: write` covers PR reviews and PR-review-comment APIs.
+  # `issues: write` is required separately because GitHub treats PR
+  # issue-comments and reactions as Issues endpoints (e.g.
+  # /issues/$N/comments, /issues/comments/$ID/reactions). With explicit
+  # permissions set, any unspecified scope is `none`, so without this
+  # the Acknowledge / Post result / React steps would 403.
   pull-requests: write
+  issues: write
   contents: read
 
 jobs:

@@ -218,15 +218,20 @@ The workflow run is keyed off the `issue_comment` event, not a commit SHA. We ca
 
 ### Step 5: Wait for the Workflow Run
 
-Poll for the most recent `Auto Approve` workflow run that started after `TRIGGERED_AT`:
+Poll for the most recent `Auto Approve` workflow run that started after `TRIGGERED_AT`. Implement the lookup as two explicit calls — **not** a piped `xargs -I{}`. Empty-input behavior of `xargs` differs between GNU and BSD/macOS: BSD will run the command with `{}` substituted as the empty string, producing a malformed URL silently. Capture the workflow ID first, bail out loudly if it is empty, then poll the runs endpoint directly:
 
 ```bash
-# Find the run id
+WF_ID=$(gh api "/repos/{owner}/{repo}/actions/workflows" \
+  --jq '.workflows[] | select(.name == "Auto Approve") | .id' | head -1)
+
+if [ -z "$WF_ID" ]; then
+  echo "Auto Approve workflow not found in this repo. Did the workflow file land on the default branch yet?"
+  exit 1
+fi
+
+RUN_ID=""
 for i in 1 2 3 4 5 6 7 8 9 10; do
-  RUN_JSON=$(gh api "/repos/{owner}/{repo}/actions/workflows" \
-    --jq '.workflows[] | select(.name == "Auto Approve") | .id' \
-    | head -1 \
-    | xargs -I{} gh api "/repos/{owner}/{repo}/actions/workflows/{}/runs?event=issue_comment&per_page=10" \
+  RUN_JSON=$(gh api "/repos/{owner}/{repo}/actions/workflows/$WF_ID/runs?event=issue_comment&per_page=10" \
     --jq "[.workflow_runs[] | select(.created_at > \"$TRIGGERED_AT\")] | .[0]")
   if [ -n "$RUN_JSON" ] && [ "$RUN_JSON" != "null" ]; then
     RUN_ID=$(echo "$RUN_JSON" | jq -r '.id')
@@ -250,21 +255,6 @@ Visit PR_URL/checks to investigate.
 ```
 
 Stop here.
-
-Where the `RUN_JSON` lookup above is implemented as two explicit steps, **not** a piped `xargs -I{}`. Empty-input behavior of `xargs` differs between GNU and BSD/macOS — BSD will run the command with `{}` substituted as empty, producing a malformed URL silently. Capture the workflow ID first and bail out loudly if it is empty:
-
-```bash
-WF_ID=$(gh api "/repos/{owner}/{repo}/actions/workflows" \
-  --jq '.workflows[] | select(.name == "Auto Approve") | .id' | head -1)
-
-if [ -z "$WF_ID" ]; then
-  echo "Auto Approve workflow not found in this repo. Did the workflow file land on the default branch yet?"
-  exit 1
-fi
-
-RUN_JSON=$(gh api "/repos/{owner}/{repo}/actions/workflows/$WF_ID/runs?event=issue_comment&per_page=10" \
-  --jq "[.workflow_runs[] | select(.created_at > \"$TRIGGERED_AT\")] | .[0]")
-```
 
 Once `RUN_ID` is found, poll until the run completes:
 

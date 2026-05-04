@@ -961,7 +961,15 @@ for candidate in \
 done
 
 INSTALL_RC=255
-INSTALL_DID_WRITE=false   # only true when the workflow file was newly created or refreshed
+INSTALL_OK=false           # workflow file is in the right state to be staged
+INSTALL_FRESH_WRITE=false  # the installer actually created or refreshed the file this run
+
+# Capture pre-existence so we can tell "freshly installed" apart from
+# "already up to date" — both produce exit 0, but the user-facing
+# reminder text below should only fire on a fresh write.
+WF_EXISTED_BEFORE=false
+[ -f "$ROOT/.github/workflows/auto-approve.yml" ] && WF_EXISTED_BEFORE=true
+
 if [ -z "$PLUGIN_ROOT" ]; then
   echo "Could not locate hero-skills plugin root in standard locations."
   echo "Install /hero-skills under ~/.claude/plugins/hero-skills, or copy"
@@ -975,8 +983,11 @@ fi
 
 case "$INSTALL_RC" in
   0)
-    # Either freshly installed or already up to date — safe to stage.
-    INSTALL_DID_WRITE=true
+    # Workflow file is in sync with the plugin — safe to stage.
+    INSTALL_OK=true
+    if [ "$WF_EXISTED_BEFORE" = "false" ]; then
+      INSTALL_FRESH_WRITE=true
+    fi
     ;;
   2)
     echo ""
@@ -996,7 +1007,7 @@ case "$INSTALL_RC" in
 esac
 ```
 
-Reminders shown only when the workflow was actually installed (`INSTALL_DID_WRITE=true`):
+Reminders shown only when the workflow was newly created this run (`INSTALL_FRESH_WRITE=true`). For an already-up-to-date repo (`INSTALL_OK=true` but `INSTALL_FRESH_WRITE=false`), skip the "installed at..." text — it would be misleading.
 
 1. **Merge the workflow to the default branch.** GitHub only honors `issue_comment` workflows that already exist on the default branch.
 2. **Add an `ANTHROPIC_API_KEY` repo secret.** The workflow uses it for Claude verification.
@@ -1014,11 +1025,11 @@ Next steps before /hero-auto-approve will work:
 
 Always commit `HERO.md` to the repo. Do NOT ask whether to commit or whether to add it to `.gitignore`. Stage and commit it immediately after user confirmation in Step 6 (and Step 6.5 if the workflow was installed).
 
-Only stage the workflow file when Step 6.5 actually wrote it (`INSTALL_DID_WRITE=true`). When the installer returned exit 2 (`EXISTS`), the working file is still the user's original — committing it now would falsely claim `/hero-init` installed the new version.
+Only stage the workflow file when Step 6.5 reported the file is in sync with the plugin (`INSTALL_OK=true`, covering both the fresh-install and already-up-to-date paths). When the installer returned exit 2 (`EXISTS`, drift detected), the working file is still the user's original — committing it now would falsely claim `/hero-init` installed the new version.
 
 ```bash
 FILES_TO_ADD=("HERO.md" "CLAUDE.md")
-if [ "${INSTALL_DID_WRITE:-false}" = "true" ] && [ -f .github/workflows/auto-approve.yml ]; then
+if [ "${INSTALL_OK:-false}" = "true" ] && [ -f .github/workflows/auto-approve.yml ]; then
   FILES_TO_ADD+=(".github/workflows/auto-approve.yml")
 fi
 git add "${FILES_TO_ADD[@]}"

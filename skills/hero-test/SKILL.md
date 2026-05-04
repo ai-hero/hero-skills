@@ -82,12 +82,12 @@ For full-stack with subdirs, install in each.
 
 Skip this step if `$ARGUMENTS` is `smoke`, `backend`, `frontend`, `cli`, or `mcp` — those target smoke testing only.
 
-Capture the list of changed files first (uncommitted, then last commit, fallback to empty):
+Capture the list of changed files first (uncommitted, then last commit, fallback to empty). Read the dedupe back into the array via `mapfile` so filenames containing spaces, tabs, or globs survive intact — `($(...))` would word-split and corrupt them:
 
 ```bash
 mapfile -t CHANGED_FILES < <(git diff --name-only; git diff --name-only HEAD~1 HEAD 2>/dev/null)
-# Dedupe
-CHANGED_FILES=($(printf "%s\n" "${CHANGED_FILES[@]}" | sort -u))
+# Newline-safe dedupe (preserves spaces in filenames).
+mapfile -t CHANGED_FILES < <(printf "%s\n" "${CHANGED_FILES[@]}" | sort -u)
 ```
 
 If `CHANGED_FILES` is empty, run the checks on the whole project (replace `"${CHANGED_FILES[@]}"` with `.` or the project root).
@@ -151,6 +151,16 @@ Pre-commit: PASSED
 If any check fails, report the failures clearly and **stop** before running smoke tests. Ask the user how to proceed (fix now vs continue to smoke tests).
 
 ### Step 4: Run Smoke Tests by Type
+
+**Skip Step 4 entirely if `$ARGUMENTS` is `verify`.** That mode is documented as "verification only" — Step 3 already ran lint, typecheck, unit tests, and pre-commit; running smoke tests would contradict the documented contract.
+
+```bash
+FIRST_ARG=$(printf '%s' "$ARGUMENTS" | awk '{print $1}')
+if [ "$FIRST_ARG" = "verify" ]; then
+  echo "Skipping smoke tests (verify mode)."
+  # Jump to Step 7: Final Report.
+fi
+```
 
 #### CLI / Library
 
