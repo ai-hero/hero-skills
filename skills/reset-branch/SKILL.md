@@ -40,7 +40,7 @@ You have uncommitted changes on '$CURRENT':
   (list changed files from git status)
 
 Options:
-1. Stash changes (saved as "hero-reset: WIP on $CURRENT") — you can restore later with `git stash pop`
+1. Stash changes (saved as "reset-branch: WIP on $CURRENT") — you can restore later with `git stash pop`
 2. Cancel — go back and commit or handle changes first
 ```
 
@@ -49,13 +49,13 @@ Options:
 **If user chooses option 1 (stash):**
 
 ```bash
-git stash push -m "hero-reset: WIP on $CURRENT"
+git stash push -m "reset-branch: WIP on $CURRENT"
 ```
 
 Report the stash ref:
 
 ```
-Stashed as: stash@{0} — "hero-reset: WIP on $CURRENT"
+Stashed as: stash@{0} — "reset-branch: WIP on $CURRENT"
 You can restore later with: git stash pop
 ```
 
@@ -174,7 +174,7 @@ Status: Up to date with origin
 
 Previous branch: {previous-branch} [merged — deleted / not merged — kept / was already on default]
 Pulled: N new commits
-Stashed: [yes — "hero-reset: WIP on {branch}" (restore with `git stash pop`) / no]
+Stashed: [yes — "reset-branch: WIP on {branch}" (restore with `git stash pop`) / no]
 Cleaned up: [list of deleted merged branches, if any]
 Context: Cleared
 ```

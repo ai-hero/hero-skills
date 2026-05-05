@@ -1024,7 +1024,7 @@ Next steps before hero-skills:ship-pr will work:
 
 Always commit `HERO.md` to the repo. Do NOT ask whether to commit or whether to add it to `.gitignore`. Stage and commit it immediately after user confirmation in Step 6 (and Step 6a if the workflow was installed).
 
-Only stage the workflow file when Step 6.5 reported the file is in sync with the plugin (`INSTALL_OK=true`, covering both the fresh-install and already-up-to-date paths). When the installer returned exit 2 (`EXISTS`, drift detected), the working file is still the user's original — committing it now would falsely claim `hero-skills:init-hero` installed the new version.
+Only stage the workflow file when Step 6a reported the file is in sync with the plugin (`INSTALL_OK=true`, covering both the fresh-install and already-up-to-date paths). When the installer returned exit 2 (`EXISTS`, drift detected), the working file is still the user's original — committing it now would falsely claim `hero-skills:init-hero` installed the new version.
 
 ```bash
 FILES_TO_ADD=("HERO.md" "CLAUDE.md")

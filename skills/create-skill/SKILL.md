@@ -1,8 +1,9 @@
 ---
 name: create-skill
 # prettier-ignore
-description: Create a new Claude Code skill, subagent, rule, or hook. Guides through trigger conditions, success criteria, and writes a well-structured SKILL.md. Use when extending Claude with a new slash command.
+description: Create a new Claude Code skill, subagent, rule, or hook. Guides through trigger conditions, success criteria, and writes a well-structured SKILL.md. Use when extending Claude.
 argument-hint: DESCRIPTION_OF_WHAT_YOU_WANT_CLAUDE_TO_DO
+disable-model-invocation: true
 ---
 
 # Create Skill — Create Claude Code Components

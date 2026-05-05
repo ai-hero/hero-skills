@@ -1,5 +1,5 @@
 # Hero Configuration
-<!-- This file configures hero-skills. See hero-skills:init to update. -->
+<!-- This file configures hero-skills. See hero-skills:init-hero to update. -->
 
 ## Project Management
 

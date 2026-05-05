@@ -51,7 +51,7 @@ echo "Current branch: $BRANCH"
 These changes will be affected by switching branches.
 
 Options:
-1. Stash changes (saved as "hero-branch: WIP on $BRANCH") — will auto-restore when done
+1. Stash changes (saved as "create-branch: WIP on $BRANCH") — will auto-restore when done
 2. Carry changes to the new branch (default git behavior — changes stay unstaged)
 3. Cancel — go back and commit or handle changes first
 ```
@@ -61,13 +61,13 @@ Options:
 **If user chooses option 1 (stash):**
 
 ```bash
-git stash push -m "hero-branch: WIP on $BRANCH"
+git stash push -m "create-branch: WIP on $BRANCH"
 ```
 
 Report the stash ref so the user can find it later:
 
 ```
-Stashed as: stash@{0} — "hero-branch: WIP on $BRANCH"
+Stashed as: stash@{0} — "create-branch: WIP on $BRANCH"
 Will auto-restore after branch creation.
 ```
 
@@ -175,7 +175,7 @@ git stash pop
 Report the restore:
 
 ```
-Restored stashed changes from "hero-branch: WIP on $BRANCH"
+Restored stashed changes from "create-branch: WIP on $BRANCH"
 ```
 
 If the stash pop has conflicts, report them clearly and let the user resolve.

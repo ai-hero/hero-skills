@@ -128,7 +128,11 @@ If a test file maps directly to a changed source file, prefer running just those
 #### 3d: Pre-commit (if configured)
 
 ```bash
-which pre-commit && pre-commit run --files "${CHANGED_FILES[@]}" || echo "NO_PRECOMMIT"
+if command -v pre-commit > /dev/null 2>&1; then
+  pre-commit run --files "${CHANGED_FILES[@]}"
+else
+  echo "NO_PRECOMMIT"
+fi
 ```
 
 #### 3e: Report verification results

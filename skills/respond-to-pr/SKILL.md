@@ -78,7 +78,7 @@ You have uncommitted changes on '$CURRENT':
 Need to switch to '$PR_BRANCH' to address PR comments.
 
 Options:
-1. Stash changes (saved as "hero-respond-to-pr: WIP on $CURRENT") — will NOT auto-restore since you're moving to a different branch
+1. Stash changes (saved as "respond-to-pr: WIP on $CURRENT") — will NOT auto-restore since you're moving to a different branch
 2. Cancel — go back and commit or handle changes first
 ```
 
@@ -87,10 +87,10 @@ Options:
 **If user chooses option 1 (stash):**
 
 ```bash
-git stash push -m "hero-respond-to-pr: WIP on $CURRENT"
+git stash push -m "respond-to-pr: WIP on $CURRENT"
 ```
 
-Report: `Stashed as: stash@{0} — "hero-respond-to-pr: WIP on $CURRENT". Restore later with: git checkout $CURRENT && git stash pop`
+Report: `Stashed as: stash@{0} — "respond-to-pr: WIP on $CURRENT". Restore later with: git checkout $CURRENT && git stash pop`
 
 Note: Since the user is switching to a different branch to do PR work, do NOT auto-pop the stash. Remind the user in the final summary how to restore.
 
@@ -207,7 +207,11 @@ After all fixes are applied:
 
 ```bash
 # Run pre-commit if available
-which pre-commit && pre-commit run --all-files || echo "NO_PRECOMMIT"
+if command -v pre-commit > /dev/null 2>&1; then
+  pre-commit run --all-files
+else
+  echo "NO_PRECOMMIT"
+fi
 
 # Run tests if configured in HERO.md
 # Use the test command from HERO.md projects section

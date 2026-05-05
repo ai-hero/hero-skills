@@ -62,7 +62,7 @@ PR_STATE=$(echo "$PR_JSON" | jq -r '.state')
 
 | Condition | Mode |
 |-----------|------|
-| No PR found | STOP — "No PR for '$BRANCH'. Run `/push` first." |
+| No PR found | STOP — "No PR for '$BRANCH'. Run `hero-skills:push-pr` first." |
 | Closed/merged | STOP — Report status. |
 | PR author is you AND draft | Self-review mode |
 | PR author is you AND not draft | Warn "PR is already ready-for-review — continue self-review? [y/N]" |
@@ -112,7 +112,7 @@ Wait for all agents to complete, then aggregate findings into: **Critical** (bug
 
 ```bash
 gh pr comment $PR_NUMBER --body "$(cat <<'EOF'
-## Self-Review
+## Hero Self-Review
 
 ### Critical ({N})
 - [agent] {file:line} — {finding}
@@ -161,7 +161,11 @@ For each accepted finding:
 After all fixes:
 
 ```bash
-which pre-commit && pre-commit run --files "${CHANGED_FILES[@]}" || echo "NO_PRECOMMIT"
+if command -v pre-commit > /dev/null 2>&1; then
+  pre-commit run --files "${CHANGED_FILES[@]}"
+else
+  echo "NO_PRECOMMIT"
+fi
 ```
 
 Fix any pre-commit failures before continuing.
@@ -192,7 +196,7 @@ Render the template with real values — never post literal placeholders. Omit s
 
 ```bash
 gh pr comment $PR_NUMBER --body "$(cat <<'EOF'
-## Self-Review Improvements
+## Hero Self-Review Improvements
 
 **Critical (A / X fixed):**
 - FILE:LINE — FINDING — FIX_DESCRIPTION

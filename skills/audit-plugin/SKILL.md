@@ -3,6 +3,7 @@ name: audit-plugin
 # prettier-ignore
 description: Audit the hero-skills plugin. Checks skill quality, consistency, DRY violations, HERO.md field coverage, and readability. Use before releasing changes to the plugin.
 argument-hint: [--fix]
+disable-model-invocation: true
 ---
 
 # Audit — Plugin Self-Audit
@@ -140,12 +141,12 @@ DESCRIPTION QUALITY
 ───────────────────
 [OK] commit: "Create a smart git commit..." (85 chars, clear trigger)
 [!!] audit: description is 190 chars — consider trimming
-[??] hero-new-skill: no trigger phrase — add "Use when..." or "Use for..."
+[??] create-skill: no trigger phrase — add "Use when..." or "Use for..."
 ```
 
 #### 2f: Alphabetical & Organizational Checks
 
-- Are skills listed alphabetically when referenced in tables (e.g., hero-init's "What each skill needs" table)?
+- Are skills listed alphabetically when referenced in tables (e.g., init-hero's "What each skill needs" table)?
 - Are HERO.md sections in a logical order?
 - Are frontmatter fields in a consistent order across skills?
 
@@ -154,7 +155,7 @@ DESCRIPTION QUALITY
 ```
 Plugin Audit
 ═════════════════════════
-Skills audited: 14
+Skills audited: 17
 Total lines: 4,200 | Total words: 28,000
 
 MUST FIX
@@ -187,6 +188,6 @@ If `--fix` is passed, automatically fix:
 
 - **This skill is for the hero-skills repo only.** It audits the plugin, not user projects.
 - **DRY is not always better.** Skills run independently — some repetition is by design.
-- **Field coverage matters.** Every HERO.md field should be produced by hero-init and consumed by at least one skill.
+- **Field coverage matters.** Every HERO.md field should be produced by init-hero and consumed by at least one skill.
 - **Size awareness.** Skills consume context window. Large skills slow down every invocation.
 - **Be specific.** File, line, what's wrong, how to fix.

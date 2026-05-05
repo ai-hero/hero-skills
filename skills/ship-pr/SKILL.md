@@ -250,18 +250,23 @@ Visit PR_URL/checks to investigate.
 
 Stop here.
 
-Once `RUN_ID` is found, poll until the run completes:
+Once `RUN_ID` is found, poll until the run completes. The loop has a hard 5-minute timeout — without it, a hung workflow blocks indefinitely with no surfaced error:
 
 ```bash
+WAIT_START=$SECONDS
 while true; do
+  if (( SECONDS - WAIT_START > 300 )); then
+    RUN_URL=$(gh api "/repos/{owner}/{repo}/actions/runs/$RUN_ID" --jq '.html_url')
+    echo "Timed out waiting for run $RUN_ID after 5 minutes."
+    echo "Visit $RUN_URL to check status manually, then ask the user whether to keep waiting or stop."
+    break
+  fi
   STATUS=$(gh api "/repos/{owner}/{repo}/actions/runs/$RUN_ID" --jq '.status')
   CONCLUSION=$(gh api "/repos/{owner}/{repo}/actions/runs/$RUN_ID" --jq '.conclusion')
   [ "$STATUS" = "completed" ] && break
   sleep 10
 done
 ```
-
-Time-box the wait at ~5 minutes. If it does not complete by then, ask the user whether to keep waiting or stop.
 
 ### Step 6: Read the Verdict
 

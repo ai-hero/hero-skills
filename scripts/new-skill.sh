@@ -72,7 +72,7 @@ cat "\$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 Read \`HERO.md\` if it exists. This skill uses:
 - TODO: list which HERO.md sections this skill reads
 
-If \`HERO.md\` is missing, suggest \`hero-skills:init\` but proceed with auto-detection.
+If \`HERO.md\` is missing, suggest \`hero-skills:init-hero\` but proceed with auto-detection.
 
 ### Step 1: TODO
 

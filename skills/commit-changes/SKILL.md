@@ -71,7 +71,11 @@ Proceed with the rest of the skill on the new branch.
 ### Step 2: Run Pre-commit (if available)
 
 ```bash
-which pre-commit && pre-commit run --all-files || echo "NO_PRECOMMIT"
+if command -v pre-commit > /dev/null 2>&1; then
+  pre-commit run --all-files
+else
+  echo "NO_PRECOMMIT"
+fi
 ```
 
 If pre-commit is installed and checks fail: report errors, offer to auto-fix, do not proceed until passing.
@@ -169,7 +173,11 @@ EOF
 Dry-run any pre-push hooks now so failures surface before the user runs `hero-skills:push-pr`:
 
 ```bash
-which pre-commit && pre-commit run --hook-stage pre-push --all-files || echo "NO_PRECOMMIT"
+if command -v pre-commit > /dev/null 2>&1; then
+  pre-commit run --hook-stage pre-push --all-files
+else
+  echo "NO_PRECOMMIT"
+fi
 ```
 
 ### Step 9: Summary

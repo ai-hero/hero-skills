@@ -70,8 +70,24 @@ fi
 DIFF=$(git diff --cached)
 HERO=$(cat "$ROOT/HERO.md")
 
-# Snapshot the index before Claude runs so we can restore any unintended staging
+# Snapshot the index before Claude runs so we can restore any unintended staging.
+# Capture the HERO.md blob hash from the BEFORE state so we can detect whether
+# Claude actually changed it (vs. it just being already-tracked in the index).
 BEFORE_INDEX=$(git write-tree)
+BEFORE_HERO=$(git ls-tree "$BEFORE_INDEX" -- "$ROOT/HERO.md" | awk '{print $3}')
+
+# Always restore the index on exit, even if claude fails. Without this, a
+# claude crash/timeout would leave the staging area in whatever partial state
+# claude left behind (e.g., wrong files staged, HERO.md half-modified).
+_restore_index_on_failure() {
+  local rc=$?
+  if [[ $rc -ne 0 ]]; then
+    echo "hero-update: claude failed (exit $rc) — restoring git index" >&2
+    git read-tree "$BEFORE_INDEX" 2>/dev/null \
+      || echo "hero-update: WARN: index restore failed; run 'git reset HEAD' manually" >&2
+  fi
+}
+trap _restore_index_on_failure EXIT
 
 echo "$DIFF" | claude --model sonnet --max-turns 3 -p "$(cat <<EOF
 You are syncing HERO.md with codebase changes. Current HERO.md:
@@ -91,14 +107,18 @@ Keep output under 5 lines.
 EOF
 )"
 
-# Restore any files Claude may have inadvertently staged (except HERO.md)
+# Claude succeeded. Discard the trap so a successful run doesn't trigger restore.
+trap - EXIT
+
+# Discard anything Claude inadvertently staged, then re-add HERO.md if and
+# only if Claude actually modified it (compare blob hash before vs. after).
 AFTER_INDEX=$(git write-tree)
 if [[ "$BEFORE_INDEX" != "$AFTER_INDEX" ]]; then
-  # Reset index to before-state, then re-apply only HERO.md if Claude updated it
-  HERO_OBJECT=$(git ls-files --stage "$ROOT/HERO.md" | awk '{print $2}')
+  AFTER_HERO=$(git ls-tree "$AFTER_INDEX" -- "$ROOT/HERO.md" | awk '{print $3}')
   git read-tree "$BEFORE_INDEX"
-  if [[ -n "$HERO_OBJECT" ]]; then
-    # Re-stage the HERO.md Claude wrote
-    git add "$ROOT/HERO.md" 2>/dev/null || true
+  if [[ "$BEFORE_HERO" != "$AFTER_HERO" ]]; then
+    if ! git add "$ROOT/HERO.md"; then
+      echo "hero-update: WARN: failed to re-stage HERO.md — update may be lost" >&2
+    fi
   fi
 fi

@@ -139,7 +139,7 @@ Here's what a minimal config looks like:
 - Dev command: uvicorn main:app --reload
 ```
 
-No `HERO.md`? Skills fall back to auto-detection. Run `hero-skills:init` to generate one — it investigates your repo and asks smart questions to fill in what it can't detect.
+No `HERO.md`? Skills fall back to auto-detection. Run `hero-skills:init-hero` to generate one — it investigates your repo and asks smart questions to fill in what it can't detect.
 
 <details>
 <summary><strong>Full config reference</strong></summary>
