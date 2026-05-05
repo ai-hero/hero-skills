@@ -50,6 +50,14 @@ else
   PR_JSON=$(gh pr list --head "$BRANCH" --json number,url,headRefName,baseRefName,state,isDraft,author --jq '.[0]')
 fi
 
+# When no PR is found, gh pr list --jq '.[0]' returns the literal string "null".
+# A subsequent `jq -r '.number'` on that yields "null" too, which would slip past
+# the "No PR found" mode-selection check below. Stop explicitly here instead.
+if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "null" ]; then
+  echo "No PR found for branch '$BRANCH'. Run hero-skills:push-pr first."
+  exit 1
+fi
+
 PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
 PR_AUTHOR=$(echo "$PR_JSON" | jq -r '.author.login')
 IS_DRAFT=$(echo "$PR_JSON" | jq -r '.isDraft')

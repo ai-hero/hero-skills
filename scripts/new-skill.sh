@@ -39,6 +39,10 @@ if [[ -z "$DESCRIPTION" ]]; then
   DESCRIPTION="TODO: Describe what this skill does and when to use it. Include trigger phrases."
 fi
 
+# Title-case the skill name for the H1 heading. Use a portable approach
+# (tr + cut) instead of Bash 4's ${var^} since macOS ships Bash 3.2.
+SKILL_TITLE="$(echo "${SKILL_NAME:0:1}" | tr '[:lower:]' '[:upper:]')${SKILL_NAME:1}"
+
 # ─── Create skill ─────────────────────────────────────────────────
 
 mkdir -p "$SKILLS_DIR/$SKILL_NAME"
@@ -52,7 +56,7 @@ argument-hint: [args]
 disable-model-invocation: true
 ---
 
-# ${SKILL_NAME^} — TODO: Title
+# ${SKILL_TITLE} — TODO: Title
 
 TODO: Brief description of what this skill does.
 
