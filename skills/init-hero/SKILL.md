@@ -589,7 +589,7 @@ Based on your investigation, present findings grouped by **what the hero skills 
 - Namespaces / environments
 - Whether to install `.github/workflows/auto-approve.yml` for `hero-skills:ship-pr` — if absent, ask:
   *"`hero-skills:ship-pr` lets you comment `@auto-approve` on a PR to get a Claude-verified approval (gated by self-review, no unresolved threads, and PR-metadata checks). Install `.github/workflows/auto-approve.yml`? It also requires an `ANTHROPIC_API_KEY` repo secret."*
-  - If the user says yes, run the install in Step 6.5 below.
+  - If the user says yes, run the install in Step 6a below.
   - If the workflow exists locally but is not on the default branch yet, remind the user that `@auto-approve` will be a no-op until that file lands on the default branch.
 
 #### Group 5: "Coding conventions for consistent code" (all skills that write code)
