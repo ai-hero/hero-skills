@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Scaffold a new hero skill.
 # Usage: ./scripts/new-skill.sh <skill-name> [description]
-# Example: ./scripts/new-skill.sh hero-deploy "Deploy to production environments"
+# Example: ./scripts/new-skill.sh deploy "Deploy to production environments"
 
 set -euo pipefail
 
@@ -17,8 +17,8 @@ if [[ -z "$SKILL_NAME" ]]; then
   echo "Usage: $0 <skill-name> [description]"
   echo ""
   echo "Examples:"
-  echo "  $0 hero-deploy \"Deploy to production environments\""
-  echo "  $0 hero-lint \"Run linters across all projects\""
+  echo "  $0 deploy \"Deploy to production environments\""
+  echo "  $0 lint \"Run linters across all projects\""
   exit 1
 fi
 
@@ -52,7 +52,7 @@ argument-hint: [args]
 disable-model-invocation: true
 ---
 
-# ${SKILL_NAME} - TODO: Title
+# ${SKILL_NAME^} — TODO: Title
 
 TODO: Brief description of what this skill does.
 
@@ -72,7 +72,7 @@ cat "\$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 Read \`HERO.md\` if it exists. This skill uses:
 - TODO: list which HERO.md sections this skill reads
 
-If \`HERO.md\` is missing, suggest \`/hero-init\` but proceed with auto-detection.
+If \`HERO.md\` is missing, suggest \`hero-skills:init\` but proceed with auto-detection.
 
 ### Step 1: TODO
 

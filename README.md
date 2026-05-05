@@ -31,7 +31,7 @@ Hero Skills gives you **slash commands for the entire dev lifecycle** that adapt
 
 - **Plan and implement from tickets** — Fetch from Linear/Jira/GitHub Issues, create branches, draft implementation plans in Plan Mode, then implement on approval
 - **Verify changes** — Auto-detect project type (API, frontend, CLI, MCP) and run lint, typecheck, unit tests, and smoke tests
-- **Ship with confidence** — Pre-commit checks, conventional commits, draft PRs by default, automated self-review before requesting human review
+- **Ship with confidence** — Pre-commit checks, conventional commits, draft PRs by default, automated parallel review before requesting human review
 - **Stay informed** — CI/CD status, cluster health, security scans
 
 ## Install
@@ -46,20 +46,20 @@ Skills are immediately available in any Claude Code session. No restart needed.
 
 ```
 # 1. Configure your project (run once per repo)
-/hero-init
+hero-skills:init
 
 # 2. Plan work from a ticket — Plan Mode drafts the approach,
 #    approve it, and Claude implements in the same conversation
-/hero-plan PROJ-123
+hero-skills:plan PROJ-123
 
-# 3. Verify, commit, push as draft, self-review
-/hero-test
-/hero-commit
-/hero-push                 # opens a DRAFT PR
-/hero-self-review          # runs review-pr, fixes findings, asks to mark ready
+# 3. Verify, commit, push as draft, then review your own PR
+hero-skills:test
+hero-skills:commit
+hero-skills:push          # opens a DRAFT PR
+hero-skills:review        # runs all review agents in parallel, fixes findings, asks to mark ready
 
-# 4. Once reviewers (human or bot) sign off, gate the merge with /hero-auto-approve
-/hero-auto-approve         # @auto-approves only if reviewed + all threads resolved, then offers to merge
+# 4. Once reviewers sign off, ship it
+hero-skills:ship          # @auto-approves only if reviewed + all threads resolved, then offers to merge
 ```
 
 That's it. Each command reads your `HERO.md` config and adapts to your stack automatically.
@@ -70,49 +70,48 @@ That's it. Each command reads your `HERO.md` config and adapts to your stack aut
 
 | Command | What it does |
 |---------|-------------|
-| `/hero-init` | Investigate your repo, auto-detect stack, create `HERO.md` config |
-| `/hero-setup` | Set up a developer's local environment (tools, auth, dependencies) |
-| `/hero-new-project` | Scaffold a new project (Python, full-stack, Node.js) in any repo structure |
-| `/hero-new-skill` | Create new Claude Code skills, rules, or hooks |
+| `hero-skills:init` | Investigate your repo, auto-detect stack, create `HERO.md` config |
+| `hero-skills:setup` | Set up a developer's local environment (tools, auth, dependencies) |
+| `hero-skills:create` | Scaffold a new project or create a new Claude Code skill |
 
 ### Development Cycle
 
 | Command | What it does |
 |---------|-------------|
-| `/hero-plan` | Fetch a ticket, create a branch, draft a plan in Plan Mode, then implement on approval |
-| `/hero-test` | Verify changes (lint, typecheck, unit tests) and run smoke tests for any project type |
-| `/hero-commit` | Code review, pre-commit checks, grouped conventional commits — never on main |
-| `/hero-push` | Push and open a **draft PR** by default, or merge into a target branch |
+| `hero-skills:plan` | Fetch a ticket, create a branch, draft a plan in Plan Mode, then implement on approval |
+| `hero-skills:branch` | Create a feature branch from a description without planning |
+| `hero-skills:test` | Verify changes (lint, typecheck, unit tests) and run smoke tests for any project type |
+| `hero-skills:commit` | Code review, pre-commit checks, grouped conventional commits — never on main |
+| `hero-skills:push` | Push and open a **draft PR** by default, or merge into a target branch |
 
 ### Code Review
 
 | Command | What it does |
 |---------|-------------|
-| `/hero-self-review` | Run automated review on your draft PR, post findings, apply fixes, ask before marking ready |
-| `/hero-review-pr` | Review someone else's PR and leave inline comments |
-| `/hero-respond-to-pr` | Fix PR review comments, resolve threads, optionally loop with external review agent |
-| `/hero-auto-approve` | Trigger gated `@auto-approve` on a ready PR, wait for the verdict, and offer to merge if it passes |
+| `hero-skills:review` | Review a PR: your draft → runs all agents in parallel, applies fixes, asks before marking ready. Others' PR → inline comments only. |
+| `hero-skills:respond` | Fix PR review comments, resolve threads, optionally loop with external review agent |
+| `hero-skills:ship` | Trigger gated `@auto-approve`, wait for the verdict, and offer to merge if it passes |
 
 ### Operations
 
 | Command | What it does |
 |---------|-------------|
-| `/hero-cicd` | Check CI/CD pipeline status, build logs, image publish status |
-| `/hero-health` | Kubernetes cluster health (nodes, pods, deployments, ArgoCD) |
-| `/hero-secure` | Scan dependencies (Dependabot) and containers (Docker Scout) for CVEs |
+| `hero-skills:check` | CI/CD pipeline status (default) or `cluster` for Kubernetes health + ArgoCD |
+| `hero-skills:scan` | Scan dependencies (Dependabot) and containers (Docker Scout) for CVEs |
+| `hero-skills:architect` | Generate architecture specs with Mermaid diagrams |
 
-### Architecture & Meta
+### Utilities
 
 | Command | What it does |
 |---------|-------------|
-| `/hero-architect` | Generate architecture specs with Mermaid diagrams |
-| `/hero-meta` | Audit the hero-skills plugin itself for quality and consistency |
+| `hero-skills:reset` | Reset to default branch, pull latest, clear conversation context |
+| `hero-skills:audit` | Audit the hero-skills plugin itself for quality and consistency |
 
 ## HERO.md
 
-Every skill reads `HERO.md` from your repo root. It declares your stack so skills don't have to guess. **HERO.md is committed to the repo** — it's team-shared, so every developer and every hero skill works from the same config.
+Every skill reads `HERO.md` from your repo root. It declares your stack so skills don't have to guess. **HERO.md is committed to the repo** — it's team-shared, so every developer and every skill works from the same config.
 
-To keep it in sync automatically, wire `/hero-init --update` into your pre-commit hooks. A fast bash gate script checks staged files first — most commits skip Claude entirely and finish in milliseconds. Only when you change dependencies, CI config, or project structure does it invoke Claude to sync HERO.md.
+To keep it in sync automatically, wire `hero-skills:init --update` into your pre-commit hooks. A fast bash gate script checks staged files first — most commits skip Claude entirely and finish in milliseconds. Only when you change dependencies, CI config, or project structure does it invoke Claude to sync HERO.md.
 
 Here's what a minimal config looks like:
 
@@ -139,7 +138,7 @@ Here's what a minimal config looks like:
 - Dev command: uvicorn main:app --reload
 ```
 
-No `HERO.md`? Skills fall back to auto-detection. Run `/hero-init` to generate one — it investigates your repo and asks smart questions to fill in what it can't detect.
+No `HERO.md`? Skills fall back to auto-detection. Run `hero-skills:init` to generate one — it investigates your repo and asks smart questions to fill in what it can't detect.
 
 <details>
 <summary><strong>Full config reference</strong></summary>
@@ -157,9 +156,9 @@ No `HERO.md`? Skills fall back to auto-detection. Run `/hero-init` to generate o
 
 ## Extending
 
-Hero Skills is built to be extended. Use `/hero-new-skill` to create new skills that plug into the same workflow and read the same `HERO.md` config.
+Use `hero-skills:create skill` to create new skills that plug into the same workflow and read the same `HERO.md` config.
 
-Skills are markdown files that live in the `skills/` directory. Each skill is a structured prompt with instructions Claude follows when you invoke it. No code to compile, no APIs to wire up.
+Skills are markdown files in the `skills/` directory. Each is a structured prompt with instructions Claude follows when you invoke it. No code to compile, no APIs to wire up.
 
 ## License
 

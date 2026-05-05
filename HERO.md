@@ -1,5 +1,5 @@
 # Hero Configuration
-<!-- This file configures /hero-* skills. See /hero-init to update. -->
+<!-- This file configures hero-skills. See hero-skills:init to update. -->
 
 ## Project Management
 
@@ -42,7 +42,7 @@
 
 - pre-commit: true
 - linters: markdownlint, shellcheck, codespell
-- hooks: detect-secrets, validate-plugin, hero-meta, hero-init-update
+- hooks: detect-secrets, validate-plugin, audit, init-update
 
 ## Projects
 
