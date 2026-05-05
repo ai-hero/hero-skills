@@ -46,20 +46,20 @@ Skills are immediately available in any Claude Code session. No restart needed.
 
 ```
 # 1. Configure your project (run once per repo)
-hero-skills:init
+hero-skills:init-hero
 
 # 2. Plan work from a ticket — Plan Mode drafts the approach,
 #    approve it, and Claude implements in the same conversation
-hero-skills:plan PROJ-123
+hero-skills:plan-work PROJ-123
 
 # 3. Verify, commit, push as draft, then review your own PR
-hero-skills:test
-hero-skills:commit
-hero-skills:push          # opens a DRAFT PR
-hero-skills:review        # runs all review agents in parallel, fixes findings, asks to mark ready
+hero-skills:test-changes
+hero-skills:commit-changes
+hero-skills:push-pr          # opens a DRAFT PR
+hero-skills:review-pr        # runs all review agents in parallel, fixes findings, asks to mark ready
 
 # 4. Once reviewers sign off, ship it
-hero-skills:ship          # @auto-approves only if reviewed + all threads resolved, then offers to merge
+hero-skills:ship-pr          # @auto-approves only if reviewed + all threads resolved, then offers to merge
 ```
 
 That's it. Each command reads your `HERO.md` config and adapts to your stack automatically.
@@ -70,48 +70,49 @@ That's it. Each command reads your `HERO.md` config and adapts to your stack aut
 
 | Command | What it does |
 |---------|-------------|
-| `hero-skills:init` | Investigate your repo, auto-detect stack, create `HERO.md` config |
-| `hero-skills:setup` | Set up a developer's local environment (tools, auth, dependencies) |
-| `hero-skills:create` | Scaffold a new project or create a new Claude Code skill |
+| `hero-skills:init-hero` | Investigate your repo, auto-detect stack, create `HERO.md` config |
+| `hero-skills:setup-dev` | Set up a developer's local environment (tools, auth, dependencies) |
+| `hero-skills:create-project` | Scaffold a new project (Python, full-stack, Node.js) |
+| `hero-skills:create-skill` | Create a new Claude Code skill, subagent, rule, or hook |
 
 ### Development Cycle
 
 | Command | What it does |
 |---------|-------------|
-| `hero-skills:plan` | Fetch a ticket, create a branch, draft a plan in Plan Mode, then implement on approval |
-| `hero-skills:branch` | Create a feature branch from a description without planning |
-| `hero-skills:test` | Verify changes (lint, typecheck, unit tests) and run smoke tests for any project type |
-| `hero-skills:commit` | Code review, pre-commit checks, grouped conventional commits — never on main |
-| `hero-skills:push` | Push and open a **draft PR** by default, or merge into a target branch |
+| `hero-skills:plan-work` | Fetch a ticket, create a branch, draft a plan in Plan Mode, then implement on approval |
+| `hero-skills:create-branch` | Create a feature branch from a description without planning |
+| `hero-skills:test-changes` | Verify changes (lint, typecheck, unit tests) and run smoke tests for any project type |
+| `hero-skills:commit-changes` | Code review, pre-commit checks, grouped conventional commits — never on main |
+| `hero-skills:push-pr` | Push and open a **draft PR** by default, or merge into a target branch |
 
 ### Code Review
 
 | Command | What it does |
 |---------|-------------|
-| `hero-skills:review` | Review a PR: your draft → runs all agents in parallel, applies fixes, asks before marking ready. Others' PR → inline comments only. |
-| `hero-skills:respond` | Fix PR review comments, resolve threads, optionally loop with external review agent |
-| `hero-skills:ship` | Trigger gated `@auto-approve`, wait for the verdict, and offer to merge if it passes |
+| `hero-skills:review-pr` | Review a PR: your draft → runs all agents in parallel, applies fixes, asks before marking ready. Others' PR → inline comments only. |
+| `hero-skills:respond-to-pr` | Fix PR review comments, resolve threads, optionally loop with external review agent |
+| `hero-skills:ship-pr` | Trigger gated `@auto-approve`, wait for the verdict, and offer to merge if it passes |
 
 ### Operations
 
 | Command | What it does |
 |---------|-------------|
-| `hero-skills:check` | CI/CD pipeline status (default) or `cluster` for Kubernetes health + ArgoCD |
-| `hero-skills:scan` | Scan dependencies (Dependabot) and containers (Docker Scout) for CVEs |
-| `hero-skills:architect` | Generate architecture specs with Mermaid diagrams |
+| `hero-skills:check-ci` | CI/CD pipeline status (default) or `cluster` for Kubernetes health + ArgoCD |
+| `hero-skills:scan-vulns` | Scan dependencies (Dependabot) and containers (Docker Scout) for CVEs |
+| `hero-skills:document-arch` | Create and update architecture specs with Mermaid diagrams |
 
 ### Utilities
 
 | Command | What it does |
 |---------|-------------|
-| `hero-skills:reset` | Reset to default branch, pull latest, clear conversation context |
-| `hero-skills:audit` | Audit the hero-skills plugin itself for quality and consistency |
+| `hero-skills:reset-branch` | Reset to default branch, pull latest, clear conversation context |
+| `hero-skills:audit-plugin` | Audit the hero-skills plugin itself for quality and consistency |
 
 ## HERO.md
 
 Every skill reads `HERO.md` from your repo root. It declares your stack so skills don't have to guess. **HERO.md is committed to the repo** — it's team-shared, so every developer and every skill works from the same config.
 
-To keep it in sync automatically, wire `hero-skills:init --update` into your pre-commit hooks. A fast bash gate script checks staged files first — most commits skip Claude entirely and finish in milliseconds. Only when you change dependencies, CI config, or project structure does it invoke Claude to sync HERO.md.
+To keep it in sync automatically, wire `hero-skills:init-hero --update` into your pre-commit hooks. A fast bash gate script checks staged files first — most commits skip Claude entirely and finish in milliseconds. Only when you change dependencies, CI config, or project structure does it invoke Claude to sync HERO.md.
 
 Here's what a minimal config looks like:
 
@@ -156,7 +157,7 @@ No `HERO.md`? Skills fall back to auto-detection. Run `hero-skills:init` to gene
 
 ## Extending
 
-Use `hero-skills:create skill` to create new skills that plug into the same workflow and read the same `HERO.md` config.
+Use `hero-skills:create-skill` to create new skills that plug into the same workflow and read the same `HERO.md` config.
 
 Skills are markdown files in the `skills/` directory. Each is a structured prompt with instructions Claude follows when you invoke it. No code to compile, no APIs to wire up.
 

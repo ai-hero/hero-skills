@@ -1,0 +1,217 @@
+---
+name: create-project
+# prettier-ignore
+description: Scaffold a new project. Supports standalone repos or monorepo subprojects. Creates Python (FastAPI/CLI/library), full-stack (FastAPI + Next.js/Vite), or Node.js projects with CLAUDE.md.
+argument-hint: PROJECT_NAME [description]
+disable-model-invocation: true
+---
+
+# Create Project — Scaffold a New Project
+
+Scaffold a new project, either standalone or as a subproject in an existing repo.
+
+## Arguments
+
+- `$ARGUMENTS` — Project name (required) and optional description
+
+## Instructions
+
+### Step 0: Load Configuration
+
+```bash
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
+```
+
+Read `HERO.md` for repo type (single vs monorepo), code quality tools, and coding conventions. If missing, suggest `hero-skills:init-hero` and proceed with defaults.
+
+### Step 1: Parse Arguments
+
+- **Project name** (required): First word. Ask if missing.
+- **Description** (optional): Remaining text.
+
+### Step 2: Determine Context
+
+```bash
+git rev-parse --is-inside-work-tree 2>/dev/null && echo "IN_REPO" || echo "STANDALONE"
+ls */pyproject.toml */package.json 2>/dev/null | head -5
+```
+
+Ask based on context:
+
+| Context | Question |
+|---------|----------|
+| Not in a repo | Create standalone repo, or add to an existing one? |
+| In a repo with siblings | Add as a new subproject? |
+| Empty repo | Initialize this repo with the new project? |
+
+### Step 3: Choose Project Type
+
+Ask the user:
+
+1. **Python backend** — FastAPI with uv
+2. **Python library** — Reusable package (uv)
+3. **Python CLI** — Command-line tool (uv)
+4. **Full-stack** — FastAPI + Next.js or Vite with shadcn
+5. **Frontend only** — Next.js or Vite with shadcn
+6. **Node.js service** — Express/Fastify backend
+
+### Step 4: Scaffold
+
+#### Python Backend (FastAPI)
+
+Read uv FastAPI guide at <https://docs.astral.sh/uv/guides/integration/fastapi/>
+
+```bash
+uv init PROJECT_NAME
+cd PROJECT_NAME
+uv add fastapi uvicorn[standard]
+```
+
+Structure:
+
+```
+PROJECT_NAME/
+├── app/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── routers/__init__.py
+│   ├── services/__init__.py
+│   └── schemas/__init__.py
+├── pyproject.toml
+└── uv.lock
+```
+
+#### Python Library
+
+```bash
+uv init --lib PROJECT_NAME
+```
+
+#### Python CLI
+
+```bash
+uv init PROJECT_NAME
+```
+
+Add entry point in `pyproject.toml`:
+
+```toml
+[project.scripts]
+PROJECT_NAME = "project_name:main"
+```
+
+#### Full-stack
+
+```
+PROJECT_NAME/
+├── backend/    # FastAPI
+└── frontend/   # Next.js or Vite
+```
+
+Backend: same as Python Backend above.
+
+Frontend (ask Next.js or Vite):
+
+- **Next.js**: Follow <https://ui.shadcn.com/docs/installation/next>
+
+  ```bash
+  npx create-next-app@latest frontend --typescript --tailwind --eslint --app --src-dir --import-alias "@/*"
+  cd frontend && npx shadcn@latest init -d
+  ```
+
+  Add API proxy in `next.config.js`:
+
+  ```javascript
+  async rewrites() {
+    return [{ source: '/api/:path*', destination: 'http://localhost:8000/api/:path*' }];
+  }
+  ```
+
+- **Vite**: Follow <https://ui.shadcn.com/docs/installation/vite>
+
+  Add API proxy in `vite.config.ts`:
+
+  ```typescript
+  server: {
+    proxy: { '/api': { target: 'http://localhost:8000', changeOrigin: true } }
+  }
+  ```
+
+#### Frontend Only
+
+Same as full-stack frontend, at project root instead of `frontend/`.
+
+#### Node.js Service
+
+```bash
+mkdir PROJECT_NAME && cd PROJECT_NAME
+npm init -y
+npm install express typescript @types/node @types/express tsx
+npx tsc --init
+```
+
+### Step 5: Create CLAUDE.md
+
+```markdown
+# PROJECT_NAME
+
+DESCRIPTION
+
+## Development
+
+### Prerequisites
+- [Python 3.12+ and uv | Node.js 20+]
+
+### Setup
+[How to install dependencies]
+
+### Run
+[How to start dev servers]
+
+### Test
+[How to run tests]
+
+## Project Structure
+[Brief description of key directories]
+```
+
+### Step 6: Initialize Git (if standalone)
+
+```bash
+git init
+git add -A
+git commit -m "$(cat <<'EOF'
+chore: initialize PROJECT_NAME
+
+DESCRIPTION
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+EOF
+)"
+```
+
+### Step 7: Summary
+
+```
+Create Project Summary
+======================
+Project: PROJECT_NAME
+Type: [Python Backend | Full-stack | ...]
+Location: PATH
+
+Created:
+  - Project structure
+  - CLAUDE.md
+  - [Git repo initialized]
+
+Next steps:
+  cd PROJECT_NAME
+  hero-skills:commit-changes   # Set up pre-commit hooks
+  hero-skills:test-changes     # Verify it runs
+```
+
+## Notes
+
+- Always creates CLAUDE.md. Uses uv for all Python projects. Uses shadcn for frontend UI.
+- Does not push or create remote repos — local scaffolding only.
