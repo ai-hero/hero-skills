@@ -94,8 +94,8 @@ repos:
         pass_filenames: false
         always_run: true
 
-      - id: hero-meta
-        name: "Hero Meta: audit plugin quality"
+      - id: audit
+        name: "Audit: check plugin quality"
         entry: ./scripts/hero-meta-precommit.sh
         language: script
         pass_filenames: false
@@ -103,8 +103,8 @@ repos:
         stages: [pre-commit]
         verbose: true
 
-      - id: hero-init-update
-        name: "Hero Init: update HERO.md"
+      - id: init-update
+        name: "Init: update HERO.md"
         entry: ./scripts/hero-update-precommit.sh
         language: script
         pass_filenames: false

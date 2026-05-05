@@ -43,8 +43,8 @@ For the changed lines, verify:
 
 Read the surrounding files if needed to check consistency with the rest of the plugin.
 
-If everything looks good, output: "hero-meta: PASSED"
-If there are issues, output: "hero-meta: ISSUES FOUND" followed by a brief list.
+If everything looks good, output: "audit: PASSED"
+If there are issues, output: "audit: ISSUES FOUND" followed by a brief list.
 Keep output under 10 lines.
 EOF
 )")
