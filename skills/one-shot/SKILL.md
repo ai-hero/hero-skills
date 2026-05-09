@@ -2,7 +2,7 @@
 name: one-shot
 # prettier-ignore
 description: Drive a small task end-to-end — plan, implement, test, commit, push draft, self-review, respond to bots, auto-approve, merge, reset. Use only for small, low-risk PRs.
-argument-hint: ISSUE_ID_OR_DESCRIPTION
+argument-hint: ISSUE_ID_OR_DESCRIPTION [additional-context]
 disable-model-invocation: true
 ---
 
@@ -36,8 +36,24 @@ When a step is skipped (e.g., `respond` if the repo has no review bot configured
 
 - `gh` CLI installed and authenticated
 - `HERO.md` exists (run `hero-skills:init-hero` first if not)
-- `.github/workflows/auto-approve.yml` is on the default branch (Step 8 needs it)
+- `.github/workflows/auto-approve.yml` is on the default branch (Step 8 needs it). If missing, run `hero-skills:init-hero --update` to install it (Step 6a of init-hero handles this), then merge that workflow file to the default branch before running one-shot.
 - The task is small — see scope guard above
+
+## Cross-step contract
+
+Every chained skill in this orchestrator can fail in the middle of a long
+session. Before deciding to advance to the next step, you MUST:
+
+1. Read the child skill's reported state — last bash exit code, the verdict
+   it printed, and any "STOP" / "Stopped:" lines. Do NOT infer success from
+   the absence of an error.
+2. Echo a one-line "Step N result:" summary to the user with what just
+   happened and what you intend to do next.
+3. If the child skill stopped, render the pipeline DAG with `(✗)` on the
+   failed node and a `Stopped: REASON` line per `PIPELINES.md`, then halt.
+   Never auto-advance past a `(✗)`.
+
+Apply this contract at every Step 1–8 transition below.
 
 ## Instructions
 
@@ -130,11 +146,29 @@ This is a **hard gate**: `review-pr` will ask before marking the PR ready. If th
 
 ### Step 7: respond
 
-Render DAG with `respond` active. If `HERO.md` declares a Code Review Agent (CodeRabbit, Greptile, Copilot review, etc.), wait briefly for the bot to post and then run `hero-skills:respond-to-pr` to address its inline comments and resolve threads.
+Render DAG with `respond` active. If `HERO.md` declares a Code Review Agent (CodeRabbit, Greptile, Copilot review, etc.), poll the PR comments for the bot's first comment for **up to 60 seconds total, polling every 15 seconds**. If the bot has not posted by then, proceed to Step 8 (auto-approve will gate on unresolved threads anyway). If the bot has posted, run `hero-skills:respond-to-pr` to address its inline comments and resolve threads.
+
+```bash
+BOT_USER=$(awk -F': ' '/^- bot-username:/ {print $2; exit}' "$ROOT/HERO.md" \
+  | tr -d '[:space:]"'"'"'')
+# PR_NUMBER comes from Step 5's push-pr output. Re-derive owner/repo from gh
+# in case earlier steps did not export them.
+PR_NUMBER=${PR_NUMBER:-$(gh pr list --head "$(git branch --show-current)" \
+  --json number --jq '.[0].number')}
+OWNER_REPO=$(gh repo view --json owner,name --jq '"\(.owner.login)/\(.name)"')
+DEADLINE=$((SECONDS + 60))
+BOT_COMMENT=""
+while (( SECONDS < DEADLINE )); do
+  BOT_COMMENT=$(gh api "/repos/$OWNER_REPO/issues/$PR_NUMBER/comments" \
+    --jq "[.[] | select(.user.login == \"$BOT_USER\")] | first.id // empty")
+  [ -n "$BOT_COMMENT" ] && break
+  sleep 15
+done
+```
 
 If no review bot is configured (`agent: none`), mark this step `(–)` and skip to Step 8.
 
-If the bot's feedback exceeds a small set of trivial fixes, STOP and hand back — humans should triage non-trivial bot feedback.
+If the bot's feedback exceeds a small set of trivial fixes, render `(✗) respond` plus `Stopped: bot feedback non-trivial — escalate to a human reviewer` per `PIPELINES.md` skip/error semantics, and halt. Do not advance to Step 8.
 
 ### Step 8: ship
 

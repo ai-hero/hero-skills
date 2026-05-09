@@ -26,7 +26,9 @@ Print the DAG line at the start of each step. Format:
 Now running: setup-dev
 ```
 
-This skill drives the **scaffold** step and then chains forward by suggesting (or invoking) `hero-skills:setup-dev`, then `hero-skills:init-hero`, and finally a `git commit` of the scaffold + HERO.md. Each chained skill will pick up its own internal DAG when relevant.
+This skill drives the **scaffold** step and then invokes `hero-skills:setup-dev`, then `hero-skills:init-hero`, and finally a `git commit` of HERO.md + CLAUDE.md. Each chained skill renders its own internal DAG when it has one.
+
+**Naming note for `first-commit`:** When scaffolding a *standalone* repo, Step 6 below already creates the literal first commit (the scaffold). The pipeline's `first-commit` node refers specifically to the commit that lands `HERO.md` and `CLAUDE.md` — that's a follow-up commit on standalone repos, or simply the next commit when adding to an existing repo. See `PIPELINES.md` for the canonical definition.
 
 ## Arguments
 

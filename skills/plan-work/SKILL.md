@@ -24,11 +24,16 @@ This is the single entry point for "I have a task to do." Plan Mode handles plan
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 
-HERO_TIME=$(git log -1 --format=%ct -- HERO.md 2>/dev/null || echo 0)
+# Stale-HERO check — fast subset of the plugin's check-hero-staleness.sh.
+# Keep aligned with the copies in commit-changes/push-pr/test-changes.
+HERO_TIME=$(git log -1 --format=%ct -- HERO.md 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
 CONFIG_TIME=$(git log -1 --format=%ct -- \
-  pyproject.toml package.json go.mod Cargo.toml \
+  pyproject.toml ':(glob)**/pyproject.toml' \
+  package.json ':(glob)**/package.json' \
+  go.mod ':(glob)**/go.mod' \
+  Cargo.toml ':(glob)**/Cargo.toml' \
   .github/workflows .pre-commit-config.yaml \
-  CLAUDE.md Makefile justfile Taskfile.yml 2>/dev/null || echo 0)
+  CLAUDE.md Makefile justfile Taskfile.yml 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
 if [ "${CONFIG_TIME:-0}" -gt "${HERO_TIME:-0}" ]; then
   echo "note: HERO.md may be out of date — run hero-skills:init-hero --update to refresh."
 fi
