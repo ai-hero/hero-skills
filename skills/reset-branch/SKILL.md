@@ -9,6 +9,8 @@ disable-model-invocation: true
 
 Reset to the default branch, pull latest changes, and clear conversation context for a fresh start.
 
+> **Note:** When you've just merged a PR, prefer `hero-skills:ship-pr` — its final step folds in the same reset flow (switch to default, pull, delete merged head, offer cleanup). Use this standalone skill when you want to abandon or pause work that did not go through `ship-pr`.
+
 ## Instructions
 
 ### Step 0: Load Hero Configuration

@@ -23,6 +23,20 @@ This is the single entry point for "I have a task to do." Plan Mode handles plan
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
+
+# Stale-HERO check — fast subset of the plugin's check-hero-staleness.sh.
+# Keep aligned with the copies in commit-changes/push-pr/test-changes.
+HERO_TIME=$(git -C "$ROOT" log -1 --format=%ct -- HERO.md 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
+CONFIG_TIME=$(git -C "$ROOT" log -1 --format=%ct -- \
+  pyproject.toml ':(glob)**/pyproject.toml' \
+  package.json ':(glob)**/package.json' \
+  go.mod ':(glob)**/go.mod' \
+  Cargo.toml ':(glob)**/Cargo.toml' \
+  .github/workflows .pre-commit-config.yaml \
+  CLAUDE.md Makefile justfile Taskfile.yml 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
+if [ "${CONFIG_TIME:-0}" -gt "${HERO_TIME:-0}" ]; then
+  echo "note: HERO.md may be out of date — run hero-skills:init-hero --update to refresh."
+fi
 ```
 
 Read `HERO.md` if it exists. This skill uses:
@@ -31,7 +45,7 @@ Read `HERO.md` if it exists. This skill uses:
 - **Repository** → branch naming convention, default branch
 - **Projects** → which subproject the issue relates to
 
-If `HERO.md` is missing, suggest `hero-skills:init-hero` but proceed with defaults (Linear MCP, conventional branches).
+If `HERO.md` is missing, suggest `hero-skills:init-hero` but proceed with defaults (Linear MCP, conventional branches). If the stale-HERO hint fired, mention it once to the user but do not block.
 
 ### Step 1: Parse Arguments
 

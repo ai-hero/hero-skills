@@ -1,14 +1,32 @@
 ---
 name: ship-pr
 # prettier-ignore
-description: Trigger the auto-approve GitHub Action on a PR, wait for the verdict, and offer to merge if it passes. Use after hero-skills:review-pr and any external bot review when the PR is ready to ship.
+description: Trigger auto-approve on a PR, wait for the verdict, merge if it passes, and reset to the default branch. Use after hero-skills:review-pr and any bot review when the PR is ready to ship.
 argument-hint: [pr-number]
 disable-model-invocation: true
 ---
 
-# Ship — Trigger and Act on the Auto-Approve Workflow
+# Ship — Trigger Auto-Approve, Merge, Reset Local Branch
 
-This skill posts `@auto-approve` on the PR, waits for the workflow run to finish, reads the verdict, and — if the verdict is APPROVE — asks whether to merge. If the verdict is REQUEST_CHANGES, it shows what to fix and offers to re-trigger after fixes land.
+This skill posts `@auto-approve` on the PR, waits for the workflow run to finish, reads the verdict, and — if the verdict is APPROVE — asks whether to merge. If the verdict is REQUEST_CHANGES, it shows what to fix and offers to re-trigger after fixes land. After a successful merge, it folds in the `hero-skills:reset-branch` flow: switch to the default branch, pull latest, delete the merged head branch (remote + local), and offer a clean-up of other stale merged branches.
+
+## Pipeline DAG
+
+This skill is the final step of Pipeline 2 (one-shot) from `PIPELINES.md`, but it also runs standalone. Its internal DAG is:
+
+```
+gates → trigger → verdict → merge → reset
+```
+
+Print at each step transition:
+
+```
+[N/5] (✓) gates → (✓) trigger → (▶) verdict → ( ) merge → ( ) reset
+
+Now running: verdict
+```
+
+Mapping to the steps below: Step 3 = `gates`, Step 4 = `trigger`, Steps 5-6 = `verdict`, Step 7a = `merge`, Step 7b = `reset` (folded-in `hero-skills:reset-branch` flow). Steps 1-2 are pre-flight (PR identification, workflow-on-default-branch check) and Step 8 is the summary — neither appears in the DAG. Steps 7c (REQUEST_CHANGES) and 7d (WORKFLOW_FAILED) are alternative end states that *replace* `merge` and `reset`; on those paths render `(✗) merge → ( ) reset` and stop, never `(✓) merge → (✓) reset`.
 
 The workflow lives at `.github/workflows/auto-approve.yml`. **GitHub only honors `issue_comment`-triggered workflows that already exist on the default branch**, so the workflow file must be merged to `main` (or your default branch) before this skill can do anything useful. This skill checks that first.
 
@@ -366,21 +384,87 @@ fi
 
 **Never force-merge or override branch protection.** Never pass `--admin`. The fallback above is *only* for the specific "auto-merge not enabled on this repo" case; every other failure is surfaced and stops the skill.
 
-#### Step 7b: Clean Up the Merged Branch
+#### Step 7b: Reset to the Default Branch (folded-in `hero-skills:reset-branch`)
 
-GitHub may auto-delete the head branch after merge (repo setting `deleteBranchOnMerge`). If that setting is off, the merged branch lingers on the remote and locally — clean it up. Only runs after Step 7a actually performed a merge.
+After a successful merge, leave the user on the default branch with latest pulled and the merged PR branch cleaned up. This folds in what `hero-skills:reset-branch` does, since after a squash/rebase merge we are usually on the just-merged head branch and want to land on `BASE_BRANCH` ready for the next task.
+
+Order matters:
+
+1. Confirm the merge actually landed.
+2. Switch to `BASE_BRANCH` *before* deleting the head branch locally — `git branch -d` fails if you are on the branch you want to delete.
+3. Pull `BASE_BRANCH` so the local copy includes the squash/merge commit.
+4. Delete the remote head branch (unless GitHub auto-delete or HERO.md disables it).
+5. Delete the local head branch with `-d` (refuses unmerged history — that is a feature).
+6. Offer to clean up other stale merged local branches.
+7. Suggest `/clear` so the next task starts on a fresh context.
 
 Wrap the whole block in an `if` so an early return cannot kill the wrapping shell, and surface real errors instead of speculating about their cause.
 
 ```bash
 sleep 3
 MERGED=$(gh pr view $PR_NUMBER --json merged --jq '.merged')
+RESET_OK=true   # cleared if any sync step (checkout/pull/fetch) fails. Gates
+                # the cleanup steps below — never delete branches based on a
+                # stale local view of $BASE_BRANCH.
 
 if [ "$MERGED" != "true" ]; then
-  echo "Merge not yet recorded — skipping cleanup."
+  echo "Merge not yet recorded — skipping branch reset."
 else
-  # Treat null/empty/unknown deleteBranchOnMerge as "I do not know" and
-  # defer to the HERO.md preference. Non-admins may not see this field.
+  # 1. Switch to BASE_BRANCH first if we are still on the merged head.
+  #    Hard-failing checkout post-merge would leave the user stuck on the
+  #    merged head with no recovery path. Instead, surface the state, set
+  #    RESET_OK=false, and let the user finish the reset manually.
+  CURRENT=$(git branch --show-current)
+  if [ "$CURRENT" = "$PR_BRANCH" ]; then
+    echo "Switching from $PR_BRANCH to $BASE_BRANCH..."
+    if ! git checkout "$BASE_BRANCH"; then
+      RESET_OK=false
+      echo ""
+      echo "Could not checkout $BASE_BRANCH. The merge already landed remotely,"
+      echo "but you are still on $PR_BRANCH locally."
+      echo ""
+      echo "Likely causes:"
+      echo "  - Uncommitted local edits — check 'git status'"
+      echo "  - The local $BASE_BRANCH ref is divergent or missing"
+      echo ""
+      echo "Resolve manually, then run 'hero-skills:reset-branch' to finish."
+      echo "Skipping branch deletion + stale-cleanup so we do not act on a"
+      echo "stale local view of $BASE_BRANCH."
+    fi
+  elif [ "$CURRENT" != "$BASE_BRANCH" ]; then
+    # User happens to be on a third branch. Leave them there, but flag
+    # that this skill is NOT refreshing $BASE_BRANCH locally — otherwise the
+    # next plan-work / create-branch starts from a stale base.
+    echo "You are on '$CURRENT', neither '$PR_BRANCH' nor '$BASE_BRANCH'."
+    echo "Leaving you here. Note: this skill is NOT pulling $BASE_BRANCH —"
+    echo "run 'git fetch origin $BASE_BRANCH' yourself before branching off it."
+    RESET_OK=false   # cannot safely run cleanup against a possibly-stale ref
+  fi
+
+  # 2. Pull latest into BASE_BRANCH (only if we ended up on it AND the
+  #    checkout above succeeded). A non-fast-forward pull means the local
+  #    BASE_BRANCH is divergent from origin — a subsequent
+  #    "git branch --merged origin/BASE_BRANCH" would judge against a stale
+  #    ref, so we fail closed and skip the deletion + cleanup steps.
+  CURRENT=$(git branch --show-current)
+  if [ "$RESET_OK" = "true" ] && [ "$CURRENT" = "$BASE_BRANCH" ]; then
+    if ! git pull --ff-only origin "$BASE_BRANCH"; then
+      RESET_OK=false
+      echo ""
+      echo "WARN: 'git pull --ff-only origin $BASE_BRANCH' failed."
+      echo "      The local $BASE_BRANCH is divergent from origin. Skipping"
+      echo "      branch deletion and stale-branch cleanup to avoid acting"
+      echo "      on a stale reference. Resolve with:"
+      echo "        git status; git fetch origin $BASE_BRANCH"
+      echo "      then 'hero-skills:reset-branch' to finish."
+    fi
+  fi
+fi
+
+# 3. Remote head-branch cleanup — only when sync succeeded.
+if [ "$RESET_OK" = "true" ] && [ "$MERGED" = "true" ]; then
+  # Treat null/empty deleteBranchOnMerge as unknown and defer to HERO.md.
+  # Non-admins may not see this field.
   AUTO_DELETE=$(gh repo view --json deleteBranchOnMerge --jq '.deleteBranchOnMerge // empty' 2>/dev/null)
 
   HERO_AUTO_DELETE=$(awk -F': ' '/^- auto-delete-branches:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null \
@@ -388,13 +472,14 @@ else
   HERO_AUTO_DELETE=${HERO_AUTO_DELETE:-true}
 
   if [ "$AUTO_DELETE" = "true" ]; then
-    echo "GitHub will auto-delete $PR_BRANCH (repo deleteBranchOnMerge=true)."
+    # By the time we reach this branch the merge has already happened and
+    # GitHub has already deleted the remote ref. Past-tense, not future.
+    echo "GitHub auto-deleted $PR_BRANCH on merge (repo deleteBranchOnMerge=true)."
   elif [ "$HERO_AUTO_DELETE" != "true" ]; then
-    echo "Skipping branch cleanup (HERO.md auto-delete-branches=$HERO_AUTO_DELETE)."
+    echo "Skipping remote branch cleanup (HERO.md auto-delete-branches=$HERO_AUTO_DELETE)."
   else
-    # Remote delete. Capture status separately so we can distinguish
-    # 404/422 ("branch already gone — fine") from 401/403 ("permission
-    # denied — surface this, do not silently mask").
+    # Distinguish 404/422 ("already gone — fine") from 401/403 ("permission
+    # denied — surface, do not silently mask").
     DELETE_STATUS=$(gh api -X DELETE "/repos/$OWNER/$REPO/git/refs/heads/$PR_BRANCH" \
       -i 2>/dev/null | awk 'NR==1 {print $2; exit}')
     case "$DELETE_STATUS" in
@@ -405,13 +490,13 @@ else
     esac
   fi
 
-  # Local cleanup — only if we are not currently on the deleted branch.
+  # 4. Local head-branch cleanup. We're on BASE_BRANCH now; -d (not -D) so
+  #    git refuses on unmerged history.
   CURRENT=$(git branch --show-current)
   if [ "$CURRENT" = "$PR_BRANCH" ]; then
-    echo "You are on $PR_BRANCH. Switch off it first (e.g. git checkout $BASE_BRANCH) before deleting locally."
+    # Should not happen — checkout above handled it. Skip defensively.
+    echo "Still on $PR_BRANCH after checkout attempt. Skipping local delete."
   elif git show-ref --verify --quiet "refs/heads/$PR_BRANCH"; then
-    # -d (not -D) so git refuses if the branch is unmerged locally — this
-    # protects the user from data loss in odd states.
     LOCAL_ERR=$(git branch -d "$PR_BRANCH" 2>&1 1>/dev/null) || true
     if [ -z "$LOCAL_ERR" ]; then
       echo "Deleted local branch: $PR_BRANCH"
@@ -422,9 +507,43 @@ else
     fi
   fi
 
-  git fetch --prune origin >/dev/null 2>&1 || true
+  # 5. Offer to clean up other merged-but-stale local branches. Distinguish
+  #    "no stale branches" from "cannot check" — a missing
+  #    refs/remotes/origin/$BASE_BRANCH means git branch --merged returns
+  #    nothing, which would silently look identical to "all clean".
+  if ! git show-ref --verify --quiet "refs/remotes/origin/$BASE_BRANCH"; then
+    echo ""
+    echo "Skipping stale-branch cleanup: refs/remotes/origin/$BASE_BRANCH is"
+    echo "missing locally. Run 'git fetch origin' and re-check yourself."
+  elif ! git fetch --prune origin >/dev/null 2>&1; then
+    echo ""
+    echo "Skipping stale-branch cleanup: 'git fetch --prune origin' failed."
+    echo "Resolve manually before deleting any branches."
+  else
+    STALE=$(git branch --merged "origin/$BASE_BRANCH" \
+      | grep -vE '^\*' \
+      | grep -vE "^[[:space:]]*${BASE_BRANCH}$" \
+      | sed 's/^[[:space:]]*//' \
+      | grep -v '^$' \
+      | grep -v "^$PR_BRANCH$" || true)
+
+    if [ -n "$STALE" ]; then
+      echo ""
+      echo "Other local branches fully merged into $BASE_BRANCH (candidates for cleanup):"
+      echo "$STALE" | sed 's/^/  - /'
+      echo ""
+      echo "Delete them now? [y/N]"
+    fi
+  fi
 fi
+
+# 6. Tidy up the merge-error tempfile from Step 7a regardless of success.
+rm -f merge_err.log
 ```
+
+If the user confirms the cleanup prompt above, run `git branch -d BRANCH_NAME` for each listed branch. Do NOT use `-D` — refuse to force-delete.
+
+After the cleanup, suggest (do not auto-execute) running `/clear` to start the next task on a fresh conversation context. The orchestrating skill (e.g. `hero-skills:one-shot`) may want to print its own summary first, so do not clobber the conversation here.
 
 #### Step 7c: REQUEST_CHANGES Path — Surface and Offer Next Steps
 
@@ -457,21 +576,35 @@ Suggest the most likely fixes (missing `ANTHROPIC_API_KEY`, GitHub token permiss
 
 ### Step 8: Summary
 
+Render the Pipeline DAG line **conditionally on the verdict and whether the user merged**. Use the marker semantics from `PIPELINES.md`:
+
+- APPROVE + merged + reset succeeded → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✓) reset`
+- APPROVE + merged + reset partial (RESET_OK=false) → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✗) reset`
+- APPROVE + user declined merge → `(✓) gates → (✓) trigger → (✓) verdict → (✗) merge → ( ) reset` with `Stopped: user declined merge`
+- REQUEST_CHANGES → `(✓) gates → (✓) trigger → (✓) verdict → (✗) merge → ( ) reset` with `Stopped: REQUEST_CHANGES`
+- WORKFLOW_FAILED → `(✓) gates → (✓) trigger → (✗) verdict → ( ) merge → ( ) reset` with `Stopped: WORKFLOW_FAILED`
+
 ```
 Ship Summary
 =========================
 PR:        #PR_NUMBER - PR_TITLE
 Branch:    PR_BRANCH -> BASE_BRANCH
 
+Pipeline:  (CONDITIONAL_DAG_LINE_FROM_ABOVE)
+
 Verdict:   APPROVE | REQUEST_CHANGES | WORKFLOW_FAILED
 Run:       RUN_URL
 
 Action taken:
-  - Merged with MERGE_METHOD (sha SHORT_SHA)    # APPROVE + user said yes
-  - Branch cleanup: deleted remote+local | GitHub auto-delete | skipped (still on branch)
-  - Left for manual merge                       # APPROVE + user said no
-  - Suggested hero-skills:respond-to-pr               # REQUEST_CHANGES
-  - Stopped, action failure surfaced            # WORKFLOW_FAILED
+  - Merged with MERGE_METHOD (sha SHORT_SHA)            # APPROVE + user said yes
+  - Reset: switched to BASE_BRANCH, pulled, deleted PR_BRANCH (remote+local)
+  - Stale-branch cleanup: deleted N | offered N | none found | skipped (sync failed)
+  - Left for manual merge                                # APPROVE + user said no
+  - Suggested hero-skills:respond-to-pr                  # REQUEST_CHANGES
+  - Stopped, action failure surfaced                     # WORKFLOW_FAILED
+
+Next: hero-skills:plan-work to start the next task — or `/clear` first if you
+want a fresh context.
 ```
 
 ## Notes
