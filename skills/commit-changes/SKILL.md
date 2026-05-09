@@ -23,8 +23,8 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 # four daily-flow copies (commit-changes/push-pr/plan-work/test-changes)
 # in sync with each other; the standalone script can carry a longer pattern
 # list. The :(glob)**/ pathspecs catch monorepo subprojects.
-HERO_TIME=$(git log -1 --format=%ct -- HERO.md 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
-CONFIG_TIME=$(git log -1 --format=%ct -- \
+HERO_TIME=$(git -C "$ROOT" log -1 --format=%ct -- HERO.md 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
+CONFIG_TIME=$(git -C "$ROOT" log -1 --format=%ct -- \
   pyproject.toml ':(glob)**/pyproject.toml' \
   package.json ':(glob)**/package.json' \
   go.mod ':(glob)**/go.mod' \
