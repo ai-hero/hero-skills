@@ -59,10 +59,20 @@ hero-skills:push-pr          # opens a DRAFT PR
 hero-skills:review-pr        # runs all review agents in parallel, fixes findings, asks to mark ready
 
 # 4. Once reviewers sign off, ship it
-hero-skills:ship-pr          # @auto-approves only if reviewed + all threads resolved, then offers to merge
+hero-skills:ship-pr          # @auto-approves only if reviewed + all threads resolved, then merges and resets your local branch
 ```
 
 That's it. Each command reads your `HERO.md` config and adapts to your stack automatically.
+
+### Or: one-shot the whole thing
+
+For genuinely small, low-risk PRs:
+
+```
+hero-skills:one-shot PROJ-123
+```
+
+This chains all eight steps end-to-end — `plan → implement → test → commit → push-draft → self-review → respond → ship` — with explicit user gates at plan-approval, mark-ready, and merge. See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
 ## Commands
 
@@ -91,7 +101,14 @@ That's it. Each command reads your `HERO.md` config and adapts to your stack aut
 |---------|-------------|
 | `hero-skills:review-pr` | Review a PR: your draft → runs all agents in parallel, applies fixes, asks before marking ready. Others' PR → inline comments only. |
 | `hero-skills:respond-to-pr` | Fix PR review comments, resolve threads, optionally loop with external review agent |
-| `hero-skills:ship-pr` | Trigger gated `@auto-approve`, wait for the verdict, and offer to merge if it passes |
+| `hero-skills:ship-pr` | Trigger gated `@auto-approve`, wait for the verdict, merge if it passes, and reset to the default branch |
+
+### Pipelines (orchestrators)
+
+| Command | What it does |
+|---------|-------------|
+| `hero-skills:one-shot` | Drives a small task end-to-end: plan → implement → test → commit → push-draft → self-review → respond → ship. Explicit user gates at each destructive step. |
+| `hero-skills:create-project` | Scaffolds a new project, then chains into setup-dev → init-hero → first-commit. |
 
 ### Operations
 
@@ -112,7 +129,7 @@ That's it. Each command reads your `HERO.md` config and adapts to your stack aut
 
 Every skill reads `HERO.md` from your repo root. It declares your stack so skills don't have to guess. **HERO.md is committed to the repo** — it's team-shared, so every developer and every skill works from the same config.
 
-To keep it in sync automatically, wire `hero-skills:init-hero --update` into your pre-commit hooks. A fast bash gate script checks staged files first — most commits skip Claude entirely and finish in milliseconds. Only when you change dependencies, CI config, or project structure does it invoke Claude to sync HERO.md.
+When project config drifts (new deps, CI changes, switched task runner), skills detect the staleness and remind you to run `hero-skills:init-hero --update` to refresh. There is no auto-pre-commit hook for this — it was too slow. Run the refresh on demand.
 
 Here's what a minimal config looks like:
 

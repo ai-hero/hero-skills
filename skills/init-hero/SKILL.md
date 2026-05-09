@@ -10,6 +10,29 @@ disable-model-invocation: true
 
 Deeply investigate the repository, auto-detect project settings, then confirm findings with the user through smart, evidence-based questions. Creates or updates `HERO.md` at the repo root.
 
+## Pipeline DAG
+
+This skill owns Pipeline 3 from `PIPELINES.md`:
+
+```
+investigate → confirm → write → commit
+```
+
+Print the DAG line at the start of each step. Substep groups in this skill map to pipeline nodes as:
+
+- Step 3 (Deep Investigation) → `investigate`
+- Step 4 (Synthesize Findings into Smart Questions) → `confirm`
+- Steps 5, 6, and 6a (write HERO.md, validate with the user, optionally install auto-approve workflow) → `write`
+- Step 7 (Commit HERO.md) → `commit`
+
+Format:
+
+```
+[N/4] (✓) investigate → (▶) confirm → ( ) write → ( ) commit
+
+Now running: confirm
+```
+
 ## Arguments
 
 - `$ARGUMENTS`:
@@ -37,7 +60,7 @@ Each skill needs specific information to work well. This skill figures out what'
 | `hero-skills:setup-dev` | Required tools, recommended tools, MCP servers |
 | `hero-skills:respond-to-pr` | Code Review Agent (agent, trigger, poll-method, bot-username) |
 | `hero-skills:ship-pr` | CI/CD (auto-approve workflow installed on default branch), Repository (default branch) |
-| `hero-skills:init-hero --update` | All sections — keeps HERO.md in sync via pre-commit |
+| `hero-skills:init-hero --update` | All sections — re-investigates and refreshes HERO.md on demand |
 | `hero-skills:audit-plugin` | (internal) Plugin structure validation |
 
 ## Instructions
@@ -551,7 +574,8 @@ Based on your investigation, present findings grouped by **what the hero skills 
 
 - Coding agent (Claude Code, Cursor, Windsurf, etc.)
 - Whether hooks/pre-commit integration is possible
-- Whether to set up `hero-skills:init-hero --update` as a pre-commit hook to keep HERO.md in sync
+
+Do NOT offer to install a pre-commit hook for `hero-skills:init-hero --update`. Skills surface a stale-HERO.md hint on demand instead — see `scripts/check-hero-staleness.sh`.
 
 #### Group 1: "For committing and pushing code" (`hero-skills:commit-changes`, `hero-skills:push-pr`, `hero-skills:ship-pr`)
 
@@ -721,10 +745,10 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - agents: AGENT_LIST # list all if team uses multiple
 - hooks: true # or false — whether the agent supports pre-commit/hook integration
 - rules-file: CLAUDE.md # or .cursorrules, .windsurfrules, copilot-instructions.md, none
-- hero-init-update: true # or false — whether hero-skills:init-hero --update is wired into pre-commit
-<!-- If hero-init-update is enabled, the pre-commit hook runs
-     scripts/hero-update-precommit.sh, which invokes claude --model sonnet
-     to check and update HERO.md fields on every commit.
+<!-- HERO.md is refreshed on demand by `hero-skills:init-hero --update`.
+     Skills detect when HERO.md is stale (project config newer than HERO.md)
+     and prompt the user to run the refresh themselves. There is no
+     pre-commit hook for this — it was too slow.
 -->
 
 ## Code Review Agent
@@ -930,7 +954,7 @@ How your hero skills will use this:
   hero-skills:scan-vulns    → scan pyproject.toml, check ghcr.io registry
   hero-skills:document-arch → single repo, Python + FastAPI, k8s deployment
   hero-skills:setup-dev     → require node, uv, gh, docker; recommend pre-commit, linear CLI
-  hero-skills:init-hero --update → sync HERO.md via claude -p "hero-skills:init-hero --update" in pre-commit
+  hero-skills:init-hero --update → re-investigate and refresh HERO.md on demand (run when project config changes)
 
 Does this look right? [Y/n]
 ```

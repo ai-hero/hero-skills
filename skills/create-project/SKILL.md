@@ -10,6 +10,24 @@ disable-model-invocation: true
 
 Scaffold a new project, either standalone or as a subproject in an existing repo.
 
+## Pipeline DAG
+
+This skill owns Pipeline 1 (init-project) from `PIPELINES.md`:
+
+```
+scaffold → setup-dev → init-hero → first-commit
+```
+
+Print the DAG line at the start of each step. Format:
+
+```
+[N/4] (✓) scaffold → (▶) setup-dev → ( ) init-hero → ( ) first-commit
+
+Now running: setup-dev
+```
+
+This skill drives the **scaffold** step and then chains forward by suggesting (or invoking) `hero-skills:setup-dev`, then `hero-skills:init-hero`, and finally a `git commit` of the scaffold + HERO.md. Each chained skill will pick up its own internal DAG when relevant.
+
 ## Arguments
 
 - `$ARGUMENTS` — Project name (required) and optional description
@@ -191,7 +209,44 @@ EOF
 )"
 ```
 
-### Step 7: Summary
+### Step 7: Chain to setup-dev → init-hero → first-commit
+
+The init-project pipeline does not stop at scaffolding. After Step 6, render the DAG:
+
+```
+[2/4] (✓) scaffold → (▶) setup-dev → ( ) init-hero → ( ) first-commit
+
+Now running: setup-dev
+```
+
+Then run `hero-skills:setup-dev` to install required CLIs and authenticate. After that completes, render:
+
+```
+[3/4] (✓) scaffold → (✓) setup-dev → (▶) init-hero → ( ) first-commit
+
+Now running: init-hero
+```
+
+Run `hero-skills:init-hero` to investigate the freshly scaffolded project and write `HERO.md`. (Pipeline 3 runs as a nested DAG inside this step.)
+
+Finally render:
+
+```
+[4/4] (✓) scaffold → (✓) setup-dev → (✓) init-hero → (▶) first-commit
+
+Now running: first-commit
+```
+
+If the repo was initialized standalone in Step 6 with an initial commit, the `first-commit` step folds HERO.md and CLAUDE.md (written by init-hero) into a follow-up commit:
+
+```bash
+git add HERO.md CLAUDE.md
+git commit -m "chore: add HERO.md and CLAUDE.md from hero-skills:init-hero"
+```
+
+If the project was added to an existing repo, defer the commit to `hero-skills:commit-changes` (the user's normal flow).
+
+### Step 8: Summary
 
 ```
 Create Project Summary
@@ -200,15 +255,19 @@ Project: PROJECT_NAME
 Type: [Python Backend | Full-stack | ...]
 Location: PATH
 
+Pipeline:
+  (✓) scaffold → (✓) setup-dev → (✓) init-hero → (✓) first-commit
+
 Created:
   - Project structure
   - CLAUDE.md
+  - HERO.md
   - [Git repo initialized]
 
 Next steps:
   cd PROJECT_NAME
-  hero-skills:commit-changes   # Set up pre-commit hooks
-  hero-skills:test-changes     # Verify it runs
+  hero-skills:plan-work   # First task — kicks off the one-shot pipeline
+  hero-skills:test-changes  # Verify it runs
 ```
 
 ## Notes
