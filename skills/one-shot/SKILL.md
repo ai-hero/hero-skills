@@ -53,6 +53,15 @@ session. Before deciding to advance to the next step, you MUST:
 3. If the child skill stopped, render the pipeline DAG with `(✗)` on the
    failed node and a `Stopped: REASON` line per `PIPELINES.md`, then halt.
    Never auto-advance past a `(✗)`.
+4. **DAG state preservation.** Every "Render DAG with X active" instruction
+   below means: render the line with steps before `RESUME_STEP` marked `(✓)`
+   only when `RESUME_STEP` was set in Step 0.5 to a value that genuinely
+   completed those steps in a prior session. For a fresh-start invocation
+   (`RESUME_STEP=1`), prior-step markers are absent. For a manual override
+   chosen at the Step 0.5 prompt, prior-step markers are `( )`, not `(✓)` —
+   the override path makes no claim that earlier work happened. The current
+   step is `(▶)`; later steps are `( )` until they run; skipped steps are
+   `(–)`; failed/declined steps are `(✗)`.
 
 Apply this contract at every Step 1–9 transition below (or every transition from `RESUME_STEP` onward when resuming).
 
@@ -90,41 +99,85 @@ DEFAULT_BRANCH=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$ROOT/HERO.
 DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
 
 CURRENT_BRANCH=$(git branch --show-current)
-git fetch origin "$DEFAULT_BRANCH" >/dev/null 2>&1 || true
+
+# A failed fetch silently makes AHEAD/UPSTREAM judgments wrong (offline,
+# auth expired, network blip). Surface the failure rather than fall through.
+FETCH_OK=true
+if ! git fetch origin "$DEFAULT_BRANCH" >/dev/null 2>&1; then
+  FETCH_OK=false
+  echo "WARN: 'git fetch origin $DEFAULT_BRANCH' failed — origin/$DEFAULT_BRANCH may be stale."
+  echo "      Resume detection will refuse rows that depend on AHEAD or remote PR state."
+  echo "      Resolve the network/auth issue and re-run, or pick a step manually."
+fi
 
 UNCOMMITTED=$(git status --porcelain | wc -l | tr -d ' ')
-AHEAD=$(git rev-list --count "origin/$DEFAULT_BRANCH..HEAD" 2>/dev/null || echo 0)
+AHEAD=$(git rev-list --count "origin/$DEFAULT_BRANCH..HEAD" 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
 
-PR_JSON=$(gh pr list --head "$CURRENT_BRANCH" \
-  --json number,url,isDraft,reviewDecision,state \
-  --jq '.[0]' 2>/dev/null)
-PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number // empty')
-PR_STATE=$(echo "$PR_JSON" | jq -r '.state // empty')
-PR_IS_DRAFT=$(echo "$PR_JSON" | jq -r '.isDraft // empty')
-PR_REVIEW=$(echo "$PR_JSON" | jq -r '.reviewDecision // empty')
+# UNPUSHED counts commits past the branch's *upstream* (the PR's head ref),
+# not past origin/$DEFAULT_BRANCH. Distinct from AHEAD: a user who pushed
+# once and then made local follow-up commits has AHEAD>0 AND UNPUSHED>0;
+# we must push those follow-ups before any review/respond/ship step.
+UNPUSHED=$(git rev-list --count '@{u}..HEAD' 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
 
-# Check for the durable hero-self-review marker so we know review-pr ran.
+# gh pr list silently returns "[]" if no PR exists OR if gh fails — distinguish
+# the two by checking the exit code separately so empty PR_* values don't
+# masquerade as "no PR" when the real cause is a transient API failure.
+GH_OK=true
+if ! PR_LIST=$(gh pr list --head "$CURRENT_BRANCH" \
+  --json number,url,isDraft,reviewDecision,state 2>/dev/null); then
+  GH_OK=false
+  echo "WARN: 'gh pr list' failed — cannot read PR state for resume detection."
+  PR_LIST="[]"
+fi
+PR_JSON=$(printf '%s' "$PR_LIST" | jq -r '.[0] // empty')
+PR_NUMBER=$(printf '%s' "$PR_JSON" | jq -r '.number // empty')
+PR_STATE=$(printf '%s' "$PR_JSON" | jq -r '.state // empty')           # OPEN | CLOSED | MERGED | ""
+PR_IS_DRAFT=$(printf '%s' "$PR_JSON" | jq -r '.isDraft // empty')      # "true" | "false" | ""
+PR_REVIEW=$(printf '%s' "$PR_JSON" | jq -r '.reviewDecision // empty') # APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED | ""
+
+PR_EXISTS=false
+[ -n "$PR_NUMBER" ] && PR_EXISTS=true
+
+# Check for the durable Hero Self-Review marker so we know review-pr ran.
+# Surface API failures rather than fall through to "0 → re-review".
 SELF_REVIEW_DONE=0
-if [ -n "$PR_NUMBER" ]; then
-  SELF_REVIEW_DONE=$(gh api "/repos/{owner}/{repo}/issues/$PR_NUMBER/comments" \
-    --jq '[.[] | select(.body | test("Hero Self-Review"; "i"))] | length' 2>/dev/null || echo 0)
+BOT_REPLIED=false
+if [ "$PR_EXISTS" = "true" ]; then
+  if ! COMMENTS=$(gh api "/repos/{owner}/{repo}/issues/$PR_NUMBER/comments" 2>/dev/null); then
+    echo "note: gh api comments fetch failed; treating SELF_REVIEW_DONE/BOT_REPLIED as unknown."
+  else
+    SELF_REVIEW_DONE=$(printf '%s' "$COMMENTS" \
+      | jq '[.[] | select(.body | test("Hero Self-Review"; "i"))] | length')
+    BOT_USER=$(awk -F': ' '/^- bot-username:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null \
+      | tr -d '[:space:]"'"'"'')
+    if [ -n "$BOT_USER" ]; then
+      BOT_COUNT=$(printf '%s' "$COMMENTS" \
+        | jq "[.[] | select(.user.login == \"$BOT_USER\")] | length")
+      [ "${BOT_COUNT:-0}" -gt 0 ] && BOT_REPLIED=true
+    fi
+  fi
 fi
 ```
 
-Use this decision tree to pick the **resume step** (1–9). Each row is the first that matches top-to-bottom:
+Use the decision tree below to pick the **resume step** (1–9). Each row is the first that matches top-to-bottom; rows below the line require `PR_EXISTS=true` so empty PR_* values can't accidentally match.
 
 | Condition | Resume at | Reason |
 |-----------|-----------|--------|
-| PR is merged or closed | exit | nothing to do |
-| `CURRENT_BRANCH == DEFAULT_BRANCH` and `UNCOMMITTED == 0` | Step 1 (plan) | fresh start |
+| `FETCH_OK=false` OR `GH_OK=false` | force user override | resume rows depend on remote state — refuse to infer |
+| `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0` | exit | nothing to do |
+| `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED > 0` | exit with hint | merged/closed PR but local edits exist — branch off `DEFAULT_BRANCH` for follow-up work |
+| `CURRENT_BRANCH == DEFAULT_BRANCH` and `UNCOMMITTED == 0` and `AHEAD == 0` | Step 1 (plan) | fresh start |
+| `CURRENT_BRANCH == DEFAULT_BRANCH` and `AHEAD > 0` | exit with hint | unpushed commits on the default branch are unusual — push them or branch off explicitly before running one-shot |
 | `CURRENT_BRANCH == DEFAULT_BRANCH` and `UNCOMMITTED > 0` | exit with hint | one-shot needs a feature branch — tell user to run `hero-skills:plan-work` to branch + plan |
-| Feature branch, `UNCOMMITTED > 0` | Step 3 (test) | mid-implement; re-run tests + e2e on the latest diff before committing |
-| Feature branch, `UNCOMMITTED == 0`, `AHEAD > 0`, no PR | Step 6 (push-draft) | committed but not pushed |
-| Feature branch, draft PR, `SELF_REVIEW_DONE == 0` | Step 7 (self-review) | PR up but never reviewed |
-| Feature branch, draft PR, `SELF_REVIEW_DONE >= 1` | Step 7 (self-review, already-ran branch) | re-review or mark ready — `review-pr` handles the "already self-reviewed once" case itself |
-| Feature branch, ready-for-review PR, `PR_REVIEW != APPROVED`, no bot reply yet | Step 8 (respond) | wait for bot, then handle |
-| Feature branch, ready-for-review PR, `PR_REVIEW == APPROVED` | Step 9 (ship) | go straight to auto-approve + merge |
-| Feature branch, `UNCOMMITTED == 0`, `AHEAD == 0`, no PR | exit with hint | branch has no work — suggest fresh `hero-skills:plan-work` |
+| Feature branch, `UNCOMMITTED > 0` | Step 3 (test) | mid-implement; re-run test + e2e on the latest diff before committing. If a PR is already open (any state), Step 6 will push the new commit to it — confirm with user before advancing if `PR_EXISTS=true` and the PR is non-draft. |
+| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED > 0` | Step 6 (push-draft) | committed but not pushed (covers both the "no PR yet" case and the "pushed-once + local follow-up" case). After push-draft updates the PR, advance to Step 7 normally. |
+| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "true"`, `SELF_REVIEW_DONE == 0` | Step 7 (self-review) | PR up but never reviewed |
+| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "true"`, `SELF_REVIEW_DONE >= 1` | Step 7 (self-review, already-ran branch) | re-review or mark ready — `review-pr` handles the "already self-reviewed once" case itself |
+| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW != APPROVED`, `BOT_REPLIED=false` | Step 8 (respond — bot wait) | ready PR, no bot reply yet — Step 8's poll will wait |
+| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW != APPROVED`, `BOT_REPLIED=true` | Step 8 (respond) | bot has commented, run respond-to-pr |
+| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW == APPROVED` | Step 9 (ship) | go straight to auto-approve + merge |
+| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=false`, `AHEAD == 0` | exit with hint | branch has no work — suggest fresh `hero-skills:plan-work` |
+| any other combination | force user override | unrouted state — show the detected variables and let the user pick a step manually |
 
 When `$ARGUMENTS` is non-empty AND we're on a non-default branch, ask once: "Resume the current branch, or branch off `DEFAULT_BRANCH` for the new ticket?" Do not assume.
 
@@ -155,12 +208,23 @@ Stop conditions (any of these aborts and hands control back to you):
   - You decline to merge
 
 Pick:
-  1. Continue from Step 7 (recommended)
-  2. Override — pick a different step  (then list the valid steps the user can choose)
+  1. Continue from Step INFERRED_STEP (recommended)
+  2. Override — pick a different step:
+       1=plan  2=implement  3=test  4=e2e  5=commit
+       6=push-draft  7=self-review  8=respond  9=ship
   3. Cancel
 ```
 
-Wait for explicit confirmation. On `1`, set `RESUME_STEP=7` and jump there. On `2`, accept any step number 1-9, render the DAG with that step `(▶)` and the rest `( )` (do not auto-mark prior steps `(✓)` unless the detected state actually supports it), then start. On `3`, exit cleanly.
+Wait for explicit confirmation. On `1`, set `RESUME_STEP` to the inferred value and jump there. On `2`, prompt for the step number and **validate it against 1-9 explicitly**:
+
+```bash
+case "$USER_PICK" in
+  1|2|3|4|5|6|7|8|9) RESUME_STEP=$USER_PICK ;;
+  *) echo "Invalid step '$USER_PICK'. Pick a number 1-9. Aborting."; exit 1 ;;
+esac
+```
+
+Then render the DAG with `RESUME_STEP` as `(▶)` and the rest `( )` (do not auto-mark prior steps `(✓)` unless the detected state actually supports it), and start. On `3`, exit cleanly.
 
 When jumping into the middle of the pipeline, **render the DAG with steps before `RESUME_STEP` marked `(✓)`** so the user keeps the visual model. The Cross-step contract still applies for every step from `RESUME_STEP` onward — read each child skill's reported state before advancing.
 
@@ -213,6 +277,8 @@ If tests fail with a quick, mechanical fix (lint, typo, import order), apply the
 Render DAG with `e2e` active. Run `hero-skills:smoke-ui`. The skill itself decides whether to drive the browser: if HERO.md declares no UI project (no `framework: next | vite | remix | …`), it exits immediately and one-shot must render `(–) e2e` per `PIPELINES.md` semantics and continue to Step 5.
 
 If `smoke-ui` flags a regression — a 4xx/5xx on a changed route, an uncaught console error, a `wait_for` timeout — render `(✗) e2e` plus `Stopped: smoke-ui regression on ROUTE` and hand back. Do not advance to commit; we never want a known UI regression in git history if we can help it.
+
+> **Resume caveat:** when one-shot resumes at Step 5 or later (the test+e2e steps were already done in a prior session), the smoke result reflects the diff at *that earlier* HEAD, not the current state. Step 0.5's table forces re-entry at Step 3 whenever `UNCOMMITTED > 0`, which covers mid-implement diffs. But a resume at Step 6 (push-draft, after a follow-up commit landed elsewhere) does *not* re-smoke. If you want a fresh smoke before pushing, override to Step 4 at the Step 0.5 prompt.
 
 The smoke is intentionally narrow (≤5 routes, no large forms). For deeper coverage, run a real E2E suite via `hero-skills:test-changes` instead.
 

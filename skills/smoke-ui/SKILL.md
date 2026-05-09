@@ -65,24 +65,58 @@ If `HERO.md` is missing, suggest `hero-skills:init-hero` and exit. This skill ne
 
 ### Step 1: Detect UI Project (`detect`)
 
-Parse the `## Projects` section of HERO.md. A "UI project" is any project whose `framework` is in this set:
+Parse the `## Projects` section of HERO.md. UI detection is **heuristic, not closed-enum** — `init-hero` does not constrain the `framework` value, so we treat the list below as a hint and fall back to asking the user when nothing matches.
+
+**Known-UI frameworks (auto-detected as UI):**
 
 ```
-next nuxt remix astro vite svelte sveltekit solid solid-start qwik gatsby angular create-react-app cra
+next nextjs nuxt remix astro vite svelte sveltekit solid solid-start qwik
+gatsby angular react cra create-react-app
 ```
 
-If none of the declared projects matches the UI set:
+**Known-non-UI frameworks (auto-detected as backend, skip silently):**
 
 ```
-(–) e2e: no UI project in HERO.md — skipping smoke-ui.
-This is expected on backend-only PRs.
+fastapi flask django starlette express nestjs hono fiber gin echo actix axum
+rails sinatra laravel
 ```
 
-Exit 0 with that message. Callers (one-shot in particular) should treat the skip as `(–)` in the DAG, not `(✗)`.
+**Decision:**
+
+1. If any project's `framework` is in the known-UI set → that's the UI project. Continue.
+2. If every project's `framework` is in the known-non-UI set OR there are no projects with a `framework` field → backend-only PR. Print and exit 0:
+
+   ```
+   (–) e2e: no UI project in HERO.md — skipping smoke-ui.
+   This is expected on backend-only PRs.
+   ```
+
+3. If a project's `framework` is in **neither** list (custom value, typo, or a UI framework not yet on the list), ask the user once:
+
+   ```
+   Project 'PROJECT_NAME' declares framework: FRAMEWORK_VALUE.
+   Treat as a UI project for smoke testing?
+     [y] Yes — drive the dev server with Playwright MCP
+     [n] No — skip with `(–) e2e` (recommended for non-UI frameworks)
+     [a] Add 'FRAMEWORK_VALUE' to the known-UI list in skills/smoke-ui/SKILL.md and continue (asks once per session, not durable)
+   ```
+
+   Default to `n` if the user answers ambiguously — silently smoking a backend project is worse than silently skipping a UI one (the latter shows up as a `(–)` the user can object to; the former wastes time and may produce false errors).
+
+Callers (one-shot in particular) should treat the skip as `(–)` in the DAG, not `(✗)`.
 
 If multiple UI projects exist, ask the user which one to smoke-test (or pass it explicitly via the project's path). One per run keeps the dev-server lifecycle simple.
 
-Record `UI_PORT`, `UI_DEV_COMMAND`, `UI_PATH` from the matched project.
+Record `UI_PORT`, `UI_DEV_COMMAND`, `UI_PATH` from the matched project. Validate that `UI_PATH` resolves under `$ROOT`:
+
+```bash
+if [ ! -d "$ROOT/$UI_PATH" ]; then
+  echo "ERROR: UI project path '$ROOT/$UI_PATH' does not exist."
+  echo "       Check the 'path:' field for this project in HERO.md, or run"
+  echo "       hero-skills:init-hero --update to re-detect."
+  exit 1
+fi
+```
 
 ### Step 2: Confirm Dev Server (`server`)
 
@@ -115,8 +149,14 @@ DEV_LOG=$(mktemp /tmp/hero-smoke-ui-XXXXXX.log)
 DEV_PID=$!
 echo "Started dev server (pid $DEV_PID, log $DEV_LOG)."
 
-# Wait up to 60s for the server to come up.
+# Wait up to 60s for the server to come up. Bail early if the spawned
+# process has already died (typo'd UI_DEV_COMMAND, missing dep, port in use).
 for i in $(seq 1 30); do
+  if ! kill -0 "$DEV_PID" 2>/dev/null; then
+    echo "Dev server process died before responding. Last 30 log lines:"
+    tail -30 "$DEV_LOG"
+    exit 1
+  fi
   if curl -sf -o /dev/null -m 2 "$DEV_URL"; then
     echo "Dev server is up after ${i}x2s."
     break
@@ -125,11 +165,43 @@ for i in $(seq 1 30); do
 done
 
 if ! curl -sf -o /dev/null -m 2 "$DEV_URL"; then
-  echo "Dev server did not come up within 60s. Last 30 log lines:"
-  tail -30 "$DEV_LOG"
+  # Server did not respond on $DEV_URL. Probe alternates: dev servers often
+  # bind 0.0.0.0 (devcontainers / CI runners) or 127.0.0.1 only, and IPv6
+  # localhost can resolve to an unreachable address. Surface that case
+  # rather than reporting "did not come up" when it actually did.
+  ALT_URL=""
+  for HOST in 127.0.0.1 0.0.0.0; do
+    if curl -sf -o /dev/null -m 2 "http://$HOST:$UI_PORT"; then
+      ALT_URL="http://$HOST:$UI_PORT"
+      break
+    fi
+  done
+  # Also grep the log for the framework's announced URL (Next, Vite, etc.
+  # all print "Local:" / "ready on" / "Listening on" with a URL).
+  LOG_URL=$(grep -Eom1 'https?://[a-zA-Z0-9.:-]+' "$DEV_LOG" 2>/dev/null || true)
+
+  if [ -n "$ALT_URL" ] || [ -n "$LOG_URL" ]; then
+    echo "Dev server is up but not on $DEV_URL."
+    [ -n "$ALT_URL" ] && echo "  Reachable at: $ALT_URL"
+    [ -n "$LOG_URL" ] && echo "  Server reports: $LOG_URL"
+    echo "  Update HERO.md 'port:' (or 'host:' if your config supports it)"
+    echo "  for project '$PROJECT_NAME' and re-run."
+  else
+    echo "Dev server did not come up within 60s. Last 30 log lines:"
+    tail -30 "$DEV_LOG"
+  fi
+
   echo ""
   echo "Cleaning up the process we started:"
   kill "$DEV_PID" 2>/dev/null || true
+  # Verify the kill worked — frameworks like `next dev` spawn worker
+  # processes; killing the parent can leave the port bound. Re-curl after
+  # a beat; if it still answers, surface the orphan so the user can clean up.
+  sleep 1
+  if curl -sf -o /dev/null -m 2 "$DEV_URL"; then
+    echo "WARN: stale process still bound to :$UI_PORT after kill."
+    echo "      Investigate: lsof -i :$UI_PORT"
+  fi
   exit 1
 fi
 ```
@@ -142,9 +214,11 @@ If `$ARGUMENTS` is non-empty, use those routes verbatim.
 
 Otherwise, derive from the diff. For each changed file under the UI project, map to its owning route(s):
 
-- Next.js App Router: `app/foo/bar/page.tsx` → `/foo/bar`; `app/(group)/x/page.tsx` → `/x`; route handlers (`route.ts`) excluded.
-- Next.js Pages Router: `pages/foo/bar.tsx` → `/foo/bar`; `pages/index.tsx` → `/`.
-- Vite + React Router / SvelteKit / Remix / etc.: walk the routing config (`routes.tsx`, `+page.svelte`, `routes/`) and emit the canonical paths.
+- Next.js App Router: `app/foo/bar/page.tsx` → `/foo/bar`; `app/(group)/x/page.tsx` → `/x` (route groups are URL-invisible); route handlers (`route.ts`) excluded.
+- Next.js dynamic / catch-all segments: `app/posts/[slug]/page.tsx`, `app/[...slug]/page.tsx`, `app/[[...slug]]/page.tsx` — there is no canonical URL for these. Ask the user once for a sample value (e.g., a real `slug` from the dev DB), or skip the route with `(–)` and a note. Do not invent values like `/posts/example` — those usually 404.
+- Next.js parallel and intercepted routes: `app/@modal/...`, `app/(.)photo/...`, `app/(..)settings/...` — exclude entirely. They have no free-standing URL; navigating to a literal `@modal` returns 404 and pollutes the smoke result.
+- Next.js Pages Router: `pages/foo/bar.tsx` → `/foo/bar`; `pages/index.tsx` → `/`; `pages/[slug].tsx` → ask for a sample value or skip.
+- Vite + React Router / SvelteKit / Remix / etc.: walk the routing config (`routes.tsx`, `+page.svelte`, `routes/`) and emit the canonical paths. Apply the same dynamic-segment rule (ask for a sample or skip).
 - Shared components (`components/Button.tsx`, `lib/`, `hooks/`): no direct route. Pick the **landing page** (`/`) plus the **most-changed page** as a fallback so we exercise the rendering path at all.
 
 If the diff touches no UI files at all (despite the project being a UI project — e.g., the change was server actions only), exercise just the landing page `/` so we still detect a hard regression like a build break.
@@ -162,6 +236,8 @@ Smoke routes (N):
 
 ### Step 4: Drive the Browser (`drive`)
 
+Mark `BROWSER_OPENED=true` after the first successful `browser_navigate` so Step 5 knows whether to call `browser_close`.
+
 For each route in order, run the same recipe via Playwright MCP:
 
 1. `mcp__playwright__browser_navigate` to `$DEV_URL$ROUTE`. Set `expectedStatus` to 200-399 if the tool supports it; otherwise check status from a follow-up `browser_network_requests` call.
@@ -175,13 +251,47 @@ For routes that involve a form change (detected by reading the diff: `<form>` / 
 1. `mcp__playwright__browser_fill_form` with placeholder-but-plausible values for the visible inputs (keep it under 5 inputs — refuse if the form is huge; that's a real E2E test, not a smoke test).
 2. Click the submit control, `browser_wait_for` the success state, `browser_console_messages` again.
 
+#### Console noise allowlist
+
+Dev-mode frameworks emit benign warnings on every page load. The allowlist below is **the only set of console messages this skill ignores**; everything else (including any console message of `type=error`) is treated as a failure. Do not invent additional patterns at runtime.
+
+```
+Next.js / React (development mode):
+  - "[Fast Refresh]"
+  - "[HMR]"
+  - "Download the React DevTools"
+  - "Warning: ReactDOM.render is no longer supported"
+  - any message whose body starts with "Warning:" AND contains "in development"
+
+Vite:
+  - "[vite] connecting…"
+  - "[vite] connected."
+  - "[vite] hot updated:"
+
+SvelteKit / Svelte:
+  - "[vite] connecting…"  (same as Vite — Kit uses Vite under the hood)
+
+General:
+  - any message whose URL is a `chrome-extension://` source (browser extensions
+    emitting in the page context — not the app's fault).
+```
+
+If a future framework has its own benign-warnings set, the user must update this list explicitly via a follow-up edit to this skill — the smoke test does not silently expand its filter set.
+
 #### Failure rules
 
 A route fails the smoke if any of:
 
 - The HTTP status of the document request is 4xx or 5xx.
-- An entry in `browser_console_messages` has type `error` (skip the dev-only Next.js / Vite hydration warnings — match against the framework's known noise list before promoting).
-- An uncaught exception appears in the dev server log (`grep -E 'Error:|TypeError:|ReferenceError:' "$DEV_LOG"`).
+- An entry in `browser_console_messages` has `type=error` AND its body does NOT match an allowlist entry from the section above. Match the allowlist conservatively: if you are not sure whether a message is benign, treat it as a failure and let the user decide.
+- An uncaught exception appears in the dev server log (covers a broad set of common failures and ignores nothing):
+
+  ```bash
+  grep -Ei '\b(Error|Warning|Exception|Traceback|Unhandled[A-Z][a-zA-Z]*Rejection):' "$DEV_LOG"
+  grep -E '\bat [A-Za-z_$][A-Za-z0-9_$.]* \(.*:[0-9]+:[0-9]+\)' "$DEV_LOG"   # JS stack frames
+  grep -E '\bModule(Not)?Found|SyntaxError|RangeError|TypeError|ReferenceError' "$DEV_LOG"
+  ```
+
 - `browser_wait_for` times out — the page never became interactive.
 - A form submission's `wait_for` fails — the success state never rendered.
 
@@ -189,11 +299,13 @@ On any failure: stop driving further routes, surface the failing route + the con
 
 ### Step 5: Cleanup
 
-Always (success or failure):
-
 ```bash
-# Close the browser session.
-mcp__playwright__browser_close
+# Close the browser session — only if Step 4 actually opened one. Skipping
+# this on early-exit paths (no UI project, server failed to come up) avoids
+# noisy "no session to close" errors from the MCP server.
+if [ "${BROWSER_OPENED:-false}" = "true" ]; then
+  mcp__playwright__browser_close
+fi
 
 # If we started the dev server, leave it running by default — most users
 # want it for follow-up work. Offer to stop only if the user explicitly
