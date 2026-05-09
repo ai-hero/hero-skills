@@ -55,19 +55,24 @@ present from commit one onward.
 ### Pipeline 2: one-shot — ticket to merged PR in a single invocation
 
 ```
-plan → implement → test → commit → push-draft → self-review → respond → ship
+plan → implement → test → e2e → commit → push-draft → self-review → respond → ship
 ```
 
-Owner: `hero-skills:one-shot`. Eight steps:
+Owner: `hero-skills:one-shot`. Nine steps:
 
 1. `plan` — fetch ticket / parse description, produce a plan in Plan Mode (calls `plan-work` internals)
 2. `implement` — apply the plan as code edits
-3. `test` — run lint/typecheck/tests (`test-changes`)
-4. `commit` — conventional commit (`commit-changes`)
-5. `push-draft` — push and open a draft PR (`push-pr`)
-6. `self-review` — review the draft, apply fixes, mark ready (`review-pr`)
-7. `respond` — answer Copilot/CodeRabbit/Greptile inline comments and resolve threads (`respond-to-pr`)
-8. `ship` — `@auto-approve`, await verdict, merge if green, then reset to default branch (`ship-pr`)
+3. `test` — run lint/typecheck/unit tests (`test-changes`)
+4. `e2e` — Playwright-MCP smoke test of the routes affected by the diff (`smoke-ui`). Skipped with `(–)` if HERO.md declares no UI project.
+5. `commit` — conventional commit (`commit-changes`)
+6. `push-draft` — push and open a draft PR (`push-pr`)
+7. `self-review` — review the draft, apply fixes, mark ready (`review-pr`)
+8. `respond` — answer Copilot/CodeRabbit/Greptile inline comments and resolve threads (`respond-to-pr`)
+9. `ship` — `@auto-approve`, await verdict, merge if green, then reset to default branch (`ship-pr`)
+
+The `e2e` node sits before `commit` so a UI regression aborts the pipeline before
+anything is written to git history. For backend-only PRs the node is skipped
+(rendered `(–)`), not failed.
 
 The user must explicitly approve at each gate that involves a destructive or
 shared-state change: marking the PR ready, posting `@auto-approve`, and

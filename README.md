@@ -72,7 +72,11 @@ For genuinely small, low-risk PRs:
 hero-skills:one-shot PROJ-123
 ```
 
-This chains all eight steps end-to-end — `plan → implement → test → commit → push-draft → self-review → respond → ship` — with explicit user gates at plan-approval, mark-ready, and merge. See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
+This chains all nine steps end-to-end — `plan → implement → test → e2e → commit → push-draft → self-review → respond → ship` — with explicit user gates at plan-approval, mark-ready, and merge. The `e2e` step uses Playwright MCP to smoke-test the routes affected by the diff and is skipped automatically on backend-only PRs.
+
+Re-running `hero-skills:one-shot` mid-flow is safe: it inspects git + the open PR for that branch, infers a resume point, and picks up where you left off rather than re-doing completed steps.
+
+See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
 ## Commands
 
@@ -107,8 +111,9 @@ This chains all eight steps end-to-end — `plan → implement → test → comm
 
 | Command | What it does |
 |---------|-------------|
-| `hero-skills:one-shot` | Drives a small task end-to-end: plan → implement → test → commit → push-draft → self-review → respond → ship. Explicit user gates at each destructive step. |
+| `hero-skills:one-shot` | Drives a small task end-to-end: plan → implement → test → e2e → commit → push-draft → self-review → respond → ship. Detects a resume point on re-invocation. Explicit user gates at each destructive step. |
 | `hero-skills:create-project` | Scaffolds a new project, then chains into setup-dev → init-hero → first-commit. |
+| `hero-skills:smoke-ui` | Playwright-MCP smoke test of the routes affected by the diff. Standalone or invoked as the `e2e` node of one-shot. Skips with `(–)` on backend-only PRs. |
 
 ### Operations
 
