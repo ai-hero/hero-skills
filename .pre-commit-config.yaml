@@ -3,6 +3,10 @@
 # =============================================================================
 # Tech stack: Markdown (SKILL.md files), Shell scripts, JSON, YAML
 # =============================================================================
+# Note: HERO.md is no longer auto-updated by a pre-commit hook (too slow).
+# Skills detect when HERO.md is stale and recommend running
+# `hero-skills:init-hero --update` to refresh it.
+# =============================================================================
 
 default_install_hook_types:
   - pre-commit
@@ -97,15 +101,6 @@ repos:
       - id: audit
         name: "Audit: check plugin quality"
         entry: ./scripts/hero-meta-precommit.sh
-        language: script
-        pass_filenames: false
-        always_run: true
-        stages: [pre-commit]
-        verbose: true
-
-      - id: init-update
-        name: "Init: update HERO.md"
-        entry: ./scripts/hero-update-precommit.sh
         language: script
         pass_filenames: false
         always_run: true

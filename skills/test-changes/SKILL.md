@@ -29,6 +29,15 @@ Verify an implementation works end to end. Runs static checks (lint, typecheck) 
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
+
+HERO_TIME=$(git log -1 --format=%ct -- HERO.md 2>/dev/null || echo 0)
+CONFIG_TIME=$(git log -1 --format=%ct -- \
+  pyproject.toml package.json go.mod Cargo.toml \
+  .github/workflows .pre-commit-config.yaml \
+  CLAUDE.md Makefile justfile Taskfile.yml 2>/dev/null || echo 0)
+if [ "${CONFIG_TIME:-0}" -gt "${HERO_TIME:-0}" ]; then
+  echo "note: HERO.md may be out of date — run hero-skills:init-hero --update to refresh."
+fi
 ```
 
 Read `HERO.md` if it exists. This skill uses:
@@ -36,7 +45,7 @@ Read `HERO.md` if it exists. This skill uses:
 - **Code Quality** → linters, formatters, type checkers (commands run during verification)
 - **Projects** → language, framework, install/test/dev commands, ports (skips auto-detection)
 
-If `HERO.md` is missing, suggest `hero-skills:init-hero` but proceed with auto-detection below.
+If `HERO.md` is missing, suggest `hero-skills:init-hero` but proceed with auto-detection below. If the stale-HERO hint fired, mention it once to the user but do not block.
 
 ### Step 1: Detect Project Structure
 

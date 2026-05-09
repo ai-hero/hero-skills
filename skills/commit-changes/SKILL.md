@@ -16,6 +16,17 @@ Reviews your changes, groups them into logical changesets, and creates clean con
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
+
+# Stale-HERO check: if project config was committed more recently than
+# HERO.md, surface a hint to refresh it.
+HERO_TIME=$(git log -1 --format=%ct -- HERO.md 2>/dev/null || echo 0)
+CONFIG_TIME=$(git log -1 --format=%ct -- \
+  pyproject.toml package.json go.mod Cargo.toml \
+  .github/workflows .pre-commit-config.yaml \
+  CLAUDE.md Makefile justfile Taskfile.yml 2>/dev/null || echo 0)
+if [ "${CONFIG_TIME:-0}" -gt "${HERO_TIME:-0}" ]; then
+  echo "note: HERO.md may be out of date — run hero-skills:init-hero --update to refresh."
+fi
 ```
 
 Read `HERO.md` if it exists. This skill uses:
@@ -24,7 +35,7 @@ Read `HERO.md` if it exists. This skill uses:
 - **Repository** → commit convention (conventional, angular, none)
 - **Project Management** → issue prefix for `Fixes:` / `Relates to:` trailers
 
-If `HERO.md` is missing, suggest `hero-skills:init-hero` but proceed with auto-detection.
+If `HERO.md` is missing, suggest `hero-skills:init-hero` but proceed with auto-detection. If the staleness hint fired, mention it once to the user but do not block — they can refresh later.
 
 ### Step 1: Verify Branch — Never Commit to Main
 
