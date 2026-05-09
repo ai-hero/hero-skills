@@ -117,7 +117,17 @@ AHEAD=$(git rev-list --count "origin/$DEFAULT_BRANCH..HEAD" 2>/dev/null | grep -
 # not past origin/$DEFAULT_BRANCH. Distinct from AHEAD: a user who pushed
 # once and then made local follow-up commits has AHEAD>0 AND UNPUSHED>0;
 # we must push those follow-ups before any review/respond/ship step.
-UNPUSHED=$(git rev-list --count '@{u}..HEAD' 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
+#
+# When no upstream is configured yet (common before the first push),
+# `git rev-list --count '@{u}..HEAD'` errors silently and would yield 0,
+# which would route the user past Step 6 (push-draft) and skip the
+# initial push entirely. Detect that case explicitly and fall back to
+# AHEAD — every commit past the default branch needs a push.
+if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+  UNPUSHED=$(git rev-list --count '@{u}..HEAD' 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
+else
+  UNPUSHED=$AHEAD
+fi
 
 # gh pr list silently returns "[]" if no PR exists OR if gh fails — distinguish
 # the two by checking the exit code separately so empty PR_* values don't
@@ -338,7 +348,7 @@ If auto-approve returns REQUEST_CHANGES or WORKFLOW_FAILED, STOP. The user shoul
 After ship-pr completes successfully, print the final pipeline DAG and a one-shot summary:
 
 ```
-[8/8] (✓) plan → (✓) implement → (✓) test → (✓) commit → (✓) push-draft → (✓) self-review → (✓) respond → (✓) ship
+[9/9] (✓) plan → (✓) implement → (✓) test → (✓) e2e → (✓) commit → (✓) push-draft → (✓) self-review → (✓) respond → (✓) ship
 
 One-Shot Summary
 ================
@@ -346,7 +356,7 @@ Task:        ISSUE_ID — TASK_TITLE
 PR:          #PR_NUMBER — PR_TITLE
 Branch:      PR_BRANCH (deleted) → DEFAULT_BRANCH
 Merged:      MERGE_SHA
-Duration:    HH:MM (from Step 1 start to Step 8 finish)
+Duration:    HH:MM (from Step 1 start to Step 9 finish)
 
 You're on DEFAULT_BRANCH with the merge pulled.
 

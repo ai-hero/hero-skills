@@ -145,7 +145,12 @@ On `y`, start the dev server with output captured to a tempfile and PID tracked:
 
 ```bash
 DEV_LOG=$(mktemp /tmp/hero-smoke-ui-XXXXXX.log)
-( cd "$ROOT/$UI_PATH" && eval "$UI_DEV_COMMAND" > "$DEV_LOG" 2>&1 ) &
+# Run UI_DEV_COMMAND without `eval` — bash's normal field-splitting on the
+# unquoted variable handles compound commands like `pnpm -C web dev --port
+# 3001` correctly, and we avoid the second round of shell expansion that
+# `eval` would add.
+# shellcheck disable=SC2086  # intentional word-splitting on UI_DEV_COMMAND
+( cd "$ROOT/$UI_PATH" && $UI_DEV_COMMAND > "$DEV_LOG" 2>&1 ) &
 DEV_PID=$!
 echo "Started dev server (pid $DEV_PID, log $DEV_LOG)."
 
@@ -169,10 +174,17 @@ if ! curl -sf -o /dev/null -m 2 "$DEV_URL"; then
   # bind 0.0.0.0 (devcontainers / CI runners) or 127.0.0.1 only, and IPv6
   # localhost can resolve to an unreachable address. Surface that case
   # rather than reporting "did not come up" when it actually did.
+  # 0.0.0.0 is a *bind* address, not a routable connect target — only
+  # probe addresses that are actually reachable as clients.
   ALT_URL=""
-  for HOST in 127.0.0.1 0.0.0.0; do
-    if curl -sf -o /dev/null -m 2 "http://$HOST:$UI_PORT"; then
-      ALT_URL="http://$HOST:$UI_PORT"
+  for HOST in 127.0.0.1 ::1; do
+    # Wrap IPv6 literal in brackets for curl's URL syntax.
+    case "$HOST" in
+      ::*) PROBE_URL="http://[$HOST]:$UI_PORT" ;;
+      *)   PROBE_URL="http://$HOST:$UI_PORT" ;;
+    esac
+    if curl -sf -o /dev/null -m 2 "$PROBE_URL"; then
+      ALT_URL="$PROBE_URL"
       break
     fi
   done
@@ -244,7 +256,7 @@ For each route in order, run the same recipe via Playwright MCP:
 2. `mcp__playwright__browser_wait_for` until the page is interactive (look for a stable selector — `body`, the route's `<h1>`, or a known landmark from the snapshot).
 3. `mcp__playwright__browser_snapshot` — capture the accessibility tree as the canonical "did it render" check.
 4. `mcp__playwright__browser_console_messages` — read messages emitted since the last navigate.
-5. `mcp__playwright__browser_take_screenshot` — save a PNG named `smoke-ui-ROUTE_SLUG.png` under `$ROOT/.smoke-ui/` (gitignored — add to `.gitignore` if absent).
+5. `mcp__playwright__browser_take_screenshot` — save a PNG named `smoke-ui-ROUTE_SLUG.png` under `$ROOT/.smoke-ui/`. Before the first screenshot, run `mkdir -p "$ROOT/.smoke-ui"` and ensure `.smoke-ui/` is in `.gitignore` (append the line if absent — the directory holds disposable artifacts).
 
 For routes that involve a form change (detected by reading the diff: `<form>` / `useForm` / `onSubmit` added or modified), additionally:
 
@@ -346,6 +358,5 @@ If FAILED, surface:
 ## Notes
 
 - This is a **smoke** test, not a full E2E. Cap routes at 5, skip large forms, do not chase flaky tests. If a real E2E suite exists in the repo (Playwright config, Cypress, etc.), prefer running it via `hero-skills:test-changes` instead.
-- The skill never modifies the user's code. It only reads, drives, and reports.
-- Screenshots and the dev-server log live under `$ROOT/.smoke-ui/` — add that directory to `.gitignore` before saving anything if it is not already ignored.
+- The skill never modifies tracked source files. It only reads, drives, and reports — but it does write disposable local artifacts: screenshots and the dev-server log under `$ROOT/.smoke-ui/`. Step 4 ensures the directory exists (`mkdir -p`) and that `.smoke-ui/` is in `.gitignore` (appending if absent) before any screenshot is taken.
 - Console-error filtering: the framework's hot-reload / dev-mode warnings (e.g., `[HMR]`, React strict-mode double-render notices) are not failures. Match conservatively: if in doubt about whether a message is real, surface it as a warning rather than a hard fail, and let the user decide.

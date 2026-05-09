@@ -27,10 +27,12 @@ ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 HERO="$ROOT/HERO.md"
 [[ -f "$HERO" ]] || exit 0
 
-HERO_TIME=$(git -C "$ROOT" log -1 --format=%ct -- HERO.md 2>/dev/null || echo 0)
-# Default-substitute any non-numeric output (corrupt repo, env hijack) to 0.
-# This default is load-bearing for the (( arithmetic )) compare below — `set
-# -u` would error on an empty value otherwise. Do not drop it.
+HERO_TIME=$(git -C "$ROOT" log -1 --format=%ct -- HERO.md 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
+# Default-substitute any empty value (corrupt repo, env hijack, no commits) to
+# 0. The `grep -E '^[0-9]+$'` already filters non-numeric output; this
+# default + the grep together ensure the `(( arithmetic ))` compare below
+# always sees a clean integer. Both are load-bearing — `set -u` would error
+# on an empty value, and the arithmetic builtin would error on non-numerics.
 HERO_TIME=${HERO_TIME:-0}
 
 # Patterns that affect HERO.md fields. Mirrors the old hero-update-precommit
@@ -66,8 +68,8 @@ PATTERNS=(
 )
 
 # Find the most recent commit touching any of those paths.
-NEWEST=$(git -C "$ROOT" log -1 --format=%ct -- "${PATTERNS[@]}" 2>/dev/null || echo 0)
-# Same load-bearing default as HERO_TIME above.
+NEWEST=$(git -C "$ROOT" log -1 --format=%ct -- "${PATTERNS[@]}" 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
+# Same load-bearing default + numeric filter as HERO_TIME above.
 NEWEST=${NEWEST:-0}
 
 if (( NEWEST > HERO_TIME )); then
