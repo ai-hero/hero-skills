@@ -371,10 +371,13 @@ jobs:
 
           # Anchor on the literal "## Verdict" header so the word
           # REQUEST_CHANGES quoted inside an explanation cannot flip
-          # the verdict. Default APPROVE only when the verdict line
-          # explicitly says APPROVE.
-          VERDICT_LINE=$(printf '%s\n' "$REVIEW" | awk '/^## Verdict$/ {getline; print; exit}')
-          if printf '%s' "$VERDICT_LINE" | grep -qx "APPROVE"; then
+          # the verdict. Read only the first whitespace-delimited token
+          # of the verdict line — Claude often appends an explanation
+          # ("APPROVE — PR metadata is honest, …") and the previous
+          # `grep -qx "APPROVE"` would reject anything with trailing
+          # text, silently flipping every approval to request_changes.
+          VERDICT_TOKEN=$(printf '%s\n' "$REVIEW" | awk '/^## Verdict$/ {getline; print $1; exit}')
+          if [ "$VERDICT_TOKEN" = "APPROVE" ]; then
             echo "verdict=approve" >> "$GITHUB_OUTPUT"
           else
             echo "verdict=request_changes" >> "$GITHUB_OUTPUT"
