@@ -90,6 +90,43 @@ fi
 
 If `HERO.md` is missing, STOP and tell the user to run `hero-skills:init-hero` first. one-shot relies on every downstream skill having a config to read; running blind through 9 steps is unsafe.
 
+### Step 0.4: Auto-branch off Default Branch (if needed)
+
+one-shot never works on the default branch. If we're on it with any uncommitted files or unpushed local commits, branch off automatically — **no prompt** — so the rest of the pipeline has a feature branch to commit and push to. This runs before resume detection so Step 0.5 always sees a feature-branch state.
+
+```bash
+DEFAULT_BRANCH=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | xargs)
+DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
+CURRENT_BRANCH=$(git branch --show-current)
+
+UNCOMMITTED=$(git status --porcelain | wc -l | tr -d ' ')
+AHEAD=$(git rev-list --count "origin/$DEFAULT_BRANCH..HEAD" 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
+
+if [ "$CURRENT_BRANCH" = "$DEFAULT_BRANCH" ] && { [ "${UNCOMMITTED:-0}" -gt 0 ] || [ "${AHEAD:-0}" -gt 0 ]; }; then
+  # SUGGESTED_BRANCH derivation (see "Naming rules" below). The user can rename later if needed.
+  echo "On $DEFAULT_BRANCH with $UNCOMMITTED uncommitted file(s) and $AHEAD unpushed commit(s)."
+  echo "Auto-branching to '$SUGGESTED_BRANCH' (one-shot never works on $DEFAULT_BRANCH)."
+  git checkout -b "$SUGGESTED_BRANCH"
+  CURRENT_BRANCH="$SUGGESTED_BRANCH"
+fi
+```
+
+**Naming rules** (no prompt — derive a sensible name and proceed):
+
+- `$ARGUMENTS` starts with an issue ID like `PROJ-123`: use `PROJ-123-SLUG_FROM_REST` (or just `PROJ-123` if nothing follows).
+- `$ARGUMENTS` is plain text: use `feat/SLUG`, `fix/SLUG`, `refactor/SLUG`, or `chore/SLUG`, picking the prefix from verbs in the description (`add/create/implement` → feat, `fix/repair/resolve` → fix, `refactor/clean/restructure` → refactor, `update/bump/upgrade` → chore). Slug is lowercased, hyphenated, ≤50 chars, with filler words stripped.
+- `$ARGUMENTS` is empty: derive from the diff via `git diff --stat HEAD` — pick the most-changed top-level directory plus a 2–3 word summary, e.g. `feat/store-trust-tier`.
+
+**On `AHEAD > 0`:** `git checkout -b` carries the local default-branch commits onto the feature branch, but the local default branch will still point at them (origin/`$DEFAULT_BRANCH` will not, until the resulting PR merges). Print one line so the user knows:
+
+```
+Note: $AHEAD local commit(s) on $DEFAULT_BRANCH are now on $SUGGESTED_BRANCH.
+$DEFAULT_BRANCH still points at them locally. After this PR merges, switch back
+and `git pull` to align with origin.
+```
+
+Do NOT silently reset `$DEFAULT_BRANCH` — that is destructive and out of scope here.
+
 ### Step 0.5: Detect Resume Point
 
 Before doing anything destructive, read the current git/PR state and figure out where in the pipeline this invocation should pick up. Users often hit `hero-skills:one-shot` after they've already done some of the work — possibly in a previous session — and the orchestrator should never silently re-do completed steps.
@@ -107,7 +144,7 @@ if ! git fetch origin "$DEFAULT_BRANCH" >/dev/null 2>&1; then
   FETCH_OK=false
   echo "WARN: 'git fetch origin $DEFAULT_BRANCH' failed — origin/$DEFAULT_BRANCH may be stale."
   echo "      Resume detection will refuse rows that depend on AHEAD or remote PR state."
-  echo "      Resolve the network/auth issue and re-run, or pick a step manually."
+  echo "      Fix the network/auth issue and re-run, or fall back to running the individual skills."
 fi
 
 UNCOMMITTED=$(git status --porcelain | wc -l | tr -d ' ')
@@ -173,13 +210,11 @@ Use the decision tree below to pick the **resume step** (1–9). Each row is the
 
 | Condition | Resume at | Reason |
 |-----------|-----------|--------|
-| `FETCH_OK=false` OR `GH_OK=false` | force user override | resume rows depend on remote state — refuse to infer |
+| `FETCH_OK=false` OR `GH_OK=false` | exit with diagnostic | resume rows depend on remote state — fix network/auth and re-run, or invoke individual skills |
 | `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0` | exit | nothing to do |
 | `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED > 0` | exit with hint | merged/closed PR but local edits exist — branch off `DEFAULT_BRANCH` for follow-up work |
-| `CURRENT_BRANCH == DEFAULT_BRANCH` and `UNCOMMITTED == 0` and `AHEAD == 0` | Step 1 (plan) | fresh start |
-| `CURRENT_BRANCH == DEFAULT_BRANCH` and `AHEAD > 0` | exit with hint | unpushed commits on the default branch are unusual — push them or branch off explicitly before running one-shot |
-| `CURRENT_BRANCH == DEFAULT_BRANCH` and `UNCOMMITTED > 0` | exit with hint | one-shot needs a feature branch — tell user to run `hero-skills:plan-work` to branch + plan |
-| Feature branch, `UNCOMMITTED > 0` | Step 3 (test) | mid-implement; re-run test + e2e on the latest diff before committing. If a PR is already open (any state), Step 6 will push the new commit to it — confirm with user before advancing if `PR_EXISTS=true` and the PR is non-draft. |
+| `CURRENT_BRANCH == DEFAULT_BRANCH` and `UNCOMMITTED == 0` and `AHEAD == 0` | Step 1 (plan) | fresh start (Step 0.4 already auto-branched if there was any work to preserve) |
+| Feature branch, `UNCOMMITTED > 0` | Step 3 (test) | mid-implement; re-run test + e2e on the latest diff before committing. If a PR is already open and non-draft, Step 6 will push the new commit to it. |
 | Feature branch, `UNCOMMITTED == 0`, `UNPUSHED > 0` | Step 6 (push-draft) | committed but not pushed (covers both the "no PR yet" case and the "pushed-once + local follow-up" case). After push-draft updates the PR, advance to Step 7 normally. |
 | Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "true"`, `SELF_REVIEW_DONE == 0` | Step 7 (self-review) | PR up but never reviewed |
 | Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "true"`, `SELF_REVIEW_DONE >= 1` | Step 7 (self-review, already-ran branch) | re-review or mark ready — `review-pr` handles the "already self-reviewed once" case itself |
@@ -187,11 +222,11 @@ Use the decision tree below to pick the **resume step** (1–9). Each row is the
 | Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW != APPROVED`, `BOT_REPLIED=true` | Step 8 (respond) | bot has commented, run respond-to-pr |
 | Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW == APPROVED` | Step 9 (ship) | go straight to auto-approve + merge |
 | Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=false`, `AHEAD == 0` | exit with hint | branch has no work — suggest fresh `hero-skills:plan-work` |
-| any other combination | force user override | unrouted state — show the detected variables and let the user pick a step manually |
+| any other combination | exit with diagnostic | unrouted state — print the detected variables and exit; user falls back to individual skills |
 
-When `$ARGUMENTS` is non-empty AND we're on a non-default branch, ask once: "Resume the current branch, or branch off `DEFAULT_BRANCH` for the new ticket?" Do not assume.
+**Default for non-default branches:** when on a feature branch, one-shot resumes that branch. `$ARGUMENTS` is treated as additional context for the in-progress work. To start a *new* ticket from `$DEFAULT_BRANCH` instead, switch back to `$DEFAULT_BRANCH` first and re-run.
 
-Show the user the inferred state and proposed resume point with the DAG pre-marked, then ask for confirmation:
+**No confirmation prompt.** Announce the detected state and the inferred resume point, then proceed straight into that step. Do NOT ask the user to confirm or pick an override — broken states already exit with a diagnostic above; everything else routes deterministically.
 
 ```
 hero-skills:one-shot — resuming from detected state
@@ -206,39 +241,21 @@ Inferred resume point: Step 7 (self-review)
 [7/9] (✓) plan → (✓) implement → (✓) test → (✓) e2e → (✓) commit → (✓) push-draft → (▶) self-review → ( ) respond → ( ) ship
 
 Reasoning: branch + unpushed commits + open draft PR + no Hero Self-Review
-comment yet → plan/implement/test/e2e/commit/push-draft are done; jump to
+comment yet → plan/implement/test/e2e/commit/push-draft are done; running
 self-review next.
 
-Stop conditions (any of these aborts and hands control back to you):
-  - The plan looks too large for a single PR (only checked if we re-enter Step 1)
-  - test-changes fails and the failure is not a quick fix
+Hard stops (these halt the pipeline mid-flight when triggered — not asked up front):
+  - Plan looks too large for a single PR (Step 1 scope check)
+  - test-changes fails and the failure needs design judgment
   - smoke-ui flags a UI regression on a changed route
-  - You decline to mark the PR ready for review
+  - You decline review-pr's mark-ready prompt
   - Auto-approve returns REQUEST_CHANGES and the fixes are non-trivial
-  - You decline to merge
-
-Pick:
-  1. Continue from Step INFERRED_STEP (recommended)
-  2. Override — pick a different step:
-       1=plan  2=implement  3=test  4=e2e  5=commit
-       6=push-draft  7=self-review  8=respond  9=ship
-  3. Cancel
+  - You decline ship-pr's merge prompt
 ```
 
-Wait for explicit confirmation. On `1`, set `RESUME_STEP` to the inferred value and jump there. On `2`, prompt for the step number and **validate it against 1-9 explicitly**:
+Set `RESUME_STEP` to the inferred value and run that step immediately. The Cross-step contract still applies for every step from `RESUME_STEP` onward — read each child skill's reported state before advancing.
 
-```bash
-case "$USER_PICK" in
-  1|2|3|4|5|6|7|8|9) RESUME_STEP=$USER_PICK ;;
-  *) echo "Invalid step '$USER_PICK'. Pick a number 1-9. Aborting."; exit 1 ;;
-esac
-```
-
-Then render the DAG with `RESUME_STEP` as `(▶)` and the rest `( )` (do not auto-mark prior steps `(✓)` unless the detected state actually supports it), and start. On `3`, exit cleanly.
-
-When jumping into the middle of the pipeline, **render the DAG with steps before `RESUME_STEP` marked `(✓)`** so the user keeps the visual model. The Cross-step contract still applies for every step from `RESUME_STEP` onward — read each child skill's reported state before advancing.
-
-Wait for explicit `y` before running anything.
+When `RESUME_STEP > 1`, render the DAG with steps before `RESUME_STEP` marked `(✓)` so the visual model stays accurate.
 
 > **Resume rule for Steps 1–9:** execute steps starting from `RESUME_STEP`. Earlier steps render as `(✓)` in the DAG **but are NOT re-executed** — do not call `plan-work`, `test-changes`, etc. for those. The first DAG render of the run shows `RESUME_STEP` as `(▶)`. Examples:
 >
