@@ -92,14 +92,18 @@ If `HERO.md` is missing, STOP and tell the user to run `hero-skills:init-hero` f
 
 one-shot never works on the default branch. If we're on it with any uncommitted files or unpushed local commits, branch off automatically — **no prompt** — so the rest of the pipeline has a feature branch to commit and push to. This runs before resume detection so Step 0.5 always sees a feature-branch state.
 
+First, **derive `SUGGESTED_BRANCH` as a reasoning step** per the Naming rules below — this is a model task, not a shell function. Inspect `$ARGUMENTS` (and the diff if `$ARGUMENTS` is empty) and produce a concrete, non-empty branch name. Then run the snippet below with that value exported in the environment. The snippet asserts the variable is set; it will not invent one.
+
 ```bash
 DEFAULT_BRANCH=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | xargs)
 DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
 CURRENT_BRANCH=$(git branch --show-current)
 
-# Fetch origin so AHEAD reflects current remote state, not last-known. Step 0.5
-# reuses the same fetched ref via its own FETCH_OK check; the fetch here is the
-# single source of truth.
+# Fetch origin so AHEAD reflects current remote state. Step 0.5 below does its
+# own fetch — that one is the canonical FETCH_OK source for resume-detection
+# guards; this fetch is for AHEAD freshness. Both are intentional and read the
+# same origin/$DEFAULT_BRANCH ref; the second call is a no-op when the first
+# succeeded.
 git fetch origin "$DEFAULT_BRANCH" >/dev/null 2>&1 || true
 
 UNCOMMITTED=$(git status --porcelain | wc -l | tr -d ' ')
@@ -114,15 +118,10 @@ if [ "$CURRENT_BRANCH" = "$DEFAULT_BRANCH" ] && { [ "${UNCOMMITTED:-0}" -gt 0 ] 
     exit 1
   fi
 
-  # Compute SUGGESTED_BRANCH per the Naming rules below. This is a reasoning
-  # step — the model must produce a concrete, non-empty branch name *before*
-  # the checkout. An empty / unset value is a hard error, not a fallback.
-  SUGGESTED_BRANCH=$(derive_branch_name "$ARGUMENTS")   # pseudo-call; see Naming rules
-
-  if [ -z "$SUGGESTED_BRANCH" ]; then
-    echo "ERROR: could not derive a branch name from \$ARGUMENTS or the diff. Aborting one-shot."
-    exit 1
-  fi
+  # SUGGESTED_BRANCH must already be set by the reasoning step above. Empty
+  # or unset is a hard error — `${VAR:?msg}` aborts the shell with the given
+  # message rather than silently running `git checkout -b ""`.
+  : "${SUGGESTED_BRANCH:?SUGGESTED_BRANCH must be derived per the Naming rules before this snippet runs.}"
 
   echo "On $DEFAULT_BRANCH with $UNCOMMITTED uncommitted file(s) and $AHEAD unpushed commit(s)."
   echo "Auto-branching to '$SUGGESTED_BRANCH' (one-shot never works on $DEFAULT_BRANCH)."
@@ -133,6 +132,16 @@ if [ "$CURRENT_BRANCH" = "$DEFAULT_BRANCH" ] && { [ "${UNCOMMITTED:-0}" -gt 0 ] 
     exit 1
   fi
   CURRENT_BRANCH="$SUGGESTED_BRANCH"
+
+  # When AHEAD > 0 the local $DEFAULT_BRANCH ref still points at those commits
+  # (origin/$DEFAULT_BRANCH does not, until the PR merges). Surface this so
+  # the user isn't surprised when they switch back later.
+  if [ "${AHEAD:-0}" -gt 0 ]; then
+    echo ""
+    echo "Note: $AHEAD local commit(s) on $DEFAULT_BRANCH are now on $SUGGESTED_BRANCH."
+    echo "The local $DEFAULT_BRANCH ref still points at those commits. After this PR"
+    echo "merges, switch back and 'git pull' to align with origin."
+  fi
 fi
 ```
 
@@ -140,17 +149,9 @@ fi
 
 1. `$ARGUMENTS` matches `^[A-Z][A-Z0-9]{1,9}-[0-9]+(\s|$)` (an issue ID anchored to the start): use `PROJ-123-SLUG_FROM_REST` — slug derived from whatever follows the ID; just `PROJ-123` if nothing follows. The match must be at position 0, so `Fix CVE-2024-1234 in auth` does **not** match this rule and falls through to rule 2.
 2. `$ARGUMENTS` is plain text (non-empty, no leading issue ID): use `feat/SLUG`, `fix/SLUG`, `refactor/SLUG`, `chore/SLUG`, or `docs/SLUG`, picking the prefix from verbs in the description (`add/create/implement` → feat, `fix/repair/resolve` → fix, `refactor/clean/restructure` → refactor, `update/bump/upgrade` → chore, `document/explain` → docs). Slug is lowercased, hyphenated, ≤50 chars, with filler words stripped.
-3. `$ARGUMENTS` is empty: derive from the diff via `git diff --stat HEAD` — pick the most-changed top-level directory plus a 2–3 word summary, e.g. `feat/store-trust-tier`.
+3. `$ARGUMENTS` is empty: derive from the diff. Use the union of committed-but-unpushed changes (`git log origin/$DEFAULT_BRANCH..HEAD --stat` plus the most recent commit's subject line) and uncommitted changes (`git diff --stat HEAD`) — picking the most-changed top-level directory and a 2–3 word summary, e.g. `feat/store-trust-tier`. The committed-and-uncommitted union matters because Step 0.4 triggers on either `AHEAD > 0` or `UNCOMMITTED > 0`; `git diff --stat HEAD` alone is empty in the committed-but-unpushed case.
 
-**On `AHEAD > 0`:** `git checkout -b` carries the local default-branch commits onto the feature branch, but the local `$DEFAULT_BRANCH` ref still points at those commits (origin/`$DEFAULT_BRANCH` does not, until the resulting PR merges). Print one line so the user knows:
-
-```
-Note: $AHEAD local commit(s) on $DEFAULT_BRANCH are now on $SUGGESTED_BRANCH.
-The local $DEFAULT_BRANCH ref still points at those commits. After this PR merges,
-switch back and `git pull` to align with origin.
-```
-
-Do NOT silently reset `$DEFAULT_BRANCH` — that is destructive and out of scope here.
+Do NOT silently reset `$DEFAULT_BRANCH` after the branch — that is destructive and out of scope here. The post-checkout note inside the snippet (gated on `AHEAD > 0`) tells the user `$DEFAULT_BRANCH` still points at the local commits.
 
 ### Step 0.5: Detect Resume Point
 
