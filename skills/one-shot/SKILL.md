@@ -55,13 +55,11 @@ session. Before deciding to advance to the next step, you MUST:
    Never auto-advance past a `(✗)`.
 4. **DAG state preservation.** Every "Render DAG with X active" instruction
    below means: render the line with steps before `RESUME_STEP` marked `(✓)`
-   only when `RESUME_STEP` was set in Step 0.5 to a value that genuinely
+   only when Step 0.5 inferred `RESUME_STEP` from a state that genuinely
    completed those steps in a prior session. For a fresh-start invocation
-   (`RESUME_STEP=1`), prior-step markers are absent. For a manual override
-   chosen at the Step 0.5 prompt, prior-step markers are `( )`, not `(✓)` —
-   the override path makes no claim that earlier work happened. The current
-   step is `(▶)`; later steps are `( )` until they run; skipped steps are
-   `(–)`; failed/declined steps are `(✗)`.
+   (`RESUME_STEP=1`), prior-step markers are absent. The current step is
+   `(▶)`; later steps are `( )` until they run; skipped steps are `(–)`;
+   failed/declined steps are `(✗)`.
 
 Apply this contract at every Step 1–9 transition below (or every transition from `RESUME_STEP` onward when resuming).
 
@@ -99,30 +97,57 @@ DEFAULT_BRANCH=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$ROOT/HERO.
 DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
 CURRENT_BRANCH=$(git branch --show-current)
 
+# Fetch origin so AHEAD reflects current remote state, not last-known. Step 0.5
+# reuses the same fetched ref via its own FETCH_OK check; the fetch here is the
+# single source of truth.
+git fetch origin "$DEFAULT_BRANCH" >/dev/null 2>&1 || true
+
 UNCOMMITTED=$(git status --porcelain | wc -l | tr -d ' ')
 AHEAD=$(git rev-list --count "origin/$DEFAULT_BRANCH..HEAD" 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
 
 if [ "$CURRENT_BRANCH" = "$DEFAULT_BRANCH" ] && { [ "${UNCOMMITTED:-0}" -gt 0 ] || [ "${AHEAD:-0}" -gt 0 ]; }; then
-  # SUGGESTED_BRANCH derivation (see "Naming rules" below). The user can rename later if needed.
+  # Refuse to branch out of a half-resolved merge / cherry-pick / rebase —
+  # `git checkout -b` would silently abort or carry conflict markers forward.
+  if [ -e .git/MERGE_HEAD ] || [ -e .git/CHERRY_PICK_HEAD ] \
+     || [ -d .git/rebase-merge ] || [ -d .git/rebase-apply ]; then
+    echo "ERROR: a merge / cherry-pick / rebase is in progress. Resolve it, then re-run one-shot."
+    exit 1
+  fi
+
+  # Compute SUGGESTED_BRANCH per the Naming rules below. This is a reasoning
+  # step — the model must produce a concrete, non-empty branch name *before*
+  # the checkout. An empty / unset value is a hard error, not a fallback.
+  SUGGESTED_BRANCH=$(derive_branch_name "$ARGUMENTS")   # pseudo-call; see Naming rules
+
+  if [ -z "$SUGGESTED_BRANCH" ]; then
+    echo "ERROR: could not derive a branch name from \$ARGUMENTS or the diff. Aborting one-shot."
+    exit 1
+  fi
+
   echo "On $DEFAULT_BRANCH with $UNCOMMITTED uncommitted file(s) and $AHEAD unpushed commit(s)."
   echo "Auto-branching to '$SUGGESTED_BRANCH' (one-shot never works on $DEFAULT_BRANCH)."
-  git checkout -b "$SUGGESTED_BRANCH"
+
+  if ! git checkout -b "$SUGGESTED_BRANCH"; then
+    echo "ERROR: 'git checkout -b $SUGGESTED_BRANCH' failed (likely a name collision)."
+    echo "       Pick a different name and re-run, or 'git checkout' the existing branch first."
+    exit 1
+  fi
   CURRENT_BRANCH="$SUGGESTED_BRANCH"
 fi
 ```
 
-**Naming rules** (no prompt — derive a sensible name and proceed):
+**Naming rules** (no prompt — derive a sensible name and proceed). Rules are checked in order; the first match wins.
 
-- `$ARGUMENTS` starts with an issue ID like `PROJ-123`: use `PROJ-123-SLUG_FROM_REST` (or just `PROJ-123` if nothing follows).
-- `$ARGUMENTS` is plain text: use `feat/SLUG`, `fix/SLUG`, `refactor/SLUG`, or `chore/SLUG`, picking the prefix from verbs in the description (`add/create/implement` → feat, `fix/repair/resolve` → fix, `refactor/clean/restructure` → refactor, `update/bump/upgrade` → chore). Slug is lowercased, hyphenated, ≤50 chars, with filler words stripped.
-- `$ARGUMENTS` is empty: derive from the diff via `git diff --stat HEAD` — pick the most-changed top-level directory plus a 2–3 word summary, e.g. `feat/store-trust-tier`.
+1. `$ARGUMENTS` matches `^[A-Z][A-Z0-9]{1,9}-[0-9]+(\s|$)` (an issue ID anchored to the start): use `PROJ-123-SLUG_FROM_REST` — slug derived from whatever follows the ID; just `PROJ-123` if nothing follows. The match must be at position 0, so `Fix CVE-2024-1234 in auth` does **not** match this rule and falls through to rule 2.
+2. `$ARGUMENTS` is plain text (non-empty, no leading issue ID): use `feat/SLUG`, `fix/SLUG`, `refactor/SLUG`, `chore/SLUG`, or `docs/SLUG`, picking the prefix from verbs in the description (`add/create/implement` → feat, `fix/repair/resolve` → fix, `refactor/clean/restructure` → refactor, `update/bump/upgrade` → chore, `document/explain` → docs). Slug is lowercased, hyphenated, ≤50 chars, with filler words stripped.
+3. `$ARGUMENTS` is empty: derive from the diff via `git diff --stat HEAD` — pick the most-changed top-level directory plus a 2–3 word summary, e.g. `feat/store-trust-tier`.
 
-**On `AHEAD > 0`:** `git checkout -b` carries the local default-branch commits onto the feature branch, but the local default branch will still point at them (origin/`$DEFAULT_BRANCH` will not, until the resulting PR merges). Print one line so the user knows:
+**On `AHEAD > 0`:** `git checkout -b` carries the local default-branch commits onto the feature branch, but the local `$DEFAULT_BRANCH` ref still points at those commits (origin/`$DEFAULT_BRANCH` does not, until the resulting PR merges). Print one line so the user knows:
 
 ```
 Note: $AHEAD local commit(s) on $DEFAULT_BRANCH are now on $SUGGESTED_BRANCH.
-$DEFAULT_BRANCH still points at them locally. After this PR merges, switch back
-and `git pull` to align with origin.
+The local $DEFAULT_BRANCH ref still points at those commits. After this PR merges,
+switch back and `git pull` to align with origin.
 ```
 
 Do NOT silently reset `$DEFAULT_BRANCH` — that is destructive and out of scope here.
@@ -143,11 +168,16 @@ FETCH_OK=true
 if ! git fetch origin "$DEFAULT_BRANCH" >/dev/null 2>&1; then
   FETCH_OK=false
   echo "WARN: 'git fetch origin $DEFAULT_BRANCH' failed — origin/$DEFAULT_BRANCH may be stale."
-  echo "      Resume detection will refuse rows that depend on AHEAD or remote PR state."
-  echo "      Fix the network/auth issue and re-run, or fall back to running the individual skills."
+  echo "      Resume detection will refuse rows that depend on AHEAD or remote PR state and"
+  echo "      will exit with diagnostic (see 'Diagnostic exit format' below). Resolve the"
+  echo "      network/auth issue and re-run, or invoke the individual skills directly."
 fi
 
 UNCOMMITTED=$(git status --porcelain | wc -l | tr -d ' ')
+# AHEAD here counts commits past origin/$DEFAULT_BRANCH on the *current* branch.
+# Note that this re-reads the value after Step 0.4 may have switched branches:
+# pre-checkout it was "local $DEFAULT_BRANCH vs origin"; post-checkout it's
+# "feature branch vs origin/$DEFAULT_BRANCH" — different semantics, same compare.
 AHEAD=$(git rev-list --count "origin/$DEFAULT_BRANCH..HEAD" 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
 
 # UNPUSHED counts commits past the branch's *upstream* (the PR's head ref),
@@ -223,6 +253,14 @@ Use the decision tree below to pick the **resume step** (1–9). Each row is the
 | Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW == APPROVED` | Step 9 (ship) | go straight to auto-approve + merge |
 | Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=false`, `AHEAD == 0` | exit with hint | branch has no work — suggest fresh `hero-skills:plan-work` |
 | any other combination | exit with diagnostic | unrouted state — print the detected variables and exit; user falls back to individual skills |
+
+**Diagnostic exit format.** When a row says "exit with diagnostic" or "exit with hint," print:
+
+1. The detected state: `CURRENT_BRANCH`, `UNCOMMITTED`, `AHEAD`, `UNPUSHED`, `FETCH_OK`, `GH_OK`, and any non-empty `PR_*` values.
+2. Which row in the table matched, paraphrased in one sentence.
+3. The recommended individual skill(s) to invoke next (e.g., `hero-skills:commit-changes`, `hero-skills:push-pr`, `hero-skills:review-pr`).
+
+Then **halt the orchestrator** — do not proceed to Step 1, do not silently skip into another step.
 
 **Default for non-default branches:** when on a feature branch, one-shot resumes that branch. `$ARGUMENTS` is treated as additional context for the in-progress work. To start a *new* ticket from `$DEFAULT_BRANCH` instead, switch back to `$DEFAULT_BRANCH` first and re-run.
 
@@ -305,7 +343,7 @@ Render DAG with `e2e` active. Run `hero-skills:smoke-ui`. The skill itself decid
 
 If `smoke-ui` flags a regression — a 4xx/5xx on a changed route, an uncaught console error, a `wait_for` timeout — render `(✗) e2e` plus `Stopped: smoke-ui regression on ROUTE` and hand back. Do not advance to commit; we never want a known UI regression in git history if we can help it.
 
-> **Resume caveat:** when one-shot resumes at Step 5 or later (the test+e2e steps were already done in a prior session), the smoke result reflects the diff at *that earlier* HEAD, not the current state. Step 0.5's table forces re-entry at Step 3 whenever `UNCOMMITTED > 0`, which covers mid-implement diffs. But a resume at Step 6 (push-draft, after a follow-up commit landed elsewhere) does *not* re-smoke. If you want a fresh smoke before pushing, override to Step 4 at the Step 0.5 prompt.
+> **Resume caveat:** when one-shot resumes at Step 5 or later (the test+e2e steps were already done in a prior session), the smoke result reflects the diff at *that earlier* HEAD, not the current state. Step 0.5's table forces re-entry at Step 3 whenever `UNCOMMITTED > 0`, which covers mid-implement diffs. But a resume at Step 6 (push-draft, after a follow-up commit landed elsewhere) does *not* re-smoke. If you want a fresh smoke before pushing, invoke `hero-skills:smoke-ui` directly, then re-run one-shot.
 
 The smoke is intentionally narrow (≤5 routes, no large forms). For deeper coverage, run a real E2E suite via `hero-skills:test-changes` instead.
 
@@ -382,11 +420,12 @@ Next:
   /clear                              # fresh context first
 ```
 
-If the pipeline stopped early, render the DAG with `(✗)` on the failed step, the reason, and the recommended skill to resume from manually.
+If the pipeline stopped early, render the DAG with `(✗)` on the failed step, the reason, and the recommended skill to re-invoke once the blocker is cleared.
 
 ## Notes
 
 - This skill **does not skip user gates**. Plan approval, mark-ready, merge confirmation are all explicit. Auto mode does not change that.
 - This skill **does not retry** on judgment-call failures (test design, large bot feedback). Retrying without human input is how small PRs become broken merges.
+- Step 0.4's `git checkout -b` is unconfirmed by design — one-shot never works on the default branch and assumes the auto-derived name is acceptable. To rename later, use `git branch -m`. Sibling skills (`commit-changes`, `create-branch`) prompt for the name because they're invoked deliberately on an existing branch; one-shot's auto-mode contract precludes that prompt.
 - For larger work, run the same skills individually so you can pause between them.
 - Run `hero-skills:reset-branch` separately if you abandon mid-pipeline — ship-pr's reset only fires after a successful merge.
