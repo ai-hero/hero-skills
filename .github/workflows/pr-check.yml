@@ -1,0 +1,39 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Validate plugin structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JSON files
+        run: |
+          find . -name "*.json" -not -path "./.git/*" | while read f; do
+            jq empty "$f" || { echo "Invalid JSON: $f"; exit 1; }
+          done
+
+      - name: Validate YAML files
+        run: |
+          python3 -c "
+          import sys, glob, yaml
+          files = glob.glob('**/*.yml', recursive=True) + glob.glob('**/*.yaml', recursive=True)
+          files = [f for f in files if not f.startswith('.git/')]
+          errors = []
+          for f in files:
+              try:
+                  yaml.safe_load(open(f))
+              except yaml.YAMLError as e:
+                  errors.append(f'{f}: {e}')
+          if errors:
+              print('\n'.join(errors))
+              sys.exit(1)
+          print(f'Validated {len(files)} YAML file(s) — OK')
+          "
+
+      - name: Validate skills plugin structure
+        run: bash scripts/validate.sh
