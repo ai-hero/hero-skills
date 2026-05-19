@@ -110,9 +110,19 @@ git diff --stat
 
 For each changed file: read the diff, understand purpose, assess quality.
 
-### Step 4: Ruthless Code Review
+### Step 4: Simplify Code
 
-Review every change:
+Invoke the `simplify` skill via the Skill tool. `simplify` is **not** part of this plugin — it ships separately (see the user-invocable skills list in the current session). It reviews the current diff for reuse, quality, and efficiency and fixes any issues found before the commit lands. Step 6 below handles the post-fix pre-commit re-run.
+
+If the `simplify` skill is unavailable in this environment, report `NO_SIMPLIFY_SKILL — falling back to inline checklist` and apply this check before continuing to Step 5:
+
+- [ ] No premature abstractions
+- [ ] No over-engineering
+- [ ] Could this be simpler?
+
+### Step 5: Ruthless Code Review
+
+Additional checks beyond simplify:
 
 **Naming Consistency**
 
@@ -125,12 +135,6 @@ Review every change:
 - [ ] No commented-out code
 - [ ] No TODO/FIXME without associated issue
 - [ ] No obvious security issues
-
-**Simplicity**
-
-- [ ] No premature abstractions
-- [ ] No over-engineering
-- [ ] Could this be simpler?
 
 **Completeness**
 
@@ -154,11 +158,11 @@ Suggestions:
 - [improvements]
 ```
 
-### Step 5: Fix Issues
+### Step 6: Fix Issues
 
 Fix any CRITICAL or WARNING issues found. Re-run pre-commit after fixes (if available).
 
-### Step 6: Group into Changesets
+### Step 7: Group into Changesets
 
 Group logically related changes:
 
@@ -167,7 +171,7 @@ Group logically related changes:
 - Dependency updates separate
 - Documentation separate
 
-### Step 7: Commit Each Changeset
+### Step 8: Commit Each Changeset
 
 ```bash
 git add file1 file2 ...
@@ -186,7 +190,7 @@ EOF
 
 **If issue ID in branch name:** Add `Fixes: PROJ-123` or `Relates to: PROJ-123`.
 
-### Step 8: Post-Commit Validation
+### Step 9: Post-Commit Validation
 
 Dry-run any pre-push hooks now so failures surface before the user runs `hero-skills:push-pr`:
 
@@ -198,7 +202,7 @@ else
 fi
 ```
 
-### Step 9: Summary
+### Step 10: Summary
 
 ```
 Commit Summary
