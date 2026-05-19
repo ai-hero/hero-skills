@@ -74,6 +74,12 @@ hero-skills:one-shot PROJ-123
 
 This chains all nine steps end-to-end — `plan → implement → test → e2e → commit → push-draft → self-review → respond → ship` — with explicit user gates at plan-approval, mark-ready, and merge. The `e2e` step uses Playwright MCP to smoke-test the routes affected by the diff and is skipped automatically on backend-only PRs.
 
+At each step transition, one-shot prints a progress line so you always know where you are:
+
+```
+[7/9] (✓) plan → (✓) implement → (✓) test → (✓) e2e → (✓) commit → (✓) push-draft → (▶) self-review → ( ) respond → ( ) ship
+```
+
 Re-running `hero-skills:one-shot` mid-flow is safe: it inspects git + the open PR for that branch and resumes from the inferred step deterministically — no confirmation prompt. On the default branch with work to preserve, one-shot auto-branches off (no prompt) before resuming. It exits cleanly with a hand-off hint only when there's nothing left to do (e.g., after the PR has merged) or when state can't be inferred safely (e.g., a failed `git fetch`).
 
 See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
