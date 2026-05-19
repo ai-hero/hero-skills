@@ -603,8 +603,10 @@ Action taken:
   - Suggested hero-skills:respond-to-pr                  # REQUEST_CHANGES
   - Stopped, action failure surfaced                     # WORKFLOW_FAILED
 
-Next: hero-skills:plan-work to start the next task — or `/clear` first if you
-want a fresh context.
+Next steps:
+  /clear                       # fresh context first (recommended for the next task)
+  hero-skills:plan-work        # Step 1 — start the next task from a ticket or description
+  hero-skills:one-shot         # …or chain Steps 1–12 again on a small follow-up
 ```
 
 ## Notes

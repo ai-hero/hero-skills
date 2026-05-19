@@ -141,10 +141,33 @@ The dev server is not running. Start it now?
   [n] Cancel — start it yourself, then re-run this skill.
 ```
 
-On `y`, start the dev server with output captured to a tempfile and PID tracked:
+On `y`, start the dev server with output captured to a log under `.test-output/` and PID tracked:
 
 ```bash
-DEV_LOG=$(mktemp /tmp/hero-smoke-ui-XXXXXX.log)
+# Centralize all smoke-ui artifacts under .test-output/ so they live next
+# to the screenshots and are covered by the same exclude entry. The
+# `mkdir -p` and exclude-append also happen in Step 4 before the first
+# screenshot — doing them here too is cheap and lets the dev-server log
+# exist before Step 4 ever runs.
+mkdir -p "$ROOT/.test-output"
+# Write the ignore rule to .git/info/exclude (repo-local, untracked) rather
+# than .gitignore (tracked) — modifying a tracked file would leave the
+# working tree dirty and contradict this skill's "never modifies tracked
+# source files" contract. Resolve the path via git so worktrees / bare repos
+# / non-default gitdirs work too.
+EXCLUDE_FILE=$(git -C "$ROOT" rev-parse --git-path info/exclude 2>/dev/null)
+case "$EXCLUDE_FILE" in
+  /*) ;;
+  *)  EXCLUDE_FILE="$ROOT/$EXCLUDE_FILE" ;;
+esac
+mkdir -p "$(dirname "$EXCLUDE_FILE")"
+grep -qxF '.test-output/' "$EXCLUDE_FILE" 2>/dev/null \
+  || printf '\n.test-output/\n' >> "$EXCLUDE_FILE"
+DEV_LOG="$ROOT/.test-output/dev-server.log"
+# Truncate any stale log from a previous run so this run's diagnostics
+# only reflect the current invocation.
+: > "$DEV_LOG"
+
 # Run UI_DEV_COMMAND without `eval` — bash's normal field-splitting on the
 # unquoted variable handles compound commands like `pnpm -C web dev --port
 # 3001` correctly, and we avoid the second round of shell expansion that
@@ -256,7 +279,28 @@ For each route in order, run the same recipe via Playwright MCP:
 2. `mcp__playwright__browser_wait_for` until the page is interactive (look for a stable selector — `body`, the route's `<h1>`, or a known landmark from the snapshot).
 3. `mcp__playwright__browser_snapshot` — capture the accessibility tree as the canonical "did it render" check.
 4. `mcp__playwright__browser_console_messages` — read messages emitted since the last navigate.
-5. `mcp__playwright__browser_take_screenshot` — save a PNG named `smoke-ui-ROUTE_SLUG.png` under `$ROOT/.smoke-ui/`. Before the first screenshot, run `mkdir -p "$ROOT/.smoke-ui"` and ensure `.smoke-ui/` is in `.gitignore` (append the line if absent — the directory holds disposable artifacts).
+5. `mcp__playwright__browser_take_screenshot` — save a PNG named `smoke-ui-ROUTE_SLUG.png` under `$ROOT/.test-output/playwright-mcp/`. **Before the first screenshot of this run**, do the three-step setup once:
+
+   ```bash
+   mkdir -p "$ROOT/.test-output/playwright-mcp"
+   # Ensure the exclude file covers .test-output/. Use .git/info/exclude
+   # (repo-local, untracked) instead of .gitignore so we don't modify a
+   # tracked file — see Step 2's note.
+   EXCLUDE_FILE=$(git -C "$ROOT" rev-parse --git-path info/exclude 2>/dev/null)
+   case "$EXCLUDE_FILE" in
+     /*) ;;
+     *)  EXCLUDE_FILE="$ROOT/$EXCLUDE_FILE" ;;
+   esac
+   mkdir -p "$(dirname "$EXCLUDE_FILE")"
+   grep -qxF '.test-output/' "$EXCLUDE_FILE" 2>/dev/null \
+     || printf '\n.test-output/\n' >> "$EXCLUDE_FILE"
+   # Clear stale artifacts from previous runs so this report only reflects
+   # the current diff. Scope the delete to smoke-ui artifacts so co-located
+   # Playwright traces / videos from unrelated sessions are not touched.
+   rm -f "$ROOT/.test-output/playwright-mcp"/smoke-ui-*.png
+   ```
+
+   `$ROOT/.test-output/` is the canonical local-only test-artifacts directory for hero-skills. All disposable outputs from any hero skill — Playwright screenshots, traces, videos, network logs, dev-server logs, coverage reports — land somewhere under it so the repo root stays clean and a single `.gitignore` entry covers them all.
 
 For routes that involve a form change (detected by reading the diff: `<form>` / `useForm` / `onSubmit` added or modified), additionally:
 
@@ -343,9 +387,14 @@ Phases:      (✓) detect → (✓) server → (✓) routes → (✓) drive → 
 
 Routes:      N tested (LIST)
 Console:     X errors, Y warnings (filtered framework noise)
-Screenshots: $ROOT/.smoke-ui/*.png
+Screenshots: $ROOT/.test-output/playwright-mcp/*.png
 
 Result:      OK | FAILED at ROUTE — REASON
+
+Next steps (when Result is OK):
+  /simplify                    # Step 5 — tidy the dirty diff before commit
+  hero-skills:commit-changes   # Step 6 — review and commit
+  hero-skills:push-pr          # Step 7 — push and open a draft PR
 ```
 
 If FAILED, surface:
@@ -358,5 +407,5 @@ If FAILED, surface:
 ## Notes
 
 - This is a **smoke** test, not a full E2E. Cap routes at 5, skip large forms, do not chase flaky tests. If a real E2E suite exists in the repo (Playwright config, Cypress, etc.), prefer running it via `hero-skills:test-changes` instead.
-- The skill never modifies tracked source files. It only reads, drives, and reports — but it does write disposable local artifacts: screenshots and the dev-server log under `$ROOT/.smoke-ui/`. Step 4 ensures the directory exists (`mkdir -p`) and that `.smoke-ui/` is in `.gitignore` (appending if absent) before any screenshot is taken.
+- The skill never modifies tracked source files. It only reads, drives, and reports — but it does write disposable local artifacts under `$ROOT/.test-output/`: screenshots in `.test-output/playwright-mcp/` (the canonical Playwright MCP artifact directory) and the dev-server log at `.test-output/dev-server.log`. `.test-output/` is the shared test-artifact directory for every hero skill. The ignore rule lives in `.git/info/exclude` (repo-local, untracked) — *not* `.gitignore` — so we never dirty the working tree. Both Step 2 (dev-server start) and Step 4 (first screenshot) `mkdir -p` the directory and append `.test-output/` to `.git/info/exclude` if absent, *and* clear stale artifacts from prior runs so the report only reflects the current diff.
 - Console-error filtering: the framework's hot-reload / dev-mode warnings (e.g., `[HMR]`, React strict-mode double-render notices) are not failures. Match conservatively: if in doubt about whether a message is real, surface it as a warning rather than a hard fail, and let the user decide.

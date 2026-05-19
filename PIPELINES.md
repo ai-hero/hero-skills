@@ -55,24 +55,38 @@ present from commit one onward.
 ### Pipeline 2: one-shot — ticket to merged PR in a single invocation
 
 ```
-plan → implement → test → e2e → commit → push-draft → self-review → respond → ship
+plan → implement → test → e2e → simplify → commit → push-draft → self-review → mark-ready → await-review → respond → ship
 ```
 
-Owner: `hero-skills:one-shot`. Nine steps:
+Owner: `hero-skills:one-shot`. Twelve steps — each maps to a single skill (or `inline` when one-shot drives it directly without delegating):
 
-1. `plan` — fetch ticket / parse description, produce a plan in Plan Mode (calls `plan-work` internals)
-2. `implement` — apply the plan as code edits
-3. `test` — run lint/typecheck/unit tests (`test-changes`)
-4. `e2e` — Playwright-MCP smoke test of the routes affected by the diff (`smoke-ui`). Skipped with `(–)` if HERO.md declares no UI project.
-5. `commit` — conventional commit (`commit-changes`)
-6. `push-draft` — push and open a draft PR (`push-pr`)
-7. `self-review` — review the draft, apply fixes, mark ready (`review-pr`)
-8. `respond` — answer Copilot/CodeRabbit/Greptile inline comments and resolve threads (`respond-to-pr`)
-9. `ship` — `@auto-approve`, await verdict, merge if green, then reset to default branch (`ship-pr`)
+| # | Step | Skill to run standalone | Notes |
+|---|------|-------------------------|-------|
+| 1 | `plan` | `hero-skills:plan-work` | fetch ticket / parse description, produce a plan in Plan Mode |
+| 2 | `implement` | `inline` (Plan Mode → edits) | applies the approved plan as code edits |
+| 3 | `test` | `hero-skills:test-changes` | run lint/typecheck/unit tests |
+| 4 | `e2e` | `hero-skills:smoke-ui` | Playwright-MCP smoke of routes touched by the diff. `(–)` if HERO.md declares no UI project |
+| 5 | `simplify` | `/simplify` (external) | review the dirty diff for reuse/quality/efficiency and fix; `(–)` if `/simplify` unavailable |
+| 6 | `commit` | `hero-skills:commit-changes` | conventional commit, groups changesets, runs pre-commit |
+| 7 | `push-draft` | `hero-skills:push-pr` | push and open a draft PR |
+| 8 | `self-review` | `hero-skills:review-pr` (Steps 1–8) | run pr-review-toolkit agents on the draft, apply fixes |
+| 9 | `mark-ready` | `hero-skills:review-pr` (Step 9) or `gh pr ready` | hard user gate that converts draft → ready |
+| 10 | `await-review` | `inline` (poll) | poll for the configured Code Review Agent's first comment; `(–)` if `agent: none` |
+| 11 | `respond` | `hero-skills:respond-to-pr` | address the bot's inline comments and resolve threads |
+| 12 | `ship` | `hero-skills:ship-pr` | `@auto-approve`, await verdict, ask the user to merge, merge, reset to default branch |
 
-The `e2e` node sits before `commit` so a UI regression aborts the pipeline before
-anything is written to git history. For backend-only PRs the node is skipped
-(rendered `(–)`), not failed.
+The `e2e` node sits before `simplify`/`commit` so a UI regression aborts the
+pipeline before anything is written to git history. For backend-only PRs the
+node is skipped (rendered `(–)`), not failed.
+
+`simplify` sits between `e2e` and `commit` so the dirty diff is tidied
+before it lands in git history. `commit-changes` also invokes `/simplify`
+internally for standalone use; running one-shot just makes that step visible
+in the DAG and pays a no-op cost on the second invocation.
+
+`mark-ready` is split from `self-review` so the conversion from draft → ready
+is a visible, separately-gated step. `await-review` is split from `respond`
+so the poll-for-bot phase is visible even when there is nothing to respond to.
 
 The user must explicitly approve at each gate that involves a destructive or
 shared-state change: marking the PR ready, posting `@auto-approve`, and

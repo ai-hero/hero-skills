@@ -2,7 +2,7 @@
 name: review-pr
 # prettier-ignore
 description: Review a PR. No argument reviews your own draft PR and applies fixes. A PR number reviews the author's code and posts inline comments without editing their code.
-argument-hint: [#PR]
+argument-hint: [#PR] [--no-mark-ready]
 disable-model-invocation: true
 ---
 
@@ -12,9 +12,26 @@ Context-aware PR review. Auto-detects whether you're reviewing your own draft or
 
 ## Arguments
 
-- `$ARGUMENTS` — Optional PR number or URL
+- `$ARGUMENTS` — Optional PR number or URL, plus optional flags
   - (none) — Auto-detect from current branch → your draft PR → self-review mode
   - `#123` or URL — Your PR: self-review mode. Someone else's PR: review mode (no edits).
+  - `--no-mark-ready` — Self-review mode only: run Steps 1–8 (post review, apply fixes, push, post improvements summary, update PR description) but skip Step 9 (the mark-ready prompt + `gh pr ready`). Used by `hero-skills:one-shot` so its DAG can render `self-review` (Step 8) and `mark-ready` (Step 9) as distinct nodes without double-prompting. Combine with a PR number/URL as needed (`#42 --no-mark-ready`).
+
+Parse `$ARGUMENTS` for the flag once at the top of Step 0:
+
+```bash
+NO_MARK_READY=false
+ARGS_FILTERED=""
+for tok in $ARGUMENTS; do
+  case "$tok" in
+    --no-mark-ready) NO_MARK_READY=true ;;
+    *) ARGS_FILTERED="$ARGS_FILTERED $tok" ;;
+  esac
+done
+ARGS_FILTERED=$(printf '%s' "$ARGS_FILTERED" | sed 's/^ //')
+# Use $ARGS_FILTERED wherever the existing skill body references $ARGUMENTS
+# for the PR identifier (Step 0's `PR_ARG=...awk '{print $1}'` lookup, etc.).
+```
 
 ## Prerequisites
 
@@ -255,6 +272,10 @@ Substitute `DRAFTED_FULL_BODY_HERE` with actual Markdown before running.
 
 ### Step 9: Ask to Mark Ready
 
+**Skip this step entirely when `$NO_MARK_READY` is `true`** (caller passed `--no-mark-ready`, typically `hero-skills:one-shot` whose own Step 9 owns the mark-ready gate). In that case, jump straight to Step 10 — the summary will show `PR state: Draft (mark-ready deferred to caller)`.
+
+Otherwise, ask the user:
+
 ```
 Self-review complete.
 
@@ -286,6 +307,15 @@ Commits: N pushed
 PR description: {updated | left as-is} ({reason})
 PR state: {Draft / Ready for review}
 URL: {pr-url}
+
+Next steps:
+  # If you marked ready in Step 9:
+  # Step 10 — your Code Review Agent (Copilot / CodeRabbit / Greptile) auto-reviews
+  #           the ready PR. No skill to run — just wait for the bot's first
+  #           comment. Skipped entirely if HERO.md has agent: none.
+  hero-skills:respond-to-pr    # Step 11 — address the bot's inline comments
+  hero-skills:ship-pr          # Step 12 — @auto-approve, merge, reset (jump here directly if `agent: none`)
+  # If you declined mark-ready, address findings and re-run hero-skills:review-pr.
 ```
 
 ---
