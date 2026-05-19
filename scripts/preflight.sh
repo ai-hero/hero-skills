@@ -9,7 +9,7 @@
 #   tooling  — gh + auth, node ≥18, Playwright MCP registered, pr-review-toolkit
 #              installed, pre-commit if .pre-commit-config.yaml exists
 #   repo     — HERO.md present + non-stale, auto-approve.yml on default branch,
-#              ANTHROPIC_API_KEY repo secret exists, no in-progress merge/rebase
+#              no in-progress merge/rebase
 #   runtime  — per-project .env keys vs .env.example, declared ports free,
 #              dependency file present. Scoped to projects touched by the diff
 #              when --projects is passed.
@@ -249,22 +249,11 @@ check_repo() {
     else
       emit BLOCKER "repo: .github/workflows/auto-approve.yml not on $DEFAULT_BRANCH — Step 12 (ship) will be a no-op. Run hero-skills:init-hero --update, then merge the workflow file to $DEFAULT_BRANCH."
     fi
-
-    # 4. ANTHROPIC_API_KEY secret exists. Server-side filter via jq's
-    # `any()` so we only pay the round-trip once and skip the grep pipe.
-    # Non-admins may not see secrets, so a `gh` failure is SKIP not BLOCKER.
-    local has_key
-    has_key=$(gh secret list --json name --jq 'any(.name == "ANTHROPIC_API_KEY")' 2>/dev/null || echo "__UNREADABLE__")
-    case "$has_key" in
-      true)             emit OK "repo: ANTHROPIC_API_KEY secret present" ;;
-      false)            emit BLOCKER "repo: ANTHROPIC_API_KEY secret missing — auto-approve workflow will fail at Step 12. Add via: gh secret set ANTHROPIC_API_KEY" ;;
-      __UNREADABLE__|*) emit SKIP "repo: cannot read repo secrets (non-admin token) — verify ANTHROPIC_API_KEY manually" ;;
-    esac
   else
-    emit SKIP "repo: gh unavailable — cannot check auto-approve.yml or secrets remotely"
+    emit SKIP "repo: gh unavailable — cannot check auto-approve.yml remotely"
   fi
 
-  # 5. No in-progress merge / rebase / cherry-pick. Resolve each path via
+  # 4. No in-progress merge / rebase / cherry-pick. Resolve each path via
   # `git rev-parse --git-path` so the check works inside worktrees (where
   # .git is a file pointing at the real gitdir) and bare repos. Hard-coded
   # $ROOT/.git/* paths miss those layouts.

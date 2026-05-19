@@ -1,7 +1,7 @@
 ---
 name: preflight
 # prettier-ignore
-description: Run pre-flight checks for the hero-skills pipeline. Catches missing tooling, stale HERO.md, missing secrets, .env mismatches, busy ports — before any step does destructive work.
+description: Run pre-flight checks for the hero-skills pipeline. Catches missing tooling, stale HERO.md, .env mismatches, busy ports — before any step does destructive work.
 argument-hint: [--bucket tooling|repo|runtime|pipeline|all] [--projects p1,p2]
 disable-model-invocation: true
 ---
@@ -24,7 +24,7 @@ The actual checks live in `scripts/preflight.sh`. This skill is a thin wrapper: 
 | Bucket | Checks |
 |--------|--------|
 | `tooling` | `gh` + auth + `repo` scope, `jq`, Node ≥18, Playwright MCP registered, pr-review-toolkit plugin installed, `pre-commit` present when `.pre-commit-config.yaml` exists |
-| `repo` | HERO.md present + non-stale, `.github/workflows/auto-approve.yml` on default branch, `ANTHROPIC_API_KEY` secret exists, no in-progress merge/rebase/cherry-pick |
+| `repo` | HERO.md present + non-stale, `.github/workflows/auto-approve.yml` on default branch, no in-progress merge/rebase/cherry-pick |
 | `runtime` | Per-project `.env` covers every key in `.env.example`, declared `port:` is free, declared `dependency-file:` exists |
 | `pipeline` | `origin/DEFAULT_BRANCH` reachable, issue tracker auth (Linear / Jira / GitHub Issues) |
 
@@ -100,12 +100,11 @@ If `Result: BLOCKED`, do not suggest `hero-skills:one-shot` as a next step — l
 
 `hero-skills:one-shot` calls `scripts/preflight.sh --bucket all` (with `--projects` scoped to the projects the diff touches) at **Step 0.3**, before auto-branching and resume detection. If any blocker fires, one-shot halts before any branch is created.
 
-You can also call it standalone any time — e.g., after adding a new project to HERO.md, after rotating a repo secret, or when something in the pipeline looks wrong and you want a single command to see the whole environmental state.
+You can also call it standalone any time — e.g., after adding a new project to HERO.md, after editing a project's `.env`, or when something in the pipeline looks wrong and you want a single command to see the whole environmental state.
 
 ## Notes
 
 - The script is read-only. It never edits files, creates branches, modifies remote state, or runs interactive prompts. Safe to run on every invocation.
 - For ports: the check uses `lsof -nP -iTCP:PORT -sTCP:LISTEN`. If `lsof` is unavailable (rare on macOS / linux dev boxes, common in minimal containers), the port check skips with `[SKIP]` rather than reporting a false-OK.
-- For secrets: `gh secret list` requires admin permission on the repo. Non-admin tokens get `[SKIP]` for the `ANTHROPIC_API_KEY` check — the user must verify manually via the repo settings page. <!-- pragma: allowlist secret -->
 - For Playwright MCP: the canonical check is `claude mcp list`. If the `claude` CLI isn't on PATH (unusual but possible), the script falls back to grepping `~/.claude.json` for a `playwright` entry.
 - For pr-review-toolkit: the script looks in `~/.claude/plugins/pr-review-toolkit/` and `$ROOT/.claude/plugins/pr-review-toolkit/`. If the plugin lives elsewhere on the user's setup, the check may report a false `[WARN]` — that's safe, since the worst case is `hero-skills:review-pr` falling back to a thinner review.
