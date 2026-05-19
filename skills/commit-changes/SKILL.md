@@ -112,7 +112,7 @@ For each changed file: read the diff, understand purpose, assess quality.
 
 ### Step 4: Simplify Code
 
-Invoke the `simplify` skill via the Skill tool. It reviews the current diff for reuse, quality, and efficiency and fixes any issues found before the commit lands. Step 6 below handles the post-fix pre-commit re-run.
+Invoke the `simplify` skill via the Skill tool. `simplify` is **not** part of this plugin — it ships separately (see the user-invocable skills list in the current session). It reviews the current diff for reuse, quality, and efficiency and fixes any issues found before the commit lands. Step 6 below handles the post-fix pre-commit re-run.
 
 If the `simplify` skill is unavailable in this environment, report `NO_SIMPLIFY_SKILL — falling back to inline checklist` and apply this check before continuing to Step 5:
 
