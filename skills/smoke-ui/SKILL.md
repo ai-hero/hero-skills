@@ -145,13 +145,24 @@ On `y`, start the dev server with output captured to a log under `.test-output/`
 
 ```bash
 # Centralize all smoke-ui artifacts under .test-output/ so they live next
-# to the screenshots and are covered by the same .gitignore entry. The
-# `mkdir -p` and gitignore-append also happen in Step 4 before the first
+# to the screenshots and are covered by the same exclude entry. The
+# `mkdir -p` and exclude-append also happen in Step 4 before the first
 # screenshot — doing them here too is cheap and lets the dev-server log
 # exist before Step 4 ever runs.
 mkdir -p "$ROOT/.test-output"
-grep -qxF '.test-output/' "$ROOT/.gitignore" 2>/dev/null \
-  || printf '\n.test-output/\n' >> "$ROOT/.gitignore"
+# Write the ignore rule to .git/info/exclude (repo-local, untracked) rather
+# than .gitignore (tracked) — modifying a tracked file would leave the
+# working tree dirty and contradict this skill's "never modifies tracked
+# source files" contract. Resolve the path via git so worktrees / bare repos
+# / non-default gitdirs work too.
+EXCLUDE_FILE=$(git -C "$ROOT" rev-parse --git-path info/exclude 2>/dev/null)
+case "$EXCLUDE_FILE" in
+  /*) ;;
+  *)  EXCLUDE_FILE="$ROOT/$EXCLUDE_FILE" ;;
+esac
+mkdir -p "$(dirname "$EXCLUDE_FILE")"
+grep -qxF '.test-output/' "$EXCLUDE_FILE" 2>/dev/null \
+  || printf '\n.test-output/\n' >> "$EXCLUDE_FILE"
 DEV_LOG="$ROOT/.test-output/dev-server.log"
 # Truncate any stale log from a previous run so this run's diagnostics
 # only reflect the current invocation.
@@ -272,10 +283,17 @@ For each route in order, run the same recipe via Playwright MCP:
 
    ```bash
    mkdir -p "$ROOT/.test-output/playwright-mcp"
-   # Ensure .gitignore covers the whole .test-output/ tree (append if absent —
-   # never commit test artifacts).
-   grep -qxF '.test-output/' "$ROOT/.gitignore" 2>/dev/null \
-     || printf '\n.test-output/\n' >> "$ROOT/.gitignore"
+   # Ensure the exclude file covers .test-output/. Use .git/info/exclude
+   # (repo-local, untracked) instead of .gitignore so we don't modify a
+   # tracked file — see Step 2's note.
+   EXCLUDE_FILE=$(git -C "$ROOT" rev-parse --git-path info/exclude 2>/dev/null)
+   case "$EXCLUDE_FILE" in
+     /*) ;;
+     *)  EXCLUDE_FILE="$ROOT/$EXCLUDE_FILE" ;;
+   esac
+   mkdir -p "$(dirname "$EXCLUDE_FILE")"
+   grep -qxF '.test-output/' "$EXCLUDE_FILE" 2>/dev/null \
+     || printf '\n.test-output/\n' >> "$EXCLUDE_FILE"
    # Clear stale artifacts from previous runs so this report only reflects
    # the current diff. Scope the delete to smoke-ui artifacts so co-located
    # Playwright traces / videos from unrelated sessions are not touched.
@@ -389,5 +407,5 @@ If FAILED, surface:
 ## Notes
 
 - This is a **smoke** test, not a full E2E. Cap routes at 5, skip large forms, do not chase flaky tests. If a real E2E suite exists in the repo (Playwright config, Cypress, etc.), prefer running it via `hero-skills:test-changes` instead.
-- The skill never modifies tracked source files. It only reads, drives, and reports — but it does write disposable local artifacts under `$ROOT/.test-output/`: screenshots in `.test-output/playwright-mcp/` (the canonical Playwright MCP artifact directory) and the dev-server log at `.test-output/dev-server.log`. `.test-output/` is the shared test-artifact directory for every hero skill; a single `.gitignore` entry covers all of it. Both Step 2 (dev-server start) and Step 4 (first screenshot) `mkdir -p` the directory and append `.test-output/` to `.gitignore` if absent, *and* clear stale artifacts from prior runs so the report only reflects the current diff.
+- The skill never modifies tracked source files. It only reads, drives, and reports — but it does write disposable local artifacts under `$ROOT/.test-output/`: screenshots in `.test-output/playwright-mcp/` (the canonical Playwright MCP artifact directory) and the dev-server log at `.test-output/dev-server.log`. `.test-output/` is the shared test-artifact directory for every hero skill. The ignore rule lives in `.git/info/exclude` (repo-local, untracked) — *not* `.gitignore` — so we never dirty the working tree. Both Step 2 (dev-server start) and Step 4 (first screenshot) `mkdir -p` the directory and append `.test-output/` to `.git/info/exclude` if absent, *and* clear stale artifacts from prior runs so the report only reflects the current diff.
 - Console-error filtering: the framework's hot-reload / dev-mode warnings (e.g., `[HMR]`, React strict-mode double-render notices) are not failures. Match conservatively: if in doubt about whether a message is real, surface it as a warning rather than a hard fail, and let the user decide.

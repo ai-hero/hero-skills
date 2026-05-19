@@ -432,13 +432,19 @@ Render DAG with `push-draft` active. Run `hero-skills:push-pr` (no arguments —
 
 ### Step 8: self-review
 
-Render DAG with `self-review` active. Run `hero-skills:review-pr` (no arguments — auto-detects your draft PR and runs the pr-review-toolkit agents in parallel, applies fixes).
+Render DAG with `self-review` active. Run `hero-skills:review-pr --no-mark-ready` (auto-detects your draft PR and runs the pr-review-toolkit agents in parallel, applies fixes). The `--no-mark-ready` flag is **required** here so review-pr stops before its own Step 9 mark-ready prompt — one-shot's Step 9 below owns that gate, and double-prompting would be confusing.
 
-This step covers `review-pr` Steps 1–8: post the review comment, ask permission to apply fixes, apply them, push the commit, post the improvements summary, and update the PR description. **`review-pr` Step 9 (mark-ready) is one-shot's Step 9 below** — render the DAG transition between them so the mark-ready gate is a visible, separately-tracked node, but do not invoke `review-pr` twice.
+This step covers `review-pr` Steps 1–8 only: post the review comment, ask permission to apply fixes, apply them, push the commit, post the improvements summary, and update the PR description. Mark-ready is deliberately deferred to one-shot's Step 9 so the DAG renders it as a visible, separately-tracked node.
 
 ### Step 9: mark-ready
 
-Render DAG with `mark-ready` active. This is the mark-ready gate handed off from `review-pr` Step 9: ask the user `Convert draft PR #{number} to ready-for-review? [y/N]`, and on `y` run:
+Render DAG with `mark-ready` active. Now ask the user the gate question explicitly:
+
+```
+Convert draft PR #{number} to ready-for-review? [y/N]
+```
+
+On `y`:
 
 ```bash
 gh pr ready "$PR_NUMBER"

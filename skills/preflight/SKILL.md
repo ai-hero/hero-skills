@@ -50,10 +50,11 @@ If `HERO.md` is missing, mention it but still run `scripts/preflight.sh` — the
 
 ### Step 1: Run the Script
 
-Prefer the harness-provided `$CLAUDE_PLUGIN_ROOT` when set (covers worktrees and non-default `~/.claude` layouts), otherwise fall back to the in-repo path, then the user-dir path:
+Prefer the harness-provided `$CLAUDE_PLUGIN_ROOT` when set (covers worktrees and non-default `~/.claude` layouts), otherwise fall back to the in-repo path, then the user-dir path. Only prepend `CLAUDE_PLUGIN_ROOT` when it's non-empty — otherwise the first candidate would expand to a bare absolute path (`/scripts/preflight.sh`) and silently point at the wrong file:
 
 ```bash
-PREFLIGHT="${CLAUDE_PLUGIN_ROOT:-}/scripts/preflight.sh"
+PREFLIGHT=""
+[ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && PREFLIGHT="$CLAUDE_PLUGIN_ROOT/scripts/preflight.sh"
 [ -x "$PREFLIGHT" ] || PREFLIGHT="$ROOT/.claude/plugins/hero-skills/scripts/preflight.sh"
 [ -x "$PREFLIGHT" ] || PREFLIGHT="$HOME/.claude/plugins/hero-skills/scripts/preflight.sh"
 "$PREFLIGHT" $ARGUMENTS
