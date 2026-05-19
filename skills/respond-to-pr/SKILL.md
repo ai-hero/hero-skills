@@ -394,6 +394,10 @@ PR description: {updated | left as-is} ({one-line reason})
 Remaining unresolved: {list any, if applicable}
 
 URL: {pr-url}
+
+Next steps:
+  hero-skills:ship-pr          # Step 12 — @auto-approve, merge, reset to default branch
+                               # ship-pr will block if any threads remain unresolved
 ```
 
 **If changes were stashed in Step 2, remind the user:**

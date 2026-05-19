@@ -241,9 +241,11 @@ Files Created:
   - path/to/new_file.py
 
 Next steps:
-  hero-skills:test-changes     # Verify the implementation works
-  hero-skills:commit-changes   # Review and commit
-  hero-skills:push-pr     # Push and open a draft PR
+  hero-skills:test-changes     # Step 3 — verify lint/typecheck/unit tests
+  hero-skills:smoke-ui         # Step 4 — Playwright smoke (UI projects only)
+  /simplify                    # Step 5 — tidy the dirty diff before commit
+  hero-skills:commit-changes   # Step 6 — review and commit
+  hero-skills:push-pr          # Step 7 — push and open a draft PR
 ```
 
 ## Integration

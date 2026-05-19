@@ -215,7 +215,9 @@ Commits Created: N
 
 Pre-commit: PASSED (or SKIPPED)
 
-Ready to push with hero-skills:push-pr
+Next steps:
+  hero-skills:push-pr          # Step 7 — push and open a draft PR
+  hero-skills:review-pr        # Step 8 — self-review on the resulting draft (and Step 9 mark-ready)
 ```
 
 ---

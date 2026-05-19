@@ -42,6 +42,52 @@ git clone https://github.com/ai-hero/hero-skills.git ~/.claude/plugins/hero-skil
 
 Skills are immediately available in any Claude Code session. No restart needed.
 
+### Companion installs (for full pipeline coverage)
+
+Three pieces ride along with one-shot — install them so Steps 7 (`push-draft`), 8 (`self-review`), 4 (`e2e`), and 12 (`ship`) work out of the box:
+
+**1. GitHub CLI (`gh`)** — required by `push-pr`, `review-pr`, `respond-to-pr`, and `ship-pr` for every PR / comment / workflow operation. Without it, every step from `push-draft` onward fails immediately.
+
+```bash
+# macOS (Homebrew)
+brew install gh
+
+# Linux (Debian/Ubuntu)
+sudo apt install gh
+
+# Other platforms: https://cli.github.com/
+```
+
+Then authenticate with the `repo` scope (required for PR creation, merge, and `gh secret set`):
+
+```bash
+gh auth login -s repo
+```
+
+`hero-skills:preflight` verifies both presence and the `repo` scope.
+
+**2. `pr-review-toolkit` plugin** — provides the five review agents that `hero-skills:review-pr` runs in parallel (code-reviewer, silent-failure-hunter, pr-test-analyzer, comment-analyzer, type-design-analyzer). From inside Claude Code:
+
+```
+/plugin install pr-review-toolkit
+```
+
+Or from the host shell:
+
+```bash
+claude plugins add pr-review-toolkit@claude-plugins-official
+```
+
+If you skip this, `hero-skills:review-pr` still runs but produces a much thinner review.
+
+**3. Playwright MCP server** — drives the browser smoke test in `hero-skills:smoke-ui` (Step 4 `e2e`). Requires Node.js 18+ (check with `node --version`):
+
+```bash
+claude mcp add playwright npx @playwright/mcp@latest
+```
+
+Use `--scope user` to share the registration across every project on the machine, or `--scope project` to commit it to the repo. Without this, the `e2e` step renders `(–)` (skipped) and you lose the UI regression check before commits land.
+
 ## Quick Start
 
 ```
@@ -50,16 +96,20 @@ hero-skills:init-hero
 
 # 2. Plan work from a ticket — Plan Mode drafts the approach,
 #    approve it, and Claude implements in the same conversation
-hero-skills:plan-work PROJ-123
+hero-skills:plan-work PROJ-123              # Steps 1–2: plan, implement
 
-# 3. Verify, commit, push as draft, then review your own PR
-hero-skills:test-changes
-hero-skills:commit-changes
-hero-skills:push-pr          # opens a DRAFT PR
-hero-skills:review-pr        # runs all review agents in parallel, fixes findings, asks to mark ready
+# 3. Verify, simplify, commit, push as draft, then review your own PR
+hero-skills:test-changes                    # Step 3: lint/typecheck/unit tests
+hero-skills:smoke-ui                        # Step 4: Playwright smoke (UI projects only)
+/simplify                                   # Step 5: tidy the dirty diff
+hero-skills:commit-changes                  # Step 6: conventional commit
+hero-skills:push-pr                         # Step 7: opens a DRAFT PR
+hero-skills:review-pr                       # Steps 8–9: parallel review agents, fixes, then mark-ready gate
 
-# 4. Once reviewers sign off, ship it
-hero-skills:ship-pr          # @auto-approves only if reviewed + all threads resolved, then merges and resets your local branch
+# 4. Wait for the review bot, address its feedback, then ship
+#    (the wait in Step 10 is implicit — respond-to-pr only runs once the bot replies)
+hero-skills:respond-to-pr                   # Step 11: address Copilot/CodeRabbit/Greptile inline comments
+hero-skills:ship-pr                         # Step 12: @auto-approve, merge, reset to default branch
 ```
 
 That's it. Each command reads your `HERO.md` config and adapts to your stack automatically.
@@ -72,15 +122,32 @@ For genuinely small, low-risk PRs:
 hero-skills:one-shot PROJ-123
 ```
 
-This chains all nine steps end-to-end — `plan → implement → test → e2e → commit → push-draft → self-review → respond → ship` — with explicit user gates at plan-approval, mark-ready, and merge. The `e2e` step uses Playwright MCP to smoke-test the routes affected by the diff and is skipped automatically on backend-only PRs.
+This chains all twelve steps end-to-end — `plan → implement → test → e2e → simplify → commit → push-draft → self-review → mark-ready → await-review → respond → ship` — with explicit user gates at plan-approval, mark-ready, and merge. The `e2e` step uses Playwright MCP to smoke-test the routes affected by the diff and is skipped automatically on backend-only PRs. `simplify` runs the `/simplify` skill on the dirty diff so the commit lands clean. `mark-ready` is the explicit draft → ready gate; `await-review` polls for your configured Code Review Agent (Copilot, CodeRabbit, Greptile, …) before `respond` addresses its feedback.
 
 At each step transition, one-shot prints a progress line so you always know where you are:
 
 ```
-[7/9] (✓) plan → (✓) implement → (✓) test → (✓) e2e → (✓) commit → (✓) push-draft → (▶) self-review → ( ) respond → ( ) ship
+[8/12] (✓) plan → (✓) implement → (✓) test → (✓) e2e → (✓) simplify → (✓) commit → (✓) push-draft → (▶) self-review → ( ) mark-ready → ( ) await-review → ( ) respond → ( ) ship
 
 Now running: self-review
 ```
+
+Each step maps to a skill you can run on its own when you don't want the whole pipeline:
+
+| # | Step | Skill to run standalone |
+|---|------|-------------------------|
+| 1 | `plan` | `hero-skills:plan-work` |
+| 2 | `implement` | inline (Plan Mode → edits) |
+| 3 | `test` | `hero-skills:test-changes` |
+| 4 | `e2e` | `hero-skills:smoke-ui` |
+| 5 | `simplify` | `/simplify` (external skill) |
+| 6 | `commit` | `hero-skills:commit-changes` |
+| 7 | `push-draft` | `hero-skills:push-pr` |
+| 8 | `self-review` | `hero-skills:review-pr` (Steps 1–8) |
+| 9 | `mark-ready` | `hero-skills:review-pr` (Step 9 gate) or `gh pr ready` |
+| 10 | `await-review` | inline poll (no separate skill) |
+| 11 | `respond` | `hero-skills:respond-to-pr` |
+| 12 | `ship` | `hero-skills:ship-pr` |
 
 Re-running `hero-skills:one-shot` mid-flow is safe: it inspects git + the open PR for that branch and resumes from the inferred step deterministically — no confirmation prompt. On the default branch with work to preserve, one-shot auto-branches off (no prompt) before resuming. It exits cleanly with a hand-off hint only when there's nothing left to do (e.g., after the PR has merged) or when state can't be inferred safely (e.g., a failed `git fetch`).
 
@@ -119,7 +186,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
 | Command | What it does |
 |---------|-------------|
-| `hero-skills:one-shot` | Drives a small task end-to-end: plan → implement → test → e2e → commit → push-draft → self-review → respond → ship. Detects a resume point on re-invocation. Explicit user gates at each destructive step. |
+| `hero-skills:one-shot` | Drives a small task end-to-end: plan → implement → test → e2e → simplify → commit → push-draft → self-review → mark-ready → await-review → respond → ship. Detects a resume point on re-invocation. Explicit user gates at each destructive step. |
 | `hero-skills:create-project` | Scaffolds a new project, then chains into setup-dev → init-hero → first-commit. |
 | `hero-skills:smoke-ui` | Playwright-MCP smoke test of the routes affected by the diff. Standalone or invoked as the `e2e` node of one-shot. Skips with `(–)` on backend-only PRs. |
 

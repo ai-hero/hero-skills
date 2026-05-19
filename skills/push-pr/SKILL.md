@@ -180,10 +180,16 @@ Draft PR created: #{number}
 URL: {pr-url}
 
 Next steps:
-  hero-skills:review-pr   # Run automated review and fix findings before marking ready
+  hero-skills:review-pr        # Step 8 — self-review (runs pr-review-toolkit agents, applies fixes)
+                               # Step 9 — its mark-ready prompt converts the draft to ready
+  # Step 10 — once the PR is ready, your Code Review Agent (Copilot / CodeRabbit /
+  #           Greptile) auto-reviews. No skill to run — just wait for the bot
+  #           to comment. Skipped entirely if HERO.md has agent: none.
+  hero-skills:respond-to-pr    # Step 11 — address the bot's inline comments
+  hero-skills:ship-pr          # Step 12 — @auto-approve, merge, reset to default branch
 ```
 
-If the PR was created with `ready` (non-draft), report `PR created` instead of `Draft PR created` and skip the self-review hint.
+If the PR was created with `ready` (non-draft), report `PR created` instead of `Draft PR created` and skip the self-review hint (jump straight to `hero-skills:respond-to-pr` once the bot replies, or `hero-skills:ship-pr` if no review bot is configured).
 
 ---
 

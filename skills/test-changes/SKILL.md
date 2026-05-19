@@ -264,6 +264,11 @@ Smoke Tests:
     Navigation: 5 links found
 
 Servers stopped.
+
+Next steps:
+  hero-skills:smoke-ui         # Step 4 — Playwright route smoke (UI projects only)
+  /simplify                    # Step 5 — tidy the dirty diff before commit
+  hero-skills:commit-changes   # Step 6 — review and commit
 ```
 
 ## Examples

@@ -268,8 +268,9 @@ Created:
 
 Next steps:
   cd PROJECT_NAME
-  hero-skills:plan-work   # First task — kicks off the one-shot pipeline
-  hero-skills:test-changes  # Verify it runs
+  hero-skills:preflight        # Step 0.3 — sanity-check tooling, .env, ports, secrets
+  hero-skills:plan-work        # Steps 1–2 — plan and implement the first task
+  hero-skills:one-shot         # …or chain Steps 1–12 in a single invocation
 ```
 
 ## Notes
