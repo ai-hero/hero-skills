@@ -9,7 +9,7 @@
 #   tooling  — gh + auth, node ≥18, Playwright MCP registered, pr-review-toolkit
 #              installed, pre-commit if .pre-commit-config.yaml exists
 #   repo     — HERO.md present + non-stale, auto-approve.yml on default branch,
-#              no in-progress merge/rebase
+#              no in-progress merge/rebase/cherry-pick
 #   runtime  — per-project .env keys vs .env.example, declared ports free,
 #              dependency file present. Scoped to projects touched by the diff
 #              when --projects is passed.
