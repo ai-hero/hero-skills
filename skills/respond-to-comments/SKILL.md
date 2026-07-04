@@ -1,12 +1,12 @@
 ---
-name: respond-to-pr
+name: respond-to-comments
 # prettier-ignore
 description: Read PR review comments, fix the code issues they raise, and resolve the conversations on GitHub. Handles the full respond-to-feedback cycle.
 argument-hint: [pr-number]
 disable-model-invocation: true
 ---
 
-# Respond — Fix Issues and Resolve PR Comments
+# Respond to Comments — Fix Issues and Resolve PR Comments
 
 Read review comments on your pull request, update the code to address them, and resolve the conversations on GitHub.
 
@@ -78,7 +78,7 @@ You have uncommitted changes on '$CURRENT':
 Need to switch to '$PR_BRANCH' to address PR comments.
 
 Options:
-1. Stash changes (saved as "respond-to-pr: WIP on $CURRENT") — will NOT auto-restore since you're moving to a different branch
+1. Stash changes (saved as "respond-to-comments: WIP on $CURRENT") — will NOT auto-restore since you're moving to a different branch
 2. Cancel — go back and commit or handle changes first
 ```
 
@@ -87,10 +87,10 @@ Options:
 **If user chooses option 1 (stash):**
 
 ```bash
-git stash push -m "respond-to-pr: WIP on $CURRENT"
+git stash push -m "respond-to-comments: WIP on $CURRENT"
 ```
 
-Report: `Stashed as: stash@{0} — "respond-to-pr: WIP on $CURRENT". Restore later with: git checkout $CURRENT && git stash pop`
+Report: `Stashed as: stash@{0} — "respond-to-comments: WIP on $CURRENT". Restore later with: git checkout $CURRENT && git stash pop`
 
 Note: Since the user is switching to a different branch to do PR work, do NOT auto-pop the stash. Remind the user in the final summary how to restore.
 
@@ -296,7 +296,7 @@ Group by category. For each fix, name the file:line, the original feedback, and 
 
 ```bash
 COMMENT_BODY=$(cat <<'EOF'
-## Respond-to-PR Improvements
+## Respond-to-Comments Improvements
 
 **Code changes (X applied):**
 - FILE:LINE — REVIEWER_FEEDBACK — FIX_DESCRIPTION
@@ -396,6 +396,7 @@ Remaining unresolved: {list any, if applicable}
 URL: {pr-url}
 
 Next steps:
+  hero-skills:scan-vulns       # if this cycle touched dependencies
   hero-skills:ship-pr          # Step 12 — @auto-approve, merge, reset to default branch
                                # ship-pr will block if any threads remain unresolved
 ```
@@ -539,8 +540,8 @@ If not exiting, repeat the respond cycle for the new comments. The mandatory imp
 5. Commit fixes (same as Step 7)
 6. Push (same as Step 8)
 7. Reply to and resolve addressed threads (same as Step 9)
-8. Post the consolidated improvements comment (same as Step 9.5)
-9. Update PR title/body if the iteration's fixes shifted scope or behavior (same as Step 9.6)
+8. Post the consolidated improvements comment (same as Step 9a)
+9. Update PR title/body if the iteration's fixes shifted scope or behavior (same as Step 9b)
 
 Increment iteration counter and loop back to 11a.
 
