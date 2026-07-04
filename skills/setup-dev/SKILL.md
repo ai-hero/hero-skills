@@ -166,7 +166,7 @@ MCP SERVERS
 ───────────
 [??] linear (mcp__linear): listed in HERO.md
      → Is the Linear MCP server configured in your Claude settings?
-     → This is needed for hero-skills:plan-work to manage issues
+     → This is needed for hero-skills:one-shot to fetch issues
 [??] slack (mcp__slack): listed in HERO.md
      → Is the Slack MCP server configured in your Claude settings?
 ```
