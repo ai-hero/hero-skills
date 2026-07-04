@@ -107,7 +107,7 @@ Updates applied:
 Addresses:
 - CVE-XXXX-XXXXX: BRIEF_DESCRIPTION
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -145,7 +145,7 @@ Scout scan results:
 - Before: X critical, Y high
 - After:  A critical, B high
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 EOF
 )"
 ```

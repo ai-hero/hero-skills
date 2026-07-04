@@ -565,7 +565,7 @@ Smoke Tests:
     Screenshots: $ROOT/.test-output/playwright-mcp/*.png
     Result:      OK | FAILED at ROUTE — REASON
 
-Servers stopped.
+Servers: backend/MCP stopped; frontend dev server left running (see above).
 
 Next steps:
   /simplify                    # tidy the dirty diff before committing

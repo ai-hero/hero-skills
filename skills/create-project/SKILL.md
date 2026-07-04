@@ -206,7 +206,7 @@ chore: initialize PROJECT_NAME
 
 DESCRIPTION
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -243,7 +243,12 @@ If the repo was initialized standalone in Step 6 with an initial commit, the `fi
 
 ```bash
 git add HERO.md CLAUDE.md
-git commit -m "chore: add HERO.md and CLAUDE.md from hero-skills:init-hero"
+git commit -m "$(cat <<'EOF'
+chore: add HERO.md and CLAUDE.md from hero-skills:init-hero
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+EOF
+)"
 ```
 
 If the project was added to an existing repo, defer the commit to `hero-skills:push-pr` (the user's normal flow).

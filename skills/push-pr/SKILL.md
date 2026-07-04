@@ -268,7 +268,9 @@ gh pr list --head $(git branch --show-current) --json number,url,title,state
 ### A3: Create Pull Request
 
 ```bash
-DEFAULT_BRANCH=main  # or from HERO.md
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+DEFAULT_BRANCH=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | xargs)
+DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
 git log origin/$DEFAULT_BRANCH..HEAD --pretty=format:"%s%n%b" --reverse
 git diff origin/$DEFAULT_BRANCH..HEAD --stat
 git diff origin/$DEFAULT_BRANCH..HEAD --name-only
