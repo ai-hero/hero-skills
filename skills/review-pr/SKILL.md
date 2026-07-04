@@ -309,12 +309,11 @@ PR state: {Draft / Ready for review}
 URL: {pr-url}
 
 Next steps:
-  # If you marked ready in Step 9:
-  # Step 10 — your Code Review Agent (Copilot / CodeRabbit / Greptile) auto-reviews
-  #           the ready PR. No skill to run — just wait for the bot's first
-  #           comment. Skipped entirely if HERO.md has agent: none.
-  hero-skills:respond-to-pr    # Step 11 — address the bot's inline comments
-  hero-skills:ship-pr          # Step 12 — @auto-approve, merge, reset (jump here directly if `agent: none`)
+  # If you marked ready: your Code Review Agent (Copilot / CodeRabbit / Greptile)
+  # auto-reviews the ready PR — no skill to run, just wait for its first comment.
+  # Skipped entirely if HERO.md has agent: none.
+  hero-skills:respond-to-comments   # address the bot's inline comments
+  hero-skills:ship-pr               # @auto-approve, merge, reset (jump here directly if `agent: none`)
   # If you declined mark-ready, address findings and re-run hero-skills:review-pr.
 ```
 

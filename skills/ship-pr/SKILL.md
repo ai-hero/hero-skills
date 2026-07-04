@@ -193,7 +193,7 @@ Pre-flight gates for PR #PR_NUMBER:
 **This is a hard gate, not a warning.** Stop and refuse to post `@auto-approve` if any of the following:
 
 - `(SELF_REVIEW + OTHER_REVIEWS + BOT_INLINE) == 0` — no prior review at all. Run `hero-skills:review-pr`.
-- `UNRESOLVED > 0` — inline review threads still open. Run `hero-skills:respond-to-pr` to address them and resolve the threads.
+- `UNRESOLVED > 0` — inline review threads still open. Run `hero-skills:respond-to-comments` to address them and resolve the threads.
 - `ACTIVE_CHANGES > 0` — a reviewer's latest review still says CHANGES_REQUESTED. Address the change request, push fixes, then ask the reviewer to dismiss it or submit a fresh review (a subsequent APPROVED review supersedes it in `latestReviews`).
 - `UNANSWERED_QUESTIONS > 0` — top-level questions from human reviewers with no author reply. List each one (`gh api .../issues/$PR_NUMBER/comments --jq '.[] | select(.id > LAST_AUTHOR_COMMENT_ID) | {user: .user.login, body: .body[0:200], url: .html_url}'`) and tell the user to reply to each before re-running.
 
@@ -212,7 +212,7 @@ Cannot run hero-skills:ship-pr yet. Address these first:
   Unanswered reviewer questions (1):
     - @reviewer (PR_URL#issuecomment-12345): "Why not use the existing helper?"
 
-Recommended next step: hero-skills:respond-to-pr
+Recommended next step: hero-skills:respond-to-comments
 ```
 
 Do not proceed. Do not post `@auto-approve`.
@@ -557,7 +557,7 @@ Auto-approve REQUESTED CHANGES on PR #PR_NUMBER.
 (reasons from the verdict comment)
 
 What would you like to do?
-  1. hero-skills:respond-to-pr  -> address the unresolved comments and re-run
+  1. hero-skills:respond-to-comments  -> address the unresolved comments and re-run
   2. Re-trigger @auto-approve once I have addressed the items above
   3. Stop here
 ```
@@ -683,7 +683,7 @@ Action taken:
   - Reset: switched to BASE_BRANCH, pulled, deleted PR_BRANCH (remote+local)
   - Stale-branch cleanup: deleted N | offered N | none found | skipped (sync failed)
   - Left for manual merge                                # APPROVE + user said no
-  - Suggested hero-skills:respond-to-pr                  # REQUEST_CHANGES
+  - Suggested hero-skills:respond-to-comments             # REQUEST_CHANGES
   - Stopped, action failure surfaced                     # WORKFLOW_FAILED
 
 Next steps:

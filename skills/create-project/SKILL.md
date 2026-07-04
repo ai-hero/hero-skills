@@ -269,8 +269,7 @@ Created:
 Next steps:
   cd PROJECT_NAME
   hero-skills:preflight        # Step 0.3 — sanity-check tooling, .env, ports
-  hero-skills:one-shot         # plan and implement the first task
-  hero-skills:one-shot         # …or chain Steps 1–12 in a single invocation
+  hero-skills:one-shot         # plan and implement the first task, or chain the whole pipeline in one invocation
 ```
 
 ## Notes

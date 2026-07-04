@@ -397,7 +397,7 @@ URL: {pr-url}
 
 Next steps:
   hero-skills:scan-vulns       # if this cycle touched dependencies
-  hero-skills:ship-pr          # Step 12 — @auto-approve, merge, reset to default branch
+  hero-skills:ship-pr          # Step 10 — @auto-approve, merge, reset to default branch
                                # ship-pr will block if any threads remain unresolved
 ```
 

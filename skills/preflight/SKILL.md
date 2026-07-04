@@ -89,8 +89,7 @@ Skipped:    K
 Result:     PASSED | BLOCKED
 
 Next steps:
-  hero-skills:one-shot $ARGUMENTS         # Steps 1–12 in one go (once blockers are clear)
-  hero-skills:one-shot                    # …or start with Step 1 alone and run the rest manually
+  hero-skills:one-shot $ARGUMENTS         # Steps 1–10 in one go (once blockers are clear), or start with Step 1 alone
   hero-skills:preflight --bucket repo     # Re-run a single bucket after fixing (tooling|repo|runtime|pipeline)
 ```
 
