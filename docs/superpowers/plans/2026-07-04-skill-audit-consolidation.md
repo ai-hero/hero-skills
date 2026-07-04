@@ -305,7 +305,7 @@ EOF
 
 **Interfaces:**
 
-- Produces: nothing. This task only removes — every reference must already be handled (Tasks 1–3) or handled in Tasks 6–10. Run the guard grep first.
+- Produces: nothing. This task only removes. **It must run AFTER Tasks 6–10** (all reference-fixups) so the repo has zero dangling `hero-skills:*` refs — otherwise the `audit` pre-commit hook blocks the deletion commit. Run the guard grep first.
 
 - [ ] **Step 1: Confirm logic has been absorbed**
 
@@ -763,4 +763,11 @@ EOF
 
 **3. Type consistency:** Skill names are used identically throughout: `respond-to-comments` (not `respond-to-pr`), `push-pr` as the commit+push home, `test-changes` as the smoke home, `ship-pr` as the deploy-health home. The one-shot DAG node names (`plan, implement, test, simplify, push, self-review, mark-ready, await-review, respond, ship`) are identical in Tasks 6 and 7.
 
-**Ordering note:** Tasks 1–3 must run before Task 5 (they lift logic from files Task 5 deletes). Tasks 6–10 can run in any order after Task 5. Task 11 after 1–10. Task 12 (de-branding) after Tasks 1, 3, 4, 6 have settled their files. Task 13 (validation) last.
+**Ordering note (CORRECTED after Task 5 hit the audit hook):** The `audit` pre-commit hook validates `hero-skills:*` references repo-wide on every commit, so the repo must never be committed with a dangling reference. Therefore the reference-fixup tasks run BEFORE the deletion:
+
+- Tasks 1–4 first (lift logic into survivors; skills still present, all refs valid).
+- Then Tasks 6–10 (repoint every reference away from the to-be-removed skills — valid because those skills still exist on disk).
+- Then Task 5 (delete the 5 skills — now that nothing references them, the audit passes). Task 6 may still READ `plan-work`/etc. to lift inline logic, which is why deletion is last.
+- Then Task 11 (Next steps), Task 12 (de-branding, after Tasks 1/3/4/6 settled their files), Task 13 (validation) last.
+
+Execution order: **1, 2, 3, 4, 6, 7, 8, 9, 10, 5, 11, 12, 13.**
