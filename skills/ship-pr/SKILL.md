@@ -604,29 +604,49 @@ kubectl cluster-info --request-timeout=5s
 If the connection fails, report `Deployment: skipped (kubectl unreachable)` and stop here — an unreachable cluster is not the same as a DEGRADED one.
 
 ```bash
+# A failed query must never be mistaken for "all healthy": empty output means
+# healthy ONLY when the query itself succeeded. Capture each command's exit
+# status and set CHECK_FAILED on any failure. `set -o pipefail` so a kubectl
+# failure piped into jq is not masked by jq's own exit code.
+set -o pipefail
+CHECK_FAILED=false
+
 # Nodes — Ready/NotReady and pressure conditions
-kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range .status.conditions[*]}{.type}={.status}{"\t"}{end}{"\n"}{end}'
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range .status.conditions[*]}{.type}={.status}{"\t"}{end}{"\n"}{end}' || CHECK_FAILED=true
 
 # Pods — anything not Running/Succeeded, plus crashloops
-kubectl get pods --all-namespaces --field-selector=status.phase!=Running,status.phase!=Succeeded -o wide 2>/dev/null
-kubectl get pods --all-namespaces -o json | \
-  jq -r '.items[] | select(.status.containerStatuses[]?.restartCount > 5) | "\(.metadata.namespace)/\(.metadata.name) restarts=\(.status.containerStatuses[0].restartCount)"'
+PODS_OUT=$(kubectl get pods --all-namespaces --field-selector=status.phase!=Running,status.phase!=Succeeded -o wide 2>&1) \
+  && printf '%s\n' "$PODS_OUT" \
+  || { echo "WARN: pod-status query failed: $PODS_OUT"; CHECK_FAILED=true; }
+kubectl get pods --all-namespaces -o json \
+  | jq -r '.items[] | select(.status.containerStatuses[]?.restartCount > 5) | "\(.metadata.namespace)/\(.metadata.name) restarts=\(.status.containerStatuses[0].restartCount)"' \
+  || CHECK_FAILED=true
 
 # Deployments — ready vs desired replica counts
-kubectl get deployments --all-namespaces -o json | \
-  jq -r '.items[] | select(.status.readyReplicas != .status.replicas) | "\(.metadata.namespace)/\(.metadata.name) ready=\(.status.readyReplicas // 0)/\(.status.replicas)"'
+kubectl get deployments --all-namespaces -o json \
+  | jq -r '.items[] | select(.status.readyReplicas != .status.replicas) | "\(.metadata.namespace)/\(.metadata.name) ready=\(.status.readyReplicas // 0)/\(.status.replicas)"' \
+  || CHECK_FAILED=true
 ```
 
 If HERO.md flags ArgoCD for this deployment, also check sync/health:
 
 ```bash
-argocd app list -o json 2>/dev/null | jq -r '.[] | "\(.metadata.name)\t\(.status.sync.status)\t\(.status.health.status)"'
-# Fallback via kubectl when the argocd CLI isn't available
-kubectl get applications -n argocd -o json 2>/dev/null | \
-  jq -r '.items[] | "\(.metadata.name)\tsync=\(.status.sync.status)\thealth=\(.status.health.status)"'
+# Try the argocd CLI; fall back to kubectl. If BOTH fail, ArgoCD state is
+# unknown — record that rather than treating empty output as "all Synced".
+if ! argocd app list -o json 2>/dev/null \
+     | jq -r '.[] | "\(.metadata.name)\t\(.status.sync.status)\t\(.status.health.status)"'; then
+  if ! kubectl get applications -n argocd -o json 2>/dev/null \
+       | jq -r '.items[] | "\(.metadata.name)\tsync=\(.status.sync.status)\thealth=\(.status.health.status)"'; then
+    echo "WARN: could not query ArgoCD via the argocd CLI or kubectl."
+    CHECK_FAILED=true
+  fi
+fi
 ```
 
-Classify `HEALTHY` (all nodes Ready, no crashlooping/pending pods, all deployments at desired replica count, ArgoCD Synced/Healthy where checked) vs `DEGRADED` (any NotReady node, any crashlooping/pending pod, any under-replica'd deployment, or ArgoCD OutOfSync/Degraded/Missing).
+Classify in this order:
+
+- **`UNKNOWN` (could not verify)** when `CHECK_FAILED` is `true` — a health query itself failed (RBAC denial, missing `argocd` binary, apiserver error, expired token). This is **not** the same as healthy; report it as `could not verify deployment health` so the user investigates rather than trusting a false green.
+- Otherwise `HEALTHY` (all nodes Ready, no crashlooping/pending pods, all deployments at desired replica count, ArgoCD Synced/Healthy where checked) vs `DEGRADED` (any NotReady node, any crashlooping/pending pod, any under-replica'd deployment, or ArgoCD OutOfSync/Degraded/Missing).
 
 **`vm` / `paas` / `serverless`** — curl the HERO.md-configured health endpoint(s). HERO.md's Deployment section lists one or more, e.g. `- health-endpoint: https://api.example.com/healthz`; read them all first:
 
@@ -651,7 +671,7 @@ Treat a missing endpoint list as skipped, not DEGRADED — there is nothing conf
 
 **`none` or missing** — skip silently; render `(–)` for this phase in the DAG and Summary.
 
-Report the result as `HEALTHY`, `DEGRADED`, or `skipped`, along with the raw evidence (offending node/pod/deployment names, or the failing endpoint and status code) so the user can act on it directly. Never suggest un-merging — end a DEGRADED result with a note like "Deployment looks DEGRADED — investigate, but the merge itself stands."
+Report the result as `HEALTHY`, `DEGRADED`, `UNKNOWN` (could not verify — a health query failed), or `skipped` (no platform configured), along with the raw evidence (offending node/pod/deployment names, the failing endpoint and status code, or the query that errored) so the user can act on it directly. Never suggest un-merging — end a DEGRADED result with a note like "Deployment looks DEGRADED — investigate, but the merge itself stands."
 
 ### Step 8: Summary
 
@@ -659,6 +679,7 @@ Render the Pipeline DAG line **conditionally on the verdict, whether the user me
 
 - APPROVE + merged + reset succeeded + deploy healthy → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✓) reset → (✓) verify-deploy`
 - APPROVE + merged + reset succeeded + deploy DEGRADED → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✓) reset → (✗) verify-deploy`
+- APPROVE + merged + reset succeeded + deploy UNKNOWN (a health query failed) → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✓) reset → (✗) verify-deploy` with a `could not verify deployment health` note (distinct from DEGRADED — the deployment may be fine; the check couldn't confirm it)
 - APPROVE + merged + reset succeeded + no platform configured (skipped) → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✓) reset → (–) verify-deploy`
 - APPROVE + merged + reset partial (RESET_OK=false) → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✗) reset → (✓|✗|–) verify-deploy` — verify-deploy still runs off `MERGED == true`, independent of the reset outcome
 - APPROVE + user declined merge → `(✓) gates → (✓) trigger → (✓) verdict → (✗) merge → ( ) reset → ( ) verify-deploy` with `Stopped: user declined merge`

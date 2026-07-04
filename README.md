@@ -46,7 +46,7 @@ Skills are immediately available in any Claude Code session. No restart needed.
 
 Three pieces ride along with one-shot — install them so Steps 3 (`test`), 5 (`push`), 6 (`self-review`), 9 (`respond`), and 10 (`ship`) work out of the box:
 
-**1. GitHub CLI (`gh`)** — required by `push-pr`, `review-pr`, `respond-to-comments`, and `ship-pr` for every PR / comment / workflow operation. Without it, every step from `push-draft` onward fails immediately.
+**1. GitHub CLI (`gh`)** — required by `push-pr`, `review-pr`, `respond-to-comments`, and `ship-pr` for every PR / comment / workflow operation. Without it, every step from `push` onward fails immediately.
 
 ```bash
 # macOS (Homebrew)

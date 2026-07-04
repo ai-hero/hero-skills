@@ -26,7 +26,7 @@ ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 
 # Stale-HERO check — fast subset of the plugin's check-hero-staleness.sh.
-# Keep aligned with the copies in push-pr/test-changes/one-shot.
+# Keep aligned with the copies in test-changes/one-shot.
 HERO_TIME=$(git -C "$ROOT" log -1 --format=%ct -- HERO.md 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
 CONFIG_TIME=$(git -C "$ROOT" log -1 --format=%ct -- \
   pyproject.toml ':(glob)**/pyproject.toml' \
@@ -269,8 +269,16 @@ gh pr list --head $(git branch --show-current) --json number,url,title,state
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-DEFAULT_BRANCH=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | xargs)
-DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
+RAW_DEFAULT=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | xargs)
+DEFAULT_BRANCH=${RAW_DEFAULT:-main}
+# Surface the resolved base and whether it came from HERO.md or the fallback,
+# so a missing/mistyped default-branch key can't silently open the PR against
+# the wrong base (e.g. `main` on a repo whose real default is `master`).
+if [ -z "$RAW_DEFAULT" ]; then
+  echo "PR base: $DEFAULT_BRANCH (fallback — HERO.md default-branch not found)"
+else
+  echo "PR base: $DEFAULT_BRANCH (from HERO.md)"
+fi
 git log origin/$DEFAULT_BRANCH..HEAD --pretty=format:"%s%n%b" --reverse
 git diff origin/$DEFAULT_BRANCH..HEAD --stat
 git diff origin/$DEFAULT_BRANCH..HEAD --name-only
@@ -350,10 +358,22 @@ If the PR was created with `ready` (non-draft), report `PR created` instead of `
 Give a brief, non-blocking CI summary after the push. Skip this step entirely if `gh` is unavailable.
 
 ```bash
-gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo "NO_GH"
 BRANCH=$(git branch --show-current)
-gh run list --branch "$BRANCH" --limit 5 \
-  --json databaseId,name,status,conclusion,headBranch,createdAt,url 2>/dev/null
+# Distinguish three outcomes explicitly so an errored gh call is never mistaken
+# for "no runs yet" (which would otherwise read as a clean/absent CI state):
+if ! gh repo view --json nameWithOwner -q .nameWithOwner >/dev/null 2>&1; then
+  echo "CI status unavailable (gh not authenticated or no remote) — skipping CI block."
+else
+  RUNS_JSON=$(gh run list --branch "$BRANCH" --limit 5 \
+    --json databaseId,name,status,conclusion,headBranch,createdAt,url 2>&1)
+  if [ $? -ne 0 ]; then
+    echo "CI status unavailable (gh run list failed) — skipping CI block: $RUNS_JSON"
+  elif [ "$(printf '%s' "$RUNS_JSON" | tr -d '[:space:]')" = "[]" ]; then
+    echo "Overall: NO RUNS YET"
+  else
+    printf '%s\n' "$RUNS_JSON"   # classify PASSING / FAILING / IN PROGRESS from these
+  fi
+fi
 ```
 
 For each run, report: workflow name, status (queued/in_progress/completed), conclusion (success/failure/cancelled/skipped).
