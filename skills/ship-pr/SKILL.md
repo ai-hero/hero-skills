@@ -123,7 +123,7 @@ PR_AUTHOR=$(gh api "/repos/$OWNER/$REPO/pulls/$PR_NUMBER" --jq '.user.login')
 
 # 3a — Prior review present (self-review OR reviewer review OR bot inline)
 SELF_REVIEW=$(gh api "/repos/$OWNER/$REPO/issues/$PR_NUMBER/comments" \
-  --jq '[.[] | select(.body | test("Hero Self-Review"; "i"))] | length')
+  --jq '[.[] | select(.body | test("ai-hero:self-review"))] | length')
 
 OTHER_REVIEWS=$(gh api "/repos/$OWNER/$REPO/pulls/$PR_NUMBER/reviews" \
   --jq "[.[] | select(.user.login != \"$PR_AUTHOR\") | select(.state != \"PENDING\")] | length")

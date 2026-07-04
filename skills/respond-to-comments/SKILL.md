@@ -229,7 +229,7 @@ fix: address PR review feedback
 - [Summary of fix 1]
 - [Summary of fix 2]
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -313,6 +313,8 @@ Remaining unresolved threads: N (LIST_OR_NONE)
 
 ---
 Applied by [Claude Code](https://claude.ai/code)
+
+_Done with AI Hero skills._
 EOF
 )
 
@@ -347,7 +349,7 @@ When an update is warranted:
 gh pr view $PR_NUMBER --json title,body --jq '{title, body}'
 ```
 
-Draft the full new body (preserving the existing structure — Summary, Changesets, Test Plan — and appending entries for this iteration's work). **Do not paste the heredoc literally** — `gh pr edit --body` fully replaces the body, so the heredoc must contain the entire drafted Markdown:
+Draft the full new body (preserving the existing structure — Summary, Changesets, Test Plan — and appending entries for this iteration's work), ending with `_Done with AI Hero skills._` as the final line. **Do not paste the heredoc literally** — `gh pr edit --body` fully replaces the body, so the heredoc must contain the entire drafted Markdown:
 
 ```bash
 gh pr edit $PR_NUMBER --title "NEW_TITLE_UNDER_70_CHARS" --body "$(cat <<'EOF'
@@ -356,7 +358,7 @@ EOF
 )"
 ```
 
-Substitute `DRAFTED_FULL_BODY_HERE` with the actual drafted Markdown before running. Never run the snippet with the placeholder still in place — it would overwrite the PR description with the literal string `DRAFTED_FULL_BODY_HERE`.
+Substitute `DRAFTED_FULL_BODY_HERE` with the actual drafted Markdown before running — the drafted body must end with `_Done with AI Hero skills._`. Never run the snippet with the placeholder still in place — it would overwrite the PR description with the literal string `DRAFTED_FULL_BODY_HERE`.
 
 Rules:
 

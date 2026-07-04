@@ -279,7 +279,7 @@ PR_REVIEW=$(printf '%s' "$PR_JSON" | jq -r '.reviewDecision // empty') # APPROVE
 PR_EXISTS=false
 [ -n "$PR_NUMBER" ] && PR_EXISTS=true
 
-# Check for the durable Hero Self-Review marker so we know review-pr ran.
+# Check for the durable self-review marker so we know review-pr ran.
 # Surface API failures rather than fall through to "0 → re-review".
 SELF_REVIEW_DONE=0
 BOT_REPLIED=false
@@ -288,7 +288,7 @@ if [ "$PR_EXISTS" = "true" ]; then
     echo "note: gh api comments fetch failed; treating SELF_REVIEW_DONE/BOT_REPLIED as unknown."
   else
     SELF_REVIEW_DONE=$(printf '%s' "$COMMENTS" \
-      | jq '[.[] | select(.body | test("Hero Self-Review"; "i"))] | length')
+      | jq '[.[] | select(.body | test("ai-hero:self-review"))] | length')
     BOT_USER=$(awk -F': ' '/^- bot-username:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null \
       | tr -d '[:space:]"'"'"'')
     if [ -n "$BOT_USER" ]; then
@@ -342,8 +342,8 @@ Inferred resume point: Step 6 (self-review)
 
 [6/10] (✓) plan → (✓) implement → (✓) test → (✓) simplify → (✓) push → (▶) self-review → ( ) mark-ready → ( ) await-review → ( ) respond → ( ) ship
 
-Reasoning: branch + unpushed commits + open draft PR + no Hero Self-Review
-comment yet → plan/implement/test/simplify/push are done;
+Reasoning: branch + unpushed commits + open draft PR + no self-review comment
+yet → plan/implement/test/simplify/push are done;
 running self-review next.
 
 Hard stops (these halt the pipeline mid-flight when triggered — not asked up front):
