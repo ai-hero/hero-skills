@@ -47,19 +47,16 @@ Each skill needs specific information to work well. This skill figures out what'
 
 | Skill | Needs |
 |-------|-------|
-| `hero-skills:commit-changes` | Commit convention, pre-commit run command, issue prefix |
-| `hero-skills:push-pr` | Default branch, branch convention, hosting platform (`gh`/`glab`), issue prefix |
-| `hero-skills:plan-work` | PM tool + MCP server name, branch template, issue prefix, project list |
+| `hero-skills:push-pr` | Default branch, branch convention, hosting platform (`gh`/`glab`), issue prefix, commit convention, pre-commit run command, CI platform, workflow names, registry, required status checks |
+| `hero-skills:one-shot` | PM tool + MCP server name, branch template, issue prefix, project list |
 | `hero-skills:test-changes` | Language, framework, lint/format/typecheck commands, test/dev/install commands, ports, dependency file |
 | `hero-skills:review-pr` | Code Quality (pre-commit), Code Review Agent (bot username — to dedupe its comments) |
-| `hero-skills:check-ci` | CI platform, workflow names, registry, required status checks |
-| `hero-skills:check-ci cluster` | Deployment platform, namespaces, ArgoCD, health check endpoints |
 | `hero-skills:scan-vulns` | Registry, language/framework, dependency files per project |
 | `hero-skills:document-arch` | Repo type, project list, deployment platform |
 | `hero-skills:create-project` | Repo type, coding conventions, code quality tools, project scaffold patterns |
 | `hero-skills:setup-dev` | Required tools, recommended tools, MCP servers |
-| `hero-skills:respond-to-pr` | Code Review Agent (agent, trigger, poll-method, bot-username) |
-| `hero-skills:ship-pr` | CI/CD (auto-approve workflow installed on default branch), Repository (default branch) |
+| `hero-skills:respond-to-comments` | Code Review Agent (agent, trigger, poll-method, bot-username) |
+| `hero-skills:ship-pr` | CI/CD (auto-approve workflow installed on default branch), Repository (default branch), deployment platform, namespaces, ArgoCD, health check endpoints |
 | `hero-skills:init-hero --update` | All sections — re-investigates and refreshes HERO.md on demand |
 | `hero-skills:audit-plugin` | (internal) Plugin structure validation |
 
@@ -555,17 +552,17 @@ Based on your investigation, present findings grouped by **what the hero skills 
 ```
 [CONFIRMED] SETTING: VALUE
   Evidence: EVIDENCE
-  Used by: hero-skills:commit-changes, hero-skills:push-pr
+  Used by: hero-skills:push-pr
 
 [NEEDS CONFIRMATION] SETTING: BEST_GUESS
   Evidence: EVIDENCE (and why ambiguous)
   Question: QUESTION
-  Used by: hero-skills:plan-work
+  Used by: hero-skills:one-shot
 
 [NOT DETECTED] SETTING
   Looked for: WHAT_WAS_CHECKED
   Question: QUESTION
-  Used by: hero-skills:check-ci cluster
+  Used by: hero-skills:ship-pr
 ```
 
 **Group findings into these categories, presented in this order:**
@@ -577,7 +574,7 @@ Based on your investigation, present findings grouped by **what the hero skills 
 
 Do NOT offer to install a pre-commit hook for `hero-skills:init-hero --update`. Skills surface a stale-HERO.md hint on demand instead — see `scripts/check-hero-staleness.sh`.
 
-#### Group 1: "For committing and pushing code" (`hero-skills:commit-changes`, `hero-skills:push-pr`, `hero-skills:ship-pr`)
+#### Group 1: "For committing and pushing code" (`hero-skills:push-pr`, `hero-skills:ship-pr`)
 
 - Hosting platform (GitHub, GitLab, Bitbucket — from remote URL)
 - Commit convention (evidence from git log patterns)
@@ -589,7 +586,7 @@ Do NOT offer to install a pre-commit hook for `hero-skills:init-hero --update`. 
 - Linters, formatters
 - Task runner (if Makefile/justfile provides commit/push/lint targets)
 
-#### Group 2: "For planning and tracking work" (`hero-skills:plan-work`)
+#### Group 2: "For planning and tracking work" (`hero-skills:one-shot`)
 
 - PM tool (evidence from templates, commit messages, integrations)
 - Issue ID prefix (evidence from commit/branch patterns)
@@ -604,7 +601,7 @@ Do NOT offer to install a pre-commit hook for `hero-skills:init-hero --update`. 
 - Task runner (Makefile, justfile, etc.) and its available targets
 - Monorepo vs single repo structure
 
-#### Group 4: "For CI/CD and deployment" (`hero-skills:check-ci`, `hero-skills:check-ci cluster`, `hero-skills:scan-vulns`, `hero-skills:ship-pr`)
+#### Group 4: "For CI/CD and deployment" (`hero-skills:push-pr`, `hero-skills:ship-pr`, `hero-skills:scan-vulns`)
 
 - CI platform and workflow names
 - Deployment platform
@@ -636,7 +633,7 @@ Hero Init - Investigation Results
 
 I analyzed the repo and here's what I found:
 
-FOR COMMITTING & PUSHING (hero-skills:commit-changes, hero-skills:push-pr)
+FOR COMMITTING & PUSHING (hero-skills:push-pr)
 ────────────────────────────────────────────────────
 [OK] Commit convention: conventional
      Evidence: 18/20 recent commits use "feat:", "fix:", "chore:" format
@@ -653,7 +650,7 @@ FOR COMMITTING & PUSHING (hero-skills:commit-changes, hero-skills:push-pr)
        - PROJ-45-update-deps (ticket-first pattern)
      → Which pattern do you prefer?
 
-FOR PLANNING & TRACKING (hero-skills:plan-work)
+FOR PLANNING & TRACKING (hero-skills:one-shot)
 ─────────────────────────────────────
 [??] PM tool: likely Linear
      Evidence: Found "linear" in .github/workflows/sync.yml,
@@ -679,7 +676,7 @@ FOR TESTING & VERIFICATION (hero-skills:test-changes)
 [OK] Port: 8000
      Evidence: Found in docker-compose.yml port mapping
 
-FOR CI/CD & DEPLOYMENT (hero-skills:check-ci, hero-skills:check-ci cluster)
+FOR CI/CD & DEPLOYMENT (hero-skills:push-pr, hero-skills:ship-pr)
 ──────────────────────────────────────────────────
 [OK] CI: GitHub Actions
      Evidence: 3 workflows: ci.yml (test+lint), build.yml (docker),
@@ -698,7 +695,7 @@ FOR CI/CD & DEPLOYMENT (hero-skills:check-ci, hero-skills:check-ci cluster)
 [--] Namespaces: not detected
      → What k8s namespaces do you deploy to?
 
-CODING CONVENTIONS (hero-skills:plan-work, hero-skills:commit-changes)
+CODING CONVENTIONS (hero-skills:one-shot, hero-skills:push-pr)
 ──────────────────────────────────────────────
 [OK] Naming: snake_case functions, PascalCase classes
      Evidence: 40+ function defs follow snake_case, all classes PascalCase
@@ -753,7 +750,7 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 
 ## Code Review Agent
 <!-- External code review bot that reviews PRs automatically.
-     Used by hero-skills:respond-to-pr --loop to trigger, poll, and fix feedback iteratively. -->
+     Used by hero-skills:respond-to-comments --loop to trigger, poll, and fix feedback iteratively. -->
 - agent: AGENT_TYPE (greptile|coderabbit|copilot|none)
 - trigger: TRIGGER_METHOD (e.g., "@greptile review" comment, auto on push, label)
 - poll-method: POLL_METHOD (check-runs|comments|pipeline-status)
@@ -829,7 +826,7 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 ### MCP Servers
 <!-- MCP servers that hero skills or Claude need to interact with external tools -->
 <!-- Examples:
-- linear (mcp__linear) — for hero-skills:plan-work issue management
+- linear (mcp__linear) — for hero-skills:one-shot issue planning
 - slack (mcp__slack) — for notifications
 -->
 
@@ -945,12 +942,12 @@ Show the generated file and a one-line-per-skill summary:
 HERO.md written to REPO_ROOT/HERO.md
 
 How your hero skills will use this:
-  hero-skills:commit-changes    → conventional commits, pre-commit runs ruff + black + mypy
-  hero-skills:push-pr      → PRs via gh against main, link LIN-### issues
-  hero-skills:plan-work      → fetch from Linear (mcp__linear), branch as feature/LIN-###-DESC
+  hero-skills:push-pr       → conventional commits, pre-commit runs ruff + black + mypy,
+                               PRs via gh against main, link LIN-### issues,
+                               check GitHub Actions: ci, build, deploy
+  hero-skills:one-shot      → fetch from Linear (mcp__linear), branch as feature/LIN-###-DESC
   hero-skills:test-changes      → uv sync, then ruff check + mypy + pytest, smoke at :8000
-  hero-skills:check-ci      → check GitHub Actions: ci, build, deploy
-  hero-skills:check-ci cluster    → k8s namespaces: staging, production
+  hero-skills:ship-pr       → k8s namespaces: staging, production
   hero-skills:scan-vulns    → scan pyproject.toml, check ghcr.io registry
   hero-skills:document-arch → single repo, Python + FastAPI, k8s deployment
   hero-skills:setup-dev     → require node, uv, gh, docker; recommend pre-commit, linear CLI
