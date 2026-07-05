@@ -153,9 +153,7 @@ gh pr comment $PR_NUMBER --body "$(cat <<'EOF'
 - {what's well-done}
 
 ---
-Self-review by [Claude Code](https://claude.ai/code)
-
-_Done with AI Hero skills._
+_Generated using hero-skills._
 EOF
 )"
 ```
@@ -242,9 +240,7 @@ gh pr comment $PR_NUMBER --body "$(cat <<'EOF'
 Commits: SHA1, SHA2
 
 ---
-Applied by [Claude Code](https://claude.ai/code)
-
-_Done with AI Hero skills._
+_Generated using hero-skills._
 EOF
 )"
 ```
@@ -265,7 +261,7 @@ Leave unchanged for: style/typo/comment fixes only. Default to update when uncer
 gh pr view $PR_NUMBER --json title,body --jq '{title, body}'
 ```
 
-Draft the full new body preserving structure (Summary, Changesets, Test Plan) and ending with `_Done with AI Hero skills._` as the final line, then apply:
+Draft the full new body preserving structure (Summary, Changesets, Test Plan) and ending with `_Generated using hero-skills._` as the final line, then apply:
 
 ```bash
 gh pr edit $PR_NUMBER --title "NEW_TITLE_UNDER_70_CHARS" --body "$(cat <<'EOF'
@@ -274,7 +270,7 @@ EOF
 )"
 ```
 
-Substitute `DRAFTED_FULL_BODY_HERE` with actual Markdown before running — the drafted body must end with `_Done with AI Hero skills._`.
+Substitute `DRAFTED_FULL_BODY_HERE` with actual Markdown before running — the drafted body must end with `_Generated using hero-skills._`.
 
 ### Step 9: Ask to Mark Ready
 
@@ -400,9 +396,7 @@ gh pr review $PR_NUMBER {DECISION_FLAG} --body "$(cat <<'EOF'
 - {positive observations}
 
 ---
-Review by [Claude Code](https://claude.ai/code)
-
-_Done with AI Hero skills._
+_Generated using hero-skills._
 EOF
 )"
 ```

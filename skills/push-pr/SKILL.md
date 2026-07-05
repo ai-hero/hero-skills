@@ -302,7 +302,7 @@ fi
 PR_TITLE="$(git log origin/$DEFAULT_BRANCH..HEAD --pretty=%s | head -1)"
 ```
 
-**Generate PR content by listing each commit as a changeset with its files and description.** Keep the title unbranded (no "Hero"/"hero-skills"). End the body with exactly one attribution line, `_Done with AI Hero skills._`:
+**Generate PR content by listing each commit as a changeset with its files and description.** Keep the title unbranded (no "Hero"/"hero-skills"). End the body with exactly one attribution line, `_Generated using hero-skills._`:
 
 ```bash
 gh pr create $DRAFT_FLAG --base "$DEFAULT_BRANCH" --title "$PR_TITLE" --body "$(cat <<'EOF'
@@ -328,7 +328,7 @@ Brief description of what this commit does and why
 ## Related Issues
 [Link issues if mentioned in commits]
 
-_Done with AI Hero skills._
+_Generated using hero-skills._
 EOF
 )"
 ```
