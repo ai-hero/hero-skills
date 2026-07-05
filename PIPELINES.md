@@ -55,32 +55,28 @@ present from commit one onward.
 ### Pipeline 2: one-shot — ticket to merged PR in a single invocation
 
 ```
-plan → implement → test → e2e → simplify → commit → push-draft → self-review → mark-ready → await-review → respond → ship
+plan → implement → test → simplify → push → self-review → mark-ready → await-review → respond → ship
 ```
 
-Owner: `hero-skills:one-shot`. Twelve steps — each maps to a single skill (or `inline` when one-shot drives it directly without delegating):
+Owner: `hero-skills:one-shot`. Ten steps — each maps to a single skill (or `inline` when one-shot drives it directly without delegating):
 
 | # | Step | Skill to run standalone | Notes |
 |---|------|-------------------------|-------|
-| 1 | `plan` | `hero-skills:plan-work` | fetch ticket / parse description, produce a plan in Plan Mode |
+| 1 | `plan` | `inline` (Plan Mode) | fetches a Linear issue if `$ARGUMENTS` is an issue ID, else treats it as a plain-text description |
 | 2 | `implement` | `inline` (Plan Mode → edits) | applies the approved plan as code edits |
-| 3 | `test` | `hero-skills:test-changes` | run lint/typecheck/unit tests |
-| 4 | `e2e` | `hero-skills:smoke-ui` | Playwright-MCP smoke of routes touched by the diff. `(–)` if HERO.md declares no UI project |
-| 5 | `simplify` | `/simplify` (external) | review the dirty diff for reuse/quality/efficiency and fix; `(–)` if `/simplify` unavailable |
-| 6 | `commit` | `hero-skills:commit-changes` | conventional commit, groups changesets, runs pre-commit |
-| 7 | `push-draft` | `hero-skills:push-pr` | push and open a draft PR |
-| 8 | `self-review` | `hero-skills:review-pr` (Steps 1–8) | run pr-review-toolkit agents on the draft, apply fixes |
-| 9 | `mark-ready` | `hero-skills:review-pr` (Step 9) or `gh pr ready` | hard user gate that converts draft → ready |
-| 10 | `await-review` | `inline` (poll) | poll for the configured Code Review Agent's first comment; `(–)` if `agent: none` |
-| 11 | `respond` | `hero-skills:respond-to-pr` | address the bot's inline comments and resolve threads |
-| 12 | `ship` | `hero-skills:ship-pr` | `@auto-approve`, await verdict, ask the user to merge, merge, reset to default branch |
+| 3 | `test` | `hero-skills:test-changes` | run lint/typecheck/unit tests, including UI smoke via Playwright MCP |
+| 4 | `simplify` | `/simplify` (external) | review the dirty diff for reuse/quality/efficiency and fix; `(–)` if `/simplify` unavailable |
+| 5 | `push` | `hero-skills:push-pr` | commits outstanding work with a conventional commit and pushes a draft PR |
+| 6 | `self-review` | `hero-skills:review-pr --no-mark-ready` (Steps 1–8) | run pr-review-toolkit agents on the draft, apply fixes |
+| 7 | `mark-ready` | `hero-skills:review-pr`'s own Step 9, or `gh pr ready` | hard user gate that converts draft → ready |
+| 8 | `await-review` | `inline` (poll) | poll for the configured Code Review Agent's first comment; `(–)` if `agent: none` |
+| 9 | `respond` | `hero-skills:respond-to-comments` | address the bot's inline comments and resolve threads |
+| 10 | `ship` | `hero-skills:ship-pr` | `@auto-approve`, await verdict, ask the user to merge, merge, reset to default branch |
 
-The `e2e` node sits before `simplify`/`commit` so a UI regression aborts the
-pipeline before anything is written to git history. For backend-only PRs the
-node is skipped (rendered `(–)`), not failed.
+UI smoke runs inside `test`; backend-only PRs skip it.
 
-`simplify` sits between `e2e` and `commit` so the dirty diff is tidied
-before it lands in git history. `commit-changes` also invokes `/simplify`
+`simplify` sits between `test` and `push` so the dirty diff is tidied
+before it lands in git history. `push-pr` also invokes `/simplify`
 internally for standalone use; running one-shot just makes that step visible
 in the DAG and pays a no-op cost on the second invocation.
 

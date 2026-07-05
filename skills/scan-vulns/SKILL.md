@@ -107,7 +107,7 @@ Updates applied:
 Addresses:
 - CVE-XXXX-XXXXX: BRIEF_DESCRIPTION
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -145,7 +145,7 @@ Scout scan results:
 - Before: X critical, Y high
 - After:  A critical, B high
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -164,6 +164,10 @@ Dependabot: 5 alerts (2 critical, 2 high, 1 medium)
 Docker Scout: 3 images scanned
   Fixed: 3 critical, 7 high CVEs
   Remaining: 2 medium (no fix available)
+
+Next steps:
+  hero-skills:push-pr          # commit and push the fixes — opens a draft PR
+  hero-skills:ship-pr          # once green — @auto-approve, merge, verify deploy, reset
 ```
 
 ## Safety Notes

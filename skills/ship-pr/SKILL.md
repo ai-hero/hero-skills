@@ -8,25 +8,25 @@ disable-model-invocation: true
 
 # Ship — Trigger Auto-Approve, Merge, Reset Local Branch
 
-This skill posts `@auto-approve` on the PR, waits for the workflow run to finish, reads the verdict, and — if the verdict is APPROVE — asks whether to merge. If the verdict is REQUEST_CHANGES, it shows what to fix and offers to re-trigger after fixes land. After a successful merge, it folds in the `hero-skills:reset-branch` flow: switch to the default branch, pull latest, delete the merged head branch (remote + local), and offer a clean-up of other stale merged branches.
+This skill posts `@auto-approve` on the PR, waits for the workflow run to finish, reads the verdict, and — if the verdict is APPROVE — asks whether to merge. If the verdict is REQUEST_CHANGES, it shows what to fix and offers to re-trigger after fixes land. After a successful merge, it folds in the `hero-skills:reset-branch` flow: switch to the default branch, pull latest, delete the merged head branch (remote + local), and offer a clean-up of other stale merged branches. It then runs a platform-agnostic, advisory post-merge deployment-health check (Kubernetes, VM, PaaS, or serverless, driven by HERO.md).
 
 ## Pipeline DAG
 
 This skill is the final step of Pipeline 2 (one-shot) from `PIPELINES.md`, but it also runs standalone. Its internal DAG is:
 
 ```
-gates → trigger → verdict → merge → reset
+gates → trigger → verdict → merge → reset → verify-deploy
 ```
 
 Print at each step transition:
 
 ```
-[N/5] (✓) gates → (✓) trigger → (▶) verdict → ( ) merge → ( ) reset
+[N/6] (✓) gates → (✓) trigger → (▶) verdict → ( ) merge → ( ) reset → ( ) verify-deploy
 
 Now running: verdict
 ```
 
-Mapping to the steps below: Step 3 = `gates`, Step 4 = `trigger`, Steps 5-6 = `verdict`, Step 7a = `merge`, Step 7b = `reset` (folded-in `hero-skills:reset-branch` flow). Steps 1-2 are pre-flight (PR identification, workflow-on-default-branch check) and Step 8 is the summary — neither appears in the DAG. Steps 7c (REQUEST_CHANGES) and 7d (WORKFLOW_FAILED) are alternative end states that *replace* `merge` and `reset`; on those paths render `(✗) merge → ( ) reset` and stop, never `(✓) merge → (✓) reset`.
+Mapping to the steps below: Step 3 = `gates`, Step 4 = `trigger`, Steps 5-6 = `verdict`, Step 7a = `merge`, Step 7b = `reset` (folded-in `hero-skills:reset-branch` flow), Step 7e = `verify-deploy` (platform-agnostic post-merge deployment-health check). Steps 1-2 are pre-flight (PR identification, workflow-on-default-branch check) and Step 8 is the summary — neither appears in the DAG. Steps 7c (REQUEST_CHANGES) and 7d (WORKFLOW_FAILED) are alternative end states that *replace* `merge`, `reset`, and `verify-deploy` — there is no merge to verify deployment health for. On those paths render `(✗) merge → ( ) reset → ( ) verify-deploy` and stop, never `(✓) merge → (✓) reset → (✓) verify-deploy`.
 
 The workflow lives at `.github/workflows/auto-approve.yml`. **GitHub only honors `issue_comment`-triggered workflows that already exist on the default branch**, so the workflow file must be merged to `main` (or your default branch) before this skill can do anything useful. This skill checks that first.
 
@@ -40,6 +40,7 @@ The workflow lives at `.github/workflows/auto-approve.yml`. **GitHub only honors
 - `gh` CLI installed and authenticated with `repo` scope
 - `.github/workflows/auto-approve.yml` present on the default branch — run `hero-skills:init-hero --update` to install it
 - The repo has an `ANTHROPIC_API_KEY` secret configured (used by the workflow)
+- `kubectl`/`argocd` (k8s deploys) or `curl`-reachable health endpoints (VM/PaaS) — only needed if HERO.md declares a deployment platform
 
 ## Instructions
 
@@ -54,6 +55,7 @@ Read `HERO.md` if it exists. This skill uses:
 
 - **Repository** -> default branch (to confirm the workflow is on it)
 - **CI/CD** -> workflow names (to identify the auto-approve run)
+- **Deployment** -> platform (kubernetes | vm | serverless | paas | none), namespaces/hosts, health endpoints
 
 If `HERO.md` is missing, suggest `hero-skills:init-hero` but proceed with defaults.
 
@@ -121,7 +123,7 @@ PR_AUTHOR=$(gh api "/repos/$OWNER/$REPO/pulls/$PR_NUMBER" --jq '.user.login')
 
 # 3a — Prior review present (self-review OR reviewer review OR bot inline)
 SELF_REVIEW=$(gh api "/repos/$OWNER/$REPO/issues/$PR_NUMBER/comments" \
-  --jq '[.[] | select(.body | test("Hero Self-Review"; "i"))] | length')
+  --jq '[.[] | select(.body | test("ai-hero:self-review"))] | length')
 
 OTHER_REVIEWS=$(gh api "/repos/$OWNER/$REPO/pulls/$PR_NUMBER/reviews" \
   --jq "[.[] | select(.user.login != \"$PR_AUTHOR\") | select(.state != \"PENDING\")] | length")
@@ -191,7 +193,7 @@ Pre-flight gates for PR #PR_NUMBER:
 **This is a hard gate, not a warning.** Stop and refuse to post `@auto-approve` if any of the following:
 
 - `(SELF_REVIEW + OTHER_REVIEWS + BOT_INLINE) == 0` — no prior review at all. Run `hero-skills:review-pr`.
-- `UNRESOLVED > 0` — inline review threads still open. Run `hero-skills:respond-to-pr` to address them and resolve the threads.
+- `UNRESOLVED > 0` — inline review threads still open. Run `hero-skills:respond-to-comments` to address them and resolve the threads.
 - `ACTIVE_CHANGES > 0` — a reviewer's latest review still says CHANGES_REQUESTED. Address the change request, push fixes, then ask the reviewer to dismiss it or submit a fresh review (a subsequent APPROVED review supersedes it in `latestReviews`).
 - `UNANSWERED_QUESTIONS > 0` — top-level questions from human reviewers with no author reply. List each one (`gh api .../issues/$PR_NUMBER/comments --jq '.[] | select(.id > LAST_AUTHOR_COMMENT_ID) | {user: .user.login, body: .body[0:200], url: .html_url}'`) and tell the user to reply to each before re-running.
 
@@ -210,7 +212,7 @@ Cannot run hero-skills:ship-pr yet. Address these first:
   Unanswered reviewer questions (1):
     - @reviewer (PR_URL#issuecomment-12345): "Why not use the existing helper?"
 
-Recommended next step: hero-skills:respond-to-pr
+Recommended next step: hero-skills:respond-to-comments
 ```
 
 Do not proceed. Do not post `@auto-approve`.
@@ -434,7 +436,7 @@ else
   elif [ "$CURRENT" != "$BASE_BRANCH" ]; then
     # User happens to be on a third branch. Leave them there, but flag
     # that this skill is NOT refreshing $BASE_BRANCH locally — otherwise the
-    # next plan-work / create-branch starts from a stale base.
+    # next task starts from a stale base.
     echo "You are on '$CURRENT', neither '$PR_BRANCH' nor '$BASE_BRANCH'."
     echo "Leaving you here. Note: this skill is NOT pulling $BASE_BRANCH —"
     echo "run 'git fetch origin $BASE_BRANCH' yourself before branching off it."
@@ -555,7 +557,7 @@ Auto-approve REQUESTED CHANGES on PR #PR_NUMBER.
 (reasons from the verdict comment)
 
 What would you like to do?
-  1. hero-skills:respond-to-pr  -> address the unresolved comments and re-run
+  1. hero-skills:respond-to-comments  -> address the unresolved comments and re-run
   2. Re-trigger @auto-approve once I have addressed the items above
   3. Stop here
 ```
@@ -574,15 +576,123 @@ gh api "/repos/{owner}/{repo}/actions/runs/$RUN_ID/jobs" \
 
 Suggest the most likely fixes (missing `ANTHROPIC_API_KEY`, GitHub token permissions, repo secrets disabled). Do not retry automatically.
 
+#### Step 7e: Verify Deployment Health (post-merge)
+
+Runs only on the APPROVE + merged path, gated on `MERGED == "true"` from Step 7b. REQUEST_CHANGES (7c), WORKFLOW_FAILED (7d), and declined-merge paths have no merge to check the deployment health of, so this step does not run there — it is skipped entirely, not rendered as failed.
+
+This check is **advisory only**. It surfaces a DEGRADED or unreachable deployment loudly so the user can act, but it never un-merges, reverts, or blocks anything that already landed in Step 7a.
+
+```bash
+if [ "$MERGED" != "true" ]; then
+  DEPLOY_STATUS="skipped"
+else
+  DEPLOY_PLATFORM=$(awk -F': ' '/^- platform:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null \
+    | tr -d '[:space:]' | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]')
+  DEPLOY_PLATFORM=${DEPLOY_PLATFORM:-none}
+fi
+```
+
+Dispatch on `$DEPLOY_PLATFORM`:
+
+**`kubernetes`** — read-only cluster health (nodes, pods, deployments, optional ArgoCD):
+
+```bash
+kubectl config current-context
+kubectl cluster-info --request-timeout=5s
+```
+
+If the connection fails, report `Deployment: skipped (kubectl unreachable)` and stop here — an unreachable cluster is not the same as a DEGRADED one.
+
+```bash
+# A failed query must never be mistaken for "all healthy": empty output means
+# healthy ONLY when the query itself succeeded. Capture each command's exit
+# status and set CHECK_FAILED on any failure. `set -o pipefail` so a kubectl
+# failure piped into jq is not masked by jq's own exit code.
+set -o pipefail
+CHECK_FAILED=false
+
+# Nodes — Ready/NotReady and pressure conditions
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range .status.conditions[*]}{.type}={.status}{"\t"}{end}{"\n"}{end}' || CHECK_FAILED=true
+
+# Pods — anything not Running/Succeeded, plus crashloops
+PODS_OUT=$(kubectl get pods --all-namespaces --field-selector=status.phase!=Running,status.phase!=Succeeded -o wide 2>&1) \
+  && printf '%s\n' "$PODS_OUT" \
+  || { echo "WARN: pod-status query failed: $PODS_OUT"; CHECK_FAILED=true; }
+kubectl get pods --all-namespaces -o json \
+  | jq -r '.items[] | select(.status.containerStatuses[]?.restartCount > 5) | "\(.metadata.namespace)/\(.metadata.name) restarts=\(.status.containerStatuses[0].restartCount)"' \
+  || CHECK_FAILED=true
+
+# Deployments — ready vs desired replica counts
+kubectl get deployments --all-namespaces -o json \
+  | jq -r '.items[] | select(.status.readyReplicas != .status.replicas) | "\(.metadata.namespace)/\(.metadata.name) ready=\(.status.readyReplicas // 0)/\(.status.replicas)"' \
+  || CHECK_FAILED=true
+```
+
+If HERO.md flags ArgoCD for this deployment, also check sync/health:
+
+```bash
+# Try the argocd CLI; fall back to kubectl. If BOTH fail, ArgoCD state is
+# unknown — record that rather than treating empty output as "all Synced".
+if ! argocd app list -o json 2>/dev/null \
+     | jq -r '.[] | "\(.metadata.name)\t\(.status.sync.status)\t\(.status.health.status)"'; then
+  if ! kubectl get applications -n argocd -o json 2>/dev/null \
+       | jq -r '.items[] | "\(.metadata.name)\tsync=\(.status.sync.status)\thealth=\(.status.health.status)"'; then
+    echo "WARN: could not query ArgoCD via the argocd CLI or kubectl."
+    CHECK_FAILED=true
+  fi
+fi
+```
+
+Classify in this order:
+
+- **`UNKNOWN` (could not verify)** when `CHECK_FAILED` is `true` — a health query itself failed (RBAC denial, missing `argocd` binary, apiserver error, expired token). This is **not** the same as healthy; report it as `could not verify deployment health` so the user investigates rather than trusting a false green.
+- Otherwise `HEALTHY` (all nodes Ready, no crashlooping/pending pods, all deployments at desired replica count, ArgoCD Synced/Healthy where checked) vs `DEGRADED` (any NotReady node, any crashlooping/pending pod, any under-replica'd deployment, or ArgoCD OutOfSync/Degraded/Missing).
+
+**`vm` / `paas` / `serverless`** — curl the HERO.md-configured health endpoint(s). HERO.md's Deployment section lists one or more, e.g. `- health-endpoint: https://api.example.com/healthz`; read them all first:
+
+```bash
+HEALTH_ENDPOINTS=$(awk -F': ' '/^- health-endpoint:/ {print $2}' "$ROOT/HERO.md" 2>/dev/null \
+  | tr -d '"' | tr -d "'")
+
+if [ -z "$HEALTH_ENDPOINTS" ]; then
+  echo "No health endpoint configured for $DEPLOY_PLATFORM — skipping."
+  DEPLOY_STATUS="skipped"
+else
+  DEPLOY_STATUS="HEALTHY"
+  # Here-string (not `... | while`): a pipeline runs the loop in a subshell,
+  # so DEPLOY_STATUS assignments inside it would be discarded. curl emits 000
+  # on timeout/unreachable, which the non-2xx branch correctly treats as
+  # DEGRADED.
+  while read -r URL; do
+    [ -z "$URL" ] && continue
+    CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$URL")
+    echo "$URL -> HTTP $CODE"
+    case "$CODE" in
+      2??) ;;                          # 2xx — healthy
+      *)   DEPLOY_STATUS="DEGRADED" ;; # non-2xx or 000 (timeout/unreachable)
+    esac
+  done <<< "$HEALTH_ENDPOINTS"
+fi
+```
+
+Treat a missing endpoint list as skipped, not DEGRADED — there is nothing configured to check. Otherwise the loop above sets `HEALTHY` (every endpoint returns 2xx) vs `DEGRADED` (any non-2xx response or timeout).
+
+**`none` or missing** — skip silently; render `(–)` for this phase in the DAG and Summary.
+
+Report the result as `HEALTHY`, `DEGRADED`, `UNKNOWN` (could not verify — a health query failed), or `skipped` (no platform configured), along with the raw evidence (offending node/pod/deployment names, the failing endpoint and status code, or the query that errored) so the user can act on it directly. Never suggest un-merging — end a DEGRADED result with a note like "Deployment looks DEGRADED — investigate, but the merge itself stands."
+
 ### Step 8: Summary
 
-Render the Pipeline DAG line **conditionally on the verdict and whether the user merged**. Use the marker semantics from `PIPELINES.md`:
+Render the Pipeline DAG line **conditionally on the verdict, whether the user merged, and the deployment-health result**. Use the marker semantics from `PIPELINES.md`:
 
-- APPROVE + merged + reset succeeded → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✓) reset`
-- APPROVE + merged + reset partial (RESET_OK=false) → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✗) reset`
-- APPROVE + user declined merge → `(✓) gates → (✓) trigger → (✓) verdict → (✗) merge → ( ) reset` with `Stopped: user declined merge`
-- REQUEST_CHANGES → `(✓) gates → (✓) trigger → (✓) verdict → (✗) merge → ( ) reset` with `Stopped: REQUEST_CHANGES`
-- WORKFLOW_FAILED → `(✓) gates → (✓) trigger → (✗) verdict → ( ) merge → ( ) reset` with `Stopped: WORKFLOW_FAILED`
+- APPROVE + merged + reset succeeded + deploy healthy → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✓) reset → (✓) verify-deploy`
+- APPROVE + merged + reset succeeded + deploy DEGRADED → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✓) reset → (✗) verify-deploy`
+- APPROVE + merged + reset succeeded + deploy UNKNOWN (a health query failed) → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✓) reset → (✗) verify-deploy` with a `could not verify deployment health` note (distinct from DEGRADED — the deployment may be fine; the check couldn't confirm it)
+- APPROVE + merged + reset succeeded + no platform configured (skipped) → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✓) reset → (–) verify-deploy`
+- APPROVE + merged + reset partial (RESET_OK=false) → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✗) reset → (✓|✗|–) verify-deploy` — verify-deploy still runs off `MERGED == true`, independent of the reset outcome
+- APPROVE + user declined merge → `(✓) gates → (✓) trigger → (✓) verdict → (✗) merge → ( ) reset → ( ) verify-deploy` with `Stopped: user declined merge`
+- REQUEST_CHANGES → `(✓) gates → (✓) trigger → (✓) verdict → (✗) merge → ( ) reset → ( ) verify-deploy` with `Stopped: REQUEST_CHANGES`
+- WORKFLOW_FAILED → `(✓) gates → (✓) trigger → (✗) verdict → ( ) merge → ( ) reset → ( ) verify-deploy` with `Stopped: WORKFLOW_FAILED`
 
 ```
 Ship Summary
@@ -595,18 +705,20 @@ Pipeline:  (CONDITIONAL_DAG_LINE_FROM_ABOVE)
 Verdict:   APPROVE | REQUEST_CHANGES | WORKFLOW_FAILED
 Run:       RUN_URL
 
+Deployment: HEALTHY | DEGRADED | UNKNOWN | skipped
+
 Action taken:
   - Merged with MERGE_METHOD (sha SHORT_SHA)            # APPROVE + user said yes
   - Reset: switched to BASE_BRANCH, pulled, deleted PR_BRANCH (remote+local)
   - Stale-branch cleanup: deleted N | offered N | none found | skipped (sync failed)
   - Left for manual merge                                # APPROVE + user said no
-  - Suggested hero-skills:respond-to-pr                  # REQUEST_CHANGES
+  - Suggested hero-skills:respond-to-comments             # REQUEST_CHANGES
   - Stopped, action failure surfaced                     # WORKFLOW_FAILED
 
 Next steps:
-  /clear                       # fresh context first (recommended for the next task)
-  hero-skills:plan-work        # Step 1 — start the next task from a ticket or description
-  hero-skills:one-shot         # …or chain Steps 1–12 again on a small follow-up
+  /clear                       # fresh context before the next task (recommended)
+  hero-skills:one-shot         # start the next small task ticket-to-merge
+  hero-skills:reset-branch     # if you abandoned work mid-flight instead of merging
 ```
 
 ## Notes

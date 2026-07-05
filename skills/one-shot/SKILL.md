@@ -1,7 +1,7 @@
 ---
 name: one-shot
 # prettier-ignore
-description: Drive a small task end-to-end — plan, implement, test, simplify, commit, push draft, self-review, mark ready, await bot review, respond, auto-approve, merge, reset. Use only for small, low-risk PRs.
+description: Drive a small task end-to-end — plan, implement, test, simplify, push, self-review, mark ready, await review, respond, ship. Use only for small, low-risk PRs.
 argument-hint: ISSUE_ID_OR_DESCRIPTION [additional-context]
 disable-model-invocation: true
 ---
@@ -15,18 +15,18 @@ Take a small task from a ticket (or plain description) all the way through to a 
 ## Pipeline DAG
 
 ```
-plan → implement → test → e2e → simplify → commit → push-draft → self-review → mark-ready → await-review → respond → ship
+plan → implement → test → simplify → push → self-review → mark-ready → await-review → respond → ship
 ```
 
 Print this line at the start of every step, marking progress:
 
 ```
-[N/12] (✓) plan → (✓) implement → (✓) test → (▶) e2e → ( ) simplify → ( ) commit → ( ) push-draft → ( ) self-review → ( ) mark-ready → ( ) await-review → ( ) respond → ( ) ship
+[N/10] (✓) plan → (✓) implement → (▶) test → ( ) simplify → ( ) push → ( ) self-review → ( ) mark-ready → ( ) await-review → ( ) respond → ( ) ship
 
-Now running: e2e
+Now running: test
 ```
 
-When a step is skipped (e.g., `e2e` on a backend-only PR with no UI project in HERO.md, or `await-review`/`respond` if the repo has no review bot configured), use `(–)` and continue. When the user declines a gate (mark-ready, merge) or a smoke test fails, use `(✗)` and stop.
+When a step is skipped (e.g., `await-review`/`respond` if the repo has no review bot configured), use `(–)` and continue. When the user declines a gate (mark-ready, merge) or `test-changes` flags a UI smoke regression, use `(✗)` and stop.
 
 ### Step → skill mapping
 
@@ -34,30 +34,28 @@ Each DAG node delegates to a single skill (or runs inline when the work is just 
 
 | # | Step | Skill to run standalone |
 |---|------|-------------------------|
-| 1 | `plan` | `hero-skills:plan-work` |
+| 1 | `plan` | inline (Plan Mode; fetches a Linear issue if `$ARGUMENTS` is an issue ID) |
 | 2 | `implement` | inline (Plan Mode → edits) |
-| 3 | `test` | `hero-skills:test-changes` |
-| 4 | `e2e` | `hero-skills:smoke-ui` |
-| 5 | `simplify` | `/simplify` (external skill) |
-| 6 | `commit` | `hero-skills:commit-changes` |
-| 7 | `push-draft` | `hero-skills:push-pr` |
-| 8 | `self-review` | `hero-skills:review-pr` (Steps 1–8) |
-| 9 | `mark-ready` | `hero-skills:review-pr` (Step 9 gate) or `gh pr ready` |
-| 10 | `await-review` | inline poll (no separate skill) |
-| 11 | `respond` | `hero-skills:respond-to-pr` |
-| 12 | `ship` | `hero-skills:ship-pr` |
+| 3 | `test` | `hero-skills:test-changes` (includes UI smoke) |
+| 4 | `simplify` | `/simplify` (external skill) |
+| 5 | `push` | `hero-skills:push-pr` (commits + pushes a draft PR) |
+| 6 | `self-review` | `hero-skills:review-pr --no-mark-ready` |
+| 7 | `mark-ready` | `hero-skills:review-pr`'s own Step 9 gate, or `gh pr ready` |
+| 8 | `await-review` | inline poll (no separate skill) |
+| 9 | `respond` | `hero-skills:respond-to-comments` |
+| 10 | `ship` | `hero-skills:ship-pr` |
 
 ## Arguments
 
-- `$ARGUMENTS` — Same as `hero-skills:plan-work`: an issue ID (e.g., `PROJ-123`) or a plain-text description. Required.
+- `$ARGUMENTS` — An issue ID (e.g., `PROJ-123`), fetched via the Linear MCP, or a plain-text description of the task, plus optional additional context. Required.
 
 ## Prerequisites
 
-- **GitHub CLI (`gh`) installed and authenticated with the `repo` scope**. Steps 7 (push-draft), 8 (self-review), 11 (respond), and 12 (ship) all fail without it. Install via `brew install gh` (macOS), `sudo apt install gh` (Debian/Ubuntu), or <https://cli.github.com/>. Authenticate with `gh auth login -s repo`.
+- **GitHub CLI (`gh`) installed and authenticated with the `repo` scope**. Steps 5 (push), 6 (self-review), 9 (respond), and 10 (ship) all fail without it. Install via `brew install gh` (macOS), `sudo apt install gh` (Debian/Ubuntu), or <https://cli.github.com/>. Authenticate with `gh auth login -s repo`.
 - `HERO.md` exists (run `hero-skills:init-hero` first if not)
-- `.github/workflows/auto-approve.yml` is on the default branch (Step 12 needs it). If missing, run `hero-skills:init-hero --update` to install it (Step 6a of init-hero handles this), then merge that workflow file to the default branch before running one-shot.
-- **`pr-review-toolkit` plugin installed** so Step 8 (`self-review`) gets all five review agents. From inside Claude Code: `/plugin install pr-review-toolkit`. From a shell: `claude plugins add pr-review-toolkit@claude-plugins-official`. Without it, `hero-skills:review-pr` runs with a thinner review.
-- **Playwright MCP server registered** so Step 4 (`e2e`) can drive the dev server. Requires Node.js 18+. Run `claude mcp add playwright npx @playwright/mcp@latest` (add `--scope user` to share across projects, `--scope project` to commit it). Backend-only PRs skip Step 4 with `(–)` even without this.
+- `.github/workflows/auto-approve.yml` is on the default branch (Step 10 needs it). If missing, run `hero-skills:init-hero --update` to install it (Step 6a of init-hero handles this), then merge that workflow file to the default branch before running one-shot.
+- **`pr-review-toolkit` plugin installed** so Step 6 (`self-review`) gets all five review agents. From inside Claude Code: `/plugin install pr-review-toolkit`. From a shell: `claude plugins add pr-review-toolkit@claude-plugins-official`. Without it, `hero-skills:review-pr` runs with a thinner review.
+- **Playwright MCP server registered** so Step 3 (`test`) can drive the dev server for UI smoke. Requires Node.js 18+. Run `claude mcp add playwright npx @playwright/mcp@latest` (add `--scope user` to share across projects, `--scope project` to commit it). Backend-only PRs skip the UI-smoke portion of Step 3 with `(–)` even without this.
 - The task is small — see scope guard above
 
 ## Cross-step contract
@@ -81,7 +79,7 @@ session. Before deciding to advance to the next step, you MUST:
    `(▶)`; later steps are `( )` until they run; skipped steps are `(–)`;
    failed/declined steps are `(✗)`.
 
-Apply this contract at every Step 1–12 transition below (or every transition from `RESUME_STEP` onward when resuming).
+Apply this contract at every Step 1–10 transition below (or every transition from `RESUME_STEP` onward when resuming).
 
 ## Instructions
 
@@ -92,7 +90,7 @@ ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 
 # Stale-HERO check — fast subset of the plugin's check-hero-staleness.sh.
-# Keep aligned with the copies in commit-changes/push-pr/plan-work/test-changes.
+# Keep aligned with the copies in push-pr/test-changes.
 HERO_TIME=$(git -C "$ROOT" log -1 --format=%ct -- HERO.md 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
 CONFIG_TIME=$(git -C "$ROOT" log -1 --format=%ct -- \
   pyproject.toml ':(glob)**/pyproject.toml' \
@@ -106,11 +104,11 @@ if [ "${CONFIG_TIME:-0}" -gt "${HERO_TIME:-0}" ]; then
 fi
 ```
 
-If `HERO.md` is missing, STOP and tell the user to run `hero-skills:init-hero` first. one-shot relies on every downstream skill having a config to read; running blind through 12 steps is unsafe.
+If `HERO.md` is missing, STOP and tell the user to run `hero-skills:init-hero` first. one-shot relies on every downstream skill having a config to read; running blind through 10 steps is unsafe.
 
 ### Step 0.3: Pre-flight Checks
 
-Before auto-branching or any other destructive work, run the full pre-flight to catch failures that would otherwise only surface at Step 6 (commit), Step 7 (push-draft), Step 8 (self-review), or Step 12 (ship) — after you've already done the work.
+Before auto-branching or any other destructive work, run the full pre-flight to catch failures that would otherwise only surface at Step 5 (push), Step 6 (self-review), or Step 10 (ship) — after you've already done the work.
 
 ```bash
 # DEFAULT_BRANCH is needed *here* — Step 0.4 sets it too, but the
@@ -253,7 +251,7 @@ AHEAD=$(git rev-list --count "origin/$DEFAULT_BRANCH..HEAD" 2>/dev/null | grep -
 #
 # When no upstream is configured yet (common before the first push),
 # `git rev-list --count '@{u}..HEAD'` errors silently and would yield 0,
-# which would route the user past Step 7 (push-draft) and skip the
+# which would route the user past Step 5 (push) and skip the
 # initial push entirely. Detect that case explicitly and fall back to
 # AHEAD — every commit past the default branch needs a push.
 if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
@@ -281,7 +279,7 @@ PR_REVIEW=$(printf '%s' "$PR_JSON" | jq -r '.reviewDecision // empty') # APPROVE
 PR_EXISTS=false
 [ -n "$PR_NUMBER" ] && PR_EXISTS=true
 
-# Check for the durable Hero Self-Review marker so we know review-pr ran.
+# Check for the durable self-review marker so we know review-pr ran.
 # Surface API failures rather than fall through to "0 → re-review".
 SELF_REVIEW_DONE=0
 BOT_REPLIED=false
@@ -290,7 +288,7 @@ if [ "$PR_EXISTS" = "true" ]; then
     echo "note: gh api comments fetch failed; treating SELF_REVIEW_DONE/BOT_REPLIED as unknown."
   else
     SELF_REVIEW_DONE=$(printf '%s' "$COMMENTS" \
-      | jq '[.[] | select(.body | test("Hero Self-Review"; "i"))] | length')
+      | jq '[.[] | select(.body | test("ai-hero:self-review"))] | length')
     BOT_USER=$(awk -F': ' '/^- bot-username:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null \
       | tr -d '[:space:]"'"'"'')
     if [ -n "$BOT_USER" ]; then
@@ -302,7 +300,7 @@ if [ "$PR_EXISTS" = "true" ]; then
 fi
 ```
 
-Use the decision tree below to pick the **resume step** (1–12). Each row is the first that matches top-to-bottom; rows below the line require `PR_EXISTS=true` so empty PR_* values can't accidentally match.
+Use the decision tree below to pick the **resume step** (1–10). Each row is the first that matches top-to-bottom; rows below the line require `PR_EXISTS=true` so empty PR_* values can't accidentally match.
 
 | Condition | Resume at | Reason |
 |-----------|-----------|--------|
@@ -310,21 +308,21 @@ Use the decision tree below to pick the **resume step** (1–12). Each row is th
 | `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0` | exit | nothing to do |
 | `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED > 0` | exit with hint | merged/closed PR but local edits exist — branch off `DEFAULT_BRANCH` for follow-up work |
 | `CURRENT_BRANCH == DEFAULT_BRANCH` and `UNCOMMITTED == 0` and `AHEAD == 0` | Step 1 (plan) | fresh start (Step 0.4 already auto-branched if there was any work to preserve) |
-| Feature branch, `UNCOMMITTED > 0` | Step 3 (test) | mid-implement; re-run test + e2e + simplify on the latest diff before committing. If a PR is already open and non-draft, Step 7 will push the new commit to it. |
-| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED > 0` | Step 7 (push-draft) | committed but not pushed (covers both the "no PR yet" case and the "pushed-once + local follow-up" case). After push-draft updates the PR, advance to Step 8 normally. |
-| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "true"`, `SELF_REVIEW_DONE == 0` | Step 8 (self-review) | PR up but never reviewed |
-| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "true"`, `SELF_REVIEW_DONE >= 1` | Step 9 (mark-ready) | self-review already ran on this draft — go straight to the mark-ready gate |
-| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW != APPROVED`, `BOT_REPLIED=false` | Step 10 (await-review) | ready PR, no bot reply yet — Step 10's poll will wait |
-| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW != APPROVED`, `BOT_REPLIED=true` | Step 11 (respond) | bot has commented, run respond-to-pr |
-| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW == APPROVED` | Step 12 (ship) | go straight to auto-approve + merge |
-| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=false`, `AHEAD == 0` | exit with hint | branch has no work — suggest fresh `hero-skills:plan-work` |
+| Feature branch, `UNCOMMITTED > 0` | Step 3 (test) | mid-implement; re-run test (includes UI smoke) + simplify on the latest diff before pushing. If a PR is already open and non-draft, Step 5 will push the new commit to it. |
+| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED > 0` | Step 5 (push) | committed but not pushed (covers both the "no PR yet" case and the "pushed-once + local follow-up" case). After push updates the PR, advance to Step 6 normally. |
+| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "true"`, `SELF_REVIEW_DONE == 0` | Step 6 (self-review) | PR up but never reviewed |
+| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "true"`, `SELF_REVIEW_DONE >= 1` | Step 7 (mark-ready) | self-review already ran on this draft — go straight to the mark-ready gate |
+| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW != APPROVED`, `BOT_REPLIED=false` | Step 8 (await-review) | ready PR, no bot reply yet — Step 8's poll will wait |
+| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW != APPROVED`, `BOT_REPLIED=true` | Step 9 (respond) | bot has commented, run respond-to-comments |
+| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW == APPROVED` | Step 10 (ship) | go straight to auto-approve + merge |
+| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=false`, `AHEAD == 0` | exit with hint | branch has no work — suggest a fresh `hero-skills:one-shot ISSUE_OR_DESCRIPTION` (Step 1 plans inline) |
 | any other combination | exit with diagnostic | unrouted state — print the detected variables and exit; user falls back to individual skills |
 
 **Diagnostic exit format.** When a row says "exit with diagnostic" or "exit with hint," print:
 
 1. The detected state: `CURRENT_BRANCH`, `UNCOMMITTED`, `AHEAD`, `UNPUSHED`, `FETCH_OK`, `GH_OK`, and any non-empty `PR_*` values.
 2. Which row in the table matched, paraphrased in one sentence.
-3. The recommended individual skill(s) to invoke next (e.g., `hero-skills:commit-changes`, `hero-skills:push-pr`, `hero-skills:review-pr`).
+3. The recommended individual skill(s) to invoke next (e.g., `hero-skills:test-changes`, `hero-skills:push-pr`, `hero-skills:review-pr`).
 
 Then **halt the orchestrator** — do not proceed to Step 1, do not silently skip into another step.
 
@@ -340,19 +338,19 @@ Uncommitted:   2 files
 Unpushed:      3 commits ahead of origin/main
 PR:            #42 (draft, 0 reviews)
 
-Inferred resume point: Step 8 (self-review)
+Inferred resume point: Step 6 (self-review)
 
-[8/12] (✓) plan → (✓) implement → (✓) test → (✓) e2e → (✓) simplify → (✓) commit → (✓) push-draft → (▶) self-review → ( ) mark-ready → ( ) await-review → ( ) respond → ( ) ship
+[6/10] (✓) plan → (✓) implement → (✓) test → (✓) simplify → (✓) push → (▶) self-review → ( ) mark-ready → ( ) await-review → ( ) respond → ( ) ship
 
-Reasoning: branch + unpushed commits + open draft PR + no Hero Self-Review
-comment yet → plan/implement/test/e2e/simplify/commit/push-draft are done;
+Reasoning: branch + unpushed commits + open draft PR + no self-review comment
+yet → plan/implement/test/simplify/push are done;
 running self-review next.
 
 Hard stops (these halt the pipeline mid-flight when triggered — not asked up front):
   - Plan looks too large for a single PR (Step 1 scope check)
   - test-changes fails and the failure needs design judgment
-  - smoke-ui flags a UI regression on a changed route
-  - You decline review-pr's mark-ready prompt (Step 9)
+  - test-changes flags a UI smoke regression on a changed route
+  - You decline review-pr's mark-ready prompt (Step 7)
   - Auto-approve returns REQUEST_CHANGES and the fixes are non-trivial
   - You decline ship-pr's merge prompt
 ```
@@ -361,23 +359,36 @@ Set `RESUME_STEP` to the inferred value and run that step immediately. The Cross
 
 When `RESUME_STEP > 1`, render the DAG with steps before `RESUME_STEP` marked `(✓)` so the visual model stays accurate.
 
-> **Resume rule for Steps 1–12:** execute steps starting from `RESUME_STEP`. Earlier steps render as `(✓)` in the DAG **but are NOT re-executed** — do not call `plan-work`, `test-changes`, etc. for those. The first DAG render of the run shows `RESUME_STEP` as `(▶)`. Examples:
+> **Resume rule for Steps 1–10:** execute steps starting from `RESUME_STEP`. Earlier steps render as `(✓)` in the DAG **but are NOT re-executed** — do not re-run `test-changes`, `push-pr`, etc. for those steps. The first DAG render of the run shows `RESUME_STEP` as `(▶)`. Examples:
 >
 > - `RESUME_STEP=1` (fresh start) → run every step in order.
-> - `RESUME_STEP=8` (resuming at self-review on an open draft PR) → skip Steps 1–7 entirely; render `[8/12] (✓) plan → (✓) implement → (✓) test → (✓) e2e → (✓) simplify → (✓) commit → (✓) push-draft → (▶) self-review → ( ) mark-ready → ( ) await-review → ( ) respond → ( ) ship`; start running at Step 8.
-> - `RESUME_STEP=9` (resuming at mark-ready, self-review comment already present) → skip Steps 1–8; render `[9/12] (✓) plan → (✓) implement → (✓) test → (✓) e2e → (✓) simplify → (✓) commit → (✓) push-draft → (✓) self-review → (▶) mark-ready → ( ) await-review → ( ) respond → ( ) ship`; ask the mark-ready confirmation directly.
+> - `RESUME_STEP=6` (resuming at self-review on an open draft PR) → skip Steps 1–5 entirely; render `[6/10] (✓) plan → (✓) implement → (✓) test → (✓) simplify → (✓) push → (▶) self-review → ( ) mark-ready → ( ) await-review → ( ) respond → ( ) ship`; start running at Step 6.
+> - `RESUME_STEP=7` (resuming at mark-ready, self-review comment already present) → skip Steps 1–6; render `[7/10] (✓) plan → (✓) implement → (✓) test → (✓) simplify → (✓) push → (✓) self-review → (▶) mark-ready → ( ) await-review → ( ) respond → ( ) ship`; ask the mark-ready confirmation directly.
 
 ### Step 1: plan
 
 Render the DAG with `plan` as the active step:
 
 ```
-[1/12] (▶) plan → ( ) implement → ( ) test → ( ) e2e → ( ) simplify → ( ) commit → ( ) push-draft → ( ) self-review → ( ) mark-ready → ( ) await-review → ( ) respond → ( ) ship
+[1/10] (▶) plan → ( ) implement → ( ) test → ( ) simplify → ( ) push → ( ) self-review → ( ) mark-ready → ( ) await-review → ( ) respond → ( ) ship
 
 Now running: plan
 ```
 
-Run `hero-skills:plan-work "$ARGUMENTS"`. This handles ticket fetch (Linear/Jira/GitHub Issues), branch creation, and a Plan-Mode draft.
+Plan inline — there is no standalone planning skill to delegate to; one-shot owns the full plan flow itself:
+
+1. **Parse `$ARGUMENTS`.** If the first token matches a Linear/issue-ID pattern (e.g., `PROJ-123` — letters, dash, digits), treat it as an issue ID; otherwise treat the entire argument as a plain-text description. Any remaining text after the issue ID is additional context. If `$ARGUMENTS` is empty, ask the user what to plan.
+2. **If an issue ID was found, fetch it from Linear** using the Linear MCP tools:
+
+   ```
+   mcp__linear-server__get_issue with id: ISSUE_ID
+   mcp__linear-server__list_comments with issueId: ISSUE_ID
+   ```
+
+   Extract and summarize the title, description, acceptance criteria, labels/priority, and any related/linked issues, plus comments for extra context. Present the summary to the user. If no Linear MCP is configured or the ID does not resolve, tell the user and fall back to treating `$ARGUMENTS` as a plain description.
+3. **If a plain-text description was provided**, use it directly as the task context. Summarize what you understand the task to be and confirm with the user.
+4. **Enter Plan Mode** via `EnterPlanMode`. This ensures Claude cannot modify files while planning and the user must approve the plan before implementation begins. Analyze the codebase (identify affected systems, search for related code, note existing patterns, identify dependencies), then draft an implementation plan covering summary, files to modify/create, implementation steps, testing approach, and risks. Ask clarifying questions about anything unclear before finalizing.
+5. **Exit Plan Mode** via `ExitPlanMode` once the plan is ready — this hands it to the user for approval. The user either approves (Plan Mode exits, implementation begins in the same conversation) or rejects (stay in Plan Mode and revise).
 
 **Scope check after planning.** Read the plan output. If any of the following holds, STOP and hand back to the user:
 
@@ -390,9 +401,14 @@ Otherwise continue.
 
 ### Step 2: implement
 
-Render DAG with `implement` active. Implement the plan inline (Plan Mode exits naturally into implementation, same as `plan-work` Step 5).
+Render DAG with `implement` active. Implement the plan inline (Plan Mode exits naturally into implementation). Follow these rules:
 
-After implementation, **always run a quick self-review-of-the-diff before moving on** — but do NOT run the full `review-pr` agent suite yet (that happens in Step 8 against the open PR). At minimum:
+- **Read before edit** — Always Read a file before modifying it.
+- **Match existing patterns** — Follow naming, structure, and style already in the codebase. Don't introduce new conventions.
+- **One step at a time** — Announce each step briefly, make the change, then move on. No commentary between steps unless something blocks you.
+- **Stop and ask on ambiguity** — If a step is unclear or the codebase state contradicts the plan, stop and ask the user rather than guess.
+
+After implementation, **always run a quick self-review-of-the-diff before moving on** — but do NOT run the full `review-pr` agent suite yet (that happens in Step 6 against the open PR). At minimum:
 
 - `git status` — confirm only intended files changed
 - `git diff` — read every line; reject sloppy edits
@@ -400,43 +416,37 @@ After implementation, **always run a quick self-review-of-the-diff before moving
 
 ### Step 3: test
 
-Render DAG with `test` active. Run `hero-skills:test-changes`.
+Render DAG with `test` active. Run `hero-skills:test-changes` (no arguments — runs verification plus smoke tests, including UI smoke via Playwright MCP when a UI project is detected).
 
 If tests fail with a quick, mechanical fix (lint, typo, import order), apply the fix and re-run. If they fail in a way that needs design judgment (test asserting wrong behavior, integration breakage, flaky CI), STOP and hand back.
 
-### Step 4: e2e
+If `test-changes` flags a UI smoke regression — a 4xx/5xx on a changed route, an uncaught console error, a `wait_for` timeout — render `(✗) test` plus `Stopped: test-changes regression on ROUTE` and hand back. Do not advance to simplify/push; we never want a known UI regression in git history if we can help it.
 
-Render DAG with `e2e` active. Run `hero-skills:smoke-ui`. The skill itself decides whether to drive the browser: if HERO.md declares no UI project (no `framework: next | vite | remix | …`), it exits immediately and one-shot must render `(–) e2e` per `PIPELINES.md` semantics and continue to Step 5.
+On backend-only PRs (no UI project declared in HERO.md), `test-changes` reports its frontend-smoke section as skipped with `(–)` internally and continues — that's expected, not a failure. one-shot still renders the top-level `test` node as `(✓)` once it completes.
 
-If `smoke-ui` flags a regression — a 4xx/5xx on a changed route, an uncaught console error, a `wait_for` timeout — render `(✗) e2e` plus `Stopped: smoke-ui regression on ROUTE` and hand back. Do not advance to simplify/commit; we never want a known UI regression in git history if we can help it.
+> **Resume caveat:** when one-shot resumes at Step 5 or later (test + simplify were already done in a prior session), the test result reflects the diff at *that earlier* HEAD, not the current state. Step 0.5's table forces re-entry at Step 3 whenever `UNCOMMITTED > 0`, which covers mid-implement diffs. But a resume at Step 5 (push, after a follow-up commit landed elsewhere) does *not* re-test. If you want a fresh test before pushing, invoke `hero-skills:test-changes` directly, then re-run one-shot.
 
-> **Resume caveat:** when one-shot resumes at Step 6 or later (the test+e2e+simplify steps were already done in a prior session), the smoke result reflects the diff at *that earlier* HEAD, not the current state. Step 0.5's table forces re-entry at Step 3 whenever `UNCOMMITTED > 0`, which covers mid-implement diffs. But a resume at Step 7 (push-draft, after a follow-up commit landed elsewhere) does *not* re-smoke. If you want a fresh smoke before pushing, invoke `hero-skills:smoke-ui` directly, then re-run one-shot.
+The smoke portion of `test-changes` is intentionally narrow (≤5 routes, no large forms). For deeper coverage, run a real E2E suite directly.
 
-The smoke is intentionally narrow (≤5 routes, no large forms). For deeper coverage, run a real E2E suite via `hero-skills:test-changes` instead.
+### Step 4: simplify
 
-### Step 5: simplify
+Render DAG with `simplify` active. Invoke the `simplify` skill via the Skill tool — it reviews the dirty diff for reuse, quality, and efficiency and fixes any issues found before push runs.
 
-Render DAG with `simplify` active. Invoke the `simplify` skill via the Skill tool — it reviews the dirty diff for reuse, quality, and efficiency and fixes any issues found before commit-changes runs.
+`simplify` is **not** part of this plugin — it ships separately (see the user-invocable skills list). `hero-skills:push-pr` also invokes it internally when it commits, so running it here makes simplification visible as its own DAG step *and* the second invocation inside push-pr is a fast no-op once nothing is left to simplify.
 
-`simplify` is **not** part of this plugin — it ships separately (see the user-invocable skills list). `hero-skills:commit-changes` also invokes it internally for standalone use, so running it here makes simplification visible as its own DAG step *and* the second invocation inside commit-changes is a fast no-op once nothing is left to simplify.
+If the `simplify` skill is unavailable in this environment, render `(–) simplify` and continue — push-pr's own commit step will catch anything we missed via its inline fallback checklist.
 
-If the `simplify` skill is unavailable in this environment, render `(–) simplify` and continue — commit-changes' own Step 4 will catch anything we missed via its inline fallback checklist.
+### Step 5: push
 
-### Step 6: commit
+Render DAG with `push` active. Run `hero-skills:push-pr` (no arguments — commits any outstanding work with a smart conventional commit, branches off the default branch first if needed, pushes, and opens a draft PR). Trust its grouping/commit logic — do not skip pre-commit hooks. Capture the PR number from its output for downstream steps.
 
-Render DAG with `commit` active. Run `hero-skills:commit-changes`. Trust its grouping logic — do not skip pre-commit hooks.
+### Step 6: self-review
 
-### Step 7: push-draft
+Render DAG with `self-review` active. Run `hero-skills:review-pr --no-mark-ready` (auto-detects your draft PR and runs the pr-review-toolkit agents in parallel, applies fixes). The `--no-mark-ready` flag is **required** here so review-pr stops before its own Step 9 mark-ready prompt — one-shot's Step 7 below owns that gate, and double-prompting would be confusing.
 
-Render DAG with `push-draft` active. Run `hero-skills:push-pr` (no arguments — defaults to a draft PR). Capture the PR number from its output for downstream steps.
+This step covers `review-pr` Steps 1–8 only: post the review comment, ask permission to apply fixes, apply them, push the commit, post the improvements summary, and update the PR description. Mark-ready is deliberately deferred to one-shot's Step 7 so the DAG renders it as a visible, separately-tracked node.
 
-### Step 8: self-review
-
-Render DAG with `self-review` active. Run `hero-skills:review-pr --no-mark-ready` (auto-detects your draft PR and runs the pr-review-toolkit agents in parallel, applies fixes). The `--no-mark-ready` flag is **required** here so review-pr stops before its own Step 9 mark-ready prompt — one-shot's Step 9 below owns that gate, and double-prompting would be confusing.
-
-This step covers `review-pr` Steps 1–8 only: post the review comment, ask permission to apply fixes, apply them, push the commit, post the improvements summary, and update the PR description. Mark-ready is deliberately deferred to one-shot's Step 9 so the DAG renders it as a visible, separately-tracked node.
-
-### Step 9: mark-ready
+### Step 7: mark-ready
 
 Render DAG with `mark-ready` active. Now ask the user the gate question explicitly:
 
@@ -450,16 +460,16 @@ On `y`:
 gh pr ready "$PR_NUMBER"
 ```
 
-This is a **hard gate**. If the user declines, render `(✗) mark-ready` plus `Stopped: user declined mark-ready` and STOP. Do not bypass — auto-approve in Step 12 refuses draft PRs anyway, and `gh pr ready` is the only way past the draft state.
+This is a **hard gate**. If the user declines, render `(✗) mark-ready` plus `Stopped: user declined mark-ready` and STOP. Do not bypass — auto-approve in Step 10 refuses draft PRs anyway, and `gh pr ready` is the only way past the draft state.
 
-### Step 10: await-review
+### Step 8: await-review
 
-Render DAG with `await-review` active. If `HERO.md` declares a Code Review Agent (CodeRabbit, Greptile, Copilot review, etc.), poll the PR comments for the bot's first comment for **up to 60 seconds total, polling every 15 seconds**. If the bot has not posted by then, render `(–) await-review` (the gate behavior is delegated to Step 12's auto-approve, which will refuse on unresolved threads) and advance to Step 11 only if `BOT_REPLIED=true` — otherwise skip Step 11 with `(–)` too and go straight to Step 12.
+Render DAG with `await-review` active. If `HERO.md` declares a Code Review Agent (CodeRabbit, Greptile, Copilot review, etc.), poll the PR comments for the bot's first comment for **up to 60 seconds total, polling every 15 seconds**. If the bot has not posted by then, render `(–) await-review` (the gate behavior is delegated to Step 10's auto-approve, which will refuse on unresolved threads) and advance to Step 9 only if `BOT_REPLIED=true` — otherwise skip Step 9 with `(–)` too and go straight to Step 10.
 
 ```bash
 BOT_USER=$(awk -F': ' '/^- bot-username:/ {print $2; exit}' "$ROOT/HERO.md" \
   | tr -d '[:space:]"'"'"'')
-# PR_NUMBER comes from Step 7's push-pr output. Re-derive owner/repo from gh
+# PR_NUMBER comes from Step 5's push-pr output. Re-derive owner/repo from gh
 # in case earlier steps did not export them.
 PR_NUMBER=${PR_NUMBER:-$(gh pr list --head "$(git branch --show-current)" \
   --json number --jq '.[0].number')}
@@ -474,15 +484,15 @@ while (( SECONDS < DEADLINE )); do
 done
 ```
 
-If no review bot is configured (`agent: none`), render `(–) await-review` and skip both Steps 10 and 11; advance directly to Step 12.
+If no review bot is configured (`agent: none`), render `(–) await-review` and skip both Steps 8 and 9; advance directly to Step 10.
 
-### Step 11: respond
+### Step 9: respond
 
-Render DAG with `respond` active. Run `hero-skills:respond-to-pr` to address the bot's inline comments and resolve threads. This step only runs if Step 10 saw the bot reply.
+Render DAG with `respond` active. Run `hero-skills:respond-to-comments` to address the bot's inline comments and resolve threads. This step only runs if Step 8 saw the bot reply.
 
-If the bot's feedback exceeds a small set of trivial fixes, render `(✗) respond` plus `Stopped: bot feedback non-trivial — escalate to a human reviewer` per `PIPELINES.md` skip/error semantics, and halt. Do not advance to Step 12.
+If the bot's feedback exceeds a small set of trivial fixes, render `(✗) respond` plus `Stopped: bot feedback non-trivial — escalate to a human reviewer` per `PIPELINES.md` skip/error semantics, and halt. Do not advance to Step 10.
 
-### Step 12: ship
+### Step 10: ship
 
 Render DAG with `ship` active. Run `hero-skills:ship-pr`. This:
 
@@ -491,14 +501,14 @@ Render DAG with `ship` active. Run `hero-skills:ship-pr`. This:
 3. On APPROVE, asks before merging. The user must say `y`.
 4. After merge, switches to the default branch, pulls latest, and deletes the merged head branch (remote + local).
 
-If auto-approve returns REQUEST_CHANGES or WORKFLOW_FAILED, STOP. The user should run `hero-skills:respond-to-pr` again or fix the workflow before re-attempting.
+If auto-approve returns REQUEST_CHANGES or WORKFLOW_FAILED, STOP. The user should run `hero-skills:respond-to-comments` again or fix the workflow before re-attempting.
 
-### Step 12: Summary
+### Final Summary
 
 After ship-pr completes successfully, print the final pipeline DAG and a one-shot summary:
 
 ```
-[12/12] (✓) plan → (✓) implement → (✓) test → (✓) e2e → (✓) simplify → (✓) commit → (✓) push-draft → (✓) self-review → (✓) mark-ready → (✓) await-review → (✓) respond → (✓) ship
+[10/10] (✓) plan → (✓) implement → (✓) test → (✓) simplify → (✓) push → (✓) self-review → (✓) mark-ready → (✓) await-review → (✓) respond → (✓) ship
 
 One-Shot Summary
 ================
@@ -506,7 +516,7 @@ Task:        ISSUE_ID — TASK_TITLE
 PR:          #PR_NUMBER — PR_TITLE
 Branch:      PR_BRANCH (deleted) → DEFAULT_BRANCH
 Merged:      MERGE_SHA
-Duration:    HH:MM (from Step 1 start to Step 12 finish)
+Duration:    HH:MM (from Step 1 start to Step 10 finish)
 
 You're on DEFAULT_BRANCH with the merge pulled.
 
@@ -521,6 +531,6 @@ If the pipeline stopped early, render the DAG with `(✗)` on the failed step, t
 
 - This skill **does not skip user gates**. Plan approval, mark-ready, merge confirmation are all explicit. Auto mode does not change that.
 - This skill **does not retry** on judgment-call failures (test design, large bot feedback). Retrying without human input is how small PRs become broken merges.
-- Step 0.4's `git checkout -b` is unconfirmed by design — one-shot never works on the default branch and assumes the auto-derived name is acceptable. To rename later, use `git branch -m`. Sibling skills (`commit-changes`, `create-branch`) prompt for the name because they're invoked deliberately on an existing branch; one-shot's auto-mode contract precludes that prompt.
+- Step 0.4's `git checkout -b` is unconfirmed by design — one-shot never works on the default branch and assumes the auto-derived name is acceptable. To rename later, use `git branch -m`. The sibling skill `push-pr` prompts for the name because it's invoked deliberately on an existing branch; one-shot's auto-mode contract precludes that prompt.
 - For larger work, run the same skills individually so you can pause between them.
 - Run `hero-skills:reset-branch` separately if you abandon mid-pipeline — ship-pr's reset only fires after a successful merge.

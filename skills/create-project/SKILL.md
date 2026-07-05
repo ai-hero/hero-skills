@@ -206,7 +206,7 @@ chore: initialize PROJECT_NAME
 
 DESCRIPTION
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -243,10 +243,15 @@ If the repo was initialized standalone in Step 6 with an initial commit, the `fi
 
 ```bash
 git add HERO.md CLAUDE.md
-git commit -m "chore: add HERO.md and CLAUDE.md from hero-skills:init-hero"
+git commit -m "$(cat <<'EOF'
+chore: add HERO.md and CLAUDE.md from hero-skills:init-hero
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+EOF
+)"
 ```
 
-If the project was added to an existing repo, defer the commit to `hero-skills:commit-changes` (the user's normal flow).
+If the project was added to an existing repo, defer the commit to `hero-skills:push-pr` (the user's normal flow).
 
 ### Step 8: Summary
 
@@ -269,8 +274,7 @@ Created:
 Next steps:
   cd PROJECT_NAME
   hero-skills:preflight        # Step 0.3 — sanity-check tooling, .env, ports
-  hero-skills:plan-work        # Steps 1–2 — plan and implement the first task
-  hero-skills:one-shot         # …or chain Steps 1–12 in a single invocation
+  hero-skills:one-shot         # plan and implement the first task, or chain the whole pipeline in one invocation
 ```
 
 ## Notes

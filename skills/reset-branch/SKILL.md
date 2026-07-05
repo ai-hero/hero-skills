@@ -179,4 +179,7 @@ Pulled: N new commits
 Stashed: [yes — "reset-branch: WIP on {branch}" (restore with `git stash pop`) / no]
 Cleaned up: [list of deleted merged branches, if any]
 Context: Cleared
+
+Next steps:
+  hero-skills:one-shot         # start the next task
 ```
