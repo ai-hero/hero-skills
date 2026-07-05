@@ -402,12 +402,12 @@ jobs:
           TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M UTC")
 
           COMMENT_BODY="<!-- claude-approve -->
-          🤖 **Claude Pre-Approve Check**
+          🤖 **hero-skills Pre-Approve Check**
 
           $REVIEW_BODY
 
           ---
-          *Verified by Claude (claude-sonnet-4-6) • $TIMESTAMP*"
+          *Verified using hero-skills (claude-sonnet-4-6) • $TIMESTAMP*"
 
           # Update existing or create new
           EXISTING=$(gh api \
