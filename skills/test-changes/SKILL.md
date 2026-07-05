@@ -17,10 +17,10 @@ Verify an implementation works end to end. Runs static checks (lint, typecheck) 
   - `verify` - Run only verification (lint, typecheck, unit tests on changed files)
   - `smoke` - Run only smoke tests (skip verification)
   - `backend` - Only smoke test backend API
-  - `frontend [routes...]` - Only smoke test frontend app. Optional trailing tokens are routes to exercise verbatim (e.g., `/dashboard /settings/api`); if omitted, routes are derived from the diff (capped at 5)
+  - `frontend [routes...]` - Only smoke test frontend app. Optional trailing tokens **that start with `/`** are routes to exercise verbatim (e.g., `/dashboard /settings/api`); trailing tokens that do not start with `/` are treated as a test description instead. If no `/`-routes are given, routes are derived from the diff (capped at 5)
   - `cli` - Only smoke test CLI/library
   - `mcp` - Only smoke test MCP server
-  - Any other text is treated as a test description (e.g., "test the login flow")
+  - Any other text (not starting with a mode keyword above) is treated as a test description (e.g., "test the login flow")
 
 ## Instructions
 
@@ -314,10 +314,11 @@ DEV_LOG="$ROOT/.test-output/dev-server.log"
 # only reflect the current invocation.
 : > "$DEV_LOG"
 
-# Run UI_DEV_COMMAND without `eval` — bash's normal field-splitting on the
-# unquoted variable handles compound commands like `pnpm -C web dev --port
-# 3001` correctly, and we avoid the second round of shell expansion that
-# `eval` would add.
+# Run UI_DEV_COMMAND without `eval`: bash field-splitting on the unquoted
+# variable handles a command with plain arguments (e.g. `pnpm -C web dev
+# --port 3001`). It does NOT interpret shell operators (`&&`, `|`, `;`) —
+# those would be passed as literal argv. A project needing a compound command
+# should wrap it in a script and point dev-command at that.
 # shellcheck disable=SC2086  # intentional word-splitting on UI_DEV_COMMAND
 ( cd "$ROOT/$UI_PATH" && $UI_DEV_COMMAND > "$DEV_LOG" 2>&1 ) &
 DEV_PID=$!
@@ -487,12 +488,14 @@ A route fails the smoke if any of:
 
 - The HTTP status of the document request is 4xx or 5xx.
 - An entry in `browser_console_messages` has `type=error` AND its body does NOT match an allowlist entry from the section above. Match the allowlist conservatively: if you are not sure whether a message is benign, treat it as a failure and let the user decide.
-- An uncaught exception appears in the dev server log (covers a broad set of common failures and ignores nothing):
+- An uncaught exception appears in the dev server log (covers a broad set of common failures and ignores nothing). This check only applies when **this** skill started the dev server — `$DEV_LOG` is only set on that path; when the server was already running there is no log to grep, so gate on `$DEV_LOG` being set and the file existing:
 
   ```bash
-  grep -Ei '\b(Error|Warning|Exception|Traceback|Unhandled[A-Z][a-zA-Z]*Rejection):' "$DEV_LOG"
-  grep -E '\bat [A-Za-z_$][A-Za-z0-9_$.]* \(.*:[0-9]+:[0-9]+\)' "$DEV_LOG"   # JS stack frames
-  grep -E '\bModule(Not)?Found|SyntaxError|RangeError|TypeError|ReferenceError' "$DEV_LOG"
+  if [ -n "$DEV_LOG" ] && [ -f "$DEV_LOG" ]; then
+    grep -Ei '\b(Error|Warning|Exception|Traceback|Unhandled[A-Z][a-zA-Z]*Rejection):' "$DEV_LOG"
+    grep -E '\bat [A-Za-z_$][A-Za-z0-9_$.]* \(.*:[0-9]+:[0-9]+\)' "$DEV_LOG"   # JS stack frames
+    grep -E '\bModule(Not)?Found|SyntaxError|RangeError|TypeError|ReferenceError' "$DEV_LOG"
+  fi
   ```
 
 - `browser_wait_for` times out — the page never became interactive.
@@ -591,8 +594,8 @@ hero-skills:test-changes cli run the export command          # Smoke test a spec
 - Use `browser_snapshot` (not screenshots) for reliable element interaction; screenshots are captured separately as evidence for the report
 - The frontend smoke is a **smoke** test, not a full E2E: cap routes at 5, skip large forms, do not chase flaky tests. If a real E2E suite already exists in the repo (Playwright config, Cypress, etc.), prefer running it directly instead.
 - The frontend smoke never modifies tracked source files. It only reads, drives, and reports, but writes disposable local artifacts under `$ROOT/.test-output/`: screenshots in `.test-output/playwright-mcp/` and the dev-server log at `.test-output/dev-server.log`. `.test-output/` is the shared test-artifact directory for every hero skill. The ignore rule lives in `.git/info/exclude` (repo-local, untracked) — *not* `.gitignore` — so the working tree never gets dirtied.
-- Console-error filtering: the framework's hot-reload / dev-mode warnings (e.g., `[HMR]`, React strict-mode double-render notices) are not failures. Match conservatively: if in doubt about whether a message is real, surface it as a warning rather than a hard fail, and let the user decide.
-- Stop all background servers when testing completes
+- Console-error filtering: the framework's hot-reload / dev-mode warnings (e.g., `[HMR]`, React strict-mode double-render notices) are not failures. Match the allowlist conservatively: if in doubt whether a message is benign, treat it as a **failure** (consistent with the frontend-smoke Failure Rules above) and let the user decide.
+- When testing completes, stop the background servers this skill started — except the frontend dev server, which Step 6 leaves running by default and only stops when the user opts in.
 - For full-stack, backend must be ready before frontend tests that call APIs
 - Verification runs against changed files first, then full project if no changes detected
 - Stop and ask the user before continuing to smoke tests if verification fails

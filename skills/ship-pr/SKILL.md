@@ -659,15 +659,23 @@ if [ -z "$HEALTH_ENDPOINTS" ]; then
   DEPLOY_STATUS="skipped"
 else
   DEPLOY_STATUS="HEALTHY"
-  echo "$HEALTH_ENDPOINTS" | while read -r URL; do
+  # Here-string (not `... | while`): a pipeline runs the loop in a subshell,
+  # so DEPLOY_STATUS assignments inside it would be discarded. curl emits 000
+  # on timeout/unreachable, which the non-2xx branch correctly treats as
+  # DEGRADED.
+  while read -r URL; do
     [ -z "$URL" ] && continue
     CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$URL")
     echo "$URL -> HTTP $CODE"
-  done
+    case "$CODE" in
+      2??) ;;                          # 2xx — healthy
+      *)   DEPLOY_STATUS="DEGRADED" ;; # non-2xx or 000 (timeout/unreachable)
+    esac
+  done <<< "$HEALTH_ENDPOINTS"
 fi
 ```
 
-Treat a missing endpoint list as skipped, not DEGRADED — there is nothing configured to check. Otherwise classify `HEALTHY` (every endpoint returns 2xx) vs `DEGRADED` (any non-2xx response or timeout).
+Treat a missing endpoint list as skipped, not DEGRADED — there is nothing configured to check. Otherwise the loop above sets `HEALTHY` (every endpoint returns 2xx) vs `DEGRADED` (any non-2xx response or timeout).
 
 **`none` or missing** — skip silently; render `(–)` for this phase in the DAG and Summary.
 
@@ -697,7 +705,7 @@ Pipeline:  (CONDITIONAL_DAG_LINE_FROM_ABOVE)
 Verdict:   APPROVE | REQUEST_CHANGES | WORKFLOW_FAILED
 Run:       RUN_URL
 
-Deployment: HEALTHY | DEGRADED | skipped
+Deployment: HEALTHY | DEGRADED | UNKNOWN | skipped
 
 Action taken:
   - Merged with MERGE_METHOD (sha SHORT_SHA)            # APPROVE + user said yes
