@@ -117,7 +117,8 @@ That's it. Each command reads your `HERO.md` config and adapts to your stack aut
 For genuinely small, low-risk PRs:
 
 ```
-hero-skills:one-shot PROJ-123
+hero-skills:one-shot PROJ-123   # start a new ticket (or a plain-text description)
+hero-skills:one-shot            # resume the current goal to merged + reset branch
 ```
 
 This chains all ten steps end-to-end — `plan → implement → test → simplify → push → self-review → mark-ready → await-review → respond → ship` — with explicit user gates at plan-approval, mark-ready, and merge. `test` includes a UI smoke check via Playwright MCP for routes affected by the diff and is skipped automatically on backend-only PRs. `simplify` runs the `/simplify` skill on the dirty diff so the commit lands clean. `push` commits and opens the draft PR in one step. `mark-ready` is the explicit draft → ready gate; `await-review` polls for your configured Code Review Agent (Copilot, CodeRabbit, Greptile, …) before `respond` addresses its feedback.
@@ -145,7 +146,7 @@ Each step maps to a skill you can run on its own when you don't want the whole p
 | 9 | `respond` | `hero-skills:respond-to-comments` |
 | 10 | `ship` | `hero-skills:ship-pr` |
 
-Re-running `hero-skills:one-shot` mid-flow is safe: it inspects git + the open PR for that branch and resumes from the inferred step deterministically — no confirmation prompt. On the default branch with work to preserve, one-shot auto-branches off (no prompt) before resuming. It exits cleanly with a hand-off hint only when there's nothing left to do (e.g., after the PR has merged) or when state can't be inferred safely (e.g., a failed `git fetch`).
+Re-running `hero-skills:one-shot` mid-flow is safe: it inspects git + the open PR for that branch and resumes from the inferred step deterministically — no confirmation prompt. With no arguments, that resume behavior is the whole point. On the default branch with work to preserve, one-shot auto-branches off (no prompt) before resuming. It exits cleanly with a hand-off hint only when there's nothing left to do (e.g., after the PR has merged) or when state can't be inferred safely (e.g., a failed `git fetch`).
 
 See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
@@ -180,7 +181,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
 | Command | What it does |
 |---------|-------------|
-| `hero-skills:one-shot` | Drives a small task end-to-end: plan → implement → test → simplify → push → self-review → mark-ready → await-review → respond → ship. Detects a resume point on re-invocation. Explicit user gates at each destructive step. |
+| `hero-skills:one-shot` | Drives a small task end-to-end: plan → implement → test → simplify → push → self-review → mark-ready → await-review → respond → ship. Detects a resume point on re-invocation; with no arguments, drives the current goal to merged + reset branch. Explicit user gates at each destructive step. |
 | `hero-skills:create-project` | Scaffolds a new project, then chains into setup-dev → init-hero → first-commit. |
 
 ### Operations

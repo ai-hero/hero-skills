@@ -1,14 +1,14 @@
 ---
 name: one-shot
 # prettier-ignore
-description: Drive a small task end-to-end — plan, implement, test, simplify, push, self-review, mark ready, await review, respond, ship. Use only for small, low-risk PRs.
-argument-hint: ISSUE_ID_OR_DESCRIPTION [additional-context]
+description: Drive a small task end-to-end — plan, implement, test, simplify, push, self-review, mark ready, await review, respond, ship. With no arguments, resumes the current goal through merge and branch reset. Use only for small, low-risk PRs.
+argument-hint: "[ISSUE_ID_OR_DESCRIPTION] [additional-context]"
 disable-model-invocation: true
 ---
 
 # One-Shot — Ticket to Merged PR in a Single Pipeline
 
-Take a small task from a ticket (or plain description) all the way through to a merged PR and a clean local checkout, by chaining the existing hero skills in order. This is the orchestrator for **Pipeline 2** in `PIPELINES.md`.
+Take a small task from a ticket (or plain description) — or, **without arguments**, the current in-progress goal — all the way through to a merged PR and a clean local checkout, by chaining the existing hero skills in order. This is the orchestrator for **Pipeline 2** in `PIPELINES.md`.
 
 > **Scope guard:** one-shot is for small, low-risk PRs only. If, during planning, the change looks larger than a single focused diff (multiple subsystems, schema changes, breaking API changes, anything you would normally split into a stack), STOP after the `plan` step and tell the user to fall back to running the individual skills. Do NOT push a large PR through unattended automation.
 
@@ -47,7 +47,9 @@ Each DAG node delegates to a single skill (or runs inline when the work is just 
 
 ## Arguments
 
-- `$ARGUMENTS` — An issue ID (e.g., `PROJ-123`), fetched via the Linear MCP, or a plain-text description of the task, plus optional additional context. Required.
+- `$ARGUMENTS` — Optional. An issue ID (e.g., `PROJ-123`), fetched via the Linear MCP, or a plain-text description of the task, plus optional additional context.
+  - **With arguments** — start work on that ticket/description; on a feature branch with work in flight, arguments are additional context (see Step 0.5's "Default for non-default branches").
+  - **Without arguments** — finish the **current goal**: Step 0.5 detects the in-progress state and resumes the pipeline from the inferred step, through `ship`'s merge and reset to the default branch. Step 0.5's decision table is the single source of truth for that routing — states with nothing left to resume exit with a hint, and a truly fresh start reaches Step 1, which asks what to plan.
 
 ## Prerequisites
 
@@ -377,7 +379,7 @@ Now running: plan
 
 Plan inline — there is no standalone planning skill to delegate to; one-shot owns the full plan flow itself:
 
-1. **Parse `$ARGUMENTS`.** If the first token matches a Linear/issue-ID pattern (e.g., `PROJ-123` — letters, dash, digits), treat it as an issue ID; otherwise treat the entire argument as a plain-text description. Any remaining text after the issue ID is additional context. If `$ARGUMENTS` is empty, ask the user what to plan.
+1. **Parse `$ARGUMENTS`.** If the first token matches a Linear/issue-ID pattern (e.g., `PROJ-123` — letters, dash, digits), treat it as an issue ID; otherwise treat the entire argument as a plain-text description. Any remaining text after the issue ID is additional context. If `$ARGUMENTS` is empty, ask the user what to plan — Step 0.5 routes here only when it found no current goal to resume.
 2. **If an issue ID was found, fetch it from Linear** using the Linear MCP tools:
 
    ```

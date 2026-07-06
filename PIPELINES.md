@@ -58,7 +58,7 @@ present from commit one onward.
 plan → implement → test → simplify → push → self-review → mark-ready → await-review → respond → ship
 ```
 
-Owner: `hero-skills:one-shot`. Ten steps — each maps to a single skill (or `inline` when one-shot drives it directly without delegating):
+Owner: `hero-skills:one-shot`. Invoked with an issue ID or description it starts at `plan`; invoked with no arguments it resumes the current goal (in-progress branch/diff/PR) from the detected step and drives it to merged + a reset checkout. Ten steps — each maps to a single skill (or `inline` when one-shot drives it directly without delegating):
 
 | # | Step | Skill to run standalone | Notes |
 |---|------|-------------------------|-------|
