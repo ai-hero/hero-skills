@@ -770,11 +770,11 @@ URL: {pr-url}
 
 Next steps:
   hero-skills:review-pr        # self-review — review agents + security pass, applies fixes, marks ready
-  hero-skills:scan-vulns       # if this PR touched dependencies
+  hero-skills:harden           # if this PR touched dependencies — audit CVEs, plan fixes
   hero-skills:ship-pr          # once green — @auto-approve, merge, verify deploy, reset
 ```
 
-If the PR was created with `ready` (non-draft), report `PR created` instead of `Draft PR created` and skip the self-review hint — jump straight to `hero-skills:scan-vulns` (if dependencies changed) or `hero-skills:ship-pr` once CI is green.
+If the PR was created with `ready` (non-draft), report `PR created` instead of `Draft PR created` and skip the self-review hint — jump straight to `hero-skills:harden` (if dependencies changed) or `hero-skills:ship-pr` once CI is green.
 
 ### A5: Report CI Status
 

@@ -15,7 +15,7 @@ Context-aware PR review. Auto-detects whether you're reviewing your own draft or
 - `$ARGUMENTS` — Optional PR number or URL, plus optional flags
   - (none) — Auto-detect from current branch → your draft PR → self-review mode
   - `#123` or URL — Your PR: self-review mode. Someone else's PR: review mode (no edits).
-  - `--no-mark-ready` — Self-review mode only: run Steps 1–8 (post review, apply fixes, push, post improvements summary, update PR description) but skip Step 9 (the mark-ready prompt + `gh pr ready`). Used by `hero-skills:one-shot` so its DAG can render `self-review` (Step 6) and `mark-ready` (Step 7) as distinct nodes without double-prompting. Combine with a PR number/URL as needed (`#42 --no-mark-ready`).
+  - `--no-mark-ready` — Self-review mode only: run Steps 1–8 (post review, apply fixes, push, post improvements summary, update PR description) but skip Step 9 (the mark-ready prompt + `gh pr ready`). Used by `hero-skills:one-shot` so its DAG can render `self-review` (Step 5) and `mark-ready` (Step 6) as distinct nodes without double-prompting. Combine with a PR number/URL as needed (`#42 --no-mark-ready`).
 
 Parse `$ARGUMENTS` for the flag once at the top of Step 0:
 
@@ -277,7 +277,7 @@ Substitute `DRAFTED_FULL_BODY_HERE` with actual Markdown before running — the 
 
 ### Step 9: Ask to Mark Ready
 
-**Skip this step entirely when `$NO_MARK_READY` is `true`** (caller passed `--no-mark-ready`, typically `hero-skills:one-shot` whose own Step 7 owns the mark-ready gate). In that case, jump straight to Step 10 — the summary will show `PR state: Draft (mark-ready deferred to caller)`.
+**Skip this step entirely when `$NO_MARK_READY` is `true`** (caller passed `--no-mark-ready`, typically `hero-skills:one-shot` whose own Step 6 owns the mark-ready gate). In that case, jump straight to Step 10 — the summary will show `PR state: Draft (mark-ready deferred to caller)`.
 
 Otherwise, ask the user:
 

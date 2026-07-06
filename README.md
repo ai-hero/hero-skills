@@ -185,8 +185,9 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
 | Command | What it does |
 |---------|-------------|
-| `hero-skills:scan-vulns` | Scan dependencies (Dependabot) and containers (Docker Scout) for CVEs |
-| `hero-skills:document-arch` | Create and update architecture specs with Mermaid diagrams |
+| `hero-skills:harden` | Audit read-only for hardening — dependency CVEs (Dependabot), container CVEs (Docker Scout), code robustness — and emit execution-ready plans as `plan-work/` items |
+| `hero-skills:think-it-through` | Brainstorm + grill an idea one question at a time into shared understanding and dependency-aware work-items; `arch` mode manages `specs/` docs + ADRs |
+| `hero-skills:handoff` | Distill the current conversation into one self-contained work-item for a downstream agent (optionally filed to the tracker) |
 
 ### Utilities
 
