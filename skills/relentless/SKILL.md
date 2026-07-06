@@ -171,9 +171,11 @@ testable and can be reviewed on their own. For each, write one file to
 this is the payoff over a flat TODO list. Flag any one-way-door item with
 `one_way_door: true`.
 
-Assign IDs as zero-padded numbers, continuing from the highest existing ID in
-`plan-work/` (so concurrent efforts don't collide on `001`). After writing,
-print the readiness view (below) so the user sees what to start first.
+Number items sequentially from the highest existing `id` in `plan-work/` (so
+concurrent efforts don't collide). The `id` frontmatter field is a plain
+integer; zero-pad only the **filename** prefix (`007-slug.md`) so `ls` sorts
+them — `depends_on` references the plain integer id. After writing, print the
+readiness view (below) so the user sees what to start first.
 
 ## The Work-Item Format
 
@@ -181,7 +183,7 @@ One markdown file per item at `plan-work/NNN-slug.md`:
 
 ```markdown
 ---
-id: 007
+id: 7 # a plain integer; only the filename is zero-padded (007-slug.md) for sorting
 title: Add OAuth device-flow login
 status: ready # ready | blocked | in-progress | done
 depends_on: [3, 5] # ids that must be `done` before this can start
@@ -224,25 +226,34 @@ primitive without a database — a plain read over the folder:
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 cd "$ROOT/plan-work" 2>/dev/null || { echo "no plan-work/ yet"; exit 0; }
 
-# Collect ids whose status is done.
-done_ids=" $(for f in *.md; do
-  [ -e "$f" ] || continue
-  st=$(awk -F': *' '/^status:/{print $2; exit}' "$f" | tr -d '[:space:]')
-  [ "$st" = "done" ] && awk -F': *' '/^id:/{print $2; exit}' "$f" | tr -d '[:space:]'
-done | tr '\n' ' ') "
+# Read a frontmatter scalar, stripping any trailing "# comment" and whitespace.
+fm() { awk -F': ' -v k="$2" '$1==k{v=$2; sub(/ *#.*/,"",v); gsub(/^[[:space:]]+|[[:space:]]+$/,"",v); print v; exit}' "$1"; }
+# Normalize an id to a base-10 integer so 007 and 7 compare equal.
+norm() { printf '%s' "$((10#${1:-0}))"; }
 
-# An item is ready if not done and all depends_on are in done_ids.
+# Collect the ids whose status is done (normalized).
+done_ids=" "
 for f in *.md; do
   [ -e "$f" ] || continue
-  st=$(awk -F': *' '/^status:/{print $2; exit}' "$f" | tr -d '[:space:]')
-  [ "$st" = "done" ] && continue
-  deps=$(awk -F'[][]' '/^depends_on:/{print $2; exit}' "$f" | tr ',' ' ')
+  [ "$(fm "$f" status)" = "done" ] && done_ids="$done_ids$(norm "$(fm "$f" id)") "
+done
+
+# An item is ready if it is not done and every depends_on id is done.
+for f in *.md; do
+  [ -e "$f" ] || continue
+  [ "$(fm "$f" status)" = "done" ] && continue
+  # Split deps onto separate lines and read them with a heredoc-fed loop:
+  # portable across bash/zsh (zsh doesn't word-split unquoted vars) and the
+  # heredoc keeps the loop in the current shell so `ready` persists.
+  deps=$(awk -F': ' '/^depends_on:/{v=$2; sub(/ *#.*/,"",v); gsub(/[][, ]+/,"\n",v); print v; exit}' "$f")
   ready=1
-  for d in $deps; do
-    d=$(printf '%s' "$d" | tr -d '[:space:]'); [ -z "$d" ] && continue
-    case "$done_ids" in *" $d "*) ;; *) ready=0 ;; esac
-  done
-  title=$(awk -F': *' '/^title:/{sub(/^title: */,""); print; exit}' "$f")
+  while IFS= read -r d; do
+    [ -z "$d" ] && continue
+    case "$done_ids" in *" $(norm "$d") "*) ;; *) ready=0 ;; esac
+  done <<EOF
+$deps
+EOF
+  title=$(fm "$f" title)
   [ "$ready" = 1 ] && echo "READY  $f — $title" || echo "blocked $f — $title"
 done
 ```
