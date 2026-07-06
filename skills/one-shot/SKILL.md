@@ -1,8 +1,8 @@
 ---
 name: one-shot
 # prettier-ignore
-description: Drive a small task end-to-end — plan, implement, test, simplify, push, self-review, mark ready, await review, respond, ship. With no arguments, resumes the current goal through merge and branch reset. Use only for small, low-risk PRs.
-argument-hint: "[ISSUE_ID_OR_DESCRIPTION] [additional-context]"
+description: Drive a small task end-to-end — plan, implement, test, simplify, push, self-review, mark ready, await review, respond, ship. No args: resume the current goal (gated). Small, low-risk PRs only.
+argument-hint: "[ISSUE_ID [additional-context] | DESCRIPTION]"
 disable-model-invocation: true
 ---
 
@@ -49,7 +49,7 @@ Each DAG node delegates to a single skill (or runs inline when the work is just 
 
 - `$ARGUMENTS` — Optional. An issue ID (e.g., `PROJ-123`), fetched via the Linear MCP, or a plain-text description of the task, plus optional additional context.
   - **With arguments** — start work on that ticket/description; on a feature branch with work in flight, arguments are additional context (see Step 0.5's "Default for non-default branches").
-  - **Without arguments** — finish the **current goal**: Step 0.5 detects the in-progress state and resumes the pipeline from the inferred step, through `ship`'s merge and reset to the default branch. Step 0.5's decision table is the single source of truth for that routing — states with nothing left to resume exit with a hint, and a truly fresh start reaches Step 1, which asks what to plan.
+  - **Without arguments** — finish the **current goal**: Step 0.5 detects the in-progress state and resumes the pipeline from the inferred step, through `ship`'s merge and reset to the default branch. Step 0.5's decision table is the single source of truth for that routing — states with nothing left to resume exit with a hint or diagnostic per the table, and a truly fresh start on the default branch reaches Step 1, which asks what to plan.
 
 ## Prerequisites
 
@@ -155,7 +155,7 @@ If `PREFLIGHT_RC` is zero but the script printed `[WARN]` lines, surface them to
 
 ### Step 0.4: Auto-branch off Default Branch (if needed)
 
-one-shot never works on the default branch. If we're on it with any uncommitted files or unpushed local commits, branch off automatically — **no prompt** — so the rest of the pipeline has a feature branch to commit and push to. This runs before resume detection so Step 0.5 always sees a feature-branch state.
+one-shot never works on the default branch. If we're on it with any uncommitted files or unpushed local commits, branch off automatically — **no prompt** — so the rest of the pipeline has a feature branch to commit and push to. This runs before resume detection so Step 0.5 sees a feature-branch state whenever there is work to preserve.
 
 First, **derive `SUGGESTED_BRANCH` as a reasoning step** per the Naming rules below — this is a model task, not a shell function. Inspect `$ARGUMENTS` (and the diff if `$ARGUMENTS` is empty) and produce a concrete, non-empty branch name. Then run the snippet below with that value exported in the environment. The snippet asserts the variable is set; it will not invent one.
 
@@ -307,7 +307,7 @@ Use the decision tree below to pick the **resume step** (1–10). Each row is th
 | Condition | Resume at | Reason |
 |-----------|-----------|--------|
 | `FETCH_OK=false` OR `GH_OK=false` | exit with diagnostic | resume rows depend on remote state — fix network/auth and re-run, or invoke individual skills |
-| `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0` | exit | nothing to do |
+| `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0` | exit with hint | `MERGED` → done; suggest `hero-skills:reset-branch` if the local checkout still has the branch. `CLOSED` without merge → the work never landed; say so explicitly and suggest reopening the PR or starting a new branch |
 | `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED > 0` | exit with hint | merged/closed PR but local edits exist — branch off `DEFAULT_BRANCH` for follow-up work |
 | `CURRENT_BRANCH == DEFAULT_BRANCH` and `UNCOMMITTED == 0` and `AHEAD == 0` | Step 1 (plan) | fresh start (Step 0.4 already auto-branched if there was any work to preserve) |
 | Feature branch, `UNCOMMITTED > 0` | Step 3 (test) | mid-implement; re-run test (includes UI smoke) + simplify on the latest diff before pushing. If a PR is already open and non-draft, Step 5 will push the new commit to it. |
@@ -379,7 +379,7 @@ Now running: plan
 
 Plan inline — there is no standalone planning skill to delegate to; one-shot owns the full plan flow itself:
 
-1. **Parse `$ARGUMENTS`.** If the first token matches a Linear/issue-ID pattern (e.g., `PROJ-123` — letters, dash, digits), treat it as an issue ID; otherwise treat the entire argument as a plain-text description. Any remaining text after the issue ID is additional context. If `$ARGUMENTS` is empty, ask the user what to plan — Step 0.5 routes here only when it found no current goal to resume.
+1. **Parse `$ARGUMENTS`.** If the first token matches a Linear/issue-ID pattern (e.g., `PROJ-123` — letters, dash, digits), treat it as an issue ID; otherwise treat the entire argument as a plain-text description. Any remaining text after the issue ID is additional context. If `$ARGUMENTS` is empty, ask the user what to plan — Step 0.5 routes here only when it found no current goal on the current branch to resume (PRs on other branches are not scanned).
 2. **If an issue ID was found, fetch it from Linear** using the Linear MCP tools:
 
    ```
