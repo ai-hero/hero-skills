@@ -1,21 +1,24 @@
 ---
 name: push-pr
 # prettier-ignore
-description: Commit your work and push it — smart conventional commit, branch off the default branch if needed, then open a draft PR and report CI. Pass `ready` for a non-draft PR, or a branch name to merge into a target.
-argument-hint: [ready|target-branch]
+description: Test (verify + smoke), commit, push, and open a draft PR with a CI report. Pass test to run only the test phase, ready for a non-draft PR, or a target branch to merge into.
+argument-hint: "[test|ready|target-branch]"
 disable-model-invocation: true
 ---
 
-# Push — Commit, Push, Draft PR, and Merge Workflow
+# Push — Test, Commit, Push, Draft PR, and Merge Workflow
 
-Commit any outstanding work with a smart conventional commit, branch off the default branch first if you're still on it, push to the remote repository, and open a **draft PR by default**. Drafts are the default because the author should run `hero-skills:review-pr` (which calls all pr-review-toolkit agents, applies fixes, and asks for confirmation) before promoting the PR to ready-for-review. After a successful push, this skill also prints a brief CI status summary.
+Test the outstanding work (verification plus smoke tests), commit it with a smart conventional commit, branch off the default branch first if you're still on it, push to the remote repository, and open a **draft PR by default**. Drafts are the default because the author should run `hero-skills:review-pr` (which calls all pr-review-toolkit agents plus a security pass, applies fixes, and asks for confirmation) before promoting the PR to ready-for-review. After a successful push, this skill also prints a brief CI status summary.
+
+The test phase (Step 2) absorbed the former `hero-skills:test-changes` skill — run `hero-skills:push-pr test` for a test-only run that stops before any commit.
 
 ## Arguments
 
 - `$ARGUMENTS` - Optional modifier or target branch:
-  - (none, default) - Commit if dirty, push, and create a **draft** PR
-  - `ready` - Commit if dirty, push, and create a non-draft PR (ready for review immediately) — only use when you have already self-reviewed or for trivial changes
-  - If a branch name (e.g., `main`, `develop`): Commit if dirty, push, then merge into that target branch (no PR)
+  - (none, default) - Test, commit if dirty, push, and create a **draft** PR
+  - `test` - Run only Step 2 (verification + smoke tests) and stop — no commit, no push. Optional trailing tokens narrow the run: `verify` (static checks + unit tests only), `smoke` (skip verification), `backend`, `frontend [routes...]` (routes must start with `/`), `cli`, `mcp`, or a free-text test description
+  - `ready` - Test, commit if dirty, push, and create a non-draft PR (ready for review immediately) — only use when you have already self-reviewed or for trivial changes
+  - If a branch name (e.g., `main`, `develop`): Test, commit if dirty, push, then merge into that target branch (no PR)
 
 ## Instructions
 
@@ -26,7 +29,7 @@ ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 
 # Stale-HERO check — fast subset of the plugin's check-hero-staleness.sh.
-# Keep aligned with the copies in test-changes/one-shot.
+# Keep aligned with the copy in one-shot.
 HERO_TIME=$(git -C "$ROOT" log -1 --format=%ct -- HERO.md 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
 CONFIG_TIME=$(git -C "$ROOT" log -1 --format=%ct -- \
   pyproject.toml ':(glob)**/pyproject.toml' \
@@ -43,13 +46,16 @@ fi
 Read `HERO.md` if it exists. This skill uses:
 
 - **Repository** → default branch (for branching and PR base), branch convention, commit convention
-- **Code Quality** → linters, formatters (for the pre-commit steps)
+- **Code Quality** → linters, formatters, type checkers (test phase + pre-commit steps)
+- **Projects** → language, framework, install/test/dev commands, ports (test phase; skips auto-detection)
 - **CI/CD** → platform name for PR description context and CI status reporting
 - **Project Management** → issue prefix for branch names, `Fixes:`/`Relates to:` trailers, and linking PRs to issues
 
-If `HERO.md` is missing, suggest `hero-skills:init-hero` but proceed with defaults. If the stale-HERO hint fired, mention it once to the user but do not block.
+If `HERO.md` is missing, suggest `hero-skills:init-hero` but proceed with defaults (the test phase falls back to auto-detection). If the stale-HERO hint fired, mention it once to the user but do not block.
 
 ### Step 1: Branch if on Default Branch
+
+**If `$ARGUMENTS` starts with `test`, skip this step** — a test-only run commits nothing, so it may run on any branch, including the default.
 
 Never commit or push directly to the default branch.
 
@@ -91,17 +97,433 @@ git branch --show-current
 git status --porcelain
 ```
 
-### Step 2: Commit Dirty Changes (Smart Commit)
+### Step 2: Test the Changes (Verification + Smoke)
+
+Verify the implementation works end to end before anything is committed: static checks (lint, typecheck) and unit tests against changed files, then auto-detect project type and run smoke tests against running services. Works for standalone projects, monorepo subprojects, or full-stack apps with multiple layers.
+
+Mode selection from `$ARGUMENTS` (after the leading `test`, when present): `verify` runs only Step 2b; `smoke`, `backend`, `frontend [routes...]`, `cli`, and `mcp` skip Step 2b and run only the matching part of Step 2c; anything else (including no modifier) runs both. Free text that is not a mode keyword is a test description to focus on.
+
+**Failure semantics:** if a check fails with a quick, mechanical fix (lint, typo, import order), apply the fix and re-run. If it fails in a way that needs design judgment (test asserting wrong behavior, integration breakage, flaky CI), or the UI smoke flags a regression on a changed route, **STOP** — report the failure and hand back to the user. Never carry a known regression into a commit.
+
+#### 2a: Detect Project Structure
+
+Use HERO.md's **Projects** section when present. Otherwise scan the current directory (and immediate subdirectories) for indicators:
+
+| Indicator | Type | Default Port |
+|-----------|------|-------------|
+| `pyproject.toml` + `fastmcp`/`mcp` dep | MCP Server | 8000 |
+| `pyproject.toml` + FastAPI/Flask import in `app/` | Backend API | 8000 |
+| `pyproject.toml` + `[project.scripts]` or `__main__.py` | CLI/Library | - |
+| `package.json` + `next.config.*` | Frontend (Next.js) | 3000 |
+| `package.json` + `vite.config.*` | Frontend (Vite) | 5173 |
+| `backend/` + `frontend/` subdirs | Full-stack | both |
+
+```bash
+ls pyproject.toml package.json next.config.* vite.config.* 2>/dev/null
+ls backend/pyproject.toml frontend/package.json 2>/dev/null
+```
+
+Check the project's `CLAUDE.md` for specific run instructions. Report what was detected; if nothing, ask the user. Install dependencies first when needed (`uv sync`, `npm install` — per project for full-stack).
+
+#### 2b: Verify Implementation (Lint, Typecheck, Unit Tests)
+
+Capture the list of changed files first (uncommitted, then last commit, fallback to empty). Read the dedupe back into the array via `mapfile` so filenames containing spaces, tabs, or globs survive intact — `($(...))` would word-split and corrupt them:
+
+```bash
+mapfile -t CHANGED_FILES < <(git diff --name-only; git diff --name-only HEAD~1 HEAD 2>/dev/null)
+# Newline-safe dedupe (preserves spaces in filenames).
+mapfile -t CHANGED_FILES < <(printf "%s\n" "${CHANGED_FILES[@]}" | sort -u)
+```
+
+If `CHANGED_FILES` is empty, run the checks on the whole project (replace `"${CHANGED_FILES[@]}"` with `.` or the project root).
+
+Use commands from `HERO.md` **Code Quality** and **Projects** sections when available. Otherwise auto-detect:
+
+- **Lint:** `uv run ruff check "${CHANGED_FILES[@]}"` (Python), `npx eslint "${CHANGED_FILES[@]}"` (TS/JS), `go vet ./...` (Go)
+- **Typecheck:** `uv run mypy "${CHANGED_FILES[@]}"` (Python), `npx tsc --noEmit` (TS)
+- **Unit tests:** the `test-command` from HERO.md per project; else `uv run pytest` / `npm test`. If a test file maps directly to a changed source file, prefer running just those tests for speed.
+
+Report the verification result:
+
+```
+Verification
+============
+Lint:      PASSED (0 issues)
+Typecheck: PASSED (0 errors)
+Unit tests: 42 passed, 0 failed
+```
+
+If any check fails, apply the failure semantics above — mechanical fixes are fixed and re-run; judgment calls stop the skill before the smoke tests.
+
+#### 2c: Run Smoke Tests by Type
+
+Skip entirely in `verify` mode.
+
+**CLI / Library** — find entry points in `pyproject.toml` (`[project.scripts]`) or `__main__.py` and run with `--help` or a basic invocation (`uv run SCRIPT_NAME --help`); for libraries with no CLI, `uv run python -c "import PACKAGE; print('OK')"`.
+
+**Backend API** — start the server in the background (e.g., `uv run uvicorn app.main:app --reload --port 8000`), wait for ready, then smoke:
+
+```bash
+curl -s http://localhost:8000/health
+curl -s http://localhost:8000/openapi.json | head -50
+```
+
+**MCP Server** — start the server, launch `npx @modelcontextprotocol/inspector`, connect via Playwright at `http://localhost:6274` (Streamable HTTP → server URL → Connect), and exercise the available tools through the Inspector UI.
+
+**Full-stack** — backend first (APIs must be ready), frontend second (may proxy to backend), then smoke each layer.
+
+**Frontend App** — the full recipe below: detect whether this is a UI project, confirm/start its dev server under `.test-output/`, derive up to 5 routes from the diff (or use explicit `/`-routes passed after `frontend`), drive each route with Playwright MCP, and apply the console-noise allowlist and failure rules. If no UI project is detected, skip gracefully — expected on backend-only diffs, not a failure.
+
+##### Detect UI project
+
+If Step 2a detected no frontend indicator at all (no `next.config.*`, `vite.config.*`, and no HERO.md project with a UI-ish `framework`), skip this section and print:
+
+```
+(–) frontend: no UI project detected — skipping frontend smoke.
+This is expected on backend-only PRs.
+```
+
+Otherwise, confirm which project to drive using HERO.md's `## Projects` section (already loaded in Step 0). UI detection there is **heuristic, not closed-enum** — `init-hero` does not constrain the `framework` value, so treat the list below as a hint and fall back to asking the user when nothing matches.
+
+**Known-UI frameworks (auto-detected as UI):**
+
+```
+next nextjs nuxt remix astro vite svelte sveltekit solid solid-start qwik
+gatsby angular react cra create-react-app
+```
+
+**Known-non-UI frameworks (auto-detected as backend, skip silently):**
+
+```
+fastapi flask django starlette express nestjs hono fiber gin echo actix axum
+rails sinatra laravel
+```
+
+**Decision:**
+
+1. If any project's `framework` is in the known-UI set → that's the UI project. Continue.
+2. If every project's `framework` is in the known-non-UI set OR there are no HERO.md projects with a `framework` field → fall back to Step 2a's file-based detection (`next.config.*`, `vite.config.*`). If that also found nothing, skip as above.
+3. If a project's `framework` is in **neither** list (custom value, typo, or a UI framework not yet on the list), ask the user once:
+
+   ```
+   Project 'PROJECT_NAME' declares framework: FRAMEWORK_VALUE.
+   Treat as a UI project for smoke testing?
+     [y] Yes — drive the dev server with Playwright MCP
+     [n] No — skip (recommended for non-UI frameworks)
+     [a] Add 'FRAMEWORK_VALUE' to the known-UI list in skills/push-pr/SKILL.md and continue (asks once per session, not durable)
+   ```
+
+   Default to `n` if the user answers ambiguously — silently smoking a backend project is worse than silently skipping a UI one.
+
+If multiple UI projects exist, ask the user which one to smoke-test (or pass it explicitly via the project's path). One per run keeps the dev-server lifecycle simple.
+
+Record `UI_PORT`, `UI_DEV_COMMAND`, `UI_PATH` from the matched project. Validate that `UI_PATH` resolves under `$ROOT`:
+
+```bash
+if [ ! -d "$ROOT/$UI_PATH" ]; then
+  echo "ERROR: UI project path '$ROOT/$UI_PATH' does not exist."
+  echo "       Check the 'path:' field for this project in HERO.md, or run"
+  echo "       hero-skills:init-hero --update to re-detect."
+  exit 1
+fi
+```
+
+##### Confirm or start the dev server
+
+Check whether the dev server is already up on `UI_PORT`:
+
+```bash
+DEV_URL="http://localhost:$UI_PORT"
+if curl -sf -o /dev/null -m 3 "$DEV_URL"; then
+  echo "Dev server already running at $DEV_URL — using it."
+  STARTED_BY_US=false
+else
+  echo "Dev server is not responding at $DEV_URL."
+  STARTED_BY_US=true
+fi
+```
+
+If `STARTED_BY_US=true`, ask the user before starting it:
+
+```
+The dev server is not running. Start it now?
+  [y] Start `UI_DEV_COMMAND` in the background — leaves it running after this skill finishes.
+  [n] Cancel — start it yourself, then re-run this skill.
+```
+
+On `y`, start the dev server with output captured to a log under `.test-output/` and PID tracked:
+
+```bash
+# Centralize all frontend-smoke artifacts under .test-output/ so they live
+# next to the screenshots and are covered by the same exclude entry. The
+# `mkdir -p` and exclude-append also happen below before the first
+# screenshot — doing them here too is cheap and lets the dev-server log
+# exist before the drive phase ever runs.
+mkdir -p "$ROOT/.test-output"
+# Write the ignore rule to .git/info/exclude (repo-local, untracked) rather
+# than .gitignore (tracked) — modifying a tracked file would leave the
+# working tree dirty and contradict the test phase's "never modifies tracked
+# source files" contract. Resolve the path via git so worktrees / bare repos
+# / non-default gitdirs work too.
+EXCLUDE_FILE=$(git -C "$ROOT" rev-parse --git-path info/exclude 2>/dev/null)
+case "$EXCLUDE_FILE" in
+  /*) ;;
+  *)  EXCLUDE_FILE="$ROOT/$EXCLUDE_FILE" ;;
+esac
+mkdir -p "$(dirname "$EXCLUDE_FILE")"
+grep -qxF '.test-output/' "$EXCLUDE_FILE" 2>/dev/null \
+  || printf '\n.test-output/\n' >> "$EXCLUDE_FILE"
+DEV_LOG="$ROOT/.test-output/dev-server.log"
+# Truncate any stale log from a previous run so this run's diagnostics
+# only reflect the current invocation.
+: > "$DEV_LOG"
+
+# Run UI_DEV_COMMAND without `eval`: bash field-splitting on the unquoted
+# variable handles a command with plain arguments (e.g. `pnpm -C web dev
+# --port 3001`). It does NOT interpret shell operators (`&&`, `|`, `;`) —
+# those would be passed as literal argv. A project needing a compound command
+# should wrap it in a script and point dev-command at that.
+# shellcheck disable=SC2086  # intentional word-splitting on UI_DEV_COMMAND
+( cd "$ROOT/$UI_PATH" && $UI_DEV_COMMAND > "$DEV_LOG" 2>&1 ) &
+DEV_PID=$!
+echo "Started dev server (pid $DEV_PID, log $DEV_LOG)."
+
+# Wait up to 60s for the server to come up. Bail early if the spawned
+# process has already died (typo'd UI_DEV_COMMAND, missing dep, port in use).
+for i in $(seq 1 30); do
+  if ! kill -0 "$DEV_PID" 2>/dev/null; then
+    echo "Dev server process died before responding. Last 30 log lines:"
+    tail -30 "$DEV_LOG"
+    exit 1
+  fi
+  if curl -sf -o /dev/null -m 2 "$DEV_URL"; then
+    echo "Dev server is up after ${i}x2s."
+    break
+  fi
+  sleep 2
+done
+
+if ! curl -sf -o /dev/null -m 2 "$DEV_URL"; then
+  # Server did not respond on $DEV_URL. Probe alternates: dev servers often
+  # bind 0.0.0.0 (devcontainers / CI runners) or 127.0.0.1 only, and IPv6
+  # localhost can resolve to an unreachable address. Surface that case
+  # rather than reporting "did not come up" when it actually did.
+  # 0.0.0.0 is a *bind* address, not a routable connect target — only
+  # probe addresses that are actually reachable as clients.
+  ALT_URL=""
+  for HOST in 127.0.0.1 ::1; do
+    # Wrap IPv6 literal in brackets for curl's URL syntax.
+    case "$HOST" in
+      ::*) PROBE_URL="http://[$HOST]:$UI_PORT" ;;
+      *)   PROBE_URL="http://$HOST:$UI_PORT" ;;
+    esac
+    if curl -sf -o /dev/null -m 2 "$PROBE_URL"; then
+      ALT_URL="$PROBE_URL"
+      break
+    fi
+  done
+  # Also grep the log for the framework's announced URL (Next, Vite, etc.
+  # all print "Local:" / "ready on" / "Listening on" with a URL).
+  LOG_URL=$(grep -Eom1 'https?://[a-zA-Z0-9.:-]+' "$DEV_LOG" 2>/dev/null || true)
+
+  if [ -n "$ALT_URL" ] || [ -n "$LOG_URL" ]; then
+    echo "Dev server is up but not on $DEV_URL."
+    [ -n "$ALT_URL" ] && echo "  Reachable at: $ALT_URL"
+    [ -n "$LOG_URL" ] && echo "  Server reports: $LOG_URL"
+    echo "  Update HERO.md 'port:' (or 'host:' if your config supports it)"
+    echo "  for project '$PROJECT_NAME' and re-run."
+  else
+    echo "Dev server did not come up within 60s. Last 30 log lines:"
+    tail -30 "$DEV_LOG"
+  fi
+
+  echo ""
+  echo "Cleaning up the process we started:"
+  kill "$DEV_PID" 2>/dev/null || true
+  # Verify the kill worked — frameworks like `next dev` spawn worker
+  # processes; killing the parent can leave the port bound. Re-curl after
+  # a beat; if it still answers, surface the orphan so the user can clean up.
+  sleep 1
+  if curl -sf -o /dev/null -m 2 "$DEV_URL"; then
+    echo "WARN: stale process still bound to :$UI_PORT after kill."
+    echo "      Investigate: lsof -i :$UI_PORT"
+  fi
+  exit 1
+fi
+```
+
+Note the log path so the user can `tail -f` it in another terminal if a smoke-test failure needs deeper diagnosis. Do NOT auto-tail it into this conversation — it will flood the context.
+
+##### Identify routes
+
+If `/`-routes were passed after `frontend` (e.g., `hero-skills:push-pr test frontend /dashboard /settings/api`), use those verbatim.
+
+Otherwise, derive from the diff. For each changed file under the UI project, map to its owning route(s):
+
+- Next.js App Router: `app/foo/bar/page.tsx` → `/foo/bar`; `app/(group)/x/page.tsx` → `/x` (route groups are URL-invisible); route handlers (`route.ts`) excluded.
+- Next.js dynamic / catch-all segments: `app/posts/[slug]/page.tsx`, `app/[...slug]/page.tsx`, `app/[[...slug]]/page.tsx` — there is no canonical URL for these. Ask the user once for a sample value (e.g., a real `slug` from the dev DB), or skip the route with `(–)` and a note. Do not invent values like `/posts/example` — those usually 404.
+- Next.js parallel and intercepted routes: `app/@modal/...`, `app/(.)photo/...`, `app/(..)settings/...` — exclude entirely. They have no free-standing URL; navigating to a literal `@modal` returns 404 and pollutes the smoke result.
+- Next.js Pages Router: `pages/foo/bar.tsx` → `/foo/bar`; `pages/index.tsx` → `/`; `pages/[slug].tsx` → ask for a sample value or skip.
+- Vite + React Router / SvelteKit / Remix / etc.: walk the routing config (`routes.tsx`, `+page.svelte`, `routes/`) and emit the canonical paths. Apply the same dynamic-segment rule (ask for a sample or skip).
+- Shared components (`components/Button.tsx`, `lib/`, `hooks/`): no direct route. Pick the **landing page** (`/`) plus the **most-changed page** as a fallback so we exercise the rendering path at all.
+
+If the diff touches no UI files at all (despite the project being a UI project — e.g., the change was server actions only), exercise just the landing page `/` so we still detect a hard regression like a build break.
+
+Cap the route list at **5 routes** for a smoke test. More than that and the user should run a real E2E suite.
+
+Print the route list before driving so the user can object:
+
+```
+Smoke routes (N):
+  - /
+  - /dashboard
+  - /settings/api
+```
+
+##### Drive the browser
+
+Mark `BROWSER_OPENED=true` after the first successful `browser_navigate` so the cleanup step knows whether to call `browser_close`.
+
+For each route in order, run the same recipe via Playwright MCP:
+
+1. `mcp__playwright__browser_navigate` to `$DEV_URL$ROUTE`. Set `expectedStatus` to 200-399 if the tool supports it; otherwise check status from a follow-up `browser_network_requests` call.
+2. `mcp__playwright__browser_wait_for` until the page is interactive (look for a stable selector — `body`, the route's `<h1>`, or a known landmark from the snapshot).
+3. `mcp__playwright__browser_snapshot` — capture the accessibility tree as the canonical "did it render" check.
+4. `mcp__playwright__browser_console_messages` — read messages emitted since the last navigate.
+5. `mcp__playwright__browser_take_screenshot` — save a PNG named `smoke-ROUTE_SLUG.png` under `$ROOT/.test-output/playwright-mcp/`. **Before the first screenshot of this run**, do the three-step setup once:
+
+   ```bash
+   mkdir -p "$ROOT/.test-output/playwright-mcp"
+   # Ensure the exclude file covers .test-output/. Use .git/info/exclude
+   # (repo-local, untracked) instead of .gitignore so we don't modify a
+   # tracked file — see the dev-server note above.
+   EXCLUDE_FILE=$(git -C "$ROOT" rev-parse --git-path info/exclude 2>/dev/null)
+   case "$EXCLUDE_FILE" in
+     /*) ;;
+     *)  EXCLUDE_FILE="$ROOT/$EXCLUDE_FILE" ;;
+   esac
+   mkdir -p "$(dirname "$EXCLUDE_FILE")"
+   grep -qxF '.test-output/' "$EXCLUDE_FILE" 2>/dev/null \
+     || printf '\n.test-output/\n' >> "$EXCLUDE_FILE"
+   # Clear stale artifacts from previous runs so this report only reflects
+   # the current diff. Scope the delete to this skill's artifacts so
+   # co-located Playwright traces / videos from unrelated sessions are not
+   # touched.
+   rm -f "$ROOT/.test-output/playwright-mcp"/smoke-*.png
+   ```
+
+   `$ROOT/.test-output/` is the canonical local-only test-artifacts directory for hero-skills. All disposable outputs from any hero skill — Playwright screenshots, traces, videos, network logs, dev-server logs, coverage reports — land somewhere under it so the repo root stays clean and a single exclude entry covers them all.
+
+For routes that involve a form change (detected by reading the diff: `<form>` / `useForm` / `onSubmit` added or modified), additionally:
+
+1. `mcp__playwright__browser_fill_form` with placeholder-but-plausible values for the visible inputs (keep it under 5 inputs — refuse if the form is huge; that's a real E2E test, not a smoke test).
+2. Click the submit control, `browser_wait_for` the success state, `browser_console_messages` again.
+
+###### Console noise allowlist
+
+Dev-mode frameworks emit benign warnings on every page load. The allowlist below is **the only set of console messages this skill ignores**; everything else (including any console message of `type=error`) is treated as a failure. Do not invent additional patterns at runtime.
+
+```
+Next.js / React (development mode):
+  - "[Fast Refresh]"
+  - "[HMR]"
+  - "Download the React DevTools"
+  - "Warning: ReactDOM.render is no longer supported"
+  - any message whose body starts with "Warning:" AND contains "in development"
+
+Vite:
+  - "[vite] connecting…"
+  - "[vite] connected."
+  - "[vite] hot updated:"
+
+SvelteKit / Svelte:
+  - "[vite] connecting…"  (same as Vite — Kit uses Vite under the hood)
+
+General:
+  - any message whose URL is a `chrome-extension://` source (browser extensions
+    emitting in the page context — not the app's fault).
+```
+
+If a future framework has its own benign-warnings set, the user must update this list explicitly via a follow-up edit to this skill — the frontend smoke does not silently expand its filter set.
+
+###### Failure rules
+
+A route fails the smoke if any of:
+
+- The HTTP status of the document request is 4xx or 5xx.
+- An entry in `browser_console_messages` has `type=error` AND its body does NOT match an allowlist entry from the section above. Match the allowlist conservatively: if you are not sure whether a message is benign, treat it as a failure and let the user decide.
+- An uncaught exception appears in the dev server log (covers a broad set of common failures and ignores nothing). This check only applies when **this** skill started the dev server — `$DEV_LOG` is only set on that path; when the server was already running there is no log to grep, so gate on `$DEV_LOG` being set and the file existing:
+
+  ```bash
+  if [ -n "$DEV_LOG" ] && [ -f "$DEV_LOG" ]; then
+    grep -Ei '\b(Error|Warning|Exception|Traceback|Unhandled[A-Z][a-zA-Z]*Rejection):' "$DEV_LOG"
+    grep -E '\bat [A-Za-z_$][A-Za-z0-9_$.]* \(.*:[0-9]+:[0-9]+\)' "$DEV_LOG"   # JS stack frames
+    grep -E '\bModule(Not)?Found|SyntaxError|RangeError|TypeError|ReferenceError' "$DEV_LOG"
+  fi
+  ```
+
+- `browser_wait_for` times out — the page never became interactive.
+- A form submission's `wait_for` fails — the success state never rendered.
+
+On any failure: stop driving further routes, surface the failing route + the console message + the screenshot path, and treat the run as failed. Do **not** auto-retry; the model is a poor judge of "transient vs real" for UI bugs.
+
+#### 2d: Test Cleanup and Report
+
+```bash
+# Close the browser session — only if the frontend drive step actually
+# opened one. Skipping this when no UI project was found (or the server
+# failed to come up) avoids noisy "no session to close" errors from the
+# MCP server.
+if [ "${BROWSER_OPENED:-false}" = "true" ]; then
+  mcp__playwright__browser_close
+fi
+
+# If we started the frontend dev server ourselves, leave it running by
+# default — most users want it for follow-up work. Offer to stop only if
+# the user explicitly asked for cleanup.
+if [ "${STARTED_BY_US:-false}" = "true" ]; then
+  echo ""
+  echo "Dev server is still running (pid $DEV_PID, log $DEV_LOG)."
+  echo "Stop it now? [y/N]"
+fi
+```
+
+If the user says yes, `kill "$DEV_PID"` and remove the log. Otherwise leave both in place. Stop any other background servers (backend, MCP inspector) started for this run via `TaskStop`, then report:
+
+```
+Test Results
+=================
+Project: {name}
+Mode: all (verification + smoke)
+
+Verification:
+  Lint:      PASSED (0 issues)
+  Typecheck: PASSED (0 errors)
+  Unit tests: 42 passed, 0 failed
+
+Smoke Tests:
+  Backend (FastAPI on :8000):
+    GET /health -> 200 OK
+  Frontend (Next.js on :3000):
+    Routes:      N tested (/, /dashboard, /settings/api)
+    Console:     X errors, Y warnings (filtered framework noise)
+    Screenshots: $ROOT/.test-output/playwright-mcp/*.png
+    Result:      OK | FAILED at ROUTE — REASON
+```
+
+**If `$ARGUMENTS` started with `test`, STOP here** — the test-only run is complete. Suggest `/simplify` and a plain `hero-skills:push-pr` as next steps. Otherwise continue to Step 3.
+
+### Step 3: Commit Dirty Changes (Smart Commit)
 
 ```bash
 git status --porcelain
 ```
 
-**If the tree is clean (no output):** the work is already committed — skip straight to Step 3.
+**If the tree is clean (no output):** the work is already committed — skip straight to Step 4.
 
 **If the tree is dirty**, run the following before pushing.
 
-#### 2a: Run Pre-commit (if available)
+#### 3a: Run Pre-commit (if available)
 
 ```bash
 if command -v pre-commit > /dev/null 2>&1; then
@@ -113,7 +535,7 @@ fi
 
 If pre-commit is installed and checks fail: report errors, offer to auto-fix, do not proceed until passing. If not installed, skip and continue.
 
-#### 2b: Analyze Changes
+#### 3b: Analyze Changes
 
 ```bash
 git status --porcelain
@@ -124,9 +546,9 @@ git diff --stat
 
 For each changed file: read the diff, understand its purpose, assess quality.
 
-#### 2c: Simplify Code
+#### 3c: Simplify Code
 
-Invoke the `simplify` skill via the Skill tool. `simplify` is **not** part of this plugin — it ships separately (see the user-invocable skills list in the current session). It reviews the current diff for reuse, quality, and efficiency and fixes any issues found before the commit lands. Step 2g below handles the post-fix pre-push dry-run.
+Invoke the `simplify` skill via the Skill tool. `simplify` is **not** part of this plugin — it ships separately (see the user-invocable skills list in the current session). It reviews the current diff for reuse, quality, and efficiency and fixes any issues found before the commit lands. Step 3g below handles the post-fix pre-push dry-run.
 
 If the `simplify` skill is unavailable in this environment, report `NO_SIMPLIFY_SKILL — falling back to inline checklist` and apply this check before continuing:
 
@@ -134,7 +556,7 @@ If the `simplify` skill is unavailable in this environment, report `NO_SIMPLIFY_
 - [ ] No over-engineering
 - [ ] Could this be simpler?
 
-#### 2d: Ruthless Code Review
+#### 3d: Ruthless Code Review
 
 Additional checks beyond simplify:
 
@@ -174,7 +596,7 @@ Suggestions:
 
 Fix any CRITICAL or WARNING issues found. Re-run pre-commit after fixes (if available).
 
-#### 2e: Group into Changesets
+#### 3e: Group into Changesets
 
 Group logically related changes:
 
@@ -183,7 +605,7 @@ Group logically related changes:
 - Dependency updates separate
 - Documentation separate
 
-#### 2f: Commit Each Changeset
+#### 3f: Commit Each Changeset
 
 ```bash
 git add file1 file2 ...
@@ -202,7 +624,7 @@ EOF
 
 **If issue ID in branch name:** Add `Fixes: PROJ-123` or `Relates to: PROJ-123`.
 
-#### 2g: Post-Commit Pre-Push Dry-Run
+#### 3g: Post-Commit Pre-Push Dry-Run
 
 Dry-run any pre-push hooks now so failures surface before the actual push (Workflow A1 / B1):
 
@@ -214,7 +636,7 @@ else
 fi
 ```
 
-#### 2h: Commit Summary
+#### 3h: Commit Summary
 
 ```
 Commit Summary
@@ -228,13 +650,14 @@ Commits Created: N
 Pre-commit: PASSED (or SKIPPED)
 ```
 
-Proceed to Step 3.
+Proceed to Step 4.
 
-### Step 3: Determine Workflow
+### Step 4: Determine Workflow
 
 | Argument | Workflow |
 |----------|----------|
 | (none, default) | Push + **Draft** PR |
+| `test` | Already stopped after Step 2 (test-only) |
 | `ready` | Push + non-draft PR |
 | `main`/`master` | Push + Merge to main |
 | Other branch | Push + Merge to target |
@@ -346,7 +769,7 @@ Draft PR created: #{number}
 URL: {pr-url}
 
 Next steps:
-  hero-skills:review-pr        # self-review — runs pr-review-toolkit agents, applies fixes, marks ready
+  hero-skills:review-pr        # self-review — review agents + security pass, applies fixes, marks ready
   hero-skills:scan-vulns       # if this PR touched dependencies
   hero-skills:ship-pr          # once green — @auto-approve, merge, verify deploy, reset
 ```
@@ -416,14 +839,14 @@ git push -u origin $(git branch --show-current)
 
 ### B2: Switch to Target and Pull
 
-Before switching, verify the working tree is clean (Step 2 should have committed everything, but double-check):
+Before switching, verify the working tree is clean (Step 3 should have committed everything, but double-check):
 
 ```bash
 FEATURE_BRANCH=$(git branch --show-current)
 git status --porcelain
 ```
 
-**If uncommitted changes exist at this point, STOP.** Do not switch branches — go back and commit them (re-run Step 2) before continuing.
+**If uncommitted changes exist at this point, STOP.** Do not switch branches — go back and commit them (re-run Step 3) before continuing.
 
 ```bash
 git checkout $TARGET_BRANCH
@@ -463,8 +886,9 @@ Suggestion: Delete the feature branch?
 
 ## Safety Checks
 
+- [ ] Test phase (Step 2) passed — no known regression is committed
 - [ ] Pre-push hooks pass before any push
-- [ ] Working tree clean before push (Step 2 committed any dirty changes)
+- [ ] Working tree clean before push (Step 3 committed any dirty changes)
 - [ ] Not force pushing
 - [ ] Merge commits (not fast-forward) for traceability
 
@@ -492,11 +916,23 @@ This may take a few minutes.
 - Auto-resolve merge conflicts
 - Skip hooks with `--no-verify`
 - Push secrets or sensitive files
-- Stash changes to work around a dirty tree — commit them instead (Step 2)
+- Stash changes to work around a dirty tree — commit them instead (Step 3)
 
 ## Large PR Warning
 
 If diff >1000 lines or >50 files, warn and suggest breaking into smaller PRs.
+
+## Examples
+
+```
+hero-skills:push-pr                                       # Test, commit, push, draft PR
+hero-skills:push-pr ready                                 # Test, commit, push, non-draft PR
+hero-skills:push-pr test                                  # Test only (verification + smoke), no commit
+hero-skills:push-pr test verify                           # Only lint, typecheck, unit tests
+hero-skills:push-pr test frontend /dashboard /settings    # Smoke-test specific routes (verbatim)
+hero-skills:push-pr test cli run the export command       # Smoke-test a specific CLI command
+hero-skills:push-pr develop                               # Test, commit, push, merge into develop
+```
 
 ## Notes
 
@@ -504,3 +940,8 @@ If diff >1000 lines or >50 files, warn and suggest breaking into smaller PRs.
 - Respects repository PR templates if they exist
 - Always creates merge commits for traceability
 - Never commits or pushes directly to the default branch — Step 1 branches off first
+- Always check the project's CLAUDE.md first for custom run instructions
+- The frontend smoke is a **smoke** test, not a full E2E: cap routes at 5, skip large forms, do not chase flaky tests. If a real E2E suite already exists in the repo (Playwright config, Cypress, etc.), prefer running it directly instead.
+- The test phase never modifies tracked source files. It only reads, drives, and reports, but writes disposable local artifacts under `$ROOT/.test-output/` (screenshots in `.test-output/playwright-mcp/`, the dev-server log at `.test-output/dev-server.log`). The ignore rule lives in `.git/info/exclude` (repo-local, untracked) — *not* `.gitignore` — so the working tree never gets dirtied.
+- Use `browser_snapshot` (not screenshots) for reliable element interaction; screenshots are captured separately as evidence for the report
+- When testing completes, stop the background servers the test phase started — except the frontend dev server, which is left running by default and only stopped when the user opts in

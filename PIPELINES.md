@@ -55,27 +55,26 @@ present from commit one onward.
 ### Pipeline 2: one-shot — ticket to merged PR in a single invocation
 
 ```
-plan → implement → test → simplify → push → self-review → mark-ready → await-review → respond → ship
+plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship
 ```
 
-Owner: `hero-skills:one-shot`. Invoked with an issue ID or description it starts at `plan`; invoked with no arguments it resumes the current goal (in-progress branch/diff/PR on the current branch) from the detected step and drives it — through the usual user gates — to merged + a reset checkout. Ten steps — each maps to a single skill (or `inline` when one-shot drives it directly without delegating):
+Owner: `hero-skills:one-shot`. Invoked with an issue ID or description it starts at `plan`; invoked with no arguments it resumes the current goal (in-progress branch/diff/PR on the current branch) from the detected step and drives it — through the usual user gates — to merged + a reset checkout. Nine steps — each maps to a single skill (or `inline` when one-shot drives it directly without delegating):
 
 | # | Step | Skill to run standalone | Notes |
 |---|------|-------------------------|-------|
 | 1 | `plan` | `inline` (Plan Mode) | fetches a Linear issue if `$ARGUMENTS` is an issue ID, else treats it as a plain-text description |
 | 2 | `implement` | `inline` (Plan Mode → edits) | applies the approved plan as code edits |
-| 3 | `test` | `hero-skills:test-changes` | run lint/typecheck/unit tests, including UI smoke via Playwright MCP |
-| 4 | `simplify` | `/simplify` (external) | review the dirty diff for reuse/quality/efficiency and fix; `(–)` if `/simplify` unavailable |
-| 5 | `push` | `hero-skills:push-pr` | commits outstanding work with a conventional commit and pushes a draft PR |
-| 6 | `self-review` | `hero-skills:review-pr --no-mark-ready` (Steps 1–8) | run pr-review-toolkit agents on the draft, apply fixes |
-| 7 | `mark-ready` | `hero-skills:review-pr`'s own Step 9, or `gh pr ready` | hard user gate that converts draft → ready |
-| 8 | `await-review` | `inline` (poll) | poll for the configured Code Review Agent's first comment; `(–)` if `agent: none` |
-| 9 | `respond` | `hero-skills:respond-to-comments` | address the bot's inline comments and resolve threads |
-| 10 | `ship` | `hero-skills:ship-pr` | `@auto-approve`, await verdict, ask the user to merge, merge, reset to default branch |
+| 3 | `simplify` | `/simplify` (external) | review the dirty diff for reuse/quality/efficiency and fix; `(–)` if `/simplify` unavailable |
+| 4 | `push` | `hero-skills:push-pr` | tests first (lint/typecheck/unit + UI smoke via Playwright MCP), then commits outstanding work with a conventional commit and pushes a draft PR |
+| 5 | `self-review` | `hero-skills:review-pr --no-mark-ready` (Steps 1–8) | run the pr-review-toolkit agents plus a security pass on the draft, apply fixes |
+| 6 | `mark-ready` | `hero-skills:review-pr`'s own Step 9, or `gh pr ready` | hard user gate that converts draft → ready |
+| 7 | `await-review` | `inline` (poll) | poll for the configured Code Review Agent's first comment; `(–)` if `agent: none` |
+| 8 | `respond` | `hero-skills:respond-to-comments` | address the bot's inline comments and resolve threads |
+| 9 | `ship` | `hero-skills:ship-pr` | `@auto-approve`, await verdict, ask the user to merge, merge, reset to default branch |
 
-UI smoke runs inside `test`; backend-only PRs skip it.
+UI smoke runs inside `push`'s test phase (absorbed from the former `test-changes` skill — `hero-skills:push-pr test` runs it standalone); backend-only PRs skip it.
 
-`simplify` sits between `test` and `push` so the dirty diff is tidied
+`simplify` sits between `implement` and `push` so the dirty diff is tidied
 before it lands in git history. `push-pr` also invokes `/simplify`
 internally for standalone use; running one-shot just makes that step visible
 in the DAG and pays a no-op cost on the second invocation.

@@ -14,7 +14,7 @@
 # every commit). Pre-commit was too slow; we let skills surface the hint
 # on demand instead.
 #
-# Note: the daily-flow skills (push-pr / test-changes / one-shot) inline a *fast
+# Note: the daily-flow skills (push-pr / one-shot) inline a *fast
 # subset* of this check at Step 0. They're meant to be roughly aligned
 # but NOT byte-for-byte identical — this script can carry a longer
 # pattern list (Cargo, ruff, biome, agent configs, etc.) without forcing

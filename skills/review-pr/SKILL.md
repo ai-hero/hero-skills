@@ -1,14 +1,14 @@
 ---
 name: review-pr
 # prettier-ignore
-description: Review a PR. No argument reviews your own draft PR and applies fixes. A PR number reviews the author's code and posts inline comments without editing their code.
+description: Review a PR with the pr-review-toolkit agents plus a security pass. No argument reviews your own draft PR and applies fixes. A PR number reviews the author's code via inline comments, no edits.
 argument-hint: [#PR] [--no-mark-ready]
 disable-model-invocation: true
 ---
 
 # Review — PR Review
 
-Context-aware PR review. Auto-detects whether you're reviewing your own draft or someone else's PR and runs the right mode.
+Context-aware PR review. Auto-detects whether you're reviewing your own draft or someone else's PR and runs the right mode. Every review includes a security pass (absorbing what `/security-review` covers) alongside the pr-review-toolkit agents.
 
 ## Arguments
 
@@ -121,7 +121,7 @@ git pull origin "$PR_BRANCH"
 
 ### Step 2: Run All Review Agents in Parallel
 
-Launch all pr-review-toolkit agents simultaneously in a single message:
+Launch all six review agents simultaneously in a single message — the five pr-review-toolkit agents plus the security agent:
 
 ```
 Agent(subagent_type="pr-review-toolkit:code-reviewer", ...)
@@ -129,9 +129,12 @@ Agent(subagent_type="pr-review-toolkit:silent-failure-hunter", ...)
 Agent(subagent_type="pr-review-toolkit:pr-test-analyzer", ...)
 Agent(subagent_type="pr-review-toolkit:comment-analyzer", ...)
 Agent(subagent_type="pr-review-toolkit:type-design-analyzer", ...)
+Agent(subagent_type="general-purpose", security review — prompt spec below)
 ```
 
-Wait for all agents to complete, then aggregate findings into: **Critical** (bugs, security, data loss), **Important** (quality, correctness), **Suggestions** (style, polish), **Strengths**.
+**Security agent prompt spec.** Give the agent the PR diff scope (repo path, branch/PR number) and this brief: review ONLY for security vulnerabilities that are plausibly exploitable in the changed code — injection (SQL/command/template), XSS, authentication/authorization flaws, secrets or credentials in code or logs, SSRF, path traversal, unsafe deserialization/RCE, cryptographic misuse, and sensitive-data exposure. High signal only: every finding needs a concrete exploit scenario (who sends what, what happens). Explicitly EXCLUDE noise categories — denial-of-service/rate-limiting, memory safety in memory-safe languages, theoretical issues with no plausible attack path, and anything requiring an already-privileged attacker position. Return findings with file:line, severity (Critical = exploitable, Important = realistic hardening gap), and the exploit scenario; return "NO FINDINGS" when clean.
+
+Wait for all agents to complete, then aggregate findings into: **Critical** (bugs, security, data loss), **Important** (quality, correctness), **Suggestions** (style, polish), **Strengths**. Security findings land in Critical/Important per the spec above — never bury an exploitable finding in Suggestions.
 
 ### Step 3: Post Review Comment
 
@@ -340,7 +343,7 @@ If diff exceeds 1500 lines or 50 files, warn and ask to focus on specific paths.
 
 ### Step 2: Run All Review Agents in Parallel
 
-Same as self-review Step 2: launch all five pr-review-toolkit agents simultaneously and aggregate findings.
+Same as self-review Step 2: launch all six review agents (the five pr-review-toolkit agents plus the security agent, same prompt spec) simultaneously and aggregate findings.
 
 ### Step 3: Post Inline Comments
 
