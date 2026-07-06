@@ -1,23 +1,23 @@
 ---
-name: relentless
+name: think-it-through
 # prettier-ignore
-description: Relentlessly interview you — one question at a time, walking the design tree — to elevate work to principal-engineer rigor before any implementation, then emit dependency-aware work-items into a git-ignored plan-work/ store. Use before starting non-trivial or vaguely-scoped work that deserves a real design pass.
-argument-hint: [task or topic to grill on]
-disable-model-invocation: true
+description: Brainstorm an idea or task with you, then grill it one question at a time into shared, principal-level understanding, and capture the result as dependency-aware, trackable work-items.
+argument-hint: [idea or task to think through]
 ---
 
-# Relentless — Principal-Level Grilling, Then Work Items
+# Think It Through — Brainstorm, Grill to Shared Understanding, Then Work Items
 
-Take a rough idea or a vague task and grill it until it is understood at a
-principal-engineer level: goals and non-goals explicit, failure modes named,
-reversibility judged, success measurable. Then break it into dependency-aware
-work-items in a private, git-ignored `plan-work/` store — your plate, not the
-team's.
+Take a rough idea or a vague task and think it all the way through with the
+user: brainstorm it, then grill it — one question at a time — until it is
+understood at a principal-engineer level: goals and non-goals explicit, failure
+modes named, reversibility judged, success measurable. Then break it into
+dependency-aware work-items in a private, git-ignored `plan-work/` store — your
+plate, not the team's.
 
-This is the sharp, adversarial sibling of ordinary planning. Ordinary
-brainstorming asks enough questions to feel comfortable. Relentless keeps
-asking until _you_ can defend every decision — because unexamined assumptions
-are where wasted work comes from.
+This is the sharp, thorough sibling of ordinary planning. Ordinary
+brainstorming asks enough questions to feel comfortable; this keeps asking —
+relentlessly, but collaboratively — until _you_ can defend every decision,
+because unexamined assumptions are where wasted work comes from.
 
 ## The Prime Directive
 
@@ -266,7 +266,7 @@ highest-priority (or the user's choice) and start it, moving its `status` to
 
 - **The store is private.** `plan-work/` is git-ignored on purpose — it is the
   user's plate, not a shared board. Never commit it; never push it.
-- **Emit, don't implement.** Relentless produces understanding and work-items.
+- **Emit, don't implement.** This skill produces understanding and work-items.
   Handing off to implementation (e.g. `hero-skills:one-shot` on a ready item) is
   a separate, deliberate step the user takes.
 - **Discovered work goes back in.** If grilling one item surfaces new work, write
@@ -293,5 +293,5 @@ highest-priority (or the user's choice) and start it, moving its `status` to
 Next steps:
   # Pick a READY item from plan-work/ and build it:
   hero-skills:one-shot         # drive a ready item ticket-to-merge
-  hero-skills:relentless       # grill the next piece, or re-grill a blocked item
+  hero-skills:think-it-through # think the next piece through, or re-grill a blocked item
 ```
