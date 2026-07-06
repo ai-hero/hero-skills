@@ -3,7 +3,6 @@ name: think-it-through
 # prettier-ignore
 description: Brainstorm an idea or task with you, then grill it one question at a time into shared, principal-level understanding, and capture the result as dependency-aware, trackable work-items.
 argument-hint: [idea or task to think through]
-disable-model-invocation: true
 ---
 
 # Think It Through — Brainstorm, Grill to Shared Understanding, Then Work Items
