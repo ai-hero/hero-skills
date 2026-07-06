@@ -307,7 +307,8 @@ Use the decision tree below to pick the **resume step** (1–10). Each row is th
 | Condition | Resume at | Reason |
 |-----------|-----------|--------|
 | `FETCH_OK=false` OR `GH_OK=false` | exit with diagnostic | resume rows depend on remote state — fix network/auth and re-run, or invoke individual skills |
-| `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0` | exit with hint | `MERGED` → done; suggest `hero-skills:reset-branch` if the local checkout still has the branch. `CLOSED` without merge → the work never landed; say so explicitly and suggest reopening the PR or starting a new branch |
+| `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0`, `UNPUSHED == 0` | exit with hint | `MERGED` → done; suggest `hero-skills:reset-branch` if the local checkout still has the branch. `CLOSED` without merge → the work never landed; say so explicitly and suggest reopening the PR or starting a new branch |
+| `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0`, `UNPUSHED > 0` | exit with hint | local commits exist that never reached the merged/closed PR — do NOT suggest a reset; push them to a new branch (or reopen) so the work is saved remotely first |
 | `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED > 0` | exit with hint | merged/closed PR but local edits exist — branch off `DEFAULT_BRANCH` for follow-up work |
 | `CURRENT_BRANCH == DEFAULT_BRANCH` and `UNCOMMITTED == 0` and `AHEAD == 0` | Step 1 (plan) | fresh start (Step 0.4 already auto-branched if there was any work to preserve) |
 | Feature branch, `UNCOMMITTED > 0` | Step 3 (test) | mid-implement; re-run test (includes UI smoke) + simplify on the latest diff before pushing. If a PR is already open and non-draft, Step 5 will push the new commit to it. |
