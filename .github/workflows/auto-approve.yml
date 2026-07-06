@@ -116,7 +116,8 @@ jobs:
         run: |
           # Auto-approve must NOT be the only review on a PR. Require at
           # least one of:
-          #   - a Hero Self-Review comment posted by /hero-self-review
+          #   - a hero-skills self-review comment (carrying the hidden
+          #     <!-- ai-hero:self-review --> marker, posted by hero-skills:review-pr)
           #   - a review (APPROVED / CHANGES_REQUESTED / COMMENTED) from an
           #     external code review bot (Copilot, CodeRabbit, Greptile, etc.)
           #     or a human reviewer
@@ -132,9 +133,11 @@ jobs:
           gh api "/repos/${{ github.repository }}/pulls/$PR_NUMBER/comments" \
             > pr_review_comments.json
 
-          # Self-review marker — produced by /hero-self-review.
+          # Self-review marker — the hidden <!-- ai-hero:self-review -->
+          # comment posted by hero-skills:review-pr. Must match the marker
+          # string that review-pr emits and that ship-pr/one-shot grep for.
           SELF_REVIEW=$(jq -r '
-            [.[] | select(.body | test("Hero Self-Review"; "i"))] | length
+            [.[] | select(.body | test("ai-hero:self-review"))] | length
           ' issue_comments.json)
 
           # Reviews from anyone other than the PR author. Filter out
@@ -402,12 +405,12 @@ jobs:
           TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M UTC")
 
           COMMENT_BODY="<!-- claude-approve -->
-          🤖 **Claude Pre-Approve Check**
+          🤖 **hero-skills Pre-Approve Check**
 
           $REVIEW_BODY
 
           ---
-          *Verified by Claude (claude-sonnet-4-6) • $TIMESTAMP*"
+          *Verified using hero-skills (claude-sonnet-4-6) • $TIMESTAMP*"
 
           # Update existing or create new
           EXISTING=$(gh api \
