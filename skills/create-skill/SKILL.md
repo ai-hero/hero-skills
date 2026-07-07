@@ -45,6 +45,8 @@ name: verb-object
 # prettier-ignore
 description: What it does AND when to trigger it. (50-200 chars)
 argument-hint: [args]
+# Omit for skills meant to be model-invocable / chained by an orchestrator
+# like one-shot — a user-only skill cannot be called via the Skill tool.
 disable-model-invocation: true
 ---
 ```

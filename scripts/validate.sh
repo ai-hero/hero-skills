@@ -292,6 +292,28 @@ else
   echo "  Skills: $SKILL_PASS/$SKILL_COUNT passed"
 fi
 
+# ── one-shot chained-skill invocability guard ──────────────────────
+# one-shot (skills/one-shot/SKILL.md) delegates these steps to child skills
+# via the Skill tool. A child carrying `disable-model-invocation: true`
+# cannot be invoked by the model, so one-shot's pipeline breaks at that step
+# (there is no per-caller allowlist). Keep this list in sync with one-shot's
+# step→skill mapping. `preflight` is intentionally absent — one-shot runs it
+# via scripts/preflight.sh, not the Skill tool, so it may stay user-only.
+CHAINED_SKILLS="test-changes push-pr review-pr respond-to-comments ship-pr"
+for chained in $CHAINED_SKILLS; do
+  chained_file="$SKILLS_DIR/$chained/SKILL.md"
+  [[ -f "$chained_file" ]] || continue
+  if grep -qE '^disable-model-invocation:[[:space:]]*true' "$chained_file"; then
+    DMI_LINE=$(grep -nE '^disable-model-invocation:[[:space:]]*true' "$chained_file" | head -1 | cut -d: -f1)
+    error "'$chained' is chained by one-shot but is user-only (disable-model-invocation: true)" \
+      "skills/$chained/SKILL.md" \
+      "$DMI_LINE" \
+      "Remove the 'disable-model-invocation: true' line — one-shot invokes this skill via the Skill tool and cannot call a user-only skill"
+  else
+    pass "$chained: model-invocable (chainable by one-shot)"
+  fi
+done
+
 echo ""
 echo "────────────────────────────"
 
