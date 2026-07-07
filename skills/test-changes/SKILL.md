@@ -3,7 +3,6 @@ name: test-changes
 # prettier-ignore
 description: Verify an implementation. Runs lint, typecheck, and unit tests on changed files, then detects project type (CLI, backend, frontend, MCP) and runs smoke tests.
 argument-hint: [all|verify|smoke|backend|frontend|cli|mcp] [test-description|routes...]
-disable-model-invocation: true
 ---
 
 # Test — Verify and Smoke Test

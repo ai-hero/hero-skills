@@ -3,7 +3,6 @@ name: ship-pr
 # prettier-ignore
 description: Trigger auto-approve on a PR, wait for the verdict, merge if it passes, and reset to the default branch. Use after hero-skills:review-pr and any bot review when the PR is ready to ship.
 argument-hint: [pr-number]
-disable-model-invocation: true
 ---
 
 # Ship — Trigger Auto-Approve, Merge, Reset Local Branch

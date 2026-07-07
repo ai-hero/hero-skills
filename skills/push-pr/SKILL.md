@@ -3,7 +3,6 @@ name: push-pr
 # prettier-ignore
 description: Commit your work and push it — smart conventional commit, branch off the default branch if needed, then open a draft PR and report CI. Pass `ready` for a non-draft PR, or a branch name to merge into a target.
 argument-hint: [ready|target-branch]
-disable-model-invocation: true
 ---
 
 # Push — Commit, Push, Draft PR, and Merge Workflow

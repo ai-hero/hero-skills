@@ -3,7 +3,6 @@ name: review-pr
 # prettier-ignore
 description: Review a PR. No argument reviews your own draft PR and applies fixes. A PR number reviews the author's code and posts inline comments without editing their code.
 argument-hint: [#PR] [--no-mark-ready]
-disable-model-invocation: true
 ---
 
 # Review — PR Review
