@@ -53,6 +53,8 @@ name: $SKILL_NAME
 # prettier-ignore
 description: $DESCRIPTION
 argument-hint: [args]
+# Omit the next line for skills meant to be model-invocable / chained by an
+# orchestrator like one-shot (a user-only skill cannot be called via the Skill tool).
 disable-model-invocation: true
 ---
 

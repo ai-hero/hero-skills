@@ -3,7 +3,6 @@ name: respond-to-comments
 # prettier-ignore
 description: Read PR review comments, fix the code issues they raise, and resolve the conversations on GitHub. Handles the full respond-to-feedback cycle.
 argument-hint: [pr-number]
-disable-model-invocation: true
 ---
 
 # Respond to Comments — Fix Issues and Resolve PR Comments

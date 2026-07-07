@@ -292,6 +292,41 @@ else
   echo "  Skills: $SKILL_PASS/$SKILL_COUNT passed"
 fi
 
+# ── one-shot chained-skill invocability guard ──────────────────────
+# one-shot (skills/one-shot/SKILL.md) delegates these steps to child skills
+# via the Skill tool. A child carrying `disable-model-invocation: true`
+# cannot be invoked by the model, so one-shot's pipeline breaks at that step
+# (there is no per-caller allowlist). Keep this list in sync with one-shot's
+# step→skill mapping. `preflight` is intentionally absent — one-shot runs it
+# via scripts/preflight.sh, not the Skill tool, so it may stay user-only.
+CHAINED_SKILLS="test-changes push-pr review-pr respond-to-comments ship-pr"
+for chained in $CHAINED_SKILLS; do
+  chained_file="$SKILLS_DIR/$chained/SKILL.md"
+  # A missing chained skill silently breaks one-shot at that step, so error
+  # rather than skip — the list above must always resolve to real skills.
+  if [[ ! -f "$chained_file" ]]; then
+    error "one-shot chains '$chained' but skills/$chained/SKILL.md is missing" \
+      "skills/$chained/SKILL.md" \
+      "" \
+      "Restore the skill, or update one-shot's step→skill mapping and this guard's CHAINED_SKILLS list to match"
+    continue
+  fi
+  # Scope the check to the YAML frontmatter (first --- ... --- block) so a
+  # `disable-model-invocation: true` line inside a body code block (e.g. a
+  # scaffolding example) can't produce a false positive. Allow leading
+  # whitespace on the key.
+  CHAINED_FM=$(awk '/^---$/{n++; next} n==1{print} n>=2{exit}' "$chained_file")
+  if printf '%s\n' "$CHAINED_FM" | grep -qE '^[[:space:]]*disable-model-invocation:[[:space:]]*true'; then
+    DMI_LINE=$(grep -nE '^[[:space:]]*disable-model-invocation:[[:space:]]*true' "$chained_file" | head -1 | cut -d: -f1)
+    error "'$chained' is chained by one-shot but is user-only (disable-model-invocation: true)" \
+      "skills/$chained/SKILL.md" \
+      "$DMI_LINE" \
+      "Remove the 'disable-model-invocation: true' line — one-shot invokes this skill via the Skill tool and cannot call a user-only skill"
+  else
+    pass "$chained: model-invocable (chainable by one-shot)"
+  fi
+done
+
 echo ""
 echo "────────────────────────────"
 
