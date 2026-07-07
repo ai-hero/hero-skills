@@ -302,9 +302,22 @@ fi
 CHAINED_SKILLS="test-changes push-pr review-pr respond-to-comments ship-pr"
 for chained in $CHAINED_SKILLS; do
   chained_file="$SKILLS_DIR/$chained/SKILL.md"
-  [[ -f "$chained_file" ]] || continue
-  if grep -qE '^disable-model-invocation:[[:space:]]*true' "$chained_file"; then
-    DMI_LINE=$(grep -nE '^disable-model-invocation:[[:space:]]*true' "$chained_file" | head -1 | cut -d: -f1)
+  # A missing chained skill silently breaks one-shot at that step, so error
+  # rather than skip — the list above must always resolve to real skills.
+  if [[ ! -f "$chained_file" ]]; then
+    error "one-shot chains '$chained' but skills/$chained/SKILL.md is missing" \
+      "skills/$chained/SKILL.md" \
+      "" \
+      "Restore the skill, or update one-shot's step→skill mapping and this guard's CHAINED_SKILLS list to match"
+    continue
+  fi
+  # Scope the check to the YAML frontmatter (first --- ... --- block) so a
+  # `disable-model-invocation: true` line inside a body code block (e.g. a
+  # scaffolding example) can't produce a false positive. Allow leading
+  # whitespace on the key.
+  CHAINED_FM=$(awk '/^---$/{n++; next} n==1{print} n>=2{exit}' "$chained_file")
+  if printf '%s\n' "$CHAINED_FM" | grep -qE '^[[:space:]]*disable-model-invocation:[[:space:]]*true'; then
+    DMI_LINE=$(grep -nE '^[[:space:]]*disable-model-invocation:[[:space:]]*true' "$chained_file" | head -1 | cut -d: -f1)
     error "'$chained' is chained by one-shot but is user-only (disable-model-invocation: true)" \
       "skills/$chained/SKILL.md" \
       "$DMI_LINE" \
