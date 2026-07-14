@@ -48,7 +48,7 @@ jobs:
           # verifier knows exactly what it did not see. Sonnet 4.6 takes
           # 200K tokens — this leaves headroom for the file tree and
           # full-file bundle below.
-          awk -v budget=200000 '
+          awk -v budget=200000 -v hardcap=400000 '
             /^diff --git / {
               if (size > budget) { trunc = 1 }
               if (trunc) {
@@ -63,19 +63,36 @@ jobs:
               skip = 0
             }
             skip { next }
+            # Backstop: a single giant file section (or a diff with no
+            # "diff --git" boundaries at all) must not escape the budget.
+            # Once past hardcap, stop emitting even mid-file so the model
+            # context cannot be blown by one oversized file.
+            size > hardcap { hardcut = 1; next }
             { print; size += length($0) + 1 }
             END {
               if (trunc) {
                 printf "\n\n[... diff truncated at ~%d bytes on a file boundary; %d file diff(s) omitted:\n%s]\n", budget, omit, omitted
               }
+              if (hardcut) {
+                printf "\n\n[... diff hard-truncated at ~%d bytes: a file section exceeded the budget with no boundary to cut on ...]\n", hardcap
+              }
             }
           ' pr.diff > pr_truncated.diff
 
-          # List every changed file (--paginate walks all pages; without it
-          # the GitHub files endpoint returns only the first 30, silently
-          # hiding the rest of a large PR from the verifier).
+          # List the changed files. --paginate walks the pages (without it
+          # the endpoint returns only the first 30, silently hiding the rest
+          # of a large PR); GitHub still hard-caps this endpoint at 3000
+          # files, so the count is cross-checked below.
           gh api --paginate /repos/${{ github.repository }}/pulls/$PR_NUMBER/files \
             --jq '.[].filename' > changed_files.txt
+
+          # The pulls/files endpoint stops at 3000 files even with
+          # --paginate, ending with exit 0 and no error — a >3000-file PR
+          # would otherwise look complete. Capture the PR's reported file
+          # count (pr.json, fetched above) to compare against the list we
+          # actually got; any shortfall is surfaced into full_files.txt below.
+          EXPECTED_FILES=$(jq -r '.changed_files // empty' pr.json)
+          ACTUAL_FILES=$(wc -l < changed_files.txt | tr -d ' ')
 
           # Recursive repo file tree at HEAD — lets the verifier confirm
           # claims about files that exist outside the diff (tests,
@@ -134,6 +151,14 @@ jobs:
               cat bundle_omitted.txt
               printf ']\n'
             } >> full_files.txt
+          fi
+
+          # Surface the 3000-file API-ceiling shortfall (see the file-count
+          # capture above), if any — so a >3000-file PR reads as partial
+          # coverage rather than complete.
+          if [ -n "$EXPECTED_FILES" ] && [ "${ACTUAL_FILES:-0}" -lt "$EXPECTED_FILES" ]; then
+            printf '\n\n[... changed-file list incomplete: %d of %d files listed. The GitHub pulls/files API caps at 3000 files, so the remaining %d changed file(s) are absent from the list, diff, and full-file bundle — treat coverage as partial ...]\n' \
+              "$ACTUAL_FILES" "$EXPECTED_FILES" "$((EXPECTED_FILES - ACTUAL_FILES))" >> full_files.txt
           fi
 
       - name: Acknowledge
