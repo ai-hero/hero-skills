@@ -117,6 +117,14 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 # plate for THIS repo. Ensure it exists and is excluded from git via
 # .git/info/exclude (repo-local, untracked) rather than .gitignore, so we
 # never dirty a tracked file.
+#
+# One-time migration: this store was formerly named `plan-work/`. If a legacy
+# store exists and no `my-work/` does yet, move it so existing work-items carry
+# over instead of being orphaned behind the new name.
+if [ -d "$ROOT/plan-work" ] && [ ! -d "$ROOT/my-work" ]; then
+  mv "$ROOT/plan-work" "$ROOT/my-work"
+  echo "Migrated legacy plan-work/ store to my-work/."
+fi
 mkdir -p "$ROOT/my-work"
 EXCLUDE_FILE=$(git -C "$ROOT" rev-parse --git-path info/exclude 2>/dev/null)
 case "$EXCLUDE_FILE" in
@@ -124,8 +132,12 @@ case "$EXCLUDE_FILE" in
   *)  EXCLUDE_FILE="$ROOT/$EXCLUDE_FILE" ;;
 esac
 mkdir -p "$(dirname "$EXCLUDE_FILE")"
-grep -qxF 'my-work/' "$EXCLUDE_FILE" 2>/dev/null \
-  || printf '\nmy-work/\n' >> "$EXCLUDE_FILE"
+# Keep both names excluded through the transition, so a not-yet-migrated
+# legacy store never gets accidentally committed either.
+for entry in my-work/ plan-work/; do
+  grep -qxF "$entry" "$EXCLUDE_FILE" 2>/dev/null \
+    || printf '\n%s\n' "$entry" >> "$EXCLUDE_FILE"
+done
 
 # Show what's already on the plate so grilling builds on it, not beside it.
 ls "$ROOT/my-work"/*.md 2>/dev/null || echo "my-work/ is empty"
