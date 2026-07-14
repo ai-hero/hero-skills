@@ -11,7 +11,7 @@ Take a rough idea or a vague task and think it all the way through with the
 user: brainstorm it, then grill it — one question at a time — until it is
 understood at a principal-engineer level: goals and non-goals explicit, failure
 modes named, reversibility judged, success measurable. Then break it into
-dependency-aware work-items in a private, git-ignored `plan-work/` store — your
+dependency-aware work-items in a private, git-ignored `my-work/` store — your
 plate, not the team's.
 
 This is the sharp, thorough sibling of ordinary planning. Ordinary
@@ -107,7 +107,7 @@ none may be silently skipped. Skipping is how a two-week detour begins.
 
 ## Instructions
 
-### Step 0: Load context and the plan-work store
+### Step 0: Load context and the my-work store
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
@@ -117,18 +117,18 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 # plate for THIS repo. Ensure it exists and is excluded from git via
 # .git/info/exclude (repo-local, untracked) rather than .gitignore, so we
 # never dirty a tracked file.
-mkdir -p "$ROOT/plan-work"
+mkdir -p "$ROOT/my-work"
 EXCLUDE_FILE=$(git -C "$ROOT" rev-parse --git-path info/exclude 2>/dev/null)
 case "$EXCLUDE_FILE" in
   /*) ;;
   *)  EXCLUDE_FILE="$ROOT/$EXCLUDE_FILE" ;;
 esac
 mkdir -p "$(dirname "$EXCLUDE_FILE")"
-grep -qxF 'plan-work/' "$EXCLUDE_FILE" 2>/dev/null \
-  || printf '\nplan-work/\n' >> "$EXCLUDE_FILE"
+grep -qxF 'my-work/' "$EXCLUDE_FILE" 2>/dev/null \
+  || printf '\nmy-work/\n' >> "$EXCLUDE_FILE"
 
 # Show what's already on the plate so grilling builds on it, not beside it.
-ls "$ROOT/plan-work"/*.md 2>/dev/null || echo "plan-work/ is empty"
+ls "$ROOT/my-work"/*.md 2>/dev/null || echo "my-work/ is empty"
 ```
 
 Read any existing work-items first — new grilling may resolve, block, or
@@ -160,18 +160,18 @@ Announce progress lightly so the user sees the tree being walked, e.g.
 
 State plainly: "I think we have shared understanding — here's the shape of it:
 [2–4 sentence synthesis covering goals, non-goals, chosen approach, the riskiest
-decision]. Ready for me to write this into `plan-work/`?" Wait for the user's
+decision]. Ready for me to write this into `my-work/`?" Wait for the user's
 yes. Do not emit anything before it.
 
 ### Step 4: Emit work-items
 
 Break the understood work into the smallest units that each deliver something
 testable and can be reviewed on their own. For each, write one file to
-`plan-work/` (see the format below). Set `depends_on` to encode the real order —
+`my-work/` (see the format below). Set `depends_on` to encode the real order —
 this is the payoff over a flat TODO list. Flag any one-way-door item with
 `one_way_door: true`.
 
-Number items sequentially from the highest existing `id` in `plan-work/` (so
+Number items sequentially from the highest existing `id` in `my-work/` (so
 concurrent efforts don't collide). The `id` frontmatter field is a plain
 integer; zero-pad only the **filename** prefix (`007-slug.md`) so `ls` sorts
 them — `depends_on` references the plain integer id. After writing, print the
@@ -179,7 +179,7 @@ readiness view (below) so the user sees what to start first.
 
 ## The Work-Item Format
 
-One markdown file per item at `plan-work/NNN-slug.md`:
+One markdown file per item at `my-work/NNN-slug.md`:
 
 ```markdown
 ---
@@ -224,7 +224,7 @@ primitive without a database — a plain read over the folder:
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-cd "$ROOT/plan-work" 2>/dev/null || { echo "no plan-work/ yet"; exit 0; }
+cd "$ROOT/my-work" 2>/dev/null || { echo "no my-work/ yet"; exit 0; }
 
 # Read a frontmatter scalar, stripping any trailing "# comment" and whitespace.
 fm() { awk -F': ' -v k="$2" '$1==k{v=$2; sub(/ *#.*/,"",v); gsub(/^[[:space:]]+|[[:space:]]+$/,"",v); print v; exit}' "$1"; }
@@ -264,7 +264,7 @@ highest-priority (or the user's choice) and start it, moving its `status` to
 
 ## Notes
 
-- **The store is private.** `plan-work/` is git-ignored on purpose — it is the
+- **The store is private.** `my-work/` is git-ignored on purpose — it is the
   user's plate, not a shared board. Never commit it; never push it.
 - **Emit, don't implement.** This skill produces understanding and work-items.
   Handing off to implementation (e.g. `hero-skills:one-shot` on a ready item) is
@@ -291,7 +291,7 @@ highest-priority (or the user's choice) and start it, moving its `status` to
 
 ```
 Next steps:
-  # Pick a READY item from plan-work/ and build it:
+  # Pick a READY item from my-work/ and build it:
   hero-skills:one-shot         # drive a ready item ticket-to-merge
   hero-skills:think-it-through # think the next piece through, or re-grill a blocked item
 ```
