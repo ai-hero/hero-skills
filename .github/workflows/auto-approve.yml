@@ -42,16 +42,39 @@ jobs:
             /repos/${{ github.repository }}/pulls/$PR_NUMBER \
             > pr.diff
 
-          # Soft cap on the diff. Sonnet 4.6 takes 200K tokens — leaving
-          # headroom for the file tree and full-file bundle below.
-          if [ "$(wc -c < pr.diff)" -gt 200000 ]; then
-            head -c 200000 pr.diff > pr_truncated.diff
-            printf '\n\n[... diff truncated at 200KB ...]\n' >> pr_truncated.diff
-          else
-            cp pr.diff pr_truncated.diff
-          fi
+          # Soft cap on the diff, applied at FILE boundaries so the model
+          # never sees a diff cut mid-hunk. Keep whole per-file sections up
+          # to ~200KB, then list the files whose diffs were omitted so the
+          # verifier knows exactly what it did not see. Sonnet 4.6 takes
+          # 200K tokens — this leaves headroom for the file tree and
+          # full-file bundle below.
+          awk -v budget=200000 '
+            /^diff --git / {
+              if (size > budget) { trunc = 1 }
+              if (trunc) {
+                path = $0
+                sub(/^diff --git a\//, "", path)
+                sub(/ b\/.*/, "", path)
+                omitted = omitted "  " path "\n"
+                omit++
+                skip = 1
+                next
+              }
+              skip = 0
+            }
+            skip { next }
+            { print; size += length($0) + 1 }
+            END {
+              if (trunc) {
+                printf "\n\n[... diff truncated at ~%d bytes on a file boundary; %d file diff(s) omitted:\n%s]\n", budget, omit, omitted
+              }
+            }
+          ' pr.diff > pr_truncated.diff
 
-          gh api /repos/${{ github.repository }}/pulls/$PR_NUMBER/files \
+          # List every changed file (--paginate walks all pages; without it
+          # the GitHub files endpoint returns only the first 30, silently
+          # hiding the rest of a large PR from the verifier).
+          gh api --paginate /repos/${{ github.repository }}/pulls/$PR_NUMBER/files \
             --jq '.[].filename' > changed_files.txt
 
           # Recursive repo file tree at HEAD — lets the verifier confirm
@@ -67,8 +90,19 @@ jobs:
           # Bundled into a single file with markers so the prompt can
           # ingest it without juggling many --rawfile args.
           : > full_files.txt
+          : > bundle_omitted.txt
           while IFS= read -r f; do
             [ -z "$f" ] && continue
+            # Stop bundling whole-file content once over ~800KB (≈200K
+            # tokens), cutting at a FILE boundary rather than mid-file. The
+            # omitted files still have their diffs above and their paths in
+            # repo_tree.txt, so the verifier can reason about them — it just
+            # lacks their full post-merge source. Skipping them here also
+            # avoids fetching content we would only throw away.
+            if [ "$(wc -c < full_files.txt)" -gt 800000 ]; then
+              printf '  %s\n' "$f" >> bundle_omitted.txt
+              continue
+            fi
             printf '\n===== FILE: %s =====\n' "$f" >> full_files.txt
             # Capture status separately so 404 (deleted) is reported as
             # such, while other failures (rate limit, auth, 5xx) are
@@ -92,12 +126,14 @@ jobs:
             esac
           done < changed_files.txt
 
-          # Soft cap on the bundle to keep the request inside the model
-          # context. 800KB ≈ ~200K tokens of source.
-          if [ "$(wc -c < full_files.txt)" -gt 800000 ]; then
-            head -c 800000 full_files.txt > full_files.trunc
-            printf '\n\n[... full_files truncated at 800KB; remaining changed files omitted from full content ...]\n' >> full_files.trunc
-            mv full_files.trunc full_files.txt
+          # Record which files were dropped at the boundary above (their
+          # full content only — diffs and tree paths remain available).
+          if [ -s bundle_omitted.txt ]; then
+            {
+              printf '\n\n[... full-file content omitted at a file boundary (bundle over 800KB ≈ 200K tokens); the following changed files still have their diffs above and their paths in the repo tree, but not their full post-merge content:\n'
+              cat bundle_omitted.txt
+              printf ']\n'
+            } >> full_files.txt
           fi
 
       - name: Acknowledge
