@@ -37,62 +37,36 @@ jobs:
           HEAD_SHA=$(jq -r '.head.sha' pr.json)
           echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
 
-          gh api \
-            -H "Accept: application/vnd.github.v3.diff" \
-            /repos/${{ github.repository }}/pulls/$PR_NUMBER \
-            > pr.diff
+          # The unified diff is best-effort: GitHub's diff media type 406s on
+          # PRs over 300 changed files. Under `bash -e` a hard failure here
+          # kills the whole job before the verifier ever runs — even though the
+          # per-file post-merge content below (built from the files API, which
+          # paginates) is what it actually reads. So tolerate the failure and
+          # leave a placeholder rather than aborting.
+          if ! gh api \
+               -H "Accept: application/vnd.github.v3.diff" \
+               /repos/${{ github.repository }}/pulls/$PR_NUMBER \
+               > pr.diff 2>diff_err.log; then
+            printf '(unified diff unavailable — the diff API failed, typically because the PR exceeds GitHub'"'"'s 300-file diff limit: %s. Review the per-file post-merge contents in the FULL FILES section and the changed-files list below instead.)\n' \
+              "$(tr '\n' ' ' < diff_err.log)" > pr.diff
+          fi
 
-          # Soft cap on the diff, applied at FILE boundaries so the model
-          # never sees a diff cut mid-hunk. Keep whole per-file sections up
-          # to ~200KB, then list the files whose diffs were omitted so the
-          # verifier knows exactly what it did not see. Sonnet 4.6 takes
-          # 200K tokens — this leaves headroom for the file tree and
-          # full-file bundle below.
-          awk -v budget=200000 -v hardcap=400000 '
-            /^diff --git / {
-              if (size > budget) { trunc = 1 }
-              if (trunc) {
-                path = $0
-                sub(/^diff --git a\//, "", path)
-                sub(/ b\/.*/, "", path)
-                omitted = omitted "  " path "\n"
-                omit++
-                skip = 1
-                next
-              }
-              skip = 0
-            }
-            skip { next }
-            # Backstop: a single giant file section (or a diff with no
-            # "diff --git" boundaries at all) must not escape the budget.
-            # Once past hardcap, stop emitting even mid-file so the model
-            # context cannot be blown by one oversized file.
-            size > hardcap { hardcut = 1; next }
-            { print; size += length($0) + 1 }
-            END {
-              if (trunc) {
-                printf "\n\n[... diff truncated at ~%d bytes on a file boundary; %d file diff(s) omitted:\n%s]\n", budget, omit, omitted
-              }
-              if (hardcut) {
-                printf "\n\n[... diff hard-truncated at ~%d bytes: a file section exceeded the budget with no boundary to cut on ...]\n", hardcap
-              }
-            }
-          ' pr.diff > pr_truncated.diff
+          # Soft cap on the diff. Sonnet 4.6 takes 200K tokens — leaving
+          # headroom for the file tree and full-file bundle below.
+          if [ "$(wc -c < pr.diff)" -gt 200000 ]; then
+            head -c 200000 pr.diff > pr_truncated.diff
+            printf '\n\n[... diff truncated at 200KB ...]\n' >> pr_truncated.diff
+          else
+            cp pr.diff pr_truncated.diff
+          fi
 
-          # List the changed files. --paginate walks the pages (without it
-          # the endpoint returns only the first 30, silently hiding the rest
-          # of a large PR); GitHub still hard-caps this endpoint at 3000
-          # files, so the count is cross-checked below.
-          gh api --paginate /repos/${{ github.repository }}/pulls/$PR_NUMBER/files \
+          # --paginate so the file list is complete on large PRs (the API
+          # pages at 30/100 per request); without it the verifier would only
+          # see the first page of changed files.
+          # per_page in the URL (not `-f`, which would flip gh to POST → 404)
+          # keeps this a GET while --paginate walks every page.
+          gh api --paginate "/repos/${{ github.repository }}/pulls/$PR_NUMBER/files?per_page=100" \
             --jq '.[].filename' > changed_files.txt
-
-          # The pulls/files endpoint stops at 3000 files even with
-          # --paginate, ending with exit 0 and no error — a >3000-file PR
-          # would otherwise look complete. Capture the PR's reported file
-          # count (pr.json, fetched above) to compare against the list we
-          # actually got; any shortfall is surfaced into full_files.txt below.
-          EXPECTED_FILES=$(jq -r '.changed_files // empty' pr.json)
-          ACTUAL_FILES=$(wc -l < changed_files.txt | tr -d ' ')
 
           # Recursive repo file tree at HEAD — lets the verifier confirm
           # claims about files that exist outside the diff (tests,
@@ -107,19 +81,8 @@ jobs:
           # Bundled into a single file with markers so the prompt can
           # ingest it without juggling many --rawfile args.
           : > full_files.txt
-          : > bundle_omitted.txt
           while IFS= read -r f; do
             [ -z "$f" ] && continue
-            # Stop bundling whole-file content once over ~800KB (≈200K
-            # tokens), cutting at a FILE boundary rather than mid-file. The
-            # omitted files still have their diffs above and their paths in
-            # repo_tree.txt, so the verifier can reason about them — it just
-            # lacks their full post-merge source. Skipping them here also
-            # avoids fetching content we would only throw away.
-            if [ "$(wc -c < full_files.txt)" -gt 800000 ]; then
-              printf '  %s\n' "$f" >> bundle_omitted.txt
-              continue
-            fi
             printf '\n===== FILE: %s =====\n' "$f" >> full_files.txt
             # Capture status separately so 404 (deleted) is reported as
             # such, while other failures (rate limit, auth, 5xx) are
@@ -143,22 +106,12 @@ jobs:
             esac
           done < changed_files.txt
 
-          # Record which files were dropped at the boundary above (their
-          # full content only — diffs and tree paths remain available).
-          if [ -s bundle_omitted.txt ]; then
-            {
-              printf '\n\n[... full-file content omitted at a file boundary (bundle over 800KB ≈ 200K tokens); the following changed files still have their diffs above and their paths in the repo tree, but not their full post-merge content:\n'
-              cat bundle_omitted.txt
-              printf ']\n'
-            } >> full_files.txt
-          fi
-
-          # Surface the 3000-file API-ceiling shortfall (see the file-count
-          # capture above), if any — so a >3000-file PR reads as partial
-          # coverage rather than complete.
-          if [ -n "$EXPECTED_FILES" ] && [ "${ACTUAL_FILES:-0}" -lt "$EXPECTED_FILES" ]; then
-            printf '\n\n[... changed-file list incomplete: %d of %d files listed. The GitHub pulls/files API caps at 3000 files, so the remaining %d changed file(s) are absent from the list, diff, and full-file bundle — treat coverage as partial ...]\n' \
-              "$ACTUAL_FILES" "$EXPECTED_FILES" "$((EXPECTED_FILES - ACTUAL_FILES))" >> full_files.txt
+          # Soft cap on the bundle to keep the request inside the model
+          # context. 800KB ≈ ~200K tokens of source.
+          if [ "$(wc -c < full_files.txt)" -gt 800000 ]; then
+            head -c 800000 full_files.txt > full_files.trunc
+            printf '\n\n[... full_files truncated at 800KB; remaining changed files omitted from full content ...]\n' >> full_files.trunc
+            mv full_files.trunc full_files.txt
           fi
 
       - name: Acknowledge
