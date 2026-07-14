@@ -37,10 +37,19 @@ jobs:
           HEAD_SHA=$(jq -r '.head.sha' pr.json)
           echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
 
-          gh api \
-            -H "Accept: application/vnd.github.v3.diff" \
-            /repos/${{ github.repository }}/pulls/$PR_NUMBER \
-            > pr.diff
+          # The unified diff is best-effort: GitHub's diff media type 406s on
+          # PRs over 300 changed files. Under `bash -e` a hard failure here
+          # kills the whole job before the verifier ever runs — even though the
+          # per-file post-merge content below (built from the files API, which
+          # paginates) is what it actually reads. So tolerate the failure and
+          # leave a placeholder rather than aborting.
+          if ! gh api \
+               -H "Accept: application/vnd.github.v3.diff" \
+               /repos/${{ github.repository }}/pulls/$PR_NUMBER \
+               > pr.diff 2>diff_err.log; then
+            printf '(unified diff unavailable — the diff API failed, typically because the PR exceeds GitHub'"'"'s 300-file diff limit: %s. Review the per-file post-merge contents in the FULL FILES section and the changed-files list below instead.)\n' \
+              "$(tr '\n' ' ' < diff_err.log)" > pr.diff
+          fi
 
           # Soft cap on the diff. Sonnet 4.6 takes 200K tokens — leaving
           # headroom for the file tree and full-file bundle below.
@@ -51,7 +60,12 @@ jobs:
             cp pr.diff pr_truncated.diff
           fi
 
-          gh api /repos/${{ github.repository }}/pulls/$PR_NUMBER/files \
+          # --paginate so the file list is complete on large PRs (the API
+          # pages at 30/100 per request); without it the verifier would only
+          # see the first page of changed files.
+          # per_page in the URL (not `-f`, which would flip gh to POST → 404)
+          # keeps this a GET while --paginate walks every page.
+          gh api --paginate "/repos/${{ github.repository }}/pulls/$PR_NUMBER/files?per_page=100" \
             --jq '.[].filename' > changed_files.txt
 
           # Recursive repo file tree at HEAD — lets the verifier confirm
