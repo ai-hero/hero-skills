@@ -18,9 +18,17 @@ permissions:
 jobs:
   claude-approve:
     runs-on: ubuntu-latest
+    # Defense in depth on the trigger:
+    # 1. `author_association` gate — only OWNER/MEMBER/COLLABORATOR (the
+    #    associations that imply write access) can invoke. This is
+    #    load-bearing, not decorative: the workflow posts a real APPROVE
+    #    review and spends an API key, so without it any commenter — e.g.
+    #    on a public fork or clone — could trigger an approval and burn
+    #    the key.
     if: |
       github.event.issue.pull_request &&
-      contains(github.event.comment.body, '@auto-approve')
+      contains(github.event.comment.body, '@auto-approve') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
 
     steps:
       - name: Get PR details
