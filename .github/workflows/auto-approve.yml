@@ -92,6 +92,20 @@ jobs:
           while IFS= read -r f; do
             [ -z "$f" ] && continue
             printf '\n===== FILE: %s =====\n' "$f" >> full_files.txt
+            # Never send the contents of a file whose path typically holds
+            # credentials or keys to the model — even if one slipped past
+            # local secret scanning. Record it as omitted and skip the fetch.
+            case "$f" in
+              .env|.env.*|*/.env|*/.env.*| \
+              *.pem|*.key|*.p12|*.pfx|*.jks| \
+              id_rsa*|id_ed25519*|id_ecdsa*|*/id_rsa*|*/id_ed25519*|*/id_ecdsa*| \
+              *kubeconfig*|*.kubeconfig| \
+              *credentials*| \
+              .npmrc|*/.npmrc|.pypirc|*/.pypirc|.netrc|*/.netrc)
+                printf '(content omitted — path matches the secret-bearing-file blocklist)\n' >> full_files.txt
+                continue
+                ;;
+            esac
             # Capture status separately so 404 (deleted) is reported as
             # such, while other failures (rate limit, auth, 5xx) are
             # surfaced rather than masquerading as "deleted".
