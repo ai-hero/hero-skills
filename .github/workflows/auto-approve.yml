@@ -1,6 +1,10 @@
 name: Auto Approve
 
 on:
+  # Callable as a reusable workflow: other repos run this exact logic through
+  # a thin caller (uses: … + secrets: inherit) instead of copying the file
+  # and drifting. This repo also triggers it directly on its own PR comments.
+  workflow_call:
   issue_comment:
     types: [created]
 
