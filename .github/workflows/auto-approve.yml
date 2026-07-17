@@ -176,10 +176,11 @@ jobs:
             > pr_review_comments.json
 
           # Self-review marker — the hidden <!-- ai-hero:self-review -->
-          # comment posted by hero-skills:review-pr. Must match the marker
-          # string that review-pr emits and that ship-pr/one-shot grep for.
+          # comment posted by hero-skills:review-pr. Match both the current
+          # marker and the older "Hero Self-Review" heading (case-insensitive)
+          # so comments posted under the previous convention still count.
           SELF_REVIEW=$(jq -r '
-            [.[] | select(.body | test("ai-hero:self-review"))] | length
+            [.[] | select(.body | test("ai-hero:self-review|Hero Self-Review"; "i"))] | length
           ' issue_comments.json)
 
           # Reviews from anyone other than the PR author. Filter out
