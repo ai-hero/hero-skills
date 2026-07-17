@@ -18,6 +18,9 @@ permissions:
 jobs:
   claude-approve:
     runs-on: ubuntu-latest
+    # Cap the run: a model call plus paginated API reads should finish well
+    # within this; the ceiling just stops a hung step from pinning a runner.
+    timeout-minutes: 20
     # Defense in depth on the trigger:
     # 1. `author_association` gate — only OWNER/MEMBER/COLLABORATOR (the
     #    associations that imply write access) can invoke. This is
