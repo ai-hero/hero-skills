@@ -126,6 +126,9 @@ jobs:
                 printf '(file unreadable — HTTP %s; verifier should treat its content as unknown)\n' "${STATUS:-error}" >> full_files.txt
                 ;;
             esac
+            # Space out the up-to-two API calls per file to stay clear of
+            # secondary rate limits on PRs that touch many files.
+            sleep 0.5
           done < changed_files.txt
 
           # Soft cap on the bundle to keep the request inside the model
