@@ -338,6 +338,24 @@ jobs:
           PR_BODY=$(cat pr_body.txt | head -c 4000)
           CHANGED_FILES=$(cat changed_files.txt)
 
+          # Fail closed early if the key is missing: skip the wasted API call
+          # and give a precise reason. (A missing key would otherwise surface
+          # as a generic 401 on the curl below, which also fails closed — this
+          # just states the actual cause.)
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            REVIEW=$'## Verdict\nREQUEST_CHANGES\nANTHROPIC_API_KEY is not set — cannot run verification; failing closed.'
+            echo "verify_error=true" >> "$GITHUB_OUTPUT"
+            {
+              cat prior_review.md
+              echo ""
+              cat threads.md
+              echo ""
+              echo "$REVIEW"
+            } > review.md
+            echo "verdict=request_changes" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           # Build the prompt with --rawfile so the diff, repo tree, and
           # full file bundle can be larger than argv would normally allow.
           jq -n \
