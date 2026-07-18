@@ -122,9 +122,14 @@ jobs:
               | awk 'NR==1 {print $2; exit}')
             case "$STATUS" in
               200)
+                # The status probe returned 200, but a transient failure on
+                # this second fetch would abort the step under `set -e`. Fall
+                # back to an "unreadable" note so one flaky file can't kill the
+                # whole run before a verdict.
                 gh api -H "Accept: application/vnd.github.raw" \
                   "/repos/${{ github.repository }}/contents/$f?ref=$HEAD_SHA" \
-                  >> full_files.txt 2>/dev/null
+                  >> full_files.txt 2>/dev/null \
+                  || printf '(file unreadable — content fetch failed after a 200 status probe; verifier should treat its content as unknown)\n' >> full_files.txt
                 ;;
               404)
                 printf '(file deleted in this PR — 404)\n' >> full_files.txt
