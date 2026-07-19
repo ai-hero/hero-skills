@@ -104,7 +104,8 @@ The plan's execution recipe (Step 3) must have the executor batch **every** depe
 2. Edit every version bump directly into the manifest first (`package.json`, `pyproject.toml`, workflow pins) — not one `npm install PKG@VER` per package, which regenerates the lockfile N times over.
 3. Regenerate the lockfile **once**, covering all bumps together.
 4. Run the test suite once against the combined change. A bump that breaks tests gets reverted individually and noted as skipped — it doesn't block the rest of the batch.
-5. One commit for the whole batch.
+5. One commit for the whole batch; `hero-skills:push-pr` opens the PR.
+6. Once `hero-skills:ship-pr` merges it, close every Dependabot PR listed in A2 directly — `gh pr close N --comment "Superseded by #MERGED_PR_NUMBER, merged in MERGED_SHA."` **Do not wait for GitHub to auto-close them.** This is not a timing issue (it's not "nightly" or slow) — GitHub only recognizes a fix as resolving a Dependabot PR when *that PR itself* is the one merged. A batched fix lands via a different commit by design (step 2), and Dependabot does not reliably detect that as equivalent; confirmed both by two real runs of this workflow where the originals stayed open indefinitely after merge, and by GitHub's own community reports (dependabot-core#3880). Proactively closing with a reference is the only reliable path.
 
 ---
 
@@ -229,6 +230,7 @@ The chosen fix and why (e.g., merge Dependabot PR #41 rather than manual bump �
 Exact commands and edits, in order, assuming zero context:
 1. `npm install lodash@4.17.21`
 2. ...
+N. After `hero-skills:ship-pr` merges this batch: `gh pr close 41 --comment "Superseded by #MERGED_PR_NUMBER, merged in MERGED_SHA."` for each Dependabot PR from A2 (#41 here). Do not rely on GitHub auto-closing them — it doesn't reliably fire for a batched fix (see A4 step 6).
 
 ## Verification
 
@@ -247,6 +249,7 @@ A plan an executor cannot follow without asking questions is not done — rewrit
 Harden Audit Summary
 ====================
 Dependabot:   5 alerts (2 critical, 2 high, 1 medium) → 2 plan items
+  Original PRs to close after merge (do NOT wait on GitHub auto-close): #123, #124
 Docker:       3 images scanned (Scout + Trivy), 10 fixable CVEs → 1 plan item
   Deferred: CVE-XXXX-XXXXX — axes checked: tag refresh (same), runtime major
             (same), OS generation debian13 (same), variant (n/a) → no fix upstream
@@ -268,7 +271,7 @@ Next steps:
 
 - Never edit source, dependency files, Dockerfiles, or workflows — the plan is the product.
 - Flag major version updates as breaking-change risks in the plan; default the recipe to the non-breaking path.
-- Dependabot PRs auto-close when their fixes reach the default branch — prefer "merge PR #N" recipes when the PR is current.
+- Never assume Dependabot auto-closes its own PRs once a batched fix lands — it doesn't reliably fire for a fix that lands via a different commit than its own PR (see A4 step 6). The execution recipe must close each superseded Dependabot PR explicitly after merge, with a comment referencing the merged PR.
 - Always specify rescanning with **both** Scout and Trivy in a Docker plan item's verification — neither scanner alone is sufficient (see B1).
 - `my-work/` is private and git-ignored; never commit or push it.
 
