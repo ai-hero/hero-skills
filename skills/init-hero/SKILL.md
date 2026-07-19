@@ -49,10 +49,10 @@ Each skill needs specific information to work well. This skill figures out what'
 |-------|-------|
 | `hero-skills:push-pr` | Default branch, branch convention, hosting platform (`gh`/`glab`), issue prefix, commit convention, pre-commit run command, CI platform, workflow names, registry, required status checks |
 | `hero-skills:one-shot` | PM tool + MCP server name, branch template, issue prefix, project list |
-| `hero-skills:test-changes` | Language, framework, lint/format/typecheck commands, test/dev/install commands, ports, dependency file |
+| `hero-skills:push-pr` (test phase) | Language, framework, lint/format/typecheck commands, test/dev/install commands, ports, dependency file |
 | `hero-skills:review-pr` | Code Quality (pre-commit), Code Review Agent (bot username — to dedupe its comments) |
-| `hero-skills:scan-vulns` | Registry, language/framework, dependency files per project |
-| `hero-skills:document-arch` | Repo type, project list, deployment platform |
+| `hero-skills:harden` | Registry, language/framework, dependency files per project |
+| `hero-skills:think-it-through` (arch mode) | Repo type, project list, deployment platform |
 | `hero-skills:create-project` | Repo type, coding conventions, code quality tools, project scaffold patterns |
 | `hero-skills:setup-dev` | Required tools, recommended tools, MCP servers |
 | `hero-skills:respond-to-comments` | Code Review Agent (agent, trigger, poll-method, bot-username) |
@@ -444,11 +444,11 @@ grep -E "port\|PORT\|:3000\|:8000\|:8080\|:5173\|:4000" pyproject.toml package.j
 
 - Language and framework from dependency files
 - Monorepo structure (workspaces, nx, turborepo, multiple pyproject.toml)
-- **Dependency file** per project (pyproject.toml, package.json, go.mod, etc.) — needed by `hero-skills:scan-vulns` and `hero-skills:test-changes`
+- **Dependency file** per project (pyproject.toml, package.json, go.mod, etc.) — needed by `hero-skills:harden` and `hero-skills:push-pr`'s test phase
 - **Lock file** → identifies the package manager (pnpm-lock.yaml → pnpm, yarn.lock → yarn, etc.)
-- **Install command** (e.g., `uv sync`, `pnpm install`) — needed by `hero-skills:test-changes` before running
+- **Install command** (e.g., `uv sync`, `pnpm install`) — needed by `hero-skills:push-pr`'s test phase before running
 - **Task runner** (Makefile, justfile, Taskfile) — if present, prefer its targets as canonical commands (e.g., `make test` over `uv run pytest`)
-- **Exact lint/format/typecheck commands** — not just tool names; `hero-skills:test-changes` needs runnable commands for verification
+- **Exact lint/format/typecheck commands** — not just tool names; `hero-skills:push-pr`'s test phase needs runnable commands for verification
 - Test commands from scripts section or config files
 - Dev server commands and default ports
 - Entry points for CLIs
@@ -601,7 +601,7 @@ Do NOT offer to install a pre-commit hook for `hero-skills:init-hero --update`. 
 - Issue ID prefix (evidence from commit/branch patterns)
 - MCP server name if applicable
 
-#### Group 3: "For testing and verification" (`hero-skills:test-changes`)
+#### Group 3: "For testing and verification" (`hero-skills:push-pr` test phase)
 
 - Per-project: language, framework, dependency file, install command
 - Per-project: test, lint, format, typecheck commands (prefer task runner targets if available)
@@ -610,7 +610,7 @@ Do NOT offer to install a pre-commit hook for `hero-skills:init-hero --update`. 
 - Task runner (Makefile, justfile, etc.) and its available targets
 - Monorepo vs single repo structure
 
-#### Group 4: "For CI/CD and deployment" (`hero-skills:push-pr`, `hero-skills:ship-pr`, `hero-skills:scan-vulns`)
+#### Group 4: "For CI/CD and deployment" (`hero-skills:push-pr`, `hero-skills:ship-pr`, `hero-skills:harden`)
 
 - CI platform and workflow names
 - Deployment platform
@@ -669,7 +669,7 @@ FOR PLANNING & TRACKING (hero-skills:one-shot)
 [OK] Issue prefix: LIN
      Evidence: 8 commits reference LIN-### pattern
 
-FOR TESTING & VERIFICATION (hero-skills:test-changes)
+FOR TESTING & VERIFICATION (hero-skills:push-pr test phase)
 ────────────────────────────────────────
 [OK] Single repo, Python + FastAPI
      Evidence: pyproject.toml with fastapi dependency, no subprojects
@@ -955,10 +955,10 @@ How your hero skills will use this:
                                PRs via gh against main, link LIN-### issues,
                                check GitHub Actions: ci, build, deploy
   hero-skills:one-shot      → fetch from Linear (mcp__linear), branch as feature/LIN-###-DESC
-  hero-skills:test-changes      → uv sync, then ruff check + mypy + pytest, smoke at :8000
+  hero-skills:push-pr (test)    → uv sync, then ruff check + mypy + pytest, smoke at :8000
   hero-skills:ship-pr       → k8s namespaces: staging, production
-  hero-skills:scan-vulns    → scan pyproject.toml, check ghcr.io registry
-  hero-skills:document-arch → single repo, Python + FastAPI, k8s deployment
+  hero-skills:harden        → audit pyproject.toml deps, check ghcr.io registry
+  hero-skills:think-it-through arch → single repo, Python + FastAPI, k8s deployment
   hero-skills:setup-dev     → require node, uv, gh, docker; recommend pre-commit, linear CLI
   hero-skills:init-hero --update → re-investigate and refresh HERO.md on demand (run when project config changes)
 

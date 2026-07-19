@@ -1,8 +1,8 @@
 ---
 name: think-it-through
 # prettier-ignore
-description: Brainstorm an idea or task with you, then grill it one question at a time into shared, principal-level understanding, and capture the result as dependency-aware, trackable work-items.
-argument-hint: [idea or task to think through]
+description: Brainstorm and grill an idea one question at a time into principal-level shared understanding, captured as dependency-aware work-items. Arch mode manages specs/ architecture docs and ADRs.
+argument-hint: "[IDEA_OR_TASK | arch create|update|review|init [SPEC_NAME]]"
 ---
 
 # Think It Through — Brainstorm, Grill to Shared Understanding, Then Work Items
@@ -107,6 +107,8 @@ none may be silently skipped. Skipping is how a two-week detour begins.
 
 ## Instructions
 
+**Mode dispatch:** if `$ARGUMENTS` starts with `arch`, skip the grilling flow and jump to **Arch Mode** below (absorbed from the former `hero-skills:document-arch`). Everything else is an idea or task to think through.
+
 ### Step 0: Load context and the my-work store
 
 ```bash
@@ -183,11 +185,28 @@ testable and can be reviewed on their own. For each, write one file to
 this is the payoff over a flat TODO list. Flag any one-way-door item with
 `one_way_door: true`.
 
-Number items sequentially from the highest existing `id` in `my-work/` (so
-concurrent efforts don't collide). The `id` frontmatter field is a plain
-integer; zero-pad only the **filename** prefix (`007-slug.md`) so `ls` sorts
-them — `depends_on` references the plain integer id. After writing, print the
-readiness view (below) so the user sees what to start first.
+Number items sequentially from the highest existing `id` in `my-work/`,
+re-checked immediately before writing (not cached from earlier in the
+session) — this doesn't eliminate a collision between two truly concurrent
+writers, but it closes the common case of a stale count from a session that
+has been running a while. The `id` frontmatter field is a plain integer;
+zero-pad only the **filename** prefix (`007-slug.md`) so `ls` sorts them —
+`depends_on` references the plain integer id.
+
+Before writing, verify every `depends_on` id actually exists in `my-work/`.
+A typo'd or stale id (e.g. referencing a since-renumbered or removed item)
+doesn't error — it just makes the readiness check treat the item as
+permanently blocked, silently, with nothing in this skill's output pointing
+at the dangling reference.
+
+After writing, print the readiness view (below) so the user sees what to
+start first.
+
+When the grilling settled a **one-way-door architectural decision** (schema,
+public API, data model, service boundary), offer to also record it as an ADR
+under `specs/decisions/` via Arch Mode — the grilled Context / Alternatives /
+Reversibility answers _are_ the ADR content; don't make the user re-derive
+them later.
 
 ## The Work-Item Format
 
@@ -273,6 +292,64 @@ done
 Run this any time to see what to pick up next. Ready items — pick the
 highest-priority (or the user's choice) and start it, moving its `status` to
 `in-progress`, then `done` when it lands.
+
+## Arch Mode — Architecture Specs (absorbed from document-arch)
+
+Create and maintain architecture documentation in the project's `specs/` folder using Mermaid diagrams and structured markdown. **This mode only operates on specification documents in `specs/`; it does NOT modify source code.**
+
+Commands (`$ARGUMENTS` after the leading `arch`):
+
+- `arch init` — initialize `specs/` with starter templates
+- `arch create [SPEC_NAME]` — gather context from the relevant source files, ask clarifying questions (aspect, detail level, patterns), generate the spec with the appropriate Mermaid diagram, write `specs/SPEC_NAME.md`, update `specs/README.md`
+- `arch update [SPEC_NAME]` — read the existing spec, analyze the codebase for changes, update preserving structure, note changes with the date
+- `arch review` — list all specs, compare against the codebase, report up-to-date / needs-update / missing. Do NOT auto-update — just report.
+
+Load `HERO.md` first (**Repository** type for layout, **Projects** for architecture context, **Deployment** for deployment diagrams); in a monorepo root, ask which project to document.
+
+Folder layout:
+
+```
+PROJECT/
+└── specs/
+    ├── README.md           # Index of all specs
+    ├── overview.md         # High-level system overview
+    ├── components.md       # Component architecture
+    ├── data-flow.md        # Data flow diagrams
+    ├── api.md              # API specifications (if applicable)
+    └── decisions/          # Architecture Decision Records (ADRs)
+        └── 001-*.md
+```
+
+Diagram types: **graph/flowchart** (components, logic flow), **sequenceDiagram** (interactions over time), **classDiagram** (data models), **stateDiagram-v2** (state machines), **erDiagram** (database schema). Keep diagrams focused — one concept per diagram.
+
+Spec document template:
+
+```markdown
+# SPEC_TITLE
+
+> Last updated: DATE
+> Status: Draft | Review | Approved
+
+## Overview
+One or two paragraphs.
+
+## Diagram
+A fenced mermaid block with the appropriate diagram.
+
+## Components
+
+### COMPONENT_NAME
+
+- **Purpose**: what it does
+- **Location**: `path/to/code`
+- **Dependencies**: what it depends on
+
+## Key Decisions
+
+- **DECISION**: rationale
+```
+
+Arch Mode rules: always read the relevant source before creating/updating; specs describe what IS, not what should be; use `1.` for ordered lists, backtick generic types, and blank lines around blocks so markdownlint stays green.
 
 ## Notes
 

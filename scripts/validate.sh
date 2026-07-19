@@ -299,7 +299,7 @@ fi
 # (there is no per-caller allowlist). Keep this list in sync with one-shot's
 # step→skill mapping. `preflight` is intentionally absent — one-shot runs it
 # via scripts/preflight.sh, not the Skill tool, so it may stay user-only.
-CHAINED_SKILLS="test-changes push-pr review-pr respond-to-comments ship-pr"
+CHAINED_SKILLS="push-pr review-pr respond-to-comments ship-pr"
 for chained in $CHAINED_SKILLS; do
   chained_file="$SKILLS_DIR/$chained/SKILL.md"
   # A missing chained skill silently breaks one-shot at that step, so error
@@ -324,6 +324,42 @@ for chained in $CHAINED_SKILLS; do
       "Remove the 'disable-model-invocation: true' line — one-shot invokes this skill via the Skill tool and cannot call a user-only skill"
   else
     pass "$chained: model-invocable (chainable by one-shot)"
+  fi
+done
+
+echo ""
+echo "────────────────────────────"
+
+# ── absorbed-skill dangling-reference guard ────────────────────────
+# scan-vulns, test-changes, and document-arch were deleted and folded into
+# harden, push-pr, and think-it-through respectively. A live reference to one
+# of these names is fine ONLY as a lineage note ("absorbed the former X",
+# "absorbed from X") — anything else is a leftover pointer to a skill that no
+# longer exists. Scoped to tracked, non-historical docs; a plans/ retrospective
+# describing what the repo looked like at the time it was written is exempt.
+ABSORBED_SKILLS="scan-vulns test-changes document-arch"
+for absorbed in $ABSORBED_SKILLS; do
+  if [[ -d "$SKILLS_DIR/$absorbed" ]]; then
+    error "'$absorbed' was supposed to be absorbed elsewhere but skills/$absorbed/ still exists" \
+      "skills/$absorbed/SKILL.md" \
+      "" \
+      "Either this skill was reinstated (update ABSORBED_SKILLS in scripts/validate.sh to drop it) or the merge is incomplete"
+    continue
+  fi
+  HITS=$(grep -rn "$absorbed" --include='*.md' --include='*.sh' \
+    "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT/PIPELINES.md" "$PLUGIN_ROOT/scripts" 2>/dev/null \
+    | grep -v "$(basename "$0")" \
+    | grep -viE 'absorb' || true)
+  if [[ -n "$HITS" ]]; then
+    while IFS= read -r hit; do
+      hit_file="${hit%%:*}"
+      error "reference to deleted skill '$absorbed' without lineage context (expected 'absorbed...')" \
+        "${hit_file#"$PLUGIN_ROOT"/}" \
+        "" \
+        "Either add lineage framing ('absorbed the former $absorbed...') or this is a stale pointer to a skill that no longer exists"
+    done <<< "$HITS"
+  else
+    pass "no dangling references to deleted skill '$absorbed'"
   fi
 done
 
