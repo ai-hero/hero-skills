@@ -301,9 +301,7 @@ highest-priority (or the user's choice) and start it, moving its `status` to
 
 ## Next steps
 
-```
-Next steps:
-  # Pick a READY item from my-work/ and build it:
-  hero-skills:one-shot         # drive a ready item ticket-to-merge
-  hero-skills:think-it-through # think the next piece through, or re-grill a blocked item
-```
+Pick exactly one, based on `my-work/`'s current state:
+
+- **A READY item exists**: `Next step: hero-skills:one-shot — drive it ticket-to-merge` (print only — model-invocation-restricted, cannot auto-run).
+- **No READY item** (everything's still blocked, or there's another piece to grill): `Next step: hero-skills:think-it-through — think the next piece through, or re-grill a blocked item` (print only — re-invoking this same skill right after it finishes isn't auto-chained).

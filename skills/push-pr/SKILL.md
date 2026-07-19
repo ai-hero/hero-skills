@@ -61,7 +61,19 @@ echo "Current branch: $BRANCH (default: $DEFAULT_BRANCH)"
 
 **If `$BRANCH` is not `$DEFAULT_BRANCH`, skip this step entirely** and proceed to Step 2 on the current branch.
 
-**If `$BRANCH` equals `$DEFAULT_BRANCH`:** derive a feature-branch name from the diff and check out a new branch. Uncommitted changes follow the checkout automatically — do **not** stash.
+**If `$BRANCH` equals `$DEFAULT_BRANCH`:** pull it fresh before branching off it — a stale local default branch means the new feature branch (and later, the PR's base diff) silently misses recent commits.
+
+```bash
+if ! git pull --ff-only origin "$DEFAULT_BRANCH"; then
+  echo "STOP: 'git pull --ff-only origin $DEFAULT_BRANCH' failed — local $DEFAULT_BRANCH may be divergent or dirty."
+  echo "Resolve manually (check 'git status'; a diverged local $DEFAULT_BRANCH needs 'git fetch' + reconciling)."
+  echo "Then re-run hero-skills:push-pr. Do not branch off a base that failed to update."
+fi
+```
+
+**If the pull failed, stop here — do not proceed to branch creation below.** Only continue once it succeeds.
+
+Then derive a feature-branch name from the diff and check out a new branch. Uncommitted changes follow the checkout automatically — do **not** stash.
 
 Generate `BRANCH_NAME` as `{type}/{slug}`:
 
@@ -278,10 +290,17 @@ if [ -z "$RAW_DEFAULT" ]; then
 else
   echo "PR base: $DEFAULT_BRANCH (from HERO.md)"
 fi
+# Refresh the remote-tracking ref before diffing against it — Step 1 only
+# fetches when this branch came from the default branch; a branch that
+# existed before this run may never have fetched at all this session.
+FETCH_FOR_DIFF_OK=true
+git fetch origin "$DEFAULT_BRANCH" || FETCH_FOR_DIFF_OK=false
 git log origin/$DEFAULT_BRANCH..HEAD --pretty=format:"%s%n%b" --reverse
 git diff origin/$DEFAULT_BRANCH..HEAD --stat
 git diff origin/$DEFAULT_BRANCH..HEAD --name-only
 ```
+
+If `$FETCH_FOR_DIFF_OK` is `false`: this doesn't block the PR (GitHub computes the actual base/diff server-side regardless of local staleness), but the title and changeset list generated below are built from this possibly-stale local log — prepend a note to the generated PR body: `⚠️ Generated against a possibly-stale local view of $DEFAULT_BRANCH (fetch failed) — verify the changeset list against GitHub's own diff.`
 
 Determine the draft flag (drafts are the default). Parse the first whitespace-separated token of `$ARGUMENTS` so trailing whitespace or extra arguments don't silently fall through:
 
@@ -344,13 +363,13 @@ Commits pushed: N
 Draft PR created: #{number}
 URL: {pr-url}
 
-Next steps:
-  hero-skills:review-pr        # self-review — runs pr-review-toolkit agents, applies fixes, marks ready
-  hero-skills:scan-vulns       # if this PR touched dependencies
-  hero-skills:ship-pr          # once green — @auto-approve, merge, verify deploy, reset
+Next step: hero-skills:review-pr — self-review, runs pr-review-toolkit agents, applies fixes, marks ready (offer to auto-run: ask "Run it now? [y/N]", invoke via Skill tool on yes)
 ```
 
-If the PR was created with `ready` (non-draft), report `PR created` instead of `Draft PR created` and skip the self-review hint — jump straight to `hero-skills:scan-vulns` (if dependencies changed) or `hero-skills:ship-pr` once CI is green.
+If the PR was created with `ready` (non-draft), report `PR created` instead of `Draft PR created`, skip the self-review hint, and pick exactly one next step instead:
+
+- **This PR touched dependency files** (`package.json`, `pyproject.toml`, lockfiles, `.github/workflows/*.yml` version pins, or `Dockerfile*` — scan-vulns Part B covers Docker Scout too): `Next step: hero-skills:scan-vulns` (print only — model-invocation-restricted, cannot auto-run).
+- **Otherwise**: `Next step: hero-skills:ship-pr — once green, @auto-approve, merge, verify deploy, reset` (offer to auto-run).
 
 ### A5: Report CI Status
 

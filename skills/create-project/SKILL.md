@@ -271,11 +271,12 @@ Created:
   - HERO.md
   - [Git repo initialized]
 
-Next steps:
-  cd PROJECT_NAME
-  hero-skills:preflight        # Step 0.3 — sanity-check tooling, .env, ports
-  hero-skills:one-shot         # plan and implement the first task, or chain the whole pipeline in one invocation
+Run first: cd PROJECT_NAME
+
+Next step: hero-skills:preflight — Step 0.3, sanity-check tooling, .env, ports (print only — model-invocation-restricted, cannot auto-run)
 ```
+
+Don't also print `hero-skills:one-shot`; `preflight`'s own next-steps lead there once it passes.
 
 ## Notes
 

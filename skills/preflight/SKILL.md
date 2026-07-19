@@ -88,12 +88,10 @@ Skipped:    K
 
 Result:     PASSED | BLOCKED
 
-Next steps:
-  hero-skills:one-shot $ARGUMENTS         # Steps 1–10 in one go (once blockers are clear), or start with Step 1 alone
-  hero-skills:preflight --bucket repo     # Re-run a single bucket after fixing (tooling|repo|runtime|pipeline)
+Next step: hero-skills:one-shot $ARGUMENTS — Steps 1–10 in one go (print only — model-invocation-restricted, cannot auto-run)
 ```
 
-If `Result: BLOCKED`, do not suggest `hero-skills:one-shot` as a next step — list the recommended fix commands from the script output instead.
+If `Result: BLOCKED`, do not print the `one-shot` next step at all — list the recommended fix commands from the script output instead, then suggest re-running a single bucket after fixing (`hero-skills:preflight --bucket repo`, or `tooling|runtime|pipeline` as applicable) as that block's next step.
 
 ## When This Skill Runs Automatically
 

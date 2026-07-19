@@ -195,7 +195,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
 | Command | What it does |
 |---------|-------------|
-| `hero-skills:reset-branch` | Reset to default branch, pull latest, clear conversation context |
+| `hero-skills:abandon-branch` | Abandon or pause an unmerged branch — stash uncommitted work, switch to default, clear context |
 | `hero-skills:audit-plugin` | Audit the hero-skills plugin itself for quality and consistency |
 
 ## HERO.md

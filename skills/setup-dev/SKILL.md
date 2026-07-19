@@ -195,10 +195,10 @@ Remaining action items:
 Your environment is ready for development! 🎉
 Run hero-skills:init-hero --update if the project setup has changed.
 
-Next steps:
-  hero-skills:one-shot          # plan and implement the first task
-  hero-skills:preflight         # sanity-check tooling, .env, ports before starting
+Next step: hero-skills:preflight — sanity-check tooling, .env, ports before starting (print only — model-invocation-restricted, cannot auto-run)
 ```
+
+Don't also print `hero-skills:one-shot`; `preflight`'s own next-steps lead there once it passes.
 
 ## Key Principles
 

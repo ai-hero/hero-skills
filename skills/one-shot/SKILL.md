@@ -307,7 +307,7 @@ Use the decision tree below to pick the **resume step** (1–10). Each row is th
 | Condition | Resume at | Reason |
 |-----------|-----------|--------|
 | `FETCH_OK=false` OR `GH_OK=false` | exit with diagnostic | resume rows depend on remote state — fix network/auth and re-run, or invoke individual skills |
-| `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0`, `UNPUSHED == 0` | exit with hint | `MERGED` → done; suggest `hero-skills:reset-branch` if the local checkout still has the branch. `CLOSED` without merge → the work never landed; say so explicitly and suggest reopening the PR or starting a new branch |
+| `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0`, `UNPUSHED == 0` | exit with hint | `MERGED` → done; suggest re-running `hero-skills:ship-pr` if the local checkout still has the branch (Step 7b retries the cleanup for an already-merged PR — `abandon-branch` refuses merged branches by design). `CLOSED` without merge → the work never landed; say so explicitly and suggest reopening the PR or starting a new branch |
 | `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0`, `UNPUSHED > 0` | exit with hint | local commits exist that never reached the merged/closed PR — do NOT suggest a reset; push them to a new branch (or reopen) so the work is saved remotely first |
 | `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED > 0` | exit with hint | merged/closed PR but local edits exist — branch off `DEFAULT_BRANCH` for follow-up work |
 | `CURRENT_BRANCH == DEFAULT_BRANCH` and `UNCOMMITTED == 0` and `AHEAD == 0` | Step 1 (plan) | fresh start (Step 0.4 already auto-branched if there was any work to preserve) |
@@ -447,7 +447,7 @@ Render DAG with `push` active. Run `hero-skills:push-pr` (no arguments — commi
 
 Render DAG with `self-review` active. Run `hero-skills:review-pr --no-mark-ready` (auto-detects your draft PR and runs the pr-review-toolkit agents in parallel, applies fixes). The `--no-mark-ready` flag is **required** here so review-pr stops before its own Step 9 mark-ready prompt — one-shot's Step 7 below owns that gate, and double-prompting would be confusing.
 
-This step covers `review-pr` Steps 1–8 only: post the review comment, ask permission to apply fixes, apply them, push the commit, post the improvements summary, and update the PR description. Mark-ready is deliberately deferred to one-shot's Step 7 so the DAG renders it as a visible, separately-tracked node.
+This step covers `review-pr`'s functional work in Steps 1–8 only: post the review comment, ask permission to apply fixes, apply them, push the commit, post the improvements summary, and update the PR description. Mark-ready is deliberately deferred to one-shot's Step 7 so the DAG renders it as a visible, separately-tracked node. `review-pr`'s own Step 9 (mark-ready prompt) is skipped per `--no-mark-ready`; its Step 10 (summary print) still runs but is purely informational — one-shot's own DAG/summary is what's authoritative here, not review-pr's next-step suggestion.
 
 ### Step 7: mark-ready
 
@@ -536,4 +536,4 @@ If the pipeline stopped early, render the DAG with `(✗)` on the failed step, t
 - This skill **does not retry** on judgment-call failures (test design, large bot feedback). Retrying without human input is how small PRs become broken merges.
 - Step 0.4's `git checkout -b` is unconfirmed by design — one-shot never works on the default branch and assumes the auto-derived name is acceptable. To rename later, use `git branch -m`. The sibling skill `push-pr` prompts for the name because it's invoked deliberately on an existing branch; one-shot's auto-mode contract precludes that prompt.
 - For larger work, run the same skills individually so you can pause between them.
-- Run `hero-skills:reset-branch` separately if you abandon mid-pipeline — ship-pr's reset only fires after a successful merge.
+- Run `hero-skills:abandon-branch` separately if you abandon mid-pipeline — ship-pr's reset only fires after a successful merge.

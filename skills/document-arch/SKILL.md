@@ -132,5 +132,4 @@ PROJECT/
 - Keep diagrams focused - one concept per diagram
 - Specs describe what IS, not what should be
 
-Next steps:
-  hero-skills:push-pr          # commit and push the updated specs
+Next step: hero-skills:push-pr — commit and push the updated specs (offer to auto-run: ask "Run it now? [y/N]", invoke via Skill tool on yes)
