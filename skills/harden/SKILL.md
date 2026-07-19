@@ -74,8 +74,10 @@ gh api repos/{owner}/{repo}/dependabot/alerts \
     number, package: .dependency.package.name,
     severity: .security_advisory.severity,
     summary: .security_advisory.summary
-  }'
+  }' || echo "DEPENDABOT_ALERTS_UNAVAILABLE — check that alerts are enabled for this repo and the token has the security_events/repo scope"
 ```
+
+A failed call (alerts disabled, insufficient token scope) prints nothing to stdout — indistinguishable from "zero open alerts" unless the failure is caught explicitly. If `DEPENDABOT_ALERTS_UNAVAILABLE` fires, report that in the summary rather than "0 alerts, clean."
 
 Prioritize by severity: **critical > high > medium > low**.
 
@@ -113,6 +115,12 @@ The plan's execution recipe (Step 3) must have the executor batch **every** depe
 
 ### B1: Identify and Scan Images
 
+If `docker` is unavailable, don't let Part B silently drop out of the audit — report `Docker/Scout: skipped (unavailable) — container CVE audit not performed` in the Step 4 summary and stop here for this part, the same way an unavailable `trivy` is reported below rather than left unmentioned:
+
+```bash
+command -v docker > /dev/null 2>&1 || echo "DOCKER_UNAVAILABLE"
+```
+
 Scan the base of the **final/runtime stage** — builder stages never ship.
 
 ```bash
@@ -126,7 +134,7 @@ docker scout cves IMAGE_NAME:TAG --only-fixed
 trivy image --severity HIGH,CRITICAL --scanners vuln IMAGE_NAME:TAG
 ```
 
-Observed 2026-07-14 on one image: Trivy reported only the Debian `libssl3` CVEs and had no advisory for the Node runtime CVEs; Scout caught the Node CVEs plus `glibc`. Trivy alone would have concluded OpenSSL was the whole story. If `trivy` is unavailable, report `Trivy: skipped (unavailable)` and proceed on Scout alone rather than failing the whole audit.
+Example of the gap this closes: on one distroless Node image, Trivy reported only the Debian `libssl3` CVEs and had no advisory for the Node runtime CVEs, while Scout caught the Node CVEs plus `glibc`. Trivy alone would have concluded OpenSSL was the whole story — the two scanners' advisory databases genuinely don't overlap, this isn't a one-off fluke. If `trivy` is unavailable, report `Trivy: skipped (unavailable)` and proceed on Scout alone rather than failing the whole audit.
 
 ### B2: Get Recommendations — and Don't Trust a Clean One Blindly
 
@@ -167,7 +175,7 @@ for base in nodejs24-debian12 nodejs24-debian13; do
 done
 ```
 
-**Real miss this guards against:** a prior run bumped `nodejs22-debian12` -> `nodejs24-debian12` and deferred 2 HIGH, reasoning that Node 24.14.1 was "not yet published to distroless". It *was* published — on `nodejs24-debian13` (Node 24.18.0), which also cleared the `libssl3` + `glibc` CVEs. Only axis 3 was skipped, and the finding was written off as unfixable.
+**Example of the miss this guards against:** a run bumped `nodejs22-debian12` -> `nodejs24-debian12` and deferred 2 HIGH, reasoning that the newer Node runtime was "not yet published to distroless" on a newer OS generation. It *was* published — on `nodejs24-debian13`, which also cleared the `libssl3` + `glibc` CVEs. Only axis 3 was skipped, and the finding was written off as unfixable. The lesson generalizes: whichever axis gets skipped is the one that silently produces a false "no fix available."
 
 Record which axes were checked and what each returned directly in the plan item — so the executor (or the next harden run) can refute a deferred CVE instead of silently inheriting it.
 
@@ -243,6 +251,17 @@ What can break, and the rollback (e.g., major-bump risk: pin back and mark block
 
 A plan an executor cannot follow without asking questions is not done — rewrite it, don't hand it off vague.
 
+### Self-Check: Confirm Nothing Tracked Was Touched
+
+Before printing the Step 4 summary, verify the Hard Rule actually held — don't just assert it:
+
+```bash
+git diff --stat --exit-code || echo "VIOLATION: tracked files were modified — this run broke the read-only contract"
+git status --porcelain | grep -v '^?? my-work/' && echo "VIOLATION: unexpected changes outside my-work/"
+```
+
+If either check reports a violation, do not print "Source files modified: NONE" — say what changed instead and treat it as a bug in this run, not a footnote.
+
 ## Step 4: Summary
 
 ```
@@ -251,6 +270,7 @@ Harden Audit Summary
 Dependabot:   5 alerts (2 critical, 2 high, 1 medium) → 2 plan items
   Original PRs to close after merge (do NOT wait on GitHub auto-close): #123, #124
 Docker:       3 images scanned (Scout + Trivy), 10 fixable CVEs → 1 plan item
+  # or, if docker is unavailable: "Docker/Scout: skipped (unavailable) — container CVE audit not performed"
   Deferred: CVE-XXXX-XXXXX — axes checked: tag refresh (same), runtime major
             (same), OS generation debian13 (same), variant (n/a) → no fix upstream
 Code audit:   4 findings (2 important) → 2 plan items
