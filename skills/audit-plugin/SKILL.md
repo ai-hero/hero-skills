@@ -172,8 +172,7 @@ OBSERVATIONS_WITH_NO_ACTION_NEEDED
 
 Overall health: Good / Needs Attention / Critical
 
-Next steps:
-  hero-skills:push-pr          # commit and push the plugin changes
+Next step: hero-skills:push-pr — commit and push the plugin changes (offer to auto-run: ask "Run it now? [y/N]", invoke via Skill tool on yes)
 ```
 
 ### Step 4: Auto-Fix (if `--fix`)

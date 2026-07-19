@@ -127,7 +127,7 @@ Created:
 
 Test: Invoke with hero-skills:SKILL_NAME in a new conversation
 
-Next steps:
-  hero-skills:audit-plugin     # check the new skill's quality and wiring
-  hero-skills:push-pr          # commit and push the new skill
+Next step: hero-skills:audit-plugin — check the new skill's quality and wiring (print only — model-invocation-restricted, cannot auto-run)
 ```
+
+Don't also print `hero-skills:push-pr`; `audit-plugin`'s own next-steps already lead there.

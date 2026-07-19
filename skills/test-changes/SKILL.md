@@ -569,10 +569,10 @@ Smoke Tests:
 
 Servers: backend/MCP stopped; frontend dev server left running (see above).
 
-Next steps:
-  /simplify                    # tidy the dirty diff before committing
-  hero-skills:push-pr          # commit and push — opens a draft PR
+Next step: hero-skills:push-pr — commit and push, opens a draft PR (offer to auto-run: ask "Run it now? [y/N]", invoke via Skill tool on yes)
 ```
+
+`push-pr` already invokes `simplify` internally (its own Step 2c) before committing, so there's nothing to run separately first.
 
 ## Examples
 
