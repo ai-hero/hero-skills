@@ -407,7 +407,7 @@ Order matters:
 2. Switch to `BASE_BRANCH` *before* deleting the head branch locally — `git branch -d` fails if you are on the branch you want to delete.
 3. Pull `BASE_BRANCH` so the local copy includes the squash/merge commit.
 4. Delete the remote head branch (unless GitHub auto-delete or HERO.md disables it).
-5. Delete the local head branch with `-d` (refuses unmerged history — that is a feature).
+5. Delete the local head branch with `-d` (refuses unmerged history — that is a feature). If `-d` refuses, fall back to `-D` only when the local branch tip is confirmed to be exactly the PR's merged head (via `headRefOid`) — never on `MERGED=true` alone, since that only proves the PR merged, not that the local branch has no commits beyond it.
 6. Offer to clean up other stale merged local branches.
 7. Suggest `/clear` so the next task starts on a fresh context.
 
@@ -415,7 +415,17 @@ Wrap the whole block in an `if` so an early return cannot kill the wrapping shel
 
 ```bash
 sleep 3
-MERGED=$(gh pr view $PR_NUMBER --json merged --jq '.merged')
+# `--json merged` isn't a valid gh CLI field (gh 2.86.0 rejects unknown
+# --json names locally, before any API call) — derive from `state`. Also
+# check gh's own exit status: an auth/network failure here must not read
+# as "not merged yet" (both would otherwise leave MERGED empty).
+if ! MERGED=$(gh pr view $PR_NUMBER --json state --jq 'if .state == "MERGED" then "true" else "false" end' 2>/tmp/ship_pr_merge_check_err.log); then
+  echo "WARN: could not check merge status via 'gh pr view' — see error below."
+  cat /tmp/ship_pr_merge_check_err.log
+  echo "Resolve (check 'gh auth status' / network) and re-run 'hero-skills:ship-pr' to retry."
+  MERGED=false
+fi
+rm -f /tmp/ship_pr_merge_check_err.log
 RESET_OK=true   # cleared if any sync step (checkout/pull/fetch) fails. Gates
                 # the cleanup steps below — never delete branches based on a
                 # stale local view of $BASE_BRANCH.
@@ -503,20 +513,36 @@ if [ "$RESET_OK" = "true" ] && [ "$MERGED" = "true" ]; then
     esac
   fi
 
-  # 4. Local head-branch cleanup. We're on BASE_BRANCH now; -d (not -D) so
-  #    git refuses on unmerged history.
+  # 4. Local head-branch cleanup. We're on BASE_BRANCH now. Check the actual
+  #    exit status, not stderr emptiness — `git branch -d` can print a
+  #    non-fatal "not yet merged to HEAD" warning on a *successful* delete
+  #    (squash/rebase merges break linear ancestry, but an upstream-tracking
+  #    ref still shows it merged) — stderr-emptiness would misreport that as
+  #    a failure.
   CURRENT=$(git branch --show-current)
   if [ "$CURRENT" = "$PR_BRANCH" ]; then
     # Should not happen — checkout above handled it. Skip defensively.
     echo "Still on $PR_BRANCH after checkout attempt. Skipping local delete."
   elif git show-ref --verify --quiet "refs/heads/$PR_BRANCH"; then
-    LOCAL_ERR=$(git branch -d "$PR_BRANCH" 2>&1 1>/dev/null) || true
-    if [ -z "$LOCAL_ERR" ]; then
+    if git branch -d "$PR_BRANCH" 2>&1; then
       echo "Deleted local branch: $PR_BRANCH"
     else
-      echo "WARN: could not delete local $PR_BRANCH:"
-      echo "  $LOCAL_ERR"
-      echo "  Investigate before deleting manually with git branch -D."
+      # MERGED=true only proves the PR merged, not that the local tip has no
+      # commits beyond it (a forgotten local commit, an amend). Verify the
+      # local tip IS the merged PR head before force-deleting.
+      PR_HEAD_SHA=$(gh pr view $PR_NUMBER --json headRefOid --jq '.headRefOid' 2>/dev/null)
+      LOCAL_SHA=$(git rev-parse "$PR_BRANCH" 2>/dev/null)
+      if [ -n "$PR_HEAD_SHA" ] && [ "$LOCAL_SHA" = "$PR_HEAD_SHA" ]; then
+        if git branch -D "$PR_BRANCH" 2>&1; then
+          echo "Deleted local branch: $PR_BRANCH (forced — local tip matched the merged PR head $PR_HEAD_SHA)"
+        else
+          echo "WARN: could not delete local $PR_BRANCH even with -D. Investigate manually."
+        fi
+      else
+        echo "WARN: local $PR_BRANCH ($LOCAL_SHA) does not match the merged PR head ($PR_HEAD_SHA)."
+        echo "  It may have local-only commits that were never part of the merged PR — not force-deleting."
+        echo "  Investigate; delete manually with 'git branch -D $PR_BRANCH' only if you're sure."
+      fi
     fi
   fi
 
