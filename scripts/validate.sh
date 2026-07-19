@@ -299,7 +299,7 @@ fi
 # (there is no per-caller allowlist). Keep this list in sync with one-shot's
 # step→skill mapping. `preflight` is intentionally absent — one-shot runs it
 # via scripts/preflight.sh, not the Skill tool, so it may stay user-only.
-CHAINED_SKILLS="test-changes push-pr review-pr respond-to-comments ship-pr"
+CHAINED_SKILLS="push-pr review-pr respond-to-comments ship-pr"
 for chained in $CHAINED_SKILLS; do
   chained_file="$SKILLS_DIR/$chained/SKILL.md"
   # A missing chained skill silently breaks one-shot at that step, so error

@@ -140,7 +140,7 @@ check_tooling() {
       emit WARN "tooling: node $(node --version 2>/dev/null || echo missing) — Playwright MCP needs >=18"
     fi
   else
-    emit WARN "tooling: 'node' not installed — Step 4 (e2e) will be unavailable"
+    emit WARN "tooling: 'node' not installed — push-pr's test-phase UI smoke will be unavailable"
   fi
 
   # 4. Playwright MCP registered. `claude mcp list` is the canonical check;
@@ -149,12 +149,12 @@ check_tooling() {
     if claude mcp list 2>/dev/null | grep -qi "playwright"; then
       emit OK "tooling: playwright MCP registered"
     else
-      emit WARN "tooling: playwright MCP not registered — Step 4 (e2e) will skip. Install: claude mcp add playwright npx @playwright/mcp@latest"
+      emit WARN "tooling: playwright MCP not registered — push-pr's test-phase UI smoke will skip. Install: claude mcp add playwright npx @playwright/mcp@latest"
     fi
   elif [ -f "$HOME/.claude.json" ] && grep -q '"playwright"' "$HOME/.claude.json" 2>/dev/null; then
     emit OK "tooling: playwright MCP present in ~/.claude.json"
   else
-    emit WARN "tooling: cannot detect playwright MCP — Step 4 (e2e) may skip. Install: claude mcp add playwright npx @playwright/mcp@latest"
+    emit WARN "tooling: cannot detect playwright MCP — push-pr's test-phase UI smoke may skip. Install: claude mcp add playwright npx @playwright/mcp@latest"
   fi
 
   # 5. pr-review-toolkit plugin. Check both the user plugin dir and the
