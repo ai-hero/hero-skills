@@ -407,7 +407,7 @@ Order matters:
 2. Switch to `BASE_BRANCH` *before* deleting the head branch locally — `git branch -d` fails if you are on the branch you want to delete.
 3. Pull `BASE_BRANCH` so the local copy includes the squash/merge commit.
 4. Delete the remote head branch (unless GitHub auto-delete or HERO.md disables it).
-5. Delete the local head branch with `-d` (refuses unmerged history — that is a feature).
+5. Delete the local head branch with `-d` (refuses unmerged history — that is a feature), falling back to `-D` only for the squash/rebase case where `-d`'s local-ancestry check can't see the merge that the GitHub API already confirmed.
 6. Offer to clean up other stale merged local branches.
 7. Suggest `/clear` so the next task starts on a fresh context.
 
@@ -415,7 +415,9 @@ Wrap the whole block in an `if` so an early return cannot kill the wrapping shel
 
 ```bash
 sleep 3
-MERGED=$(gh pr view $PR_NUMBER --json merged --jq '.merged')
+# `--json merged` is not a valid gh CLI field (confirmed against gh 2.86.0 —
+# it 404s with "Unknown JSON field"); derive from `state` instead.
+MERGED=$(gh pr view $PR_NUMBER --json state --jq 'if .state == "MERGED" then "true" else "false" end')
 RESET_OK=true   # cleared if any sync step (checkout/pull/fetch) fails. Gates
                 # the cleanup steps below — never delete branches based on a
                 # stale local view of $BASE_BRANCH.
@@ -503,20 +505,26 @@ if [ "$RESET_OK" = "true" ] && [ "$MERGED" = "true" ]; then
     esac
   fi
 
-  # 4. Local head-branch cleanup. We're on BASE_BRANCH now; -d (not -D) so
-  #    git refuses on unmerged history.
+  # 4. Local head-branch cleanup. We're on BASE_BRANCH now. Check the actual
+  #    exit status, not whether stderr is empty — `git branch -d` can print
+  #    a non-fatal "warning: ... not yet merged to HEAD" to stderr on a
+  #    *successful* delete (its local-ancestry check doesn't understand
+  #    squash/rebase merges), so testing stderr emptiness reports a false
+  #    failure on the most common merge method in this repo.
   CURRENT=$(git branch --show-current)
   if [ "$CURRENT" = "$PR_BRANCH" ]; then
     # Should not happen — checkout above handled it. Skip defensively.
     echo "Still on $PR_BRANCH after checkout attempt. Skipping local delete."
   elif git show-ref --verify --quiet "refs/heads/$PR_BRANCH"; then
-    LOCAL_ERR=$(git branch -d "$PR_BRANCH" 2>&1 1>/dev/null) || true
-    if [ -z "$LOCAL_ERR" ]; then
+    if git branch -d "$PR_BRANCH" 2>&1; then
       echo "Deleted local branch: $PR_BRANCH"
+    elif git branch -D "$PR_BRANCH" 2>&1; then
+      # -d's ancestry check refused, but MERGED was already confirmed true
+      # via the GitHub API above — that's the authoritative signal here,
+      # so -D isn't blindly force-deleting unmerged work.
+      echo "Deleted local branch: $PR_BRANCH (forced — squash/rebase merge, confirmed merged via API)"
     else
-      echo "WARN: could not delete local $PR_BRANCH:"
-      echo "  $LOCAL_ERR"
-      echo "  Investigate before deleting manually with git branch -D."
+      echo "WARN: could not delete local $PR_BRANCH even with -D. Investigate manually."
     fi
   fi
 
