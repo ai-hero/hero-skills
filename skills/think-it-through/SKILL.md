@@ -185,11 +185,22 @@ testable and can be reviewed on their own. For each, write one file to
 this is the payoff over a flat TODO list. Flag any one-way-door item with
 `one_way_door: true`.
 
-Number items sequentially from the highest existing `id` in `my-work/` (so
-concurrent efforts don't collide). The `id` frontmatter field is a plain
-integer; zero-pad only the **filename** prefix (`007-slug.md`) so `ls` sorts
-them — `depends_on` references the plain integer id. After writing, print the
-readiness view (below) so the user sees what to start first.
+Number items sequentially from the highest existing `id` in `my-work/`,
+re-checked immediately before writing (not cached from earlier in the
+session) — this doesn't eliminate a collision between two truly concurrent
+writers, but it closes the common case of a stale count from a session that
+has been running a while. The `id` frontmatter field is a plain integer;
+zero-pad only the **filename** prefix (`007-slug.md`) so `ls` sorts them —
+`depends_on` references the plain integer id.
+
+Before writing, verify every `depends_on` id actually exists in `my-work/`.
+A typo'd or stale id (e.g. referencing a since-renumbered or removed item)
+doesn't error — it just makes the readiness check treat the item as
+permanently blocked, silently, with nothing in this skill's output pointing
+at the dangling reference.
+
+After writing, print the readiness view (below) so the user sees what to
+start first.
 
 When the grilling settled a **one-way-door architectural decision** (schema,
 public API, data model, service boundary), offer to also record it as an ADR
