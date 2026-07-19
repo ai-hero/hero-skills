@@ -7,7 +7,7 @@ argument-hint: [pr-number]
 
 # Ship — Trigger Auto-Approve, Merge, Reset Local Branch
 
-This skill posts `@auto-approve` on the PR, waits for the workflow run to finish, reads the verdict, and — if the verdict is APPROVE — asks whether to merge. If the verdict is REQUEST_CHANGES, it shows what to fix and offers to re-trigger after fixes land. After a successful merge, it folds in the `hero-skills:abandon-branch` flow: switch to the default branch, pull latest, delete the merged head branch (remote + local), and offer a clean-up of other stale merged branches. It then runs a platform-agnostic, advisory post-merge deployment-health check (Kubernetes, VM, PaaS, or serverless, driven by HERO.md).
+This skill posts `@auto-approve` on the PR, waits for the workflow run to finish, reads the verdict, and — if APPROVE — asks whether to merge. If REQUEST_CHANGES, it shows what to fix and offers to re-trigger after fixes land. After a successful merge, it switches to the default branch, pulls latest, deletes the merged head branch (remote + local), and offers cleanup of other stale merged branches (the merged-branch counterpart to `hero-skills:abandon-branch`). It then runs an advisory post-merge deployment-health check (Kubernetes, VM, PaaS, or serverless, per HERO.md).
 
 ## Pipeline DAG
 
@@ -25,7 +25,7 @@ Print at each step transition:
 Now running: verdict
 ```
 
-Mapping to the steps below: Step 3 = `gates`, Step 4 = `trigger`, Steps 5-6 = `verdict`, Step 7a = `merge`, Step 7b = `reset` (folded-in `hero-skills:abandon-branch` flow), Step 7e = `verify-deploy` (platform-agnostic post-merge deployment-health check). Steps 1-2 are pre-flight (PR identification, workflow-on-default-branch check) and Step 8 is the summary — neither appears in the DAG. Steps 7c (REQUEST_CHANGES) and 7d (WORKFLOW_FAILED) are alternative end states that *replace* `merge`, `reset`, and `verify-deploy` — there is no merge to verify deployment health for. On those paths render `(✗) merge → ( ) reset → ( ) verify-deploy` and stop, never `(✓) merge → (✓) reset → (✓) verify-deploy`.
+Mapping to the steps below: Step 3 = `gates`, Step 4 = `trigger`, Steps 5-6 = `verdict`, Step 7a = `merge`, Step 7b = `reset` (merged-branch cleanup — see Step 7b's own note), Step 7e = `verify-deploy` (platform-agnostic post-merge deployment-health check). Steps 1-2 are pre-flight (PR identification, workflow-on-default-branch check) and Step 8 is the summary — neither appears in the DAG. Steps 7c (REQUEST_CHANGES) and 7d (WORKFLOW_FAILED) are alternative end states that *replace* `merge`, `reset`, and `verify-deploy` — there is no merge to verify deployment health for. On those paths render `(✗) merge → ( ) reset → ( ) verify-deploy` and stop, never `(✓) merge → (✓) reset → (✓) verify-deploy`.
 
 The workflow lives at `.github/workflows/auto-approve.yml`. **GitHub only honors `issue_comment`-triggered workflows that already exist on the default branch**, so the workflow file must be merged to `main` (or your default branch) before this skill can do anything useful. This skill checks that first.
 
@@ -70,7 +70,8 @@ Otherwise auto-detect from the current branch:
 
 ```bash
 BRANCH=$(git branch --show-current)
-gh pr list --head "$BRANCH" --json number,url,headRefName,baseRefName,state,isDraft,mergeable,mergeStateStatus --jq '.[0]'
+# --state all: gh defaults to open-only, which would hide the merged-PR row below.
+gh pr list --head "$BRANCH" --state all --json number,url,headRefName,baseRefName,state,isDraft,mergeable,mergeStateStatus --jq '.[0]'
 ```
 
 Record `PR_NUMBER`, `PR_URL`, `PR_BRANCH`, `BASE_BRANCH`, `IS_DRAFT`.
@@ -81,8 +82,8 @@ Record `PR_NUMBER`, `PR_URL`, `PR_BRANCH`, `BASE_BRANCH`, `IS_DRAFT`.
 |-------|--------|
 | No PR found | STOP. Tell the user to run `hero-skills:push-pr` first. |
 | Draft PR | STOP. Auto-approve only runs on ready PRs — tell the user to run `hero-skills:review-pr` to mark ready. |
-| Merged, local checkout still on `PR_BRANCH` or `PR_BRANCH` still exists locally | Skip straight to Step 7b — retry the reset (it re-derives `MERGED` itself from `PR_NUMBER`, independent of Steps 2-6). |
-| Closed (not merged), or already fully reset | STOP. Report status. |
+| `.state=="MERGED"`, `PR_BRANCH` still local | Skip to Step 7b to retry (re-derives `MERGED`, independent of Steps 2-6 — see its `$OWNER`/`$REPO` note). |
+| `.state=="CLOSED"`, or `MERGED` with `PR_BRANCH` already gone | STOP. Report status. |
 | Open, ready | Continue. |
 
 ### Step 2: Verify Auto-Approve Workflow Is on the Default Branch
@@ -386,9 +387,19 @@ fi
 
 **Never force-merge or override branch protection.** Never pass `--admin`. The fallback above is *only* for the specific "auto-merge not enabled on this repo" case; every other failure is surfaced and stops the skill.
 
-#### Step 7b: Reset to the Default Branch (folded-in `hero-skills:abandon-branch`)
+#### Step 7b: Reset to the Default Branch (the merged-branch counterpart to `hero-skills:abandon-branch`)
 
-After a successful merge, leave the user on the default branch with latest pulled and the merged PR branch cleaned up. This folds in what `hero-skills:abandon-branch` does, since after a squash/rebase merge we are usually on the just-merged head branch and want to land on `BASE_BRANCH` ready for the next task.
+After a successful merge, leave the user on the default branch, pulled, with the merged PR branch cleaned up — we're usually still on the just-merged head. `abandon-branch` mirrors this for the never-merged case; not shared logic.
+
+If Step 1 skipped straight here, `$OWNER`/`$REPO` were never set (only Step 3 sets them):
+
+```bash
+if [ -z "$OWNER" ] || [ -z "$REPO" ]; then
+  OWNER_REPO=$(gh repo view --json owner,name --jq '"\(.owner.login) \(.name)"')
+  OWNER=$(echo "$OWNER_REPO" | awk '{print $1}')
+  REPO=$(echo "$OWNER_REPO" | awk '{print $2}')
+fi
+```
 
 Order matters:
 

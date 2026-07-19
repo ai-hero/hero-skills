@@ -397,7 +397,7 @@ URL: {pr-url}
 Next step: (pick exactly one)
 ```
 
-- **This cycle touched dependency files**: `Next step: hero-skills:scan-vulns` (print only — model-invocation-restricted, cannot auto-run).
+- **This cycle touched dependency files** (`package.json`, `pyproject.toml`, lockfiles, `.github/workflows/*.yml` version pins, or `Dockerfile*` — same definition as `push-pr`'s equivalent bullet): `Next step: hero-skills:scan-vulns` (print only — model-invocation-restricted, cannot auto-run).
 - **Otherwise**: `Next step: hero-skills:ship-pr — @auto-approve, merge, reset to default branch (blocks if any threads remain unresolved)` (offer to auto-run: ask "Run it now? [y/N]", invoke via Skill tool on yes).
 
 **If changes were stashed in Step 2, remind the user:**

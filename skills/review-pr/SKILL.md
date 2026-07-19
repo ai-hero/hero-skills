@@ -312,6 +312,7 @@ URL: {pr-url}
 Next step: (pick exactly one, based on what actually happened above)
 ```
 
+- **`$NO_MARK_READY` is `true`** (deferred to caller, e.g. `one-shot`): no next-step line — the caller owns what happens next (one-shot's own Step 7 mark-ready gate).
 - **Marked ready, agent configured**: print `Waiting on {agent}'s first review — then run hero-skills:respond-to-comments.` (no prompt, nothing to invoke yet).
 - **Marked ready, `agent: none`**: `Next step: hero-skills:ship-pr — @auto-approve, merge, reset` (offer to auto-run: ask "Run it now? [y/N]", invoke via Skill tool on yes).
 - **Declined mark-ready**: `Next step: address the findings above, then re-run hero-skills:review-pr.` (print only — re-invoking the same skill right after it finishes isn't auto-chained).

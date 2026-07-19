@@ -65,10 +65,13 @@ echo "Current branch: $BRANCH (default: $DEFAULT_BRANCH)"
 
 ```bash
 if ! git pull --ff-only origin "$DEFAULT_BRANCH"; then
-  echo "WARN: 'git pull --ff-only origin $DEFAULT_BRANCH' failed — local $DEFAULT_BRANCH may be divergent or dirty."
-  echo "Resolve manually (check 'git status'), then re-run."
+  echo "STOP: 'git pull --ff-only origin $DEFAULT_BRANCH' failed — local $DEFAULT_BRANCH may be divergent or dirty."
+  echo "Resolve manually (check 'git status'; a diverged local $DEFAULT_BRANCH needs 'git fetch' + reconciling)."
+  echo "Then re-run hero-skills:push-pr. Do not branch off a base that failed to update."
 fi
 ```
+
+**If the pull failed, stop here — do not proceed to branch creation below.** Only continue once it succeeds.
 
 Then derive a feature-branch name from the diff and check out a new branch. Uncommitted changes follow the checkout automatically — do **not** stash.
 
@@ -290,11 +293,14 @@ fi
 # Refresh the remote-tracking ref before diffing against it — Step 1 only
 # fetches when this branch came from the default branch; a branch that
 # existed before this run may never have fetched at all this session.
-git fetch origin "$DEFAULT_BRANCH" || echo "WARN: fetch failed — origin/$DEFAULT_BRANCH may be stale for this diff."
+FETCH_FOR_DIFF_OK=true
+git fetch origin "$DEFAULT_BRANCH" || FETCH_FOR_DIFF_OK=false
 git log origin/$DEFAULT_BRANCH..HEAD --pretty=format:"%s%n%b" --reverse
 git diff origin/$DEFAULT_BRANCH..HEAD --stat
 git diff origin/$DEFAULT_BRANCH..HEAD --name-only
 ```
+
+If `$FETCH_FOR_DIFF_OK` is `false`: this doesn't block the PR (GitHub computes the actual base/diff server-side regardless of local staleness), but the title and changeset list generated below are built from this possibly-stale local log — prepend a note to the generated PR body: `⚠️ Generated against a possibly-stale local view of $DEFAULT_BRANCH (fetch failed) — verify the changeset list against GitHub's own diff.`
 
 Determine the draft flag (drafts are the default). Parse the first whitespace-separated token of `$ARGUMENTS` so trailing whitespace or extra arguments don't silently fall through:
 
@@ -362,7 +368,7 @@ Next step: hero-skills:review-pr — self-review, runs pr-review-toolkit agents,
 
 If the PR was created with `ready` (non-draft), report `PR created` instead of `Draft PR created`, skip the self-review hint, and pick exactly one next step instead:
 
-- **This PR touched dependency files** (`package.json`, `pyproject.toml`, lockfiles, `.github/workflows/*.yml` version pins): `Next step: hero-skills:scan-vulns` (print only — model-invocation-restricted, cannot auto-run).
+- **This PR touched dependency files** (`package.json`, `pyproject.toml`, lockfiles, `.github/workflows/*.yml` version pins, or `Dockerfile*` — scan-vulns Part B covers Docker Scout too): `Next step: hero-skills:scan-vulns` (print only — model-invocation-restricted, cannot auto-run).
 - **Otherwise**: `Next step: hero-skills:ship-pr — once green, @auto-approve, merge, verify deploy, reset` (offer to auto-run).
 
 ### A5: Report CI Status

@@ -66,19 +66,30 @@ Note: this does NOT auto-pop the stash since the purpose is to switch away from 
 ### Step 2: Confirm the Branch Is Actually Unmerged, Then Switch Away
 
 ```bash
-DEFAULT_BRANCH=main  # or from HERO.md
-git fetch origin $DEFAULT_BRANCH
+DEFAULT_BRANCH=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | xargs)
+DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
+if ! git fetch origin "$DEFAULT_BRANCH"; then
+  echo "WARN: 'git fetch origin $DEFAULT_BRANCH' failed — the merged-check below may be unreliable. Resolve network/auth before trusting its result."
+fi
 ```
 
 If already on the default branch, skip to Step 3.
 
-Otherwise, check whether the current branch has secretly already been merged (handles squash-and-merge) — if so, this isn't an abandon at all, point the user at `ship-pr`'s cleanup instead of duplicating it here:
+Otherwise, check whether the current branch has secretly already been merged (handles squash-and-merge) — if so, this isn't an abandon at all, point the user at `ship-pr`'s cleanup instead of duplicating it here. Check remotely first, but fall back to a local check if the API call fails — a network hiccup must not silently read as "unmerged" when a real merge-status query would have said otherwise, especially since this now gates a destructive Delete option below:
 
 ```bash
-gh pr list --head "$CURRENT" --base "$DEFAULT_BRANCH" --state merged --json number --jq 'length' 2>/dev/null
+MERGED_COUNT=$(gh pr list --head "$CURRENT" --base "$DEFAULT_BRANCH" --state merged --json number --jq 'length' 2>/dev/null)
+if [ -z "$MERGED_COUNT" ]; then
+  echo "WARN: could not query merged-PR status via gh — falling back to a local check."
+  if git branch --merged "origin/$DEFAULT_BRANCH" 2>/dev/null | grep -Eq "^[[:space:]]*\*?[[:space:]]*${CURRENT}$"; then
+    MERGED_COUNT=1
+  else
+    MERGED_COUNT=0
+  fi
+fi
 ```
 
-**If the result is `>= 1` (already merged):** stop and say `'$CURRENT' already has a merged PR — this isn't an abandon. Run hero-skills:ship-pr's cleanup flow (or delete '$CURRENT' manually) instead.` Do not proceed with this skill.
+**If `$MERGED_COUNT >= 1` (already merged):** stop and say `'$CURRENT' already has a merged PR — this isn't an abandon. Run hero-skills:ship-pr's cleanup flow (or delete '$CURRENT' manually) instead.` If Step 1 stashed anything, say so explicitly here too — the user is being redirected away without a reminder otherwise: `Note: your uncommitted changes are stashed (stash@{0}) — restore with 'git stash pop' after switching branches.` Do not proceed with this skill.
 
 **Otherwise (genuinely unmerged):**
 
@@ -93,6 +104,10 @@ Options:
 ```
 
 **STOP and wait for user to choose.** Never delete without this explicit confirmation — an unmerged branch is unrecoverable work once its local ref and reflog expire.
+
+**If the user chose option 3 (Cancel): stop here.** Do not run the checkout below.
+
+For options 1 (Pause) and 2 (Delete), switch to the default branch first:
 
 ```bash
 if [ "$CURRENT" != "$DEFAULT_BRANCH" ]; then

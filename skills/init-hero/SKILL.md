@@ -278,9 +278,15 @@ ls .github/workflows/auto-approve.yml 2>/dev/null && \
 DEFAULT_BRANCH=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')
 # Refresh before checking — a stale origin/$DEFAULT_BRANCH would report
 # AUTO_APPROVE_NOT_ON_DEFAULT for a workflow that was actually just merged.
-git fetch origin "$DEFAULT_BRANCH" 2>/dev/null || echo "WARN: fetch failed — origin/$DEFAULT_BRANCH may be stale for this check."
-git cat-file -e "origin/$DEFAULT_BRANCH:.github/workflows/auto-approve.yml" 2>/dev/null \
-  && echo "AUTO_APPROVE_ON_DEFAULT" || echo "AUTO_APPROVE_NOT_ON_DEFAULT"
+# On fetch failure, report the result as unknown rather than letting a
+# possibly-stale ref produce a silent false AUTO_APPROVE_ON_DEFAULT that
+# suppresses the "will be a no-op" warning the user actually needs.
+if git fetch origin "$DEFAULT_BRANCH" 2>/dev/null; then
+  git cat-file -e "origin/$DEFAULT_BRANCH:.github/workflows/auto-approve.yml" 2>/dev/null \
+    && echo "AUTO_APPROVE_ON_DEFAULT" || echo "AUTO_APPROVE_NOT_ON_DEFAULT"
+else
+  echo "AUTO_APPROVE_ON_DEFAULT_UNKNOWN (fetch failed — verify manually before trusting this check)"
+fi
 ```
 
 #### 3f: Required CLI Tools & Developer Toolchain

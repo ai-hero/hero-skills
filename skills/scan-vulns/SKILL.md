@@ -78,24 +78,30 @@ For each Dependabot PR, view the diff and extract: package name, version change,
 
 ### A3: Branch Fresh and Collect All Fixes
 
-Every dependency bump gets tested **together**, in one PR, in one e2e run — a major-version bump can pass CI in isolation and still break once combined with another simultaneous update, and that's exactly the interaction bug a single combined run is meant to catch. So collect every fix onto one branch before pushing anything.
+Every dependency bump gets tested **together**, in one PR, in one e2e run — two individually-passing bumps can still break once combined (e.g. a version bump plus a config change that only conflicts together), and that's exactly the interaction bug a single combined run is meant to catch. So collect every fix onto one branch before pushing anything.
 
-Branch **fresh off the default branch on every scan-vulns run** rather than maintaining a long-lived security-fix branch across runs. This is what avoids the classic "N branches all need rebasing against each other" trap: a fresh branch off today's default branch never has a stale base to reconcile against, so there is nothing to rebase.
+Branch **fresh off the default branch on every scan-vulns run** rather than maintaining a long-lived security-fix branch across runs. This is what avoids stale security PRs piling up across successive runs, each needing its own catch-up against an ever-moving default branch: a fresh branch off today's default branch never has a stale base to reconcile against.
 
 ```bash
 DEFAULT_BRANCH=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name')
 git checkout "$DEFAULT_BRANCH" && git pull
 
-# Supersede any still-open PR from a prior scan-vulns run — don't let stale
-# security PRs pile up alongside the fresh one this run is about to open.
+# Supersede any still-open PR(s) from a prior scan-vulns run — close them
+# directly here, before opening the new one, rather than deferring to a
+# later skill that has no mechanism to carry this obligation forward.
 # Reuses A2's $OPEN_PRS payload rather than a second `gh pr list` call.
-echo "$OPEN_PRS" | jq '.[] | select(.headRefName | startswith("fix/security-updates-"))'
+STALE_PR_NUMBERS=$(echo "$OPEN_PRS" | jq -r '.[] | select(.headRefName | startswith("fix/security-updates-")) | .number')
+for STALE_PR in $STALE_PR_NUMBERS; do
+  gh pr close "$STALE_PR" --comment "Superseded by a fresh security-fix run."
+done
 
+# Guard against a same-day rerun colliding on the branch name.
 BRANCH_NAME="fix/security-updates-$(date +%Y%m%d)"
+if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME" || git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null 2>&1; then
+  BRANCH_NAME="fix/security-updates-$(date +%Y%m%d)-$(date +%H%M%S)"
+fi
 git checkout -b "$BRANCH_NAME"
 ```
-
-If a stale PR was found above, close it once the new PR exists in A4/push-pr: `gh pr close STALE_PR_NUMBER --comment "Superseded by a fresh security-fix run — see #NEW_PR_NUMBER."`
 
 For each open Dependabot alert/PR (severity order, from A1/A2), edit the target file **directly** to the fixed version — do not shell out to `npm install PACKAGE@VERSION` or `uv add` per package. Each of those calls regenerates the lockfile on its own, which stacks up N separate (and sometimes conflicting) lockfile diffs for what should be one coherent update. Collect every version-bump edit first:
 
@@ -188,10 +194,11 @@ Docker Scout: 3 images scanned
 
 Original Dependabot PRs covered: #123, #124, #126, #128
   These are NOT closed by this skill. Expect GitHub to auto-close each one
-  once this consolidated fix reaches the default branch — GitHub does this
-  automatically once it detects the same version bump on the default branch.
-  If one doesn't close within a day or so, comment `@dependabot recreate`
-  on it to trigger a recheck.
+  once this consolidated fix reaches the default branch and Dependabot next
+  scans it (timing depends on this repo's dependabot.yml schedule interval
+  — could be immediate or up to that interval's length). If one is still
+  open well past that, comment `@dependabot recreate` on it to trigger a
+  recheck.
 
 Next step: hero-skills:push-pr — commit and push the fixes, opens a draft PR (offer to auto-run: ask "Run it now? [y/N]", invoke via Skill tool on yes)
 ```
@@ -203,5 +210,5 @@ Don't also print `hero-skills:ship-pr`; `push-pr`'s own next-steps chain (review
 - Run tests after applying dependency updates
 - Skip major version updates by default (may have breaking changes)
 - Always rescan after applying Docker fixes
-- Never close the original Dependabot PRs directly — GitHub closes each one automatically once it detects the same fix on the default branch (this can occasionally lag; nudge it with `@dependabot recreate` if a PR is still open after a day). Report this expectation to the user rather than acting on their PRs.
+- Never close the original Dependabot PRs directly — GitHub closes each one automatically on its next scan of the default branch after the fix lands (timing follows this repo's `dependabot.yml` schedule interval, not a fixed delay; nudge with `@dependabot recreate` if one is still open well past that). Report this expectation to the user rather than acting on their PRs.
 - Branch fresh off the default branch on every run (A3) — never accumulate fixes on a persistent branch across runs. The one exception is this skill's *own* prior-run PR (branch prefix `fix/security-updates-`), which is fine to close/supersede since it's this skill's own artifact, not a Dependabot PR

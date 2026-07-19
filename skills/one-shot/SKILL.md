@@ -447,7 +447,7 @@ Render DAG with `push` active. Run `hero-skills:push-pr` (no arguments — commi
 
 Render DAG with `self-review` active. Run `hero-skills:review-pr --no-mark-ready` (auto-detects your draft PR and runs the pr-review-toolkit agents in parallel, applies fixes). The `--no-mark-ready` flag is **required** here so review-pr stops before its own Step 9 mark-ready prompt — one-shot's Step 7 below owns that gate, and double-prompting would be confusing.
 
-This step covers `review-pr` Steps 1–8 only: post the review comment, ask permission to apply fixes, apply them, push the commit, post the improvements summary, and update the PR description. Mark-ready is deliberately deferred to one-shot's Step 7 so the DAG renders it as a visible, separately-tracked node.
+This step covers `review-pr`'s functional work in Steps 1–8 only: post the review comment, ask permission to apply fixes, apply them, push the commit, post the improvements summary, and update the PR description. Mark-ready is deliberately deferred to one-shot's Step 7 so the DAG renders it as a visible, separately-tracked node. `review-pr`'s own Step 9 (mark-ready prompt) is skipped per `--no-mark-ready`; its Step 10 (summary print) still runs but is purely informational — one-shot's own DAG/summary is what's authoritative here, not review-pr's next-step suggestion.
 
 ### Step 7: mark-ready
 
