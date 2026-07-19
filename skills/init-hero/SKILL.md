@@ -276,6 +276,9 @@ ls .github/workflows/auto-approve.yml 2>/dev/null && \
 # workflows only trigger from the default branch, so a PR-branch-only
 # install does nothing.
 DEFAULT_BRANCH=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')
+# Refresh before checking — a stale origin/$DEFAULT_BRANCH would report
+# AUTO_APPROVE_NOT_ON_DEFAULT for a workflow that was actually just merged.
+git fetch origin "$DEFAULT_BRANCH" 2>/dev/null || echo "WARN: fetch failed — origin/$DEFAULT_BRANCH may be stale for this check."
 git cat-file -e "origin/$DEFAULT_BRANCH:.github/workflows/auto-approve.yml" 2>/dev/null \
   && echo "AUTO_APPROVE_ON_DEFAULT" || echo "AUTO_APPROVE_NOT_ON_DEFAULT"
 ```
