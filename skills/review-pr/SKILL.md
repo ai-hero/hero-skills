@@ -7,7 +7,7 @@ argument-hint: [#PR] [--no-mark-ready]
 
 # Review — PR Review
 
-Context-aware PR review. Auto-detects whether you're reviewing your own draft or someone else's PR and runs the right mode. Every review includes a security pass (absorbing what `/security-review` covers) alongside the pr-review-toolkit agents.
+Context-aware PR review. Auto-detects whether you're reviewing your own draft or someone else's PR and runs the right mode. Every review includes a security-focused pass (a checklist similar to `/security-review`, run as an in-process agent rather than invoking that skill) alongside the pr-review-toolkit agents.
 
 ## Arguments
 
