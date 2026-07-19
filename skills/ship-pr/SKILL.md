@@ -7,7 +7,7 @@ argument-hint: [pr-number]
 
 # Ship — Trigger Auto-Approve, Merge, Reset Local Branch
 
-This skill posts `@auto-approve` on the PR, waits for the workflow run to finish, reads the verdict, and — if the verdict is APPROVE — asks whether to merge. If the verdict is REQUEST_CHANGES, it shows what to fix and offers to re-trigger after fixes land. After a successful merge, it folds in the `hero-skills:reset-branch` flow: switch to the default branch, pull latest, delete the merged head branch (remote + local), and offer a clean-up of other stale merged branches. It then runs a platform-agnostic, advisory post-merge deployment-health check (Kubernetes, VM, PaaS, or serverless, driven by HERO.md).
+This skill posts `@auto-approve` on the PR, waits for the workflow run to finish, reads the verdict, and — if the verdict is APPROVE — asks whether to merge. If the verdict is REQUEST_CHANGES, it shows what to fix and offers to re-trigger after fixes land. After a successful merge, it folds in the `hero-skills:abandon-branch` flow: switch to the default branch, pull latest, delete the merged head branch (remote + local), and offer a clean-up of other stale merged branches. It then runs a platform-agnostic, advisory post-merge deployment-health check (Kubernetes, VM, PaaS, or serverless, driven by HERO.md).
 
 ## Pipeline DAG
 
@@ -25,7 +25,7 @@ Print at each step transition:
 Now running: verdict
 ```
 
-Mapping to the steps below: Step 3 = `gates`, Step 4 = `trigger`, Steps 5-6 = `verdict`, Step 7a = `merge`, Step 7b = `reset` (folded-in `hero-skills:reset-branch` flow), Step 7e = `verify-deploy` (platform-agnostic post-merge deployment-health check). Steps 1-2 are pre-flight (PR identification, workflow-on-default-branch check) and Step 8 is the summary — neither appears in the DAG. Steps 7c (REQUEST_CHANGES) and 7d (WORKFLOW_FAILED) are alternative end states that *replace* `merge`, `reset`, and `verify-deploy` — there is no merge to verify deployment health for. On those paths render `(✗) merge → ( ) reset → ( ) verify-deploy` and stop, never `(✓) merge → (✓) reset → (✓) verify-deploy`.
+Mapping to the steps below: Step 3 = `gates`, Step 4 = `trigger`, Steps 5-6 = `verdict`, Step 7a = `merge`, Step 7b = `reset` (folded-in `hero-skills:abandon-branch` flow), Step 7e = `verify-deploy` (platform-agnostic post-merge deployment-health check). Steps 1-2 are pre-flight (PR identification, workflow-on-default-branch check) and Step 8 is the summary — neither appears in the DAG. Steps 7c (REQUEST_CHANGES) and 7d (WORKFLOW_FAILED) are alternative end states that *replace* `merge`, `reset`, and `verify-deploy` — there is no merge to verify deployment health for. On those paths render `(✗) merge → ( ) reset → ( ) verify-deploy` and stop, never `(✓) merge → (✓) reset → (✓) verify-deploy`.
 
 The workflow lives at `.github/workflows/auto-approve.yml`. **GitHub only honors `issue_comment`-triggered workflows that already exist on the default branch**, so the workflow file must be merged to `main` (or your default branch) before this skill can do anything useful. This skill checks that first.
 
@@ -81,7 +81,8 @@ Record `PR_NUMBER`, `PR_URL`, `PR_BRANCH`, `BASE_BRANCH`, `IS_DRAFT`.
 |-------|--------|
 | No PR found | STOP. Tell the user to run `hero-skills:push-pr` first. |
 | Draft PR | STOP. Auto-approve only runs on ready PRs — tell the user to run `hero-skills:review-pr` to mark ready. |
-| Closed/merged | STOP. Report status. |
+| Merged, local checkout still on `PR_BRANCH` or `PR_BRANCH` still exists locally | Skip straight to Step 7b — retry the reset (it re-derives `MERGED` itself from `PR_NUMBER`, independent of Steps 2-6). |
+| Closed (not merged), or already fully reset | STOP. Report status. |
 | Open, ready | Continue. |
 
 ### Step 2: Verify Auto-Approve Workflow Is on the Default Branch
@@ -385,9 +386,9 @@ fi
 
 **Never force-merge or override branch protection.** Never pass `--admin`. The fallback above is *only* for the specific "auto-merge not enabled on this repo" case; every other failure is surfaced and stops the skill.
 
-#### Step 7b: Reset to the Default Branch (folded-in `hero-skills:reset-branch`)
+#### Step 7b: Reset to the Default Branch (folded-in `hero-skills:abandon-branch`)
 
-After a successful merge, leave the user on the default branch with latest pulled and the merged PR branch cleaned up. This folds in what `hero-skills:reset-branch` does, since after a squash/rebase merge we are usually on the just-merged head branch and want to land on `BASE_BRANCH` ready for the next task.
+After a successful merge, leave the user on the default branch with latest pulled and the merged PR branch cleaned up. This folds in what `hero-skills:abandon-branch` does, since after a squash/rebase merge we are usually on the just-merged head branch and want to land on `BASE_BRANCH` ready for the next task.
 
 Order matters:
 
@@ -428,7 +429,7 @@ else
       echo "  - Uncommitted local edits — check 'git status'"
       echo "  - The local $BASE_BRANCH ref is divergent or missing"
       echo ""
-      echo "Resolve manually, then run 'hero-skills:reset-branch' to finish."
+      echo "Resolve manually, then re-run 'hero-skills:ship-pr' to retry."
       echo "Skipping branch deletion + stale-cleanup so we do not act on a"
       echo "stale local view of $BASE_BRANCH."
     fi
@@ -457,7 +458,7 @@ else
       echo "      branch deletion and stale-branch cleanup to avoid acting"
       echo "      on a stale reference. Resolve with:"
       echo "        git status; git fetch origin $BASE_BRANCH"
-      echo "      then 'hero-skills:reset-branch' to finish."
+      echo "      then re-run 'hero-skills:ship-pr' to retry."
     fi
   fi
 fi
@@ -714,11 +715,13 @@ Action taken:
   - Suggested hero-skills:respond-to-comments             # REQUEST_CHANGES
   - Stopped, action failure surfaced                     # WORKFLOW_FAILED
 
-Next steps:
-  /clear                       # fresh context before the next task (recommended)
-  hero-skills:one-shot         # start the next small task ticket-to-merge
-  hero-skills:reset-branch     # if you abandoned work mid-flight instead of merging
+Next step: (one only — omit for REQUEST_CHANGES/WORKFLOW_FAILED, already covered by 7c/7d)
 ```
+
+- Merged → `/clear` — plain suggestion, not Skill-tool invocable, no y/N offer.
+- Abandoning mid-flight → `hero-skills:abandon-branch` — restricted, print only.
+
+Skip `hero-skills:one-shot`; it's not the deterministic next action.
 
 ## Notes
 
