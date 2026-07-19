@@ -2,7 +2,7 @@
 name: push-pr
 # prettier-ignore
 description: Test (verify + smoke), commit, push, and open a draft PR with a CI report. Pass test to run only the test phase, ready for a non-draft PR, or a target branch to merge into.
-argument-hint: "[test|ready|target-branch]"
+argument-hint: "[test [MODIFIER...]|ready|target-branch]"
 ---
 
 # Push — Test, Commit, Push, Draft PR, and Merge Workflow
@@ -13,11 +13,11 @@ The test phase (Step 2) absorbed the former `hero-skills:test-changes` skill —
 
 ## Arguments
 
-- `$ARGUMENTS` - Optional modifier or target branch:
+- `$ARGUMENTS` - Optional mode keyword or target branch. Only the **first** whitespace-separated token is matched against the keywords below (exact match, not prefix) — a branch literally named `test` or `ready` cannot be targeted this way and needs a rename or a manual `git merge` instead:
   - (none, default) - Test, commit if dirty, push, and create a **draft** PR
-  - `test` - Run only Step 2 (verification + smoke tests) and stop — no commit, no push. Optional trailing tokens narrow the run: `verify` (static checks + unit tests only), `smoke` (skip verification), `backend`, `frontend [routes...]` (routes must start with `/`), `cli`, `mcp`, or a free-text test description
+  - `test [MODIFIER...]` - Run only Step 2 (verification + smoke tests) and stop — no commit, no push. Optional trailing tokens narrow the run: `verify` (static checks + unit tests only), `smoke` (skip verification), `backend`, `frontend [routes...]` (routes must start with `/`), `cli`, `mcp`, or free text (a test description to focus on)
   - `ready` - Test, commit if dirty, push, and create a non-draft PR (ready for review immediately) — only use when you have already self-reviewed or for trivial changes
-  - If a branch name (e.g., `main`, `develop`): Test, commit if dirty, push, then merge into that target branch (no PR)
+  - Any other first token - Treated as a target branch name (e.g., `main`, `develop`): test, commit if dirty, push, then merge into that branch (no PR)
 
 ## Instructions
 
@@ -54,7 +54,13 @@ If `HERO.md` is missing, suggest `hero-skills:init-hero` but proceed with defaul
 
 ### Step 1: Branch if on Default Branch
 
-**If `$ARGUMENTS` starts with `test`, skip this step** — a test-only run commits nothing, so it may run on any branch, including the default.
+```bash
+FIRST_ARG=$(printf '%s' "$ARGUMENTS" | awk '{print $1}')
+```
+
+Parse only the first whitespace-separated token — a target branch that happens to start with `test` (e.g. `testing`, `test-staging`) must not be misread as the `test` keyword.
+
+**If `$FIRST_ARG` is exactly `test`, skip this step** — a test-only run commits nothing, so it may run on any branch, including the default.
 
 Never commit or push directly to the default branch.
 
@@ -154,7 +160,17 @@ Use commands from `HERO.md` **Code Quality** and **Projects** sections when avai
 - **Typecheck:** `uv run mypy "${CHANGED_FILES[@]}"` (Python), `npx tsc --noEmit` (TS)
 - **Unit tests:** the `test-command` from HERO.md per project; else `uv run pytest` / `npm test`. If a test file maps directly to a changed source file, prefer running just those tests for speed.
 
-Report the verification result:
+Then, a scoped pre-commit dry-run — this is the only place a `push-pr test` run (which stops before Step 3) ever exercises pre-commit, so skipping it here would mean commit-hook regressions surface only in a real commit:
+
+```bash
+if command -v pre-commit > /dev/null 2>&1; then
+  pre-commit run --files "${CHANGED_FILES[@]}"
+else
+  echo "NO_PRECOMMIT"
+fi
+```
+
+Report the verification result — `NO_PRECOMMIT` means pre-commit isn't installed; report that case as `SKIPPED`:
 
 ```
 Verification
@@ -162,6 +178,7 @@ Verification
 Lint:      PASSED (0 issues)
 Typecheck: PASSED (0 errors)
 Unit tests: 42 passed, 0 failed
+Pre-commit: PASSED (or SKIPPED if NO_PRECOMMIT)
 ```
 
 If any check fails, apply the failure semantics above — mechanical fixes are fixed and re-run; judgment calls stop the skill before the smoke tests.
@@ -522,7 +539,7 @@ Smoke Tests:
     Result:      OK | FAILED at ROUTE — REASON
 ```
 
-**If `$ARGUMENTS` started with `test`, STOP here** — the test-only run is complete. Suggest `/simplify` and a plain `hero-skills:push-pr` as next steps. Otherwise continue to Step 3.
+**If `$FIRST_ARG` (from Step 1) is exactly `test`, STOP here** — the test-only run is complete. Suggest `/simplify` and a plain `hero-skills:push-pr` as next steps. Otherwise continue to Step 3.
 
 ### Step 3: Commit Dirty Changes (Smart Commit)
 
