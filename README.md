@@ -196,6 +196,34 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 | `hero-skills:abandon-branch` | Abandon or pause an unmerged branch — stash uncommitted work, switch to default, clear context |
 | `hero-skills:audit-plugin` | Audit the hero-skills plugin itself for quality and consistency |
 
+## Updating vendored assets in a downstream repo
+
+`scripts/install-design-system.sh` and `scripts/install-auto-approve.sh` copy
+files *into* consuming repos (`.claude/rules/`, `.claude/hooks/`). Those copies
+are vendored, not authored: fix bugs here, then re-vendor.
+
+To refresh a consuming repo after a fix lands upstream:
+
+```bash
+"$PLUGIN_ROOT/scripts/install-design-system.sh" /path/to/repo
+```
+
+The installer **never overwrites a file that differs**. On drift it writes
+`<file>.new` beside the original and exits 2, leaving you to reconcile:
+
+```bash
+diff .claude/hooks/check-design-tokens.sh{,.new}
+```
+
+**Read that diff in both directions before taking `.new`.** Drift is not always
+upstream-is-newer. A consuming repo can carry a genuine improvement that was
+never back-ported, and blindly accepting `.new` silently reverts it — for a
+*check*, that reads as "still installed" while no longer catching what it used
+to. Back-port the downstream improvement here first, then re-vendor, so both
+sides converge on one version instead of alternating.
+
+Exit 2 means "you have a decision to make", not "it failed".
+
 ## HERO.md
 
 Every skill reads `HERO.md` from your repo root. It declares your stack so skills don't have to guess. **HERO.md is committed to the repo** — it's team-shared, so every developer and every skill works from the same config.
