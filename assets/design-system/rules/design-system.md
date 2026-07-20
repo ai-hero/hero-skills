@@ -10,14 +10,20 @@ paths:
 
 UI comes from AI Hero's private shadcn registry (`@aihero`) — not from scratch,
 not from stock shadcn. **Before writing any component, search the registry.**
-There are ~160 items (button, card, field, table, chart-\*, app-shell, top-bar,
-landing-page, …):
+There are ~80 installable components (66 primitives + 12 blocks: button, card,
+field, table, chart-\*, app-shell, top-bar, landing-page, …) alongside ~80
+usage examples:
 
 ```bash
-npx shadcn@latest search @aihero -q "WHAT_YOU_NEED"
-npx shadcn@latest view @aihero/ITEM      # inspect the API first
-npx shadcn@latest add @aihero/ITEM
+npx shadcn@latest search @aihero -q "WHAT_YOU_NEED" -c PATH_TO_UI
+npx shadcn@latest view @aihero/ITEM -c PATH_TO_UI   # inspect the API first
+npx shadcn@latest add @aihero/ITEM -c PATH_TO_UI
 ```
+
+`-c` is not decoration: it sets the CLI's working directory, which is both
+where `components.json` is read and where `.env` is looked up (see **Auth**).
+Prefer the repo's task-runner wrapper (`just ui-add …`) where one exists — it
+passes `-c` and exports the token.
 
 Hand-rolling a component that already exists in the registry is the primary
 defect this rule prevents.
@@ -99,17 +105,25 @@ the only registry variable this project needs. **Never commit it.**
 
 Two placements work, and only these two:
 
-1. **Exported before the CLI runs** — e.g. a task-runner recipe that sources the
+1. **Exported before the CLI runs** — e.g. a task-runner recipe that reads the
    repo-root `.env`. Preferred when the repo already keeps secrets at the root,
-   since it avoids a second copy.
-2. **In the `.env` next to `components.json`** — for a UI at `ui/`, that means
-   `ui/.env`, not the repo root.
+   since it avoids a second copy of the token.
+2. **In the `.env` inside the CLI's `--cwd`** — for `-c ui`, that means
+   `ui/.env`.
 
-A token placed only in the repo-root `.env` and left for the CLI to discover
-**fails**: the CLI resolves env relative to the config directory, not the working
-directory. The error is `Set the required environment variables to your .env or
-.env.local file`, which reads as a missing value rather than a wrong directory —
-easy to misdiagnose. Verified against shadcn 4.13.
+The trap: the CLI loads `.env` from its **`--cwd`** (defaulting to the process's
+working directory), *not* from the repo root and *not* from wherever
+`components.json` happens to live. Those last two are easy to conflate, because
+`-c ui` points at the directory that holds `components.json` — but env is
+resolved first, before that file is even located, so a token in the repo-root
+`.env` with `-c ui` is never read. The error is `Set the required environment
+variables to your .env or .env.local file`, which reads as a missing value
+rather than a wrong directory. Verified against shadcn 4.13.1, whose loader is
+`join(options.cwd, ".env.local"|".env.development"|".env")`.
+
+Do not "simplify" this to "it reads `.env` next to `components.json`" — that
+restatement holds only while `--cwd` and the config directory coincide, and it
+tells the next reader that `-c` is irrelevant to token discovery.
 
 In `components.json` write the plain `${REGISTRY_TOKEN}` form only — the CLI regex
 is `/\$\{(\w+)\}/g`, so `${VAR:-default}` ships as a literal string and surfaces
