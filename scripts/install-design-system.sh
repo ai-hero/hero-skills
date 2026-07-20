@@ -112,10 +112,37 @@ else
   fi
 fi
 
+# --- Warn if what we just wrote is gitignored -------------------------------
+# A blanket `.claude/*` rule is common, and it makes these files local-only:
+# the installer reports success, the rule works on this machine, and every
+# teammate and CI agent silently gets nothing. Surface it loudly — a
+# half-installed enforcement layer is worse than none, because it looks done.
+IGNORED=()
+if git -C "$TARGET_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  for f in .claude/rules/design-system.md .claude/hooks/check-design-tokens.sh .claude/settings.json; do
+    if git -C "$TARGET_ROOT" check-ignore -q "$f" 2>/dev/null; then
+      IGNORED+=("$f")
+    fi
+  done
+fi
+
 echo ""
 echo "Design-system enforcement installed."
 echo "  Rule:  .claude/rules/design-system.md  (loads on **/*.{tsx,jsx,css})"
 echo "  Hook:  .claude/hooks/check-design-tokens.sh  (advisory; DESIGN_TOKENS_STRICT=1 to enforce)"
+
+if [[ ${#IGNORED[@]} -gt 0 ]]; then
+  echo ""
+  echo "WARNING: these files are gitignored, so they are LOCAL-ONLY:"
+  printf '  - %s\n' "${IGNORED[@]}"
+  echo ""
+  echo "Enforcement will work on this machine and nowhere else. If the repo"
+  echo "uses a blanket '.claude/*' rule, add negations so clones inherit them:"
+  echo "  !.claude/rules/"
+  echo "  !.claude/hooks/"
+  echo "  !.claude/settings.json"
+  echo "(Keep .claude/settings.local.json ignored — that one is personal.)"
+fi
 
 [[ $DRIFT -eq 1 ]] && exit 2
 exit 0

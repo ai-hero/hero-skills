@@ -73,7 +73,7 @@ Semantic classes only — `bg-background`, `text-muted-foreground`, `border-inpu
 
 Vendored registry code stays flat; this app's own components are atomic:
 
-```
+```text
 src/components/
 ├── ui/          # vendored registry primitives  — never edit
 ├── blocks/      # vendored registry sections    — never edit
@@ -97,15 +97,22 @@ types. `organisms` may hold domain types but still receive data via props.
 `REGISTRY_TOKEN` (a Personal Access Token from `auth.aihero.studio/profile`) is
 the only registry variable this project needs. **Never commit it.**
 
-It must live in the `.env` **next to `components.json`** — not the repo-root
-`.env`, even where that is the house convention for every other secret. The CLI
-resolves env relative to the config directory, not the working directory; a
-root-level token fails with `Set the required environment variables to your .env
-or .env.local file`, which misleadingly reads as a missing variable. Exporting
-`REGISTRY_TOKEN` in the shell works too and avoids a second copy of the secret.
+Two placements work, and only these two:
+
+1. **Exported before the CLI runs** — e.g. a task-runner recipe that sources the
+   repo-root `.env`. Preferred when the repo already keeps secrets at the root,
+   since it avoids a second copy.
+2. **In the `.env` next to `components.json`** — for a UI at `ui/`, that means
+   `ui/.env`, not the repo root.
+
+A token placed only in the repo-root `.env` and left for the CLI to discover
+**fails**: the CLI resolves env relative to the config directory, not the working
+directory. The error is `Set the required environment variables to your .env or
+.env.local file`, which reads as a missing value rather than a wrong directory —
+easy to misdiagnose. Verified against shadcn 4.13.
 
 In `components.json` write the plain `${REGISTRY_TOKEN}` form only — the CLI regex
 is `/\$\{(\w+)\}/g`, so `${VAR:-default}` ships as a literal string and surfaces
 as a confusing 401.
 
-Full procedure: `hero-skills:upgrade-ui`.
+Full procedure: `hero-skills:recomponentize-ui`.
