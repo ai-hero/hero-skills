@@ -111,8 +111,14 @@ if ! jq -e . "$SETTINGS" >/dev/null 2>&1; then
   exit 1
 fi
 
-if jq -e --arg cmd "$HOOK_CMD" \
-  '[.hooks.PostToolUse[]?.hooks[]?.command] | index($cmd)' \
+# Match on the hook's PATH appearing in an existing command, not on exact
+# string equality with $HOOK_CMD. A prior install (or a hand-edit) commonly
+# writes ${CLAUDE_PROJECT_DIR} (braced) where this script's own HOOK_CMD is
+# unbraced — both expand identically in the shell that runs it, but an exact
+# match sees them as different strings and adds a SECOND PostToolUse entry
+# for the same hook, which then runs check-design-tokens.sh twice per edit.
+if jq -e \
+  '[.hooks.PostToolUse[]?.hooks[]?.command] | any(test("check-design-tokens\\.sh"))' \
   "$SETTINGS" >/dev/null 2>&1; then
   echo "OK: PostToolUse hook already wired in $SETTINGS"
 else
