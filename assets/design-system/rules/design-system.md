@@ -94,10 +94,18 @@ types. `organisms` may hold domain types but still receive data via props.
 
 ## Auth
 
-`REGISTRY_TOKEN` (a Personal Access Token from `auth.aihero.studio/profile`) lives
-in `.env` and is the only registry variable this project needs. **Never commit
-it.** In `components.json` write the plain `${REGISTRY_TOKEN}` form only — the CLI
-regex is `/\$\{(\w+)\}/g`, so `${VAR:-default}` ships as a literal string and
-surfaces as a confusing 401.
+`REGISTRY_TOKEN` (a Personal Access Token from `auth.aihero.studio/profile`) is
+the only registry variable this project needs. **Never commit it.**
+
+It must live in the `.env` **next to `components.json`** — not the repo-root
+`.env`, even where that is the house convention for every other secret. The CLI
+resolves env relative to the config directory, not the working directory; a
+root-level token fails with `Set the required environment variables to your .env
+or .env.local file`, which misleadingly reads as a missing variable. Exporting
+`REGISTRY_TOKEN` in the shell works too and avoids a second copy of the secret.
+
+In `components.json` write the plain `${REGISTRY_TOKEN}` form only — the CLI regex
+is `/\$\{(\w+)\}/g`, so `${VAR:-default}` ships as a literal string and surfaces
+as a confusing 401.
 
 Full procedure: `hero-skills:upgrade-ui`.

@@ -114,8 +114,25 @@ repo's config points at localhost and aliases `ui` to its internal atomic dir.
 Those are wrong in a consumer.
 
 If the project has a committed `.env`, rename it to `.env.example`, strip the
-value, and gitignore the real one. Never commit a token. In a monorepo, the token
-must resolve from the workspace the CLI runs in.
+value, and gitignore the real one. Never commit a token.
+
+**Trap — `.env` must sit next to `components.json`, not in the cwd.** Verified
+empirically against shadcn 4.13:
+
+| `.env` location | cwd | Result |
+|---|---|---|
+| repo root | repo root, `-c ui` | **fails** |
+| repo root | `ui/` | fails |
+| `ui/` | repo root, `-c ui` | works |
+| `ui/` | `ui/` | works |
+| none, `REGISTRY_TOKEN` exported | anywhere | works |
+
+So in a monorepo whose UI lives in `ui/`, the token goes in `ui/.env` even when
+the repo's house convention keeps every other secret in a root `.env`. A root
+`.env` produces `Set the required environment variables to your .env or
+.env.local file` — which reads like a missing variable rather than a
+wrong-directory problem, so it is easy to misdiagnose. Exporting the variable in
+the shell or a task-runner recipe also works and beats duplicating the secret.
 
 Confirm the wiring before going further — install the theme item first so tokens
 land before any component references them:
