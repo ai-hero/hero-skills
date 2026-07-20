@@ -22,8 +22,8 @@ Print the DAG line at the start of each step. Substep groups in this skill map t
 
 - Step 3 (Deep Investigation) → `investigate`
 - Step 4 (Synthesize Findings into Smart Questions) → `confirm`
-- Steps 5, 6, and 6a (write HERO.md, validate with the user, optionally install auto-approve workflow) → `write`
-- Step 7 (Commit HERO.md) → `commit`
+- Steps 5, 6, 6a, and 6b (write HERO.md, validate with the user, optionally install the auto-approve workflow and the design-system enforcement layer) → `write`
+- Step 7 (Commit HERO.md + AGENTS.md) → `commit`
 
 Format:
 
@@ -58,24 +58,56 @@ Each skill needs specific information to work well. This skill figures out what'
 | `hero-skills:respond-to-comments` | Code Review Agent (agent, trigger, poll-method, bot-username) |
 | `hero-skills:ship-pr` | CI/CD (auto-approve workflow installed on default branch), Repository (default branch), deployment platform, namespaces, ArgoCD, health check endpoints |
 | `hero-skills:init-hero --update` | All sections — re-investigates and refreshes HERO.md on demand |
+| `hero-skills:recomponentize-ui` | Design System (role, namespace, registry-url, token-env-var, atomic-layers), frontend project paths |
 | `hero-skills:audit-plugin` | (internal) Plugin structure validation |
 
 ## Instructions
 
-### Step 1: Ensure Claude Code is Initialized
+### Step 1: Establish AGENTS.md as the Agent Instructions File
+
+**House standard: `AGENTS.md` is the real file; `CLAUDE.md` is a symlink to it.**
+
+`AGENTS.md` is the cross-agent open standard (agents.md) — Cursor, Copilot, and others read it. Claude Code reads `CLAUDE.md`. A symlink means one file serves every agent with zero duplication and no drift between them. **Always write content to `AGENTS.md`, never to `CLAUDE.md`.**
+
+Detect the current state — note that `-L` must be tested *before* `-f`, since `-f` is true for a symlink pointing at an existing file:
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-ls "$ROOT/CLAUDE.md" 2>/dev/null && echo "CLAUDE_EXISTS" || echo "CLAUDE_NEW"
+cd "$ROOT"
+
+if [ -L CLAUDE.md ]; then
+  TARGET=$(readlink CLAUDE.md)
+  [ "$TARGET" = "AGENTS.md" ] && echo "STATE=CORRECT" || echo "STATE=SYMLINK_WRONG_TARGET target=$TARGET"
+elif [ -f CLAUDE.md ] && [ -f AGENTS.md ]; then
+  echo "STATE=BOTH_REGULAR_FILES"
+elif [ -f CLAUDE.md ]; then
+  echo "STATE=CLAUDE_ONLY"
+elif [ -f AGENTS.md ]; then
+  echo "STATE=AGENTS_ONLY"
+else
+  echo "STATE=NEITHER"
+fi
 ```
 
-**If `CLAUDE.md` does NOT exist:**
+Act on the state. **Never delete a `CLAUDE.md` whose content is not already preserved in `AGENTS.md`.**
 
-- Create `CLAUDE.md` at the repo root with a scaffold that includes Tech Stack and Best Practices sections (content will be filled in Step 5 after investigation).
-- For now, create the file with placeholder sections:
+| State | Action |
+|-------|--------|
+| `CORRECT` | Nothing to do. Edit `AGENTS.md` in Step 5. |
+| `NEITHER` | Create `AGENTS.md` with the scaffold below, then `ln -s AGENTS.md CLAUDE.md`. |
+| `AGENTS_ONLY` | Create the symlink: `ln -s AGENTS.md CLAUDE.md`. |
+| `CLAUDE_ONLY` | Rename, then link: `git mv CLAUDE.md AGENTS.md && ln -s AGENTS.md CLAUDE.md`. Content is preserved by the rename — nothing is lost. |
+| `BOTH_REGULAR_FILES` | **Stop and ask the user.** Two independent files exist. Show a diff, propose merging `CLAUDE.md`'s unique content into `AGENTS.md`, and only replace `CLAUDE.md` with a symlink once the user confirms the merge. Never silently discard either file. |
+| `SYMLINK_WRONG_TARGET` | Report it and ask. Do not repoint a symlink the user aimed somewhere deliberately. |
+
+For `CLAUDE_ONLY`, use `git mv` when the file is tracked so history follows the rename; fall back to plain `mv` if git reports it is untracked.
+
+Scaffold for a new `AGENTS.md` (content is filled in during Step 5):
 
 ```markdown
-# CLAUDE.md
+# AGENTS.md
+
+<!-- CLAUDE.md is a symlink to this file. Edit AGENTS.md, never CLAUDE.md. -->
 
 ## Tech Stack
 <!-- Auto-managed by hero-skills:init-hero. See HERO.md for full configuration. -->
@@ -90,15 +122,17 @@ See [HERO.md](./HERO.md) for project conventions, code quality tools, and CI/CD 
 See [HERO.md](./HERO.md) for coding conventions detected from the codebase.
 ```
 
-**If `CLAUDE.md` DOES exist:**
+**If `AGENTS.md` already has content:**
 
-- Read it and check whether it already has `## Tech Stack`, `## Best Practices`, and `## Coding Conventions` sections.
-- If either section is **missing**, append it to the end of the file.
-- If a section exists but does **not** reference `HERO.md`, add a reference line:
+- Read it and check for `## Tech Stack`, `## Best Practices`, and `## Coding Conventions`.
+- If a section is **missing**, append it.
+- If a section exists but does **not** reference `HERO.md`, add:
   `See [HERO.md](./HERO.md) for details managed by hero-skills:init-hero.`
-- **Do not** remove or overwrite any existing content the user has written in these sections — only add the HERO.md pointer if absent.
+- **Do not** remove or overwrite content the user wrote — only add the pointer if absent.
 
-**Why this matters:** CLAUDE.md is loaded into Claude's context at conversation start. Without a reference to HERO.md here, Claude won't know to consult HERO.md for tech stack decisions (e.g., using OpenTofu instead of Terraform, or a specific framework) or coding conventions (e.g., snake_case, structured logging, no DB mocks in tests). The pointer ensures Claude always reads HERO.md for authoritative project configuration.
+**Windows note:** symlinks need Developer Mode or elevated privileges. If `ln -s` fails, fall back to a regular `CLAUDE.md` containing a single line — `See [AGENTS.md](./AGENTS.md).` — and tell the user why.
+
+**Why this matters:** `AGENTS.md`/`CLAUDE.md` is loaded into context at conversation start. Without a HERO.md reference, Claude won't consult HERO.md for tech stack decisions (OpenTofu vs Terraform) or coding conventions (snake_case, structured logging, no DB mocks). The pointer ensures Claude reads HERO.md for authoritative configuration — and it survives context compaction, which loaded skills may not.
 
 ### Step 2: Check for Existing HERO.md Configuration
 
@@ -118,7 +152,7 @@ Detect which AI coding agent(s) the team uses. This must come first — it deter
 
 ```bash
 # Claude Code
-ls .claude/ .claude-plugin/ CLAUDE.md .claude/settings.json 2>/dev/null
+ls .claude/ .claude-plugin/ AGENTS.md CLAUDE.md .claude/settings.json 2>/dev/null
 ls .claude/hooks/ 2>/dev/null
 cat .claude/settings.json 2>/dev/null
 
@@ -142,7 +176,7 @@ grep -r "claude\|cursor\|copilot\|windsurf\|aider" .pre-commit-config.yaml 2>/de
 
 **What to look for:**
 
-- `.claude/` directory or `CLAUDE.md` → Claude Code user — can use hooks, skills, MCP servers
+- `.claude/` directory or `AGENTS.md`/`CLAUDE.md` → Claude Code user — can use hooks, skills, MCP servers
 - `.cursorrules` or `.cursor/rules/` → Cursor user — rules files, no hook system
 - `.github/copilot-instructions.md` → Copilot user — instructions file
 - `.windsurfrules` → Windsurf user — rules file
@@ -181,6 +215,44 @@ gh api "/repos/{owner}/{repo}/installation" --jq '{app_slug, app_name}' 2>/dev/n
 
 **If no review agent detected**, set `agent: none`. Optionally ask:
 *"Does your team use an automated code review bot (Greptile, CodeRabbit, Copilot review, etc.)?"*
+
+#### 3b-2: Design System & UI Registry
+
+Only relevant when the project has a frontend. Skip entirely if there is no UI.
+
+```bash
+# Is there a UI at all?
+ls components.json 2>/dev/null
+grep -lE '"(react|vue|svelte|next|@angular/core)"' package.json 2>/dev/null
+ls -d src/components components app/components 2>/dev/null
+
+# Already wired to a registry?
+grep -A6 '"registries"' components.json 2>/dev/null
+
+# PRODUCER signals — this repo PUBLISHES a design system rather than consuming one
+ls registry.json 2>/dev/null
+ls -d registry-dist 2>/dev/null
+grep -rl "shadcn build" package.json scripts/ 2>/dev/null
+grep -o '"ui": *"[^"]*"' components.json 2>/dev/null
+
+# Existing UI library, if any
+grep -oE '"(@mui/material|@chakra-ui/react|@mantine/core|antd|@radix-ui/[a-z-]+)"' package.json 2>/dev/null | sort -u
+
+# Atomic structure already present?
+ls -d src/components/{atoms,molecules,organisms,templates} 2>/dev/null
+
+# Token discipline — how much drift exists today
+grep -rlE '#[0-9a-fA-F]{3,6}\b' --include="*.tsx" src/ 2>/dev/null | wc -l
+```
+
+**What to look for:**
+
+- `registry.json` + `registry-dist/` + a `shadcn build` script → this repo is a **producer**. Set `role: producer` in HERO.md so `hero-skills:recomponentize-ui` refuses to run here. A registry repo's pipeline is mockup → design system; consuming its own output would invert it.
+- `components.json` with a `registries` block → already a consumer; read the namespace and URL from it rather than asking.
+- `components.json` whose `"ui"` alias points at an internal atomic dir (e.g. `@/components/atoms`) rather than `@/components/ui` → another producer signal.
+- A frontend with no `components.json` → candidate consumer. Ask (see Group 6).
+- Existing MUI/Chakra/Mantine/Ant → note it. **Never propose migrating UI libraries during init** — that is a project, not a config decision.
+- Atomic dirs already present → record `atomic-layers: true`.
 
 #### 3c: Repository & Collaboration Model
 
@@ -462,8 +534,8 @@ Investigate the codebase for established conventions the team follows. These are
 ls CONTRIBUTING.md STYLE_GUIDE.md docs/CONVENTIONS.md docs/STYLE*.md 2>/dev/null
 cat CONTRIBUTING.md 2>/dev/null | head -80
 
-# Existing CLAUDE.md for conventions already documented
-cat CLAUDE.md 2>/dev/null
+# Existing agent instructions for conventions already documented
+cat AGENTS.md 2>/dev/null
 
 # Import style — relative vs absolute, aliased paths
 # (sample 5-10 source files from different directories)
@@ -622,6 +694,18 @@ Do NOT offer to install a pre-commit hook for `hero-skills:init-hero --update`. 
   - If the user says yes, run the install in Step 6a below.
   - If the workflow exists locally but is not on the default branch yet, remind the user that `@auto-approve` will be a no-op until that file lands on the default branch.
 
+#### Group 6: "For UI work" (`hero-skills:recomponentize-ui`)
+
+Skip this group entirely for projects with no frontend.
+
+- **Producer detected** (`registry.json` / `registry-dist/` / `shadcn build`): do not ask whether to adopt a design system. Confirm instead:
+  *"This repo publishes a design system. I'll set `role: producer` so `hero-skills:recomponentize-ui` refuses to run here — it would try to consume this repo's own output. Correct?"*
+- **Consumer already wired** (`registries` block present): confirm the namespace and URL read from `components.json`; no question needed.
+- **Frontend, no registry**: ask once —
+  *"Use the AI Hero design system (`@aihero`, <https://design.aihero.studio>) for UI in this project? It needs a `REGISTRY_TOKEN` in `.env` — a Personal Access Token from auth.aihero.studio/profile. Choosing no keeps stock shadcn / your current UI library; `hero-skills:recomponentize-ui` still does the atomic refactor either way."*
+- If yes, also ask: *"Install the enforcement layer (`.claude/rules/design-system.md` + a PostToolUse token check)? It is what makes the constraints apply reliably rather than only when a skill happens to trigger."* If the user agrees, run the install in Step 6b.
+- **Never** propose migrating off an existing UI library here.
+
 #### Group 5: "Coding conventions for consistent code" (all skills that write code)
 
 - Naming conventions (functions, files, folders)
@@ -750,7 +834,7 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - primary: claude-code # or cursor, windsurf, copilot, aider
 - agents: AGENT_LIST # list all if team uses multiple
 - hooks: true # or false — whether the agent supports pre-commit/hook integration
-- rules-file: CLAUDE.md # or .cursorrules, .windsurfrules, copilot-instructions.md, none
+- rules-file: AGENTS.md # CLAUDE.md is a symlink to it; or .cursorrules, .windsurfrules, copilot-instructions.md
 <!-- HERO.md is refreshed on demand by `hero-skills:init-hero --update`.
      Skills detect when HERO.md is stale (project config newer than HERO.md)
      and prompt the user to run the refresh themselves. There is no
@@ -801,6 +885,36 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - argocd: true # or false
 - namespaces:
   - NAMESPACE
+
+## Design System
+<!-- Used by hero-skills:recomponentize-ui. Omit this whole section for projects
+     with no frontend. -->
+- role: consumer # or producer
+<!-- producer = this repo PUBLISHES the design system (builds registry.json,
+     serves /r/*). hero-skills:recomponentize-ui refuses to run in a producer
+     repo: its pipeline is mockup -> design system, and consuming its own
+     output would invert that. Setting `enabled: false` has the same effect. -->
+- namespace: "@aihero"
+- registry-url: https://design.aihero.studio/r/{name}.json
+- token-env-var: REGISTRY_TOKEN
+<!-- A Personal Access Token from auth.aihero.studio/profile, kept in .env and
+     never committed. In components.json use the plain ${REGISTRY_TOKEN} form
+     only — the CLI expands /\$\{(\w+)\}/g, so ${VAR:-default} ships as a
+     literal string and surfaces as a confusing 401. -->
+- docs: https://design.aihero.studio
+- handbook: handbook/consuming-the-registry.md # in the ai-hero/design-system repo
+- atomic-layers: true # app components use atoms/molecules/organisms/templates
+- enforcement: rules+hook # or none
+<!-- rules+hook installs .claude/rules/design-system.md (path-scoped to UI files)
+     and a PostToolUse token check. These apply regardless of whether a skill
+     triggers; a skill alone depends on model discretion. -->
+
+<!-- For a project with a frontend but no design system, record the source so
+     recomponentize-ui knows what to pull primitives from:
+- role: consumer
+- source: shadcn        # or mui, chakra, mantine, antd, none
+- atomic-layers: true
+-->
 
 ## Code Quality
 - pre-commit: true # or false
@@ -910,7 +1024,7 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 
 **Only include sections that are relevant.** If there's no CI/CD, no deployment, etc., omit those sections entirely rather than filling them with "none". Keep it clean.
 
-**Also update CLAUDE.md Tech Stack and Best Practices sections** with a human-readable summary of the key findings. This ensures Claude has immediate context without needing to parse HERO.md. Example:
+**Also update `AGENTS.md` Tech Stack and Best Practices sections** (never write to `CLAUDE.md` — it is a symlink) with a human-readable summary of the key findings. This ensures Claude has immediate context without needing to parse HERO.md. Example:
 
 ```markdown
 ## Tech Stack
@@ -1050,32 +1164,81 @@ Next steps before hero-skills:ship-pr will work:
   3. Add ANTHROPIC_API_KEY in repo settings -> Secrets and variables -> Actions
 ```
 
+### Step 6b: Optionally Install Design-System Enforcement
+
+If the user opted in during Group 6, install the rule + hook. Same exit-code contract as Step 6a — branch on it explicitly rather than assuming success:
+
+```bash
+DS_RC=255
+DS_OK=false
+
+if [ -n "$PLUGIN_ROOT" ] && [ -x "$PLUGIN_ROOT/scripts/install-design-system.sh" ]; then
+  set +e
+  "$PLUGIN_ROOT/scripts/install-design-system.sh" "$ROOT"
+  DS_RC=$?
+  set -e
+else
+  echo "Could not locate scripts/install-design-system.sh in the plugin root."
+fi
+
+case "$DS_RC" in
+  0) DS_OK=true ;;
+  2)
+    echo ""
+    echo "An existing rule or hook differs from the plugin's; .new files were written."
+    echo "Diff and reconcile before committing. Skipping auto-stage."
+    ;;
+  255) ;;
+  *) echo "Installer failed with exit code $DS_RC. Investigate before committing." ;;
+esac
+```
+
+`$PLUGIN_ROOT` is resolved in Step 6a — run that lookup first if Step 6a was skipped.
+
+Remind the user only when the install succeeded:
+
+```
+Design-system enforcement installed.
+  .claude/rules/design-system.md      — loads on **/*.{tsx,jsx,css}
+  .claude/hooks/check-design-tokens.sh — advisory; DESIGN_TOKENS_STRICT=1 to enforce
+
+Next: add REGISTRY_TOKEN to .env (never commit it), then run
+hero-skills:recomponentize-ui to migrate the UI.
+```
+
 ### Step 7: Commit HERO.md
 
 Always commit `HERO.md` to the repo. Do NOT ask whether to commit or whether to add it to `.gitignore`. Stage and commit it immediately after user confirmation in Step 6 (and Step 6a if the workflow was installed).
 
 Only stage the workflow file when Step 6a reported the file is in sync with the plugin (`INSTALL_OK=true`, covering both the fresh-install and already-up-to-date paths). When the installer returned exit 2 (`EXISTS`, drift detected), the working file is still the user's original — committing it now would falsely claim `hero-skills:init-hero` installed the new version.
 
+**Stage `AGENTS.md`, not just `CLAUDE.md`.** `CLAUDE.md` is a symlink, so staging it alone commits the link and silently drops every content change — those live in `AGENTS.md`. Stage both: the symlink itself needs committing the first time it is created.
+
 ```bash
-FILES_TO_ADD=("HERO.md" "CLAUDE.md")
+FILES_TO_ADD=("HERO.md" "AGENTS.md" "CLAUDE.md")
 if [ "${INSTALL_OK:-false}" = "true" ] && [ -f .github/workflows/auto-approve.yml ]; then
   FILES_TO_ADD+=(".github/workflows/auto-approve.yml")
 fi
+if [ "${DS_OK:-false}" = "true" ]; then
+  FILES_TO_ADD+=(".claude/rules/design-system.md" ".claude/hooks/check-design-tokens.sh" ".claude/settings.json")
+fi
 git add "${FILES_TO_ADD[@]}"
-git commit -m "chore: initialize HERO.md and update CLAUDE.md via hero-skills:init-hero"
+git commit -m "chore: initialize HERO.md and update AGENTS.md via hero-skills:init-hero"
 ```
+
+Never stage `.env`. If Group 6 added a `REGISTRY_TOKEN`, confirm `.gitignore` covers `.env` before committing anything.
 
 ## --update Mode
 
 When `--update` is passed:
 
-1. Read existing `HERO.md` and `CLAUDE.md`
+1. Read existing `HERO.md` and `AGENTS.md`, and re-check the CLAUDE.md symlink state from Step 1
 2. Re-run full investigation (Step 3, all sub-steps)
 3. Compare findings against current config — flag what changed, what's new, and what was removed
 4. Show only deltas: `[CHANGED]`, `[NEW]`, `[REMOVED]` markers
 5. Ask user to confirm updates
 6. Preserve any custom content or comments the user added to both files
-7. Write updated `HERO.md` and refresh `CLAUDE.md` summary sections
+7. Write updated `HERO.md` and refresh the `AGENTS.md` summary sections
 
 ## Key Principles
 
