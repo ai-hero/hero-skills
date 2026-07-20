@@ -130,3 +130,13 @@ is `/\$\{(\w+)\}/g`, so `${VAR:-default}` ships as a literal string and surfaces
 as a confusing 401.
 
 Full procedure: `hero-skills:recomponentize-ui`.
+
+## This repo's own exceptions
+
+**Read `.claude/rules/design-system.local.md` before touching `ui/` in this
+repo.** It holds facts specific to this codebase that the rules above cannot
+know — an app-authored file with no registry equivalent, a migration already in
+progress, a lint rule not yet wired. This file (`design-system.md`) is refreshed
+from upstream when it drifts; `.local.md` is created once, empty, on first
+install, and never touched again by any installer — which is what lets it hold
+repo truth that a re-vendor of this file cannot delete.

@@ -96,6 +96,28 @@ case_ style_hex  hit  "Color literal" '<div style={{color:"#abc123"}} />'
 case_ css_plain hit  "Color literal" 'a{color:#ff0000}'          css
 case_ css_theme miss "Color literal" '@theme{--color-x:#ff0000;}' css
 
+# --- prose is not a colour literal, and neither is a whole-line comment -----
+#
+# Both once false-positived: a colour in JSX is always inside a value context
+# (a quoted string, a template literal, Tailwind's bracket notation) and prose
+# never is, so requiring one of ["'`[ immediately before # drops these without
+# guessing at hex length. The comment case is stripped as a whole-line comment
+# before the hex check ever sees it — see the hook's own comment-stripping
+# note for why that strip is line-anchored rather than to-end-of-line.
+case_ prose_hex    miss "Color literal" '<p>Visit us at Ste #1100 downtown.</p>'
+case_ prose_hex2   miss "Color literal" '<p>See issue #1234 for details.</p>'
+case_ comment_hex  miss "Color literal" '// #aabbcc is the old brand colour, kept for reference
+export const A = () => <div className="p-4">hi</div>;'
+
+# --- the bracket-notation regression this refinement almost introduced -----
+#
+# Requiring a QUOTE before # (the first draft of the fix above) silently
+# stopped catching this: Tailwind's own bracket syntax puts a real colour
+# literal after `[`, never a quote, and it is a common real way one enters a
+# component. Caught by re-running the fixed hook against every existing case
+# before vendoring it anywhere.
+case_ bracket_hex hit "Color literal" '<div className={cn("text-[#3D4AB8]")} />'
+
 # --- a broken hook must not look like a clean file --------------------------
 exit_ malformed_payload 2 'not json at all'
 exit_ empty_payload     2 ''

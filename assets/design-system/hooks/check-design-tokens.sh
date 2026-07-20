@@ -98,17 +98,44 @@ add() { FINDINGS="${FINDINGS}  - $1\n"; }
 # `[^>]*` still bounds each match to a single JSX tag, so collapsing does not
 # let a match run from one element's className into another element's body.
 SCAN_FILE="$FILE"
+
+# Strip whole-line `//` comments BEFORE collapsing newlines, on the ORIGINAL
+# file where line boundaries still mean something. A comment ends at the
+# newline that terminates it — collapse first and there is no newline left to
+# stop at, so a whole-file strip-to-first-// would delete everything after the
+# FIRST comment anywhere in the file, JSX included.
+#
+# Only a comment that is the SOLE content of its line is stripped
+# (^[[:space:]]*//), deliberately narrower than "strip from // to end of
+# line" applied post-collapse. A same-line trailing comment after real code is
+# not caught by this — accepted, because the alternative risks a much worse
+# failure: `href="https://example.com"` is not a comment, and a same-line
+# strip-from-// rule truncates everything after the URL's own `//`, silently
+# dropping a real className that followed it on the same line. A whole-line
+# comment can never contain that prefix, so this form is not exposed to it.
+NOCOMMENT_FILE=""
+SRC_FOR_NORM="$FILE"
+if NOCOMMENT_FILE="$(mktemp 2>/dev/null)" \
+  && LC_ALL=C sed -E '/^[[:space:]]*\/\//d' "$FILE" > "$NOCOMMENT_FILE" 2>/dev/null; then
+  SRC_FOR_NORM="$NOCOMMENT_FILE"
+else
+  rm -f "$NOCOMMENT_FILE"
+  echo "check-design-tokens: cannot strip comments from $FILE (encoding?)" >&2
+  exit 2
+fi
+
 NORM_FILE=""
 # LC_ALL=C makes tr/sed/grep byte-oriented. Without it, BSD tools abort with
 # "illegal byte sequence" on a single non-UTF-8 byte (a latin-1 'é', a pasted
 # smart quote) — which would either disable a check silently or, once the rc is
 # checked, fail the whole hook on an otherwise fine file. Byte mode scans it.
-if NORM_FILE="$(mktemp 2>/dev/null)" && LC_ALL=C tr '\n' ' ' < "$FILE" > "$NORM_FILE" 2>/dev/null; then
+if NORM_FILE="$(mktemp 2>/dev/null)" && LC_ALL=C tr '\n' ' ' < "$SRC_FOR_NORM" > "$NORM_FILE" 2>/dev/null; then
   SCAN_FILE="$NORM_FILE"
-  trap 'rm -f "$NORM_FILE"' EXIT
+  trap 'rm -f "$NOCOMMENT_FILE" "$NORM_FILE"' EXIT
 else
   # Losing the normalized copy means the multi-line cases silently stop being
   # checked — report rather than degrade to the bug we just fixed.
+  rm -f "$NOCOMMENT_FILE"
   echo "check-design-tokens: cannot normalize $FILE for scanning" >&2
   exit 2
 fi
@@ -174,8 +201,22 @@ if [ -z "$STRIPPED_FILE" ] \
   echo "check-design-tokens: cannot strip link attributes from $FILE (encoding?)" >&2
   exit 2
 fi
-trap 'rm -f "$NORM_FILE" "$STRIPPED_FILE"' EXIT
-if SCAN_FILE="$STRIPPED_FILE" scan '#[0-9a-fA-F]{3,8}\b|oklch\('; then
+trap 'rm -f "$NOCOMMENT_FILE" "$NORM_FILE" "$STRIPPED_FILE"' EXIT
+# A colour literal in JSX is always inside a value context — a quoted string
+# (style={{color:"#fff"}}), a template literal, or Tailwind's bracket notation
+# (bg-[#3D4AB8]) — while prose never is. Requiring one of ["'`[ immediately
+# before # is what tells "Ste #1100" (a street address) and "issue #1234" (a
+# bare reference) apart from an actual literal, without guessing at length.
+# The bracket alternative is load-bearing, not decorative: an earlier draft
+# required only a quote and silently stopped catching bg-[#3D4AB8] and
+# text-[#3D4AB8], a real and common way a colour enters a component, because
+# the character before # there is `[`, never a quote. href-ish attributes are
+# already stripped above, so this is the second and independent guard, for
+# hex-looking text that was never inside an attribute at all. {3,4}|{6}|{8}
+# are the only valid CSS hex lengths; {3,8} (the previous range) also matched
+# 5- and 7-digit runs, which are not colours in any syntax and exist only to
+# be typo'd addresses and issue numbers.
+if SCAN_FILE="$STRIPPED_FILE" scan '["'"'"'`\[]#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b|oklch\('; then
   add "Color literal (hex/oklch) in a component. Define it as a token in the @theme layer."
 fi
 
