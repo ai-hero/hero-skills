@@ -1,7 +1,7 @@
 ---
 name: create-project
 # prettier-ignore
-description: Scaffold a new project. Supports standalone repos or monorepo subprojects. Creates Python (FastAPI/CLI/library), full-stack (FastAPI + Next.js/Vite), or Node.js projects with CLAUDE.md.
+description: Scaffold a new project. Supports standalone repos or monorepo subprojects. Creates Python (FastAPI/CLI/library), full-stack (FastAPI + Next.js/Vite), or Node.js projects with AGENTS.md.
 argument-hint: PROJECT_NAME [description]
 disable-model-invocation: true
 ---
@@ -26,9 +26,9 @@ Print the DAG line at the start of each step. Format:
 Now running: setup-dev
 ```
 
-This skill drives the **scaffold** step and then invokes `hero-skills:setup-dev`, then `hero-skills:init-hero`, and finally a `git commit` of HERO.md + CLAUDE.md. Each chained skill renders its own internal DAG when it has one.
+This skill drives the **scaffold** step and then invokes `hero-skills:setup-dev`, then `hero-skills:init-hero`, and finally a `git commit` of HERO.md + AGENTS.md. Each chained skill renders its own internal DAG when it has one.
 
-**Naming note for `first-commit`:** When scaffolding a *standalone* repo, Step 6 below already creates the literal first commit (the scaffold). The pipeline's `first-commit` node refers specifically to the commit that lands `HERO.md` and `CLAUDE.md` — that's a follow-up commit on standalone repos, or simply the next commit when adding to an existing repo. See `PIPELINES.md` for the canonical definition.
+**Naming note for `first-commit`:** When scaffolding a *standalone* repo, Step 6 below already creates the literal first commit (the scaffold). The pipeline's `first-commit` node refers specifically to the commit that lands `HERO.md` and `AGENTS.md` — that's a follow-up commit on standalone repos, or simply the next commit when adding to an existing repo. See `PIPELINES.md` for the canonical definition.
 
 ## Arguments
 
@@ -171,7 +171,20 @@ npm install express typescript @types/node @types/express tsx
 npx tsc --init
 ```
 
-### Step 5: Create CLAUDE.md
+### Step 5: Create AGENTS.md (+ CLAUDE.md symlink)
+
+House standard: `AGENTS.md` is the real file and `CLAUDE.md` symlinks to it, so one
+file serves Claude Code, Cursor, and Copilot without drift. Write `AGENTS.md`, then:
+
+```bash
+ln -s AGENTS.md CLAUDE.md
+```
+
+If `ln -s` fails (Windows without Developer Mode), write a one-line `CLAUDE.md`
+containing `See [AGENTS.md](./AGENTS.md).` and tell the user why.
+
+`hero-skills:init-hero` (Step 1) fills in the Tech Stack / Best Practices /
+Coding Conventions sections after it investigates — leave them out here.
 
 ```markdown
 # PROJECT_NAME
@@ -239,12 +252,12 @@ Finally render:
 Now running: first-commit
 ```
 
-If the repo was initialized standalone in Step 6 with an initial commit, the `first-commit` step folds HERO.md and CLAUDE.md (written by init-hero) into a follow-up commit:
+If the repo was initialized standalone in Step 6 with an initial commit, the `first-commit` step folds HERO.md and AGENTS.md (written by init-hero) into a follow-up commit:
 
 ```bash
-git add HERO.md CLAUDE.md
+git add HERO.md AGENTS.md CLAUDE.md
 git commit -m "$(cat <<'EOF'
-chore: add HERO.md and CLAUDE.md from hero-skills:init-hero
+chore: add HERO.md and AGENTS.md from hero-skills:init-hero
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 EOF
@@ -267,7 +280,7 @@ Pipeline:
 
 Created:
   - Project structure
-  - CLAUDE.md
+  - AGENTS.md (+ CLAUDE.md symlink)
   - HERO.md
   - [Git repo initialized]
 
@@ -280,5 +293,6 @@ Don't also print `hero-skills:one-shot`; `preflight`'s own next-steps lead there
 
 ## Notes
 
-- Always creates CLAUDE.md. Uses uv for all Python projects. Uses shadcn for frontend UI.
+- Always creates AGENTS.md with a CLAUDE.md symlink. Uses uv for all Python projects.
+- Frontend UI comes from the design-system registry in HERO.md when one is configured, else stock shadcn. Run `hero-skills:recomponentize-ui` after scaffolding to establish the atomic component layers.
 - Does not push or create remote repos — local scaffolding only.

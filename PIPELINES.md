@@ -47,7 +47,7 @@ final commit. Each stage announces itself with the DAG line.
 **Naming note for `first-commit`:** When scaffolding a *standalone* repo,
 create-project Step 6 already produces the literal first commit (the
 scaffold). The DAG node `first-commit` refers specifically to **the commit
-that lands `HERO.md` and `CLAUDE.md`** — for standalone repos this is the
+that lands `HERO.md` and `AGENTS.md`** — for standalone repos this is the
 second commit; for "added to existing repo" it is just the next commit. The
 node is named for the canonical case where everything begins with HERO.md
 present from commit one onward.
@@ -97,8 +97,8 @@ Owner: `hero-skills:init-hero`. Four steps:
 
 1. `investigate` — deeply scan the repo for evidence of stack, conventions, CI, deploy
 2. `confirm` — present findings as a numbered list and ask the user to confirm/correct
-3. `write` — write HERO.md, update CLAUDE.md summary sections, and (if the user opted in during `confirm`) install `.github/workflows/auto-approve.yml` via Step 6a of the skill
-4. `commit` — stage and commit HERO.md + CLAUDE.md (and the auto-approve workflow if installed this run)
+3. `write` — write HERO.md, update AGENTS.md summary sections (CLAUDE.md is a symlink to it), and (if the user opted in during `confirm`) install `.github/workflows/auto-approve.yml` via Step 6a and the design-system enforcement layer via Step 6b
+4. `commit` — stage and commit HERO.md + AGENTS.md + the CLAUDE.md symlink (and the auto-approve workflow / design-system rule + hook if installed this run)
 
 Run by itself (`hero-skills:init-hero` or `hero-skills:init-hero --update`) or
 as the third step of Pipeline 1.
