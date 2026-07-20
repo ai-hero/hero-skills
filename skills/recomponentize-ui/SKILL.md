@@ -17,16 +17,19 @@ available: **local primitives get replaced by registry components**.
 ## Pipeline DAG
 
 ```
-preflight → inventory → map → install → recomponentize → codemod → enforce → verify
+preflight → enforce → inventory → map → install → recomponentize → codemod → verify
 ```
 
 Print the DAG line at the start of each step:
 
 ```
-[N/8] (✓) preflight → (▶) inventory → ( ) map → ( ) install → ( ) recomponentize → ( ) codemod → ( ) enforce → ( ) verify
+[N/8] (✓) preflight → (▶) enforce → ( ) inventory → ( ) map → ( ) install → ( ) recomponentize → ( ) codemod → ( ) verify
 
-Now running: inventory
+Now running: enforce
 ```
+
+Enforcement is installed early, before any code is rewritten, so the path-scoped
+rule guides the migration itself rather than only future work.
 
 When no registry is configured, `map` and `install` still run — against stock
 shadcn or the project's existing UI library instead of a private registry.
@@ -35,7 +38,7 @@ shadcn or the project's existing UI library instead of a private registry.
 
 - `$ARGUMENTS`:
   - (none) — full pass using the component source resolved in Step 0
-  - `--audit-only` — run `preflight`, `inventory`, `map`; report the plan, change nothing
+  - `--audit-only` — run `preflight`, `inventory`, `map`; report the plan, change nothing. Skips `enforce` too: installing the rule and hook writes files, which `--audit-only` promises not to do.
   - `REGISTRY_NAMESPACE` — override the registry (e.g. `@acme`)
 
 ## Step 0: Resolve the component source
@@ -88,7 +91,7 @@ atomic refactor is valuable on its own and carries no new dependency.
 
 ## Step 1: Preflight (`preflight`)
 
-**Skip to Step 2 when the source is "recomponentize only".** Otherwise, never run
+**Skip to Step 2 when the source is "recomponentize only" — the enforcement layer still applies.** Otherwise, never run
 `npx shadcn init` on an existing project — it does not add the `registries` block
 and may pick a conflicting style.
 
@@ -122,7 +125,34 @@ npx shadcn@latest add NAMESPACE/theme
 grep -- "--primary" src/styles.css
 ```
 
-## Step 2: Inventory the current UI (`inventory`)
+## Step 2: Install enforcement (`enforce`)
+
+A skill only fires when the model chooses it, and model-discretion triggering is
+least reliable for exactly this kind of well-trained task. These layers do not
+depend on that choice — install both:
+
+```bash
+"$PLUGIN_ROOT/scripts/install-design-system.sh" "$ROOT"
+```
+
+It writes, without overwriting customized files (exit 2 on drift, same contract
+as `install-auto-approve.sh`):
+
+- `.claude/rules/design-system.md` — path-scoped to `**/*.{tsx,jsx,css}`, so the
+  constraints load whenever Claude reads a UI file rather than when a description
+  happens to match.
+- `.claude/hooks/check-design-tokens.sh` + `PostToolUse` wiring — flags raw hex,
+  palette classes, and component-root margins on write.
+
+Then add the registry's AGENTS.md stanza (Part 8 of the `@aihero` handbook) and
+the consumer SKILL.md (Part 9). If the registry ships them, paste verbatim.
+
+Optionally port the registry's lint config (for `@aihero`,
+`eslint.taste.config.mjs` — Tailwind correctness, token discipline, a11y floor).
+Its atomic-boundaries block **does** apply once Step 6's layers exist; add `ui`
+and `blocks` as the lowest elements in the layer matrix.
+
+## Step 3: Inventory the current UI (`inventory`)
 
 Find every hand-rolled element, every oversized component, and every off-token
 style. Use an Explore subagent for a large codebase.
@@ -134,7 +164,7 @@ grep -rnE '<(button|input|select|textarea|table|dialog|nav|header|footer)\b' --i
 # Recomponentization candidates — size outliers
 find src -name "*.tsx" -exec wc -l {} + | sort -rn | head -20
 
-# Off-token styling — the codemod targets from Step 6
+# Off-token styling — the codemod targets from Step 7
 grep -rnE 'className="[^"]*\b(bg|text|border|ring)-(slate|gray|zinc|neutral|stone|red|blue|green|amber)-[0-9]' --include="*.tsx" src/
 grep -rnE '#[0-9a-fA-F]{3,8}\b|oklch\(' --include="*.tsx" --include="*.ts" src/
 grep -rnE 'className="[^"]*\bshadow-|z-\[|rounded-\[|text-\[[0-9]' --include="*.tsx" src/
@@ -143,9 +173,9 @@ grep -rnE 'className="[^"]*\bdark:(bg|text|border)-' --include="*.tsx" src/
 
 Record for each finding: file, line, what it is, and the UI concept it expresses
 ("a primary action", "a labelled form field with error text"). The concept — not
-the markup — is what you search for in Step 3.
+the markup — is what you search for in Step 4.
 
-## Step 3: Map local → upstream (`map`)
+## Step 4: Map local → upstream (`map`)
 
 For every concept in the inventory, find its upstream equivalent. Use **both**
 paths — they surface different things:
@@ -185,9 +215,9 @@ src/components/Wizard.tsx      → (none)               —           keep; reco
 ```
 
 Items with no upstream equivalent stay local — they still get recomponentized
-(Step 5) and codemodded (Step 6). Do not force a bad match.
+(Step 6) and codemodded (Step 7). Do not force a bad match.
 
-## Step 4: Install and rewrite call sites (`install`)
+## Step 5: Install and rewrite call sites (`install`)
 
 ```bash
 npx shadcn@latest add NAMESPACE/button NAMESPACE/card
@@ -206,7 +236,7 @@ merges via `cn()`), or change it upstream and re-add.
 Delete the local component only after its last call site is migrated and
 typecheck passes.
 
-## Step 5: Recomponentize (`recomponentize`)
+## Step 6: Recomponentize (`recomponentize`)
 
 **This step always runs — it is the point of the skill.** It runs for components
 with no upstream match, for projects with no registry at all, and for the app code
@@ -251,7 +281,7 @@ higher layer, a file well above the codebase's median length.
 Migrate call sites as you move files; never leave a re-export shim behind as
 "temporary" — finish the move or don't start it.
 
-## Step 6: Codemod off-token styling (`codemod`)
+## Step 7: Codemod off-token styling (`codemod`)
 
 | Found | Replace with |
 |-------|--------------|
@@ -275,33 +305,6 @@ The no-shadow rule and the exact token vocabulary are registry-specific. With
 stock shadcn, keep its default token names (`bg-background`,
 `text-muted-foreground` are shared) and **do not** strip shadows — that is an
 `@aihero` house rule, not a shadcn one.
-
-## Step 7: Install enforcement (`enforce`)
-
-A skill only fires when the model chooses it, and model-discretion triggering is
-least reliable for exactly this kind of well-trained task. These layers do not
-depend on that choice — install both:
-
-```bash
-"$PLUGIN_ROOT/scripts/install-design-system.sh" "$ROOT"
-```
-
-It writes, without overwriting customized files (exit 2 on drift, same contract
-as `install-auto-approve.sh`):
-
-- `.claude/rules/design-system.md` — path-scoped to `**/*.{tsx,jsx,css}`, so the
-  constraints load whenever Claude reads a UI file rather than when a description
-  happens to match.
-- `.claude/hooks/check-design-tokens.sh` + `PostToolUse` wiring — flags raw hex,
-  palette classes, and component-root margins on write.
-
-Then add the registry's AGENTS.md stanza (Part 8 of the `@aihero` handbook) and
-the consumer SKILL.md (Part 9). If the registry ships them, paste verbatim.
-
-Optionally port the registry's lint config (for `@aihero`,
-`eslint.taste.config.mjs` — Tailwind correctness, token discipline, a11y floor).
-Its atomic-boundaries block **does** apply once Step 5's layers exist; add `ui`
-and `blocks` as the lowest elements in the layer matrix.
 
 ## Step 8: Verify (`verify`)
 
