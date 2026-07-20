@@ -25,6 +25,10 @@ where `components.json` is read and where `.env` is looked up (see **Auth**).
 Prefer the repo's task-runner wrapper (`just ui-add …`) where one exists — it
 passes `-c` and exports the token.
 
+Every path below (`src/components/...`) is relative to `PATH_TO_UI`, not the
+repo root — the same frame `-c` establishes above. For the common layout
+where that's `ui/`, read `src/components/ui/` as `ui/src/components/ui/`.
+
 Hand-rolling a component that already exists in the registry is the primary
 defect this rule prevents.
 
@@ -56,7 +60,10 @@ Semantic classes only — `bg-background`, `text-muted-foreground`, `border-inpu
   design is wrong, not the scale.
 - Radii from the token scale (`rounded-sm|md|lg|full`); no `rounded-[10px]`.
 - **No shadows** — elevation is borders and hairlines. `--shadow-*: initial` makes
-  any `shadow-*` class a lint error, by design.
+  any `shadow-*` class a lint error, by design, once `@aihero/theme` is adopted —
+  check `design-system.local.md` for whether that's actually landed in this repo
+  yet; the design-token hook flags shadows either way, but only the token-layer
+  override turns it into a hard lint failure.
 - z-index from the named scale (`z-dropdown` < `z-sticky` < `z-overlay` <
   `z-modal` < `z-toast`); never `z-[9999]`.
 - Type from the scale (`text-sm`, `font-medium`, tracking tokens); no arbitrary
@@ -130,3 +137,15 @@ is `/\$\{(\w+)\}/g`, so `${VAR:-default}` ships as a literal string and surfaces
 as a confusing 401.
 
 Full procedure: `hero-skills:recomponentize-ui`.
+
+## This repo's own exceptions
+
+**Read `.claude/rules/design-system.local.md` before touching `ui/` in this
+repo.** It holds facts specific to this codebase that the rules above cannot
+know — an app-authored file with no registry equivalent, a migration already in
+progress, a lint rule not yet wired. This file (`design-system.md`) is NOT
+refreshed automatically — a drifted copy gets flagged (a `.new` file written,
+exit 2) for manual reconciliation, never silently overwritten. `.local.md` is
+created once, empty, on first
+install, and never touched again by any installer — which is what lets it hold
+repo truth that a re-vendor of this file cannot delete.

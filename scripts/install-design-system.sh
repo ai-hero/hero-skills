@@ -24,8 +24,9 @@ PLUGIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC_RULE="$PLUGIN_ROOT/assets/design-system/rules/design-system.md"
 SRC_HOOK="$PLUGIN_ROOT/assets/design-system/hooks/check-design-tokens.sh"
 SRC_TEST="$PLUGIN_ROOT/assets/design-system/hooks/check-design-tokens.test.sh"
+SRC_LOCAL_STUB="$PLUGIN_ROOT/assets/design-system/rules/design-system.local.stub.md"
 
-for f in "$SRC_RULE" "$SRC_HOOK" "$SRC_TEST"; do
+for f in "$SRC_RULE" "$SRC_HOOK" "$SRC_TEST" "$SRC_LOCAL_STUB"; do
   if [[ ! -f "$f" ]]; then
     echo "ERROR: source file not found at $f" >&2
     exit 1
@@ -59,11 +60,30 @@ copy_or_flag() {
   echo "INSTALLED: $dst"
 }
 
+# create_once SOURCE TARGET — unlike copy_or_flag, this NEVER compares or
+# overwrites an existing file, drifted or not. design-system.local.md is
+# repo-owned the instant it exists; the installer's only job is to make sure
+# it exists at all. Treating it like the other vendored files (refuse-on-drift,
+# write .new) would silently defeat its purpose the first time a re-vendor ran
+# after a repo customized it — .new would sit next to it forever, unread,
+# because nothing prompts a reconciliation for a file nobody expects to change.
+create_once() {
+  local src="$1" dst="$2"
+  mkdir -p "$(dirname "$dst")"
+  if [[ -f "$dst" ]]; then
+    echo "OK: $dst exists (repo-owned; never modified by this installer)"
+    return 0
+  fi
+  cp "$src" "$dst"
+  echo "INSTALLED: $dst (repo-owned from here — edit freely, re-vendoring never touches it)"
+}
+
 copy_or_flag "$SRC_RULE" "$TARGET_ROOT/.claude/rules/design-system.md"
 copy_or_flag "$SRC_HOOK" "$TARGET_ROOT/.claude/hooks/check-design-tokens.sh"
 chmod +x "$TARGET_ROOT/.claude/hooks/check-design-tokens.sh" 2>/dev/null || true
 copy_or_flag "$SRC_TEST" "$TARGET_ROOT/.claude/hooks/check-design-tokens.test.sh"
 chmod +x "$TARGET_ROOT/.claude/hooks/check-design-tokens.test.sh" 2>/dev/null || true
+create_once "$SRC_LOCAL_STUB" "$TARGET_ROOT/.claude/rules/design-system.local.md"
 
 # --- Wire the PostToolUse hook into .claude/settings.json ---------------------
 SETTINGS="$TARGET_ROOT/.claude/settings.json"
@@ -91,8 +111,18 @@ if ! jq -e . "$SETTINGS" >/dev/null 2>&1; then
   exit 1
 fi
 
-if jq -e --arg cmd "$HOOK_CMD" \
-  '[.hooks.PostToolUse[]?.hooks[]?.command] | index($cmd)' \
+# Match on the hook's PATH appearing in an existing command, not on exact
+# string equality with $HOOK_CMD. A prior install (or a hand-edit) commonly
+# writes ${CLAUDE_PROJECT_DIR} (braced) where this script's own HOOK_CMD is
+# unbraced — both expand identically in the shell that runs it, but an exact
+# match sees them as different strings and adds a SECOND PostToolUse entry
+# for the same hook, which then runs check-design-tokens.sh twice per edit.
+# `// empty` drops a null/absent command (a hooks[] entry with no "command"
+# key) before test() ever sees it — test() throws on a non-string input, and
+# an uncaught jq error here reads as "not wired", adding a duplicate entry
+# next to a sibling hook that merely lacks a command field of its own.
+if jq -e \
+  '[.hooks.PostToolUse[]?.hooks[]?.command // empty] | any(test("check-design-tokens\\.sh"))' \
   "$SETTINGS" >/dev/null 2>&1; then
   echo "OK: PostToolUse hook already wired in $SETTINGS"
 else
@@ -125,7 +155,8 @@ fi
 # half-installed enforcement layer is worse than none, because it looks done.
 IGNORED=()
 if git -C "$TARGET_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
-  for f in .claude/rules/design-system.md .claude/hooks/check-design-tokens.sh \
+  for f in .claude/rules/design-system.md .claude/rules/design-system.local.md \
+           .claude/hooks/check-design-tokens.sh \
            .claude/hooks/check-design-tokens.test.sh .claude/settings.json; do
     if git -C "$TARGET_ROOT" check-ignore -q "$f" 2>/dev/null; then
       IGNORED+=("$f")
@@ -136,6 +167,8 @@ fi
 echo ""
 echo "Design-system enforcement installed."
 echo "  Rule:  .claude/rules/design-system.md  (loads on **/*.{tsx,jsx,css})"
+echo "  Local: .claude/rules/design-system.local.md  (repo-owned; never overwritten —"
+echo "         put facts specific to this repo here, not in design-system.md)"
 echo "  Hook:  .claude/hooks/check-design-tokens.sh  (advisory — PostToolUse cannot"
 echo "         block a call that already ran; mirror it in pre-commit for a gate)"
 echo "  Test:  .claude/hooks/check-design-tokens.test.sh  (run it after editing the hook)"
