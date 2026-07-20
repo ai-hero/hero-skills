@@ -25,6 +25,10 @@ where `components.json` is read and where `.env` is looked up (see **Auth**).
 Prefer the repo's task-runner wrapper (`just ui-add …`) where one exists — it
 passes `-c` and exports the token.
 
+Every path below (`src/components/...`) is relative to `PATH_TO_UI`, not the
+repo root — the same frame `-c` establishes above. For the common layout
+where that's `ui/`, read `src/components/ui/` as `ui/src/components/ui/`.
+
 Hand-rolling a component that already exists in the registry is the primary
 defect this rule prevents.
 
@@ -139,7 +143,9 @@ Full procedure: `hero-skills:recomponentize-ui`.
 **Read `.claude/rules/design-system.local.md` before touching `ui/` in this
 repo.** It holds facts specific to this codebase that the rules above cannot
 know — an app-authored file with no registry equivalent, a migration already in
-progress, a lint rule not yet wired. This file (`design-system.md`) is refreshed
-from upstream when it drifts; `.local.md` is created once, empty, on first
+progress, a lint rule not yet wired. This file (`design-system.md`) is NOT
+refreshed automatically — a drifted copy gets flagged (a `.new` file written,
+exit 2) for manual reconciliation, never silently overwritten. `.local.md` is
+created once, empty, on first
 install, and never touched again by any installer — which is what lets it hold
 repo truth that a re-vendor of this file cannot delete.

@@ -48,7 +48,12 @@ if printf '{}' | jq -e . >/dev/null 2>&1; then
     echo "check-design-tokens: unparsable hook payload" >&2
     exit 2
   fi
-  # Relative paths in the payload resolve against its cwd, not ours.
+  # Relative paths in the payload resolve against its cwd, not ours. No exit-
+  # status check needed here (unlike FILE above and DIFF_SCAN below): by this
+  # point $PAYLOAD is already confirmed valid JSON — the FILE extraction above
+  # would have exited 2 otherwise — and `.cwd // empty` cannot itself error on
+  # any value type. DIFF_SCAN's `.edits? | .[]` can fail on a wrong-shaped-but-
+  # valid payload; a bare field access with `// empty` cannot.
   CWD="$(printf '%s' "$PAYLOAD" | jq -r '.cwd // empty' 2>/dev/null)"
   # What the model just wrote. Scoping the scan to this — rather than the
   # whole file — is what keeps the check reporting only what THIS edit
