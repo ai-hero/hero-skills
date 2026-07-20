@@ -62,8 +62,8 @@ Owner: `hero-skills:one-shot`. Invoked with an issue ID or description it starts
 
 | # | Step | Skill to run standalone | Notes |
 |---|------|-------------------------|-------|
-| 1 | `plan` | `inline` (Plan Mode) | fetches a Linear issue if `$ARGUMENTS` is an issue ID, else treats it as a plain-text description |
-| 2 | `implement` | `inline` (Plan Mode → edits) | applies the approved plan as code edits |
+| 1 | `plan` | `hero-skills:think-it-through` | resolve `$ARGUMENTS` against `my-work/` and the tracker first; grill only if nothing matches. Re-verifies the item is still outstanding before building |
+| 2 | `implement` | `inline` | executes the resolved work-item against its `success` criteria |
 | 3 | `simplify` | `/simplify` (external) | review the dirty diff for reuse/quality/efficiency and fix; `(–)` if `/simplify` unavailable |
 | 4 | `push` | `hero-skills:push-pr` | tests first (lint/typecheck/unit + UI smoke via Playwright MCP), then commits outstanding work with a conventional commit and pushes a draft PR |
 | 5 | `self-review` | `hero-skills:review-pr --no-mark-ready` (Steps 1–8) | run the pr-review-toolkit agents plus a security pass on the draft, apply fixes |
@@ -78,6 +78,16 @@ UI smoke runs inside `push`'s test phase (absorbed from the former `test-changes
 before it lands in git history. `push-pr` also invokes `/simplify`
 internally for standalone use; running one-shot just makes that step visible
 in the DAG and pays a no-op cost on the second invocation.
+
+**The work-item store closes this pipeline's loop.** `think-it-through`,
+`handoff`, and `harden` write items into the git-ignored `my-work/` store, and
+all three read it back so they build on the plate rather than beside it. What
+one-shot alone does is *execute* an item and close it out: Step 1 resolves
+against the store before grilling anything new, and Step 9a marks the merged
+item `done` — no other skill does that automatically.
+Because nothing else observes the codebase on the store's behalf, Step 1 also
+re-checks a resolved item's `success` criteria against reality — `status: todo`
+only means nobody edited the file, not that the work is still outstanding.
 
 `mark-ready` is split from `self-review` so the conversion from draft → ready
 is a visible, separately-gated step. `await-review` is split from `respond`

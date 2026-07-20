@@ -112,37 +112,22 @@ none may be silently skipped. Skipping is how a two-week detour begins.
 ### Step 0: Load context and the my-work store
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+[ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel)/scripts/hero-lib.sh"
+# shellcheck source=/dev/null
+. "$HERO_LIB"
+
+ROOT=$(hero_root)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 
-# The store is a git-ignored folder of markdown work-items — your private
-# plate for THIS repo. Ensure it exists and is excluded from git via
-# .git/info/exclude (repo-local, untracked) rather than .gitignore, so we
-# never dirty a tracked file.
-#
-# One-time migration: this store was formerly named `plan-work/`. If a legacy
-# store exists and no `my-work/` does yet, move it so existing work-items carry
-# over instead of being orphaned behind the new name.
-if [ -d "$ROOT/plan-work" ] && [ ! -d "$ROOT/my-work" ]; then
-  mv "$ROOT/plan-work" "$ROOT/my-work"
-  echo "Migrated legacy plan-work/ store to my-work/."
-fi
-mkdir -p "$ROOT/my-work"
-EXCLUDE_FILE=$(git -C "$ROOT" rev-parse --git-path info/exclude 2>/dev/null)
-case "$EXCLUDE_FILE" in
-  /*) ;;
-  *)  EXCLUDE_FILE="$ROOT/$EXCLUDE_FILE" ;;
-esac
-mkdir -p "$(dirname "$EXCLUDE_FILE")"
-# Keep both names excluded through the transition, so a not-yet-migrated
-# legacy store never gets accidentally committed either.
-for entry in my-work/ plan-work/; do
-  grep -qxF "$entry" "$EXCLUDE_FILE" 2>/dev/null \
-    || printf '\n%s\n' "$entry" >> "$EXCLUDE_FILE"
-done
+# The store is a git-ignored folder of markdown work-items — your private plate
+# for THIS repo. hero_work_store creates it, excludes it via .git/info/exclude
+# (repo-local, untracked, so no tracked file is dirtied), and migrates a legacy
+# plan-work/ store if one exists.
+STORE=$(hero_work_store)
 
 # Show what's already on the plate so grilling builds on it, not beside it.
-ls "$ROOT/my-work"/*.md 2>/dev/null || echo "my-work/ is empty"
+hero_ready_items "$STORE"
 ```
 
 Read any existing work-items first — new grilling may resolve, block, or
@@ -216,7 +201,7 @@ One markdown file per item at `my-work/NNN-slug.md`:
 ---
 id: 7 # a plain integer; only the filename is zero-padded (007-slug.md) for sorting
 title: Add OAuth device-flow login
-status: ready # ready | blocked | in-progress | done
+status: todo # todo | in-progress | done  (readiness is DERIVED, not stored)
 depends_on: [3, 5] # ids that must be `done` before this can start
 one_way_door: false # true = expensive to reverse; got extra scrutiny
 success: "User completes device-flow login in under 30s; e2e test green"
@@ -249,49 +234,32 @@ section. The frontmatter fields are always present.
 
 ## "What's Ready" — the one query that matters
 
-An item is **ready** when its `status` is not `done` and every id in its
-`depends_on` points to an item that _is_ `done`. That is the Beads `ready`
-primitive without a database — a plain read over the folder:
+`status` stores only what the author knows: `todo`, `in-progress`, or `done`.
+It deliberately does NOT carry `ready` or `blocked` — those are _derived_ from
+`depends_on`, and storing them alongside the thing they are computed from means
+the two can disagree. An item is **ready** when its `status` is `todo` and every
+id in its `depends_on` points to an item that _is_ `done`. That is the Beads `ready`
+primitive without a database — a plain read over the folder, implemented as
+`hero_ready_items` in `scripts/hero-lib.sh`:
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-cd "$ROOT/my-work" 2>/dev/null || { echo "no my-work/ yet"; exit 0; }
-
-# Read a frontmatter scalar, stripping any trailing "# comment" and whitespace.
-fm() { awk -F': ' -v k="$2" '$1==k{v=$2; sub(/ *#.*/,"",v); gsub(/^[[:space:]]+|[[:space:]]+$/,"",v); print v; exit}' "$1"; }
-# Normalize an id to a base-10 integer so 007 and 7 compare equal.
-norm() { printf '%s' "$((10#${1:-0}))"; }
-
-# Collect the ids whose status is done (normalized).
-done_ids=" "
-for f in *.md; do
-  [ -e "$f" ] || continue
-  [ "$(fm "$f" status)" = "done" ] && done_ids="$done_ids$(norm "$(fm "$f" id)") "
-done
-
-# An item is ready if it is not done and every depends_on id is done.
-for f in *.md; do
-  [ -e "$f" ] || continue
-  [ "$(fm "$f" status)" = "done" ] && continue
-  # Split deps onto separate lines and read them with a heredoc-fed loop:
-  # portable across bash/zsh (zsh doesn't word-split unquoted vars) and the
-  # heredoc keeps the loop in the current shell so `ready` persists.
-  deps=$(awk -F': ' '/^depends_on:/{v=$2; sub(/ *#.*/,"",v); gsub(/[][, ]+/,"\n",v); print v; exit}' "$f")
-  ready=1
-  while IFS= read -r d; do
-    [ -z "$d" ] && continue
-    case "$done_ids" in *" $(norm "$d") "*) ;; *) ready=0 ;; esac
-  done <<EOF
-$deps
-EOF
-  title=$(fm "$f" title)
-  [ "$ready" = 1 ] && echo "READY  $f — $title" || echo "blocked $f — $title"
-done
+# shellcheck source=/dev/null
+. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+hero_ready_items
 ```
 
-Run this any time to see what to pick up next. Ready items — pick the
-highest-priority (or the user's choice) and start it, moving its `status` to
-`in-progress`, then `done` when it lands.
+Ids are normalized to base-10, so `007` and `7` compare equal. A `depends_on`
+pointing at an id that does not exist leaves the item permanently blocked —
+which is why Step 4 verifies every reference before writing.
+
+Run this any time to see what to pick up next. Pick the highest-priority ready
+item (or the user's choice) and start it, moving its `status` to `in-progress`,
+then `done` when it lands.
+
+**Readiness is about dependencies, not about the codebase.** `hero_ready_items`
+reads frontmatter; it never checks whether the work actually happened. An item
+whose work landed out-of-band stays READY until someone edits it. Consumers must
+verify before acting — `hero-skills:one-shot` Step 1c does exactly that.
 
 ## Arch Mode — Architecture Specs (absorbed from document-arch)
 
@@ -355,9 +323,16 @@ Arch Mode rules: always read the relevant source before creating/updating; specs
 
 - **The store is private.** `my-work/` is git-ignored on purpose — it is the
   user's plate, not a shared board. Never commit it; never push it.
-- **Emit, don't implement.** This skill produces understanding and work-items.
-  Handing off to implementation (e.g. `hero-skills:one-shot` on a ready item) is
-  a separate, deliberate step the user takes.
+- **Emit, don't implement.** This skill produces understanding and work-items;
+  `hero-skills:one-shot` consumes them. The two point at each other on purpose:
+  one-shot's `plan` step delegates here when nothing on the plate matches, and
+  this skill's next step points back at one-shot once an item is READY. That is
+  a hand-off, not a loop — one-shot only grills when it could not resolve an
+  existing item, so a second lap has nothing left to grill.
+- **`status` is a claim, not a fact.** Nothing observes the codebase on your
+  behalf. An item stays `ready` after the work lands unless someone edits it —
+  which is why one-shot re-verifies an item's `success` criteria against the
+  repo before implementing, and marks it `done` only after its PR merges.
 - **Discovered work goes back in.** If grilling one item surfaces new work, write
   it as its own item with a `depends_on` link rather than smuggling it into the
   current one.

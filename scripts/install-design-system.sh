@@ -23,8 +23,9 @@ set -euo pipefail
 PLUGIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC_RULE="$PLUGIN_ROOT/assets/design-system/rules/design-system.md"
 SRC_HOOK="$PLUGIN_ROOT/assets/design-system/hooks/check-design-tokens.sh"
+SRC_TEST="$PLUGIN_ROOT/assets/design-system/hooks/check-design-tokens.test.sh"
 
-for f in "$SRC_RULE" "$SRC_HOOK"; do
+for f in "$SRC_RULE" "$SRC_HOOK" "$SRC_TEST"; do
   if [[ ! -f "$f" ]]; then
     echo "ERROR: source file not found at $f" >&2
     exit 1
@@ -61,10 +62,15 @@ copy_or_flag() {
 copy_or_flag "$SRC_RULE" "$TARGET_ROOT/.claude/rules/design-system.md"
 copy_or_flag "$SRC_HOOK" "$TARGET_ROOT/.claude/hooks/check-design-tokens.sh"
 chmod +x "$TARGET_ROOT/.claude/hooks/check-design-tokens.sh" 2>/dev/null || true
+copy_or_flag "$SRC_TEST" "$TARGET_ROOT/.claude/hooks/check-design-tokens.test.sh"
+chmod +x "$TARGET_ROOT/.claude/hooks/check-design-tokens.test.sh" 2>/dev/null || true
 
 # --- Wire the PostToolUse hook into .claude/settings.json ---------------------
 SETTINGS="$TARGET_ROOT/.claude/settings.json"
-HOOK_CMD='$CLAUDE_PROJECT_DIR/.claude/hooks/check-design-tokens.sh'
+# The inner quotes are part of the command string: the value is run through a
+# shell, so an unquoted $CLAUDE_PROJECT_DIR word-splits on a clone whose path
+# contains a space and the hook silently never runs.
+HOOK_CMD='"$CLAUDE_PROJECT_DIR/.claude/hooks/check-design-tokens.sh"'
 
 if ! command -v jq >/dev/null 2>&1; then
   echo ""
@@ -119,7 +125,8 @@ fi
 # half-installed enforcement layer is worse than none, because it looks done.
 IGNORED=()
 if git -C "$TARGET_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
-  for f in .claude/rules/design-system.md .claude/hooks/check-design-tokens.sh .claude/settings.json; do
+  for f in .claude/rules/design-system.md .claude/hooks/check-design-tokens.sh \
+           .claude/hooks/check-design-tokens.test.sh .claude/settings.json; do
     if git -C "$TARGET_ROOT" check-ignore -q "$f" 2>/dev/null; then
       IGNORED+=("$f")
     fi
@@ -129,7 +136,9 @@ fi
 echo ""
 echo "Design-system enforcement installed."
 echo "  Rule:  .claude/rules/design-system.md  (loads on **/*.{tsx,jsx,css})"
-echo "  Hook:  .claude/hooks/check-design-tokens.sh  (advisory; DESIGN_TOKENS_STRICT=1 to enforce)"
+echo "  Hook:  .claude/hooks/check-design-tokens.sh  (advisory — PostToolUse cannot"
+echo "         block a call that already ran; mirror it in pre-commit for a gate)"
+echo "  Test:  .claude/hooks/check-design-tokens.test.sh  (run it after editing the hook)"
 
 if [[ ${#IGNORED[@]} -gt 0 ]]; then
   echo ""

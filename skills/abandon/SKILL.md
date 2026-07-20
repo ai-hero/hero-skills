@@ -1,5 +1,5 @@
 ---
-name: abandon-branch
+name: abandon
 # prettier-ignore
 description: Abandon or pause work on a branch that hasn't merged — stash uncommitted changes, switch to the default branch, and clear conversation context.
 disable-model-invocation: true
@@ -42,7 +42,7 @@ You have uncommitted changes on '$CURRENT':
   (list changed files from git status)
 
 Options:
-1. Stash changes (saved as "abandon-branch: WIP on $CURRENT") — you can restore later with `git stash pop`
+1. Stash changes (saved as "abandon: WIP on $CURRENT") — you can restore later with `git stash pop`
 2. Cancel — go back and commit or handle changes first
 ```
 
@@ -51,13 +51,13 @@ Options:
 **If user chooses option 1 (stash):**
 
 ```bash
-git stash push -m "abandon-branch: WIP on $CURRENT"
+git stash push -m "abandon: WIP on $CURRENT"
 ```
 
 Report the stash ref:
 
 ```
-Stashed as: stash@{0} — "abandon-branch: WIP on $CURRENT"
+Stashed as: stash@{0} — "abandon: WIP on $CURRENT"
 You can restore later with: git stash pop
 ```
 
@@ -66,8 +66,13 @@ Note: this does NOT auto-pop the stash since the purpose is to switch away from 
 ### Step 2: Confirm the Branch Is Actually Unmerged, Then Switch Away
 
 ```bash
-DEFAULT_BRANCH=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | xargs)
-DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
+# shellcheck source=/dev/null
+. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+# _verbose, not the silent variant: this value gates a force-delete. On a repo
+# whose real default is `master`, a silent fallback to `main` makes
+# `gh pr list --base main` return 0, the branch reads as never-merged, and
+# Delete is offered on work that was merged.
+DEFAULT_BRANCH=$(hero_default_branch_verbose)
 if ! git fetch origin "$DEFAULT_BRANCH"; then
   echo "WARN: 'git fetch origin $DEFAULT_BRANCH' failed — the merged-check below may be unreliable. Resolve network/auth before trusting its result."
 fi
@@ -150,7 +155,7 @@ Status: Up to date with origin
 
 Previous branch: {previous-branch} [paused, kept locally / deleted (local + remote/PR, if confirmed) / was already on default]
 Pulled: N new commits
-Stashed: [yes — "abandon-branch: WIP on {branch}" (restore with `git stash pop`) / no]
+Stashed: [yes — "abandon: WIP on {branch}" (restore with `git stash pop`) / no]
 Context: Cleared
 
 Next step: hero-skills:one-shot — start the next task (print only — model-invocation-restricted, cannot auto-run)

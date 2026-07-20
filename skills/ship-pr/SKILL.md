@@ -7,7 +7,7 @@ argument-hint: [pr-number]
 
 # Ship — Trigger Auto-Approve, Merge, Reset Local Branch
 
-This skill posts `@auto-approve` on the PR, waits for the workflow run to finish, reads the verdict, and — if APPROVE — asks whether to merge. If REQUEST_CHANGES, it shows what to fix and offers to re-trigger after fixes land. After a successful merge, it switches to the default branch, pulls latest, deletes the merged head branch (remote + local), and offers cleanup of other stale merged branches (the merged-branch counterpart to `hero-skills:abandon-branch`). It then runs an advisory post-merge deployment-health check (Kubernetes, VM, PaaS, or serverless, per HERO.md).
+This skill posts `@auto-approve` on the PR, waits for the workflow run to finish, reads the verdict, and — if APPROVE — asks whether to merge. If REQUEST_CHANGES, it shows what to fix and offers to re-trigger after fixes land. After a successful merge, it switches to the default branch, pulls latest, deletes the merged head branch (remote + local), and offers cleanup of other stale merged branches (the merged-branch counterpart to `hero-skills:abandon`). It then runs an advisory post-merge deployment-health check (Kubernetes, VM, PaaS, or serverless, per HERO.md).
 
 ## Pipeline DAG
 
@@ -330,7 +330,9 @@ Show the comment body to the user verbatim — it contains the gate results and 
 Resolve the merge method from HERO.md (default `squash`), normalize the value (lowercase, strip quotes/whitespace) so `Squash`, `"squash"`, ` squash ` all resolve to `squash`, and reject anything else loudly:
 
 ```bash
-MERGE_METHOD_RAW=$(awk -F': ' '/^- merge-method:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null)
+# shellcheck source=/dev/null
+. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+MERGE_METHOD_RAW=$(hero_field merge-method || true)
 MERGE_METHOD=$(printf '%s' "${MERGE_METHOD_RAW:-squash}" \
   | tr -d '[:space:]' | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]')
 
@@ -387,9 +389,9 @@ fi
 
 **Never force-merge or override branch protection.** Never pass `--admin`. The fallback above is *only* for the specific "auto-merge not enabled on this repo" case; every other failure is surfaced and stops the skill.
 
-#### Step 7b: Reset to the Default Branch (the merged-branch counterpart to `hero-skills:abandon-branch`)
+#### Step 7b: Reset to the Default Branch (the merged-branch counterpart to `hero-skills:abandon`)
 
-After a successful merge, leave the user on the default branch, pulled, with the merged PR branch cleaned up — we're usually still on the just-merged head. `abandon-branch` mirrors this for the never-merged case; not shared logic.
+After a successful merge, leave the user on the default branch, pulled, with the merged PR branch cleaned up — we're usually still on the just-merged head. `abandon` mirrors this for the never-merged case; not shared logic.
 
 If Step 1 skipped straight here, `$OWNER`/`$REPO` were never set (only Step 3 sets them):
 
@@ -490,8 +492,7 @@ if [ "$RESET_OK" = "true" ] && [ "$MERGED" = "true" ]; then
   # Non-admins may not see this field.
   AUTO_DELETE=$(gh repo view --json deleteBranchOnMerge --jq '.deleteBranchOnMerge // empty' 2>/dev/null)
 
-  HERO_AUTO_DELETE=$(awk -F': ' '/^- auto-delete-branches:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null \
-    | tr -d '[:space:]' | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]')
+  HERO_AUTO_DELETE=$(hero_field auto-delete-branches 2>/dev/null | tr '[:upper:]' '[:lower:]')
   HERO_AUTO_DELETE=${HERO_AUTO_DELETE:-true}
 
   if [ "$AUTO_DELETE" = "true" ]; then
@@ -623,8 +624,7 @@ This check is **advisory only**. It surfaces a DEGRADED or unreachable deploymen
 if [ "$MERGED" != "true" ]; then
   DEPLOY_STATUS="skipped"
 else
-  DEPLOY_PLATFORM=$(awk -F': ' '/^- platform:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null \
-    | tr -d '[:space:]' | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]')
+  DEPLOY_PLATFORM=$(hero_field platform 2>/dev/null | tr '[:upper:]' '[:lower:]')
   DEPLOY_PLATFORM=${DEPLOY_PLATFORM:-none}
 fi
 ```
@@ -688,7 +688,9 @@ Classify in this order:
 **`vm` / `paas` / `serverless`** — curl the HERO.md-configured health endpoint(s). HERO.md's Deployment section lists one or more, e.g. `- health-endpoint: https://api.example.com/healthz`; read them all first:
 
 ```bash
-HEALTH_ENDPOINTS=$(awk -F': ' '/^- health-endpoint:/ {print $2}' "$ROOT/HERO.md" 2>/dev/null \
+# hero_field returns only the FIRST match; health-endpoint legitimately repeats,
+# so this list is read directly.
+HEALTH_ENDPOINTS=$(awk -F': ' '/^- health-endpoint:/ {print $2}' "$ROOT/HERO.md" 2>/dev/null `# hero-lint: allow-inline` \
   | tr -d '"' | tr -d "'")
 
 if [ -z "$HEALTH_ENDPOINTS" ]; then
@@ -756,7 +758,7 @@ Next step: (one only — omit for REQUEST_CHANGES/WORKFLOW_FAILED, already cover
 ```
 
 - Merged → `/clear` — plain suggestion, not Skill-tool invocable, no y/N offer.
-- Abandoning mid-flight → `hero-skills:abandon-branch` — restricted, print only.
+- Abandoning mid-flight → `hero-skills:abandon` — restricted, print only.
 
 Skip `hero-skills:one-shot`; it's not the deterministic next action.
 

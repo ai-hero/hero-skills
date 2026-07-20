@@ -10,7 +10,7 @@ disable-model-invocation: true
 
 Take a small task from a ticket (or plain description) — or, **without arguments**, the current in-progress goal — all the way through to a merged PR and a clean local checkout, by chaining the existing hero skills in order. This is the orchestrator for **Pipeline 2** in `PIPELINES.md`.
 
-> **Scope guard:** one-shot is for small, low-risk PRs only. If, during planning, the change looks larger than a single focused diff (multiple subsystems, schema changes, breaking API changes, anything you would normally split into a stack), STOP after the `plan` step and tell the user to fall back to running the individual skills. Do NOT push a large PR through unattended automation.
+> **Scope guard:** one-shot is for small, low-risk PRs only — **one work-item, one PR**. If the `plan` step resolves or produces more than one work-item, or the item is flagged `one_way_door: true`, STOP and hand back to the user (Step 1e). Do NOT push a large PR through unattended automation.
 
 ## Pipeline DAG
 
@@ -36,8 +36,8 @@ Each DAG node delegates to a single skill (or runs inline when the work is just 
 
 | # | Step | Skill to run standalone |
 |---|------|-------------------------|
-| 1 | `plan` | inline (Plan Mode; fetches a Linear issue if `$ARGUMENTS` is an issue ID) |
-| 2 | `implement` | inline (Plan Mode → edits) |
+| 1 | `plan` | `hero-skills:think-it-through` (only when nothing resolves from `my-work/` or the tracker) |
+| 2 | `implement` | inline (executes the resolved work-item) |
 | 3 | `simplify` | `/simplify` (external skill) |
 | 4 | `push` | `hero-skills:push-pr` (tests — verification + UI smoke — then commits + pushes a draft PR) |
 | 5 | `self-review` | `hero-skills:review-pr --no-mark-ready` |
@@ -88,66 +88,35 @@ Apply this contract at every Step 1–9 transition below (or every transition fr
 
 ### Step 0: Load Hero Configuration and Confirm Scope
 
-```bash
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
+Source the shared helper library once, at the top of the run — every later step assumes these functions are available:
 
-# Stale-HERO check — fast subset of the plugin's check-hero-staleness.sh.
-# Keep aligned with the copy in push-pr.
-HERO_TIME=$(git -C "$ROOT" log -1 --format=%ct -- HERO.md 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
-CONFIG_TIME=$(git -C "$ROOT" log -1 --format=%ct -- \
-  pyproject.toml ':(glob)**/pyproject.toml' \
-  package.json ':(glob)**/package.json' \
-  go.mod ':(glob)**/go.mod' \
-  Cargo.toml ':(glob)**/Cargo.toml' \
-  .github/workflows .pre-commit-config.yaml \
-  CLAUDE.md Makefile justfile Taskfile.yml 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
-if [ "${CONFIG_TIME:-0}" -gt "${HERO_TIME:-0}" ]; then
-  echo "note: HERO.md may be out of date — run hero-skills:init-hero --update to refresh."
-fi
+```bash
+HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+[ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel)/scripts/hero-lib.sh"
+# shellcheck source=/dev/null
+. "$HERO_LIB" || { echo "ERROR: cannot source hero-lib.sh — reinstall the plugin."; exit 1; }
+
+ROOT=$(hero_root)
+cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
+hero_check_staleness
 ```
 
 If `HERO.md` is missing, STOP and tell the user to run `hero-skills:init-hero` first. one-shot relies on every downstream skill having a config to read; running blind through 9 steps is unsafe.
+
+> Each bash block below runs in a fresh shell, so re-source `hero-lib.sh` at the top of any block that calls a `hero_*` function. The snippets show this.
 
 ### Step 0.3: Pre-flight Checks
 
 Before auto-branching or any other destructive work, run the full pre-flight to catch failures that would otherwise only surface at Step 4 (push), Step 5 (self-review), or Step 9 (ship) — after you've already done the work.
 
+`preflight.sh --auto-scope` derives its own project scope from the diff and skips the runtime bucket on a fresh start. Deciding which checks apply is preflight's job, not one-shot's:
+
 ```bash
-# DEFAULT_BRANCH is needed *here* — Step 0.4 sets it too, but the
-# committed-diff lookup below runs before Step 0.4 in a fresh shell.
-DEFAULT_BRANCH=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | xargs)
-DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
+PREFLIGHT="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/preflight.sh"
+[ -x "$PREFLIGHT" ] || PREFLIGHT="$(git rev-parse --show-toplevel)/scripts/preflight.sh"
 
-PREFLIGHT="${CLAUDE_PLUGIN_ROOT:-$ROOT/.claude/plugins/hero-skills}/scripts/preflight.sh"
-[ -x "$PREFLIGHT" ] || PREFLIGHT="$ROOT/.claude/plugins/hero-skills/scripts/preflight.sh"
-[ -x "$PREFLIGHT" ] || PREFLIGHT="$HOME/.claude/plugins/hero-skills/scripts/preflight.sh"
-
-# Scope runtime checks to the projects touched by the diff (uncommitted +
-# committed-but-unpushed). On a truly fresh start (default branch, clean
-# tree, nothing ahead) there's nothing to runtime-check yet — skip the
-# bucket entirely; Step 1 will re-run preflight with proper scope once
-# files start changing.
-CHANGED_PATHS=$( { git -C "$ROOT" diff --name-only HEAD 2>/dev/null;
-                   git -C "$ROOT" diff --name-only "origin/$DEFAULT_BRANCH...HEAD" 2>/dev/null;
-                 } | awk -F/ 'NF > 1 {print $1}' | sort -u | paste -sd, -)
-
-if [ -z "$CHANGED_PATHS" ] \
-   && [ "$(git -C "$ROOT" branch --show-current)" = "$DEFAULT_BRANCH" ] \
-   && [ -z "$(git -C "$ROOT" status --porcelain)" ]; then
-  "$PREFLIGHT" --bucket tooling
-  RC1=$?
-  "$PREFLIGHT" --bucket repo
-  RC2=$?
-  "$PREFLIGHT" --bucket pipeline
-  RC3=$?
-  PREFLIGHT_RC=$(( RC1 | RC2 | RC3 ))
-else
-  PROJECT_ARGS=()
-  [ -n "$CHANGED_PATHS" ] && PROJECT_ARGS=(--projects "$CHANGED_PATHS")
-  "$PREFLIGHT" --bucket all "${PROJECT_ARGS[@]}"
-  PREFLIGHT_RC=$?
-fi
+"$PREFLIGHT" --bucket all --auto-scope
+PREFLIGHT_RC=$?
 ```
 
 If `PREFLIGHT_RC` is non-zero, **STOP**. Print the recommended fix from each `[BLOCKER]` line (the script prints these inline) and do not advance to Step 0.4 — every blocker is something that would have failed a later step on a half-finished branch.
@@ -158,11 +127,16 @@ If `PREFLIGHT_RC` is zero but the script printed `[WARN]` lines, surface them to
 
 one-shot never works on the default branch. If we're on it with any uncommitted files or unpushed local commits, branch off automatically — **no prompt** — so the rest of the pipeline has a feature branch to commit and push to. This runs before resume detection so Step 0.5 sees a feature-branch state whenever there is work to preserve.
 
-First, **derive `SUGGESTED_BRANCH` as a reasoning step** per the Naming rules below — this is a model task, not a shell function. Inspect `$ARGUMENTS` (and the diff if `$ARGUMENTS` is empty) and produce a concrete, non-empty branch name. Then run the snippet below with that value exported in the environment. The snippet asserts the variable is set; it will not invent one.
+**Why one-shot branches at all, when `push-pr` also does:** push-pr branches at *push* time, which is Step 4 — too late, because Step 2 starts editing files. The timing is one-shot's own concern. The **naming policy is not** — that lives in `hero_branch_policy` and is shared with push-pr, so the two can't drift.
+
+First, **derive `SUGGESTED_BRANCH` as a reasoning step** — this is a model task, not a shell function. Run `hero_branch_policy` to print the rules, apply them to `$ARGUMENTS` (or the diff if `$ARGUMENTS` is empty), and produce a concrete, non-empty branch name. Then run the snippet below with that value exported in the environment. The snippet asserts the variable is set; it will not invent one.
 
 ```bash
-DEFAULT_BRANCH=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | xargs)
-DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
+# shellcheck source=/dev/null
+. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+hero_branch_policy   # apply these rules to derive SUGGESTED_BRANCH
+
+DEFAULT_BRANCH=$(hero_default_branch)
 CURRENT_BRANCH=$(git branch --show-current)
 
 # Fetch origin so AHEAD reflects current remote state. Step 0.5 below does its
@@ -211,11 +185,10 @@ if [ "$CURRENT_BRANCH" = "$DEFAULT_BRANCH" ] && { [ "${UNCOMMITTED:-0}" -gt 0 ] 
 fi
 ```
 
-**Naming rules** (no prompt — derive a sensible name and proceed). Rules are checked in order; the first match wins.
+**Naming** follows `hero_branch_policy` (shared with push-pr) with two one-shot specifics:
 
-1. `$ARGUMENTS` matches `^[A-Z][A-Z0-9]{1,9}-[0-9]+(\s|$)` (an issue ID anchored to the start): use `PROJ-123-SLUG_FROM_REST` — slug derived from whatever follows the ID; just `PROJ-123` if nothing follows. The match must be at position 0, so `Fix CVE-2024-1234 in auth` does **not** match this rule and falls through to rule 2.
-2. `$ARGUMENTS` is plain text (non-empty, no leading issue ID): use `feat/SLUG`, `fix/SLUG`, `refactor/SLUG`, `chore/SLUG`, or `docs/SLUG`, picking the prefix from verbs in the description (`add/create/implement` → feat, `fix/repair/resolve` → fix, `refactor/clean/restructure` → refactor, `update/bump/upgrade` → chore, `document/explain` → docs). Slug is lowercased, hyphenated, ≤50 chars, with filler words stripped.
-3. `$ARGUMENTS` is empty: derive from the diff. Use the union of committed-but-unpushed changes (`git log origin/$DEFAULT_BRANCH..HEAD --stat` plus the most recent commit's subject line) and uncommitted changes (`git diff --stat HEAD`) — picking the most-changed top-level directory and a 2–3 word summary, e.g. `feat/store-trust-tier`. The committed-and-uncommitted union matters because Step 0.4 triggers on either `AHEAD > 0` or `UNCOMMITTED > 0`; `git diff --stat HEAD` alone is empty in the committed-but-unpushed case.
+- **No prompt.** push-pr proposes a name and waits for confirmation; one-shot derives and proceeds. That is one-shot's auto-mode contract, not a naming difference — rename later with `git branch -m`.
+- **When `$ARGUMENTS` is empty**, derive the slug from the union of committed-but-unpushed changes (`git log origin/$DEFAULT_BRANCH..HEAD --stat` plus the latest commit subject) *and* uncommitted changes (`git diff --stat HEAD`). The union matters because this step triggers on either `AHEAD > 0` or `UNCOMMITTED > 0`, and `git diff --stat HEAD` alone is empty in the committed-but-unpushed case.
 
 Do NOT silently reset `$DEFAULT_BRANCH` after the branch — that is destructive and out of scope here. The post-checkout note inside the snippet (gated on `AHEAD > 0`) tells the user `$DEFAULT_BRANCH` still points at the local commits.
 
@@ -224,91 +197,36 @@ Do NOT silently reset `$DEFAULT_BRANCH` after the branch — that is destructive
 Before doing anything destructive, read the current git/PR state and figure out where in the pipeline this invocation should pick up. Users often hit `hero-skills:one-shot` after they've already done some of the work — possibly in a previous session — and the orchestrator should never silently re-do completed steps.
 
 ```bash
-DEFAULT_BRANCH=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | xargs)
-DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
-
-CURRENT_BRANCH=$(git branch --show-current)
-
-# A failed fetch silently makes AHEAD/UPSTREAM judgments wrong (offline,
-# auth expired, network blip). Surface the failure rather than fall through.
-FETCH_OK=true
-if ! git fetch origin "$DEFAULT_BRANCH" >/dev/null 2>&1; then
-  FETCH_OK=false
-  echo "WARN: 'git fetch origin $DEFAULT_BRANCH' failed — origin/$DEFAULT_BRANCH may be stale."
-  echo "      Resume detection will refuse rows that depend on AHEAD or remote PR state and"
-  echo "      will exit with diagnostic (see 'Diagnostic exit format' below). Resolve the"
-  echo "      network/auth issue and re-run, or invoke the individual skills directly."
+PLUGIN="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}"
+[ -x "$PLUGIN/scripts/resume-state.sh" ] || PLUGIN="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [ ! -x "$PLUGIN/scripts/resume-state.sh" ]; then
+  echo "ERROR: cannot find scripts/resume-state.sh — reinstall the plugin."
+  exit 1
 fi
-
-UNCOMMITTED=$(git status --porcelain | wc -l | tr -d ' ')
-# AHEAD here counts commits past origin/$DEFAULT_BRANCH on the *current* branch.
-# Note that this re-reads the value after Step 0.4 may have switched branches:
-# pre-checkout it was "local $DEFAULT_BRANCH vs origin"; post-checkout it's
-# "feature branch vs origin/$DEFAULT_BRANCH" — different semantics, same compare.
-AHEAD=$(git rev-list --count "origin/$DEFAULT_BRANCH..HEAD" 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
-
-# UNPUSHED counts commits past the branch's *upstream* (the PR's head ref),
-# not past origin/$DEFAULT_BRANCH. Distinct from AHEAD: a user who pushed
-# once and then made local follow-up commits has AHEAD>0 AND UNPUSHED>0;
-# we must push those follow-ups before any review/respond/ship step.
-#
-# When no upstream is configured yet (common before the first push),
-# `git rev-list --count '@{u}..HEAD'` errors silently and would yield 0,
-# which would route the user past Step 4 (push) and skip the
-# initial push entirely. Detect that case explicitly and fall back to
-# AHEAD — every commit past the default branch needs a push.
-if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
-  UNPUSHED=$(git rev-list --count '@{u}..HEAD' 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
-else
-  UNPUSHED=$AHEAD
-fi
-
-# gh pr list silently returns "[]" if no PR exists OR if gh fails — distinguish
-# the two by checking the exit code separately so empty PR_* values don't
-# masquerade as "no PR" when the real cause is a transient API failure.
-GH_OK=true
-if ! PR_LIST=$(gh pr list --head "$CURRENT_BRANCH" \
-  --json number,url,isDraft,reviewDecision,state 2>/dev/null); then
-  GH_OK=false
-  echo "WARN: 'gh pr list' failed — cannot read PR state for resume detection."
-  PR_LIST="[]"
-fi
-PR_JSON=$(printf '%s' "$PR_LIST" | jq -r '.[0] // empty')
-PR_NUMBER=$(printf '%s' "$PR_JSON" | jq -r '.number // empty')
-PR_STATE=$(printf '%s' "$PR_JSON" | jq -r '.state // empty')           # OPEN | CLOSED | MERGED | ""
-PR_IS_DRAFT=$(printf '%s' "$PR_JSON" | jq -r '.isDraft // empty')      # "true" | "false" | ""
-PR_REVIEW=$(printf '%s' "$PR_JSON" | jq -r '.reviewDecision // empty') # APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED | ""
-
-PR_EXISTS=false
-[ -n "$PR_NUMBER" ] && PR_EXISTS=true
-
-# Check for the durable self-review marker so we know review-pr ran.
-# Surface API failures rather than fall through to "0 → re-review".
-SELF_REVIEW_DONE=0
-BOT_REPLIED=false
-if [ "$PR_EXISTS" = "true" ]; then
-  if ! COMMENTS=$(gh api "/repos/{owner}/{repo}/issues/$PR_NUMBER/comments" 2>/dev/null); then
-    echo "note: gh api comments fetch failed; treating SELF_REVIEW_DONE/BOT_REPLIED as unknown."
-  else
-    SELF_REVIEW_DONE=$(printf '%s' "$COMMENTS" \
-      | jq '[.[] | select(.body | test("ai-hero:self-review"))] | length')
-    BOT_USER=$(awk -F': ' '/^- bot-username:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null \
-      | tr -d '[:space:]"'"'"'')
-    if [ -n "$BOT_USER" ]; then
-      BOT_COUNT=$(printf '%s' "$COMMENTS" \
-        | jq "[.[] | select(.user.login == \"$BOT_USER\")] | length")
-      [ "${BOT_COUNT:-0}" -gt 0 ] && BOT_REPLIED=true
-    fi
-  fi
-fi
+eval "$("$PLUGIN/scripts/resume-state.sh")"
 ```
+
+The existence guard matters: without it a missing script makes the command substitution empty, `eval` sets nothing, and every variable the table reads is **unset** — including `STATE_OK`, so the guard row would not match and the run would route on nothing at all.
+
+`resume-state.sh` gathers the state and makes no routing decision — the decision table below stays the single source of truth for that. It sets `DEFAULT_BRANCH`, `CURRENT_BRANCH`, `UNCOMMITTED`, `AHEAD`, `UNPUSHED`, `PR_EXISTS`, `PR_NUMBER`, `PR_STATE`, `PR_IS_DRAFT`, `PR_REVIEW`, `SELF_REVIEW_DONE`, `BOT_REPLIED`, plus `STATE_OK` and `STATE_ERRORS`.
+
+**Unknown is not zero.** Any value whose source call failed is emitted as the literal string `unknown`, never as a number. `AHEAD=0` means "verified nothing to push"; `AHEAD=unknown` means the fetch or the ref lookup failed and the count was never established. Because the rows below compare against `0`, an `unknown` cannot match them — the guard is structural rather than something to remember.
+
+`STATE_OK` is `false` if any source failed, with `STATE_ERRORS` naming which: `lib`, `no-hero-md`, `default-branch-rejected`, `default-branch-invalid`, `detached-head`, `jq`, `fetch`, `default-ref`, `git-status`, `rev-list-ahead`, `rev-list-unpushed`, `gh-pr-list`, `gh-comments`, `self-review-count`, `bot-count`.
+
+`default-branch-rejected` and `default-branch-invalid` are the most safety-relevant: they mean HERO.md's value was refused and every `AHEAD`/`UNPUSHED` measurement was taken against the `main` fallback rather than the repo's real base. One row guarding `STATE_OK` covers every case, so adding a source later cannot bypass a guard that enumerated the old ones.
+
+Two distinctions the table depends on:
+
+- **`AHEAD` vs `UNPUSHED`** — `AHEAD` counts commits past `origin/$DEFAULT_BRANCH`; `UNPUSHED` counts commits past this branch's own upstream. Someone who pushed once then committed again locally has both non-zero, and those follow-ups must reach the PR before any review step.
+- **`AHEAD` before vs after Step 0.4** — pre-checkout it compares the local default branch to origin; post-checkout it compares the feature branch. Same command, different meaning.
 
 Use the decision tree below to pick the **resume step** (1–9). Each row is the first that matches top-to-bottom; rows below the line require `PR_EXISTS=true` so empty PR_* values can't accidentally match.
 
 | Condition | Resume at | Reason |
 |-----------|-----------|--------|
-| `FETCH_OK=false` OR `GH_OK=false` | exit with diagnostic | resume rows depend on remote state — fix network/auth and re-run, or invoke individual skills |
-| `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0`, `UNPUSHED == 0` | exit with hint | `MERGED` → done; suggest re-running `hero-skills:ship-pr` if the local checkout still has the branch (Step 7b retries the cleanup for an already-merged PR — `abandon-branch` refuses merged branches by design). `CLOSED` without merge → the work never landed; say so explicitly and suggest reopening the PR or starting a new branch |
+| `STATE_OK=false` | STOP with diagnostic | print `STATE_ERRORS` (the only health variable emitted — `FETCH_OK`/`GH_OK` are script-internal and unset in your shell); every row below depends on state that was not established. `bot-username` alone is the one recoverable case — say the review bot cannot be identified and offer to continue at the user's chosen step. For anything else, fix it and re-run, or invoke the individual skills |
+| `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0`, `UNPUSHED == 0` | exit with hint | `MERGED` → done; suggest re-running `hero-skills:ship-pr` if the local checkout still has the branch (Step 7b retries the cleanup for an already-merged PR — `abandon` refuses merged branches by design). `CLOSED` without merge → the work never landed; say so explicitly and suggest reopening the PR or starting a new branch |
 | `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0`, `UNPUSHED > 0` | exit with hint | local commits exist that never reached the merged/closed PR — do NOT suggest a reset; push them to a new branch (or reopen) so the work is saved remotely first |
 | `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED > 0` | exit with hint | merged/closed PR but local edits exist — branch off `DEFAULT_BRANCH` for follow-up work |
 | `CURRENT_BRANCH == DEFAULT_BRANCH` and `UNCOMMITTED == 0` and `AHEAD == 0` | Step 1 (plan) | fresh start (Step 0.4 already auto-branched if there was any work to preserve) |
@@ -324,7 +242,7 @@ Use the decision tree below to pick the **resume step** (1–9). Each row is the
 
 **Diagnostic exit format.** When a row says "exit with diagnostic" or "exit with hint," print:
 
-1. The detected state: `CURRENT_BRANCH`, `UNCOMMITTED`, `AHEAD`, `UNPUSHED`, `FETCH_OK`, `GH_OK`, and any non-empty `PR_*` values.
+1. The detected state: `CURRENT_BRANCH`, `UNCOMMITTED`, `AHEAD`, `UNPUSHED`, `STATE_OK`, `STATE_ERRORS`, and any non-empty `PR_*` values.
 2. Which row in the table matched, paraphrased in one sentence.
 3. The recommended individual skill(s) to invoke next (e.g., `hero-skills:push-pr test`, `hero-skills:push-pr`, `hero-skills:review-pr`).
 
@@ -379,33 +297,116 @@ Render the DAG with `plan` as the active step:
 Now running: plan
 ```
 
-Plan inline — there is no standalone planning skill to delegate to; one-shot owns the full plan flow itself:
+**one-shot does not plan from scratch.** `hero-skills:think-it-through` is the planning skill; this step's job is to arrive at exactly one work-item and confirm it is still outstanding. Resolve first, grill only if nothing resolves.
 
-1. **Parse `$ARGUMENTS`.** If the first token matches a Linear/issue-ID pattern (e.g., `PROJ-123` — letters, dash, digits), treat it as an issue ID; otherwise treat the entire argument as a plain-text description. Any remaining text after the issue ID is additional context. If `$ARGUMENTS` is empty, ask the user what to plan — Step 0.5 routes here only when it found no current goal on the current branch to resume (PRs on other branches are not scanned).
-2. **If an issue ID was found, fetch it from Linear** using the Linear MCP tools:
+#### 1a: Parse `$ARGUMENTS`
 
+If the first token matches an issue-ID pattern (e.g., `PROJ-123` — letters, dash, digits), treat it as an issue ID; otherwise treat the entire argument as a plain-text description. Any remaining text after the issue ID is additional context. If `$ARGUMENTS` is empty, fall through to 1b and offer the ready items — Step 0.5 routes here only when it found no current goal on the current branch to resume (PRs on other branches are not scanned).
+
+#### 1b: Resolve against the work stores
+
+Read both stores before considering a grill. `think-it-through`, `handoff`, and `harden` all emit into `my-work/`; `handoff --issue`/`--repo` also files to the tracker.
+
+```bash
+# shellcheck source=/dev/null
+. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+hero_ready_items
+
+# Tracker issues, when Project Management is configured in HERO.md.
+gh issue list --assignee @me --state open --limit 20 \
+  --json number,title,url 2>/dev/null || echo "NO_TRACKER"
+```
+
+Match `$ARGUMENTS` against both sets:
+
+| Situation | Action |
+|---|---|
+| `$ARGUMENTS` names an issue ID that a `my-work/` item cross-links | That item is the plan → 1c |
+| `$ARGUMENTS` matches exactly one READY item (id, filename slug, or title) | That item is the plan → 1c |
+| `$ARGUMENTS` matches an open tracker issue but no `my-work/` item | Fetch the issue body; it is the plan → 1c |
+| `$ARGUMENTS` matches a **blocked** item | STOP — print the item's unmet `depends_on` ids and their titles. Do not implement past a dependency. |
+| `$ARGUMENTS` matches a **done** item | STOP — report that it already landed, with the item's `success` criteria as evidence. Offer the next READY item. Do NOT re-grill it; that writes a duplicate. |
+| `$ARGUMENTS` matches an **active** (in-progress) item | STOP and confirm — another session may hold it. Step 2 marks items `in-progress` before the first edit precisely so two runs cannot claim one item. |
+| `$ARGUMENTS` matches nothing, or is empty | Print the readiness view and ask: pick a READY item, or grill this as new work → 1d |
+| `$ARGUMENTS` matches more than one READY item | Ask which one. Never guess. |
+
+For an issue ID with a Linear MCP configured, fetch it for the fuller context:
+
+```
+mcp__linear-server__get_issue with id: ISSUE_ID
+mcp__linear-server__list_comments with issueId: ISSUE_ID
+```
+
+If no Linear MCP is configured or the ID does not resolve, say so and fall back to treating `$ARGUMENTS` as a plain description.
+
+#### 1c: Verify the item is still outstanding
+
+**A `todo` item is a claim, not a fact.** Nothing marks items `done` automatically when work lands out-of-band — a teammate's PR, a previous session, or the user doing it by hand. Implementing already-finished work is worse than a wasted run: it produces a confusing empty-or-conflicting diff that the later pipeline steps will happily push.
+
+Before implementing, check the item's `success` criteria and its `Verification` section against reality:
+
+1. **Read the criteria** — they state observable behavior. Go observe it: read the files the item names, run the command it names.
+2. **Search history** for the work having already landed. Check each command's status — an empty result from a command that *failed* is not evidence of absence:
+
+   `ITEM_SLUG` is the resolved item's filename slug from 1b (`007-add-oauth.md` → `add-oauth`). Set it there; without it the guard below is the default path, not an edge case.
+
+   ```bash
+   EVIDENCE_OK=true   # must be initialized: the classify table reads it as
+                      # "false", and an unset var is neither, plus a hard
+                      # error under set -u.
+
+   # `--grep ""` matches EVERY commit, which reads as "it already landed" and
+   # stops a run that should have proceeded. Skip the searches entirely rather
+   # than merely flagging — a bare flag still let the next line run.
+   if [ -z "${ITEM_SLUG:-}" ]; then
+     echo "1c: no slug to search — cannot verify from history"
+     EVIDENCE_OK=false
+   else
+     git log --all --oneline --grep "$ITEM_SLUG" -i | head || EVIDENCE_OK=false
+
+   # No 2>/dev/null: a swallowed gh failure yields an empty list that reads
+   # exactly like "no merged PR", which is the answer that says "go build it".
+     gh pr list --state merged --search "$ITEM_SLUG" --limit 5 \
+       --json number,title,mergedAt || EVIDENCE_OK=false
+   fi
    ```
-   mcp__linear-server__get_issue with id: ISSUE_ID
-   mcp__linear-server__list_comments with issueId: ISSUE_ID
-   ```
 
-   Extract and summarize the title, description, acceptance criteria, labels/priority, and any related/linked issues, plus comments for extra context. Present the summary to the user. If no Linear MCP is configured or the ID does not resolve, tell the user and fall back to treating `$ARGUMENTS` as a plain description.
-3. **If a plain-text description was provided**, use it directly as the task context. Summarize what you understand the task to be and confirm with the user.
-4. **Enter Plan Mode** via `EnterPlanMode`. This ensures Claude cannot modify files while planning and the user must approve the plan before implementation begins. Analyze the codebase (identify affected systems, search for related code, note existing patterns, identify dependencies), then draft an implementation plan covering summary, files to modify/create, implementation steps, testing approach, and risks. Ask clarifying questions about anything unclear before finalizing.
-5. **Exit Plan Mode** via `ExitPlanMode` once the plan is ready — this hands it to the user for approval. The user either approves (Plan Mode exits, implementation begins in the same conversation) or rejects (stay in Plan Mode and revise).
+   Note this is only as good as the repo's conventions: a repo that doesn't put slugs in commit subjects, or a shallow clone, yields zero hits for a reason unrelated to whether the work landed. Weigh the criteria check in step 1 more heavily than history when the two disagree.
 
-**Scope check after planning.** Read the plan output. If any of the following holds, STOP and hand back to the user:
+3. **Classify** and act:
 
-- Touches >5 files across unrelated subsystems
-- Adds or changes a public API contract / DB schema / CI workflow
-- Plan has an "out-of-scope follow-up" list with non-trivial items
-- The user did not approve the plan in Plan Mode
+| Finding | Action |
+|---|---|
+| No evidence of the work → genuinely outstanding | Continue to Step 2 |
+| Criteria already hold; history shows it landed | STOP the pipeline. Report the evidence, offer to mark the item `done`, and offer the next READY item. Do NOT implement. |
+| Partially done (some criteria hold, some don't) | Report exactly which criteria still fail. Ask whether to scope this run to the remainder or re-grill the item via `hero-skills:think-it-through`. Never silently implement the delta. |
+| **Could not evaluate** — `EVIDENCE_OK=false`, `gh` unauthenticated, a criteria command that errored for an unrelated reason, or criteria too vague to check | **STOP and ask.** Do not treat an unevaluable criterion as a failing one. Say which check could not run and let the user decide whether to build. |
 
-Otherwise continue.
+The last row exists because every other uncertain path here resolves toward implementing — which is the outcome this step exists to prevent. An empty result must never stand in for a negative one.
+
+State the verdict explicitly before advancing — "verified outstanding: SUCCESS_CRITERION does not hold" — so a wrong resolution is visible rather than assumed.
+
+#### 1d: Grill it (only when nothing resolved)
+
+Invoke `hero-skills:think-it-through` via the Skill tool, passing `$ARGUMENTS`. It grills the idea one question at a time and emits dependency-aware work-items into `my-work/`. It gates on the user confirming shared understanding — one-shot does not bypass that gate.
+
+Skip the grill and plan inline only when the task is one think-it-through itself calls out as not worth grilling (`think-it-through`'s "When to Use": a typo, a copy tweak, a dependency bump). Say which exemption applied. For anything else, grill.
+
+When think-it-through returns, re-run the readiness query and pick the item to implement.
+
+#### 1e: Scope check
+
+one-shot drives **one work-item to one PR**. After 1b–1d:
+
+- **Exactly one READY item** to implement → continue to Step 2.
+- **think-it-through emitted more than one item** → STOP. This is the scope guard firing: the work decomposed into a stack, which is the signal it is too large for unattended automation. Print the readiness view and tell the user to run one-shot per item, starting with the READY one(s).
+- **The single item is flagged `one_way_door: true`** → STOP and confirm with the user before proceeding. One-way doors (schema, public API, data model, money) do not belong in an unattended pipeline without an explicit go-ahead.
+
+The item's own `Non-goals` and `success` fields replace the old file-count heuristics — think-it-through sizes items to "the smallest units that each deliver something testable and can be reviewed on their own", which is exactly one-shot's contract.
 
 ### Step 2: implement
 
-Render DAG with `implement` active. Implement the plan inline (Plan Mode exits naturally into implementation). Follow these rules:
+Render DAG with `implement` active. Implement the work-item resolved in Step 1, working from its `Approach` section and holding its `success` criteria as the target. Mark the item `status: in-progress` in `my-work/` before the first edit, so a session that dies mid-flight leaves an honest store behind. Follow these rules:
 
 - **Read before edit** — Always Read a file before modifying it.
 - **Match existing patterns** — Follow naming, structure, and style already in the codebase. Don't introduce new conventions.
@@ -465,11 +466,14 @@ This is a **hard gate**. If the user declines, render `(✗) mark-ready` plus `S
 
 ### Step 7: await-review
 
-Render DAG with `await-review` active. If `HERO.md` declares a Code Review Agent (CodeRabbit, Greptile, Copilot review, etc.), poll the PR comments for the bot's first comment for **up to 60 seconds total, polling every 15 seconds**. If the bot has not posted by then, render `(–) await-review` (the gate behavior is delegated to Step 9's auto-approve, which will refuse on unresolved threads) and advance to Step 8 only if `BOT_REPLIED=true` — otherwise skip Step 8 with `(–)` too and go straight to Step 9.
+Render DAG with `await-review` active. If `HERO.md` declares a Code Review Agent (CodeRabbit, Greptile, Copilot review, etc.), poll the PR comments for the bot's first comment for **up to 60 seconds total, polling every 15 seconds**. If the bot has not posted by then, render `(–) await-review` (the gate behavior is delegated to Step 9's auto-approve, which will refuse on unresolved threads) and skip Step 8 with `(–)` too, going straight to Step 9.
+
+Advance to Step 8 **only if this step's own poll found a comment** — i.e. `BOT_COMMENT` is non-empty. Do not gate on `BOT_REPLIED`: that is set by `resume-state.sh` at Step 0.5, in a different shell, and on a fresh run it was evaluated before any PR existed, so it is permanently `false`. Gating on it means `respond-to-comments` never runs and bot feedback is silently skipped.
 
 ```bash
-BOT_USER=$(awk -F': ' '/^- bot-username:/ {print $2; exit}' "$ROOT/HERO.md" \
-  | tr -d '[:space:]"'"'"'')
+# shellcheck source=/dev/null
+. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+BOT_USER=$(hero_field bot-username || true)
 # PR_NUMBER comes from Step 4's push-pr output. Re-derive owner/repo from gh
 # in case earlier steps did not export them.
 PR_NUMBER=${PR_NUMBER:-$(gh pr list --head "$(git branch --show-current)" \
@@ -495,14 +499,20 @@ If the bot's feedback exceeds a small set of trivial fixes, render `(✗) respon
 
 ### Step 9: ship
 
-Render DAG with `ship` active. Run `hero-skills:ship-pr`. This:
+Render DAG with `ship` active. Run `hero-skills:ship-pr`. It owns the auto-approve gates, the verdict wait, the merge confirmation, and the branch cleanup — see its SKILL.md for what those are.
 
-1. Checks the auto-approve gates (prior review present, no unresolved threads, no active CHANGES_REQUESTED, no unanswered reviewer questions).
-2. Posts `@auto-approve` and waits for the verdict.
-3. On APPROVE, asks before merging. The user must say `y`.
-4. After merge, switches to the default branch, pulls latest, and deletes the merged head branch (remote + local).
+**Contract — what one-shot needs back:** a merged SHA, or a STOP reason.
 
-If auto-approve returns REQUEST_CHANGES or WORKFLOW_FAILED, STOP. The user should run `hero-skills:respond-to-comments` again or fix the workflow before re-attempting.
+- **STOP** (REQUEST_CHANGES, WORKFLOW_FAILED, declined merge) → render `(✗)`, report the reason, leave the work-item `in-progress`. Never mark an unmerged PR's item `done`.
+- **Merged** → run Step 9a.
+
+#### Step 9a: Close out the work-item
+
+The only place the store is marked `done`. one-shot is its sole consumer, so skipping this is what makes a later run re-resolve finished work (Step 1c catches it, but catching it late wastes the resolution):
+
+1. Set `status: done` in the item's `my-work/NNN-slug.md`.
+2. Close any cross-linked tracker issue — `gh issue close ISSUE_NUMBER --repo TARGET_REPO --comment "Merged in PR_URL"`, or the Linear MCP equivalent. Use the item's **recorded** repo; for a `handoff --repo` item that is not this one.
+3. Run `hero_ready_items` and report what the merge unblocked — items whose `depends_on` just went green are the natural next run.
 
 ### Final Summary
 
@@ -530,8 +540,10 @@ If the pipeline stopped early, render the DAG with `(✗)` on the failed step, t
 
 ## Notes
 
-- This skill **does not skip user gates**. Plan approval, mark-ready, merge confirmation are all explicit. Auto mode does not change that.
+- This skill **does not skip user gates**. think-it-through's shared-understanding gate, mark-ready, and merge confirmation are all explicit. Auto mode does not change that.
+- **one-shot consumes work-items; it does not author them.** `think-it-through`, `handoff`, and `harden` are the producers into `my-work/`. Step 1 resolves against that store (and the tracker) before it will grill anything new, and Step 9 is what marks an item `done` — one-shot is the store's only consumer, so if it skips the close-out nothing else will do it.
+- **Trust the criteria, not the status field.** `status: todo` only means "nobody has updated this file", which is not the same as "not yet done" — work lands out-of-band all the time. Step 1c re-verifies against the codebase before implementing.
 - This skill **does not retry** on judgment-call failures (test design, large bot feedback). Retrying without human input is how small PRs become broken merges.
 - Step 0.4's `git checkout -b` is unconfirmed by design — one-shot never works on the default branch and assumes the auto-derived name is acceptable. To rename later, use `git branch -m`. The sibling skill `push-pr` prompts for the name because it's invoked deliberately on an existing branch; one-shot's auto-mode contract precludes that prompt.
 - For larger work, run the same skills individually so you can pause between them.
-- Run `hero-skills:abandon-branch` separately if you abandon mid-pipeline — ship-pr's reset only fires after a successful merge.
+- Run `hero-skills:abandon` separately if you abandon mid-pipeline — ship-pr's reset only fires after a successful merge.

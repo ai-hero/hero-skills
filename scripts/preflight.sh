@@ -18,8 +18,12 @@
 #
 # Usage:
 #   scripts/preflight.sh [--bucket tooling|repo|runtime|pipeline|all]
-#                        [--projects path1,path2]
+#                        [--projects path1,path2 | --auto-scope]
 #                        [--quiet]
+#
+#   --auto-scope  derive --projects from the diff, and skip the runtime bucket
+#                 entirely on a fresh start (default branch, clean tree). Use
+#                 this instead of computing the scope in the caller.
 #
 # Output (one line per check):
 #   [OK]      bucket: detail
@@ -27,24 +31,53 @@
 #   [BLOCKER] bucket: detail (sets exit code 1)
 #   [SKIP]    bucket: detail (check not applicable)
 #
-# Exit code: 0 if no blockers, 1 otherwise. Warnings never block.
+# Exit code: 0 if no blockers, 1 if blockers found, 2 if preflight could not
+# RUN at all (usage error, or a missing/corrupt hero-lib.sh). 2 means there are
+# no [BLOCKER] lines to read — it is an installation problem, not a repo one.
+# Warnings never block.
 #
 # This script is read-only. It never edits files, creates branches, or
 # mutates remote state.
 
 set -uo pipefail
 
+# Shared helpers. HERO.md parsing lives in exactly one place — this script
+# previously carried two hand-rolled variants that disagreed with hero_field
+# and with each other on a value carrying a trailing `# comment`.
+# Resolve through symlinks: `dirname "$0"` gives the SYMLINK's directory, so
+# `ln -s .../preflight.sh ~/bin/preflight` looked for hero-lib.sh in ~/bin.
+SELF="${BASH_SOURCE[0]:-$0}"
+while [ -L "$SELF" ]; do
+  LINK=$(readlink "$SELF")
+  case "$LINK" in
+    /*) SELF="$LINK" ;;
+    *)  SELF="$(cd "$(dirname "$SELF")" && pwd)/$LINK" ;;
+  esac
+done
+HERO_LIB="$(cd "$(dirname "$SELF")" && pwd)/hero-lib.sh"
+
+# Test the precondition and the RESULT, not `.`'s exit status — `.` returns the
+# status of the last command in the sourced file, so one appended statement
+# returning non-zero would read as "cannot source" on a healthy library.
+[ -r "$HERO_LIB" ] || { echo "preflight: hero-lib.sh not readable at $HERO_LIB" >&2; exit 2; }
+# shellcheck source=/dev/null
+. "$HERO_LIB"
+command -v hero_root >/dev/null 2>&1 \
+  || { echo "preflight: sourced $HERO_LIB but hero_root is undefined — library is corrupt" >&2; exit 2; }
+
 # ---------- arg parsing ----------------------------------------------------
 
 BUCKET=all
 PROJECT_SCOPE=""
 QUIET=false
+AUTO_SCOPE=false
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --bucket)    BUCKET="${2:-all}"; shift 2 ;;
-    --projects)  PROJECT_SCOPE="${2:-}"; shift 2 ;;
-    --quiet)     QUIET=true; shift ;;
+    --bucket)     BUCKET="${2:-all}"; shift 2 ;;
+    --projects)   PROJECT_SCOPE="${2:-}"; shift 2 ;;
+    --auto-scope) AUTO_SCOPE=true; shift ;;
+    --quiet)      QUIET=true; shift ;;
     -h|--help)
       sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
@@ -57,6 +90,76 @@ case "$BUCKET" in tooling|repo|runtime|pipeline|all) ;; *)
   echo "ERROR: --bucket must be one of: tooling, repo, runtime, pipeline, all" >&2
   exit 2 ;;
 esac
+
+# ---------- auto-scope -----------------------------------------------------
+#
+# Deciding which projects a run should runtime-check is this script's job, not
+# its caller's. --auto-scope derives --projects from the diff (uncommitted plus
+# committed-but-unpushed) and, on a truly fresh start with nothing changed yet,
+# skips the runtime bucket entirely rather than checking every project in the
+# repo for a diff that does not exist.
+#
+# Callers previously reimplemented this inline; one-shot's copy was ~40 lines.
+
+if [ "$AUTO_SCOPE" = "true" ]; then
+  if [ -n "$PROJECT_SCOPE" ]; then
+    echo "ERROR: --auto-scope and --projects are mutually exclusive" >&2
+    exit 2
+  fi
+  AS_ROOT=$(hero_root)
+  # _verbose: this value decides whether an entire bucket of blocking checks is
+  # skipped. A silent fallback to `main` on a `master` repo would compare the
+  # real branch against a fabricated one, with no signal that it happened.
+  AS_DEFAULT=$(hero_default_branch_verbose "$AS_ROOT")
+
+  # An unresolvable base ref makes `git diff origin/X...HEAD` fail into
+  # 2>/dev/null and contribute NOTHING — indistinguishable from "no committed
+  # changes". That reads as a fresh start and skips the runtime bucket entirely,
+  # on a repo that may carry real blockers. There must be a third state:
+  # "could not determine scope", which falls back to checking everything.
+  if git -C "$AS_ROOT" rev-parse --verify --quiet "origin/$AS_DEFAULT" >/dev/null 2>&1; then
+    AS_BASE_OK=true
+  else
+    AS_BASE_OK=false
+    [ "$QUIET" = "true" ] || {
+      echo "auto-scope: origin/$AS_DEFAULT does not resolve — cannot derive scope from the diff." >&2
+      echo "auto-scope: checking ALL projects instead. Fix with: git fetch origin $AS_DEFAULT" >&2
+    }
+  fi
+
+  if [ "$AS_BASE_OK" = "true" ]; then
+    # Top-level directory of every changed path, deduped. Files at the repo root
+    # (NF == 1) belong to no project and are intentionally excluded.
+    # `ls-files --others` is required: neither diff form lists UNTRACKED paths,
+    # so a newly scaffolded project directory — a first-class flow here — was
+    # invisible to the scope and silently never runtime-checked.
+    PROJECT_SCOPE=$( { git -C "$AS_ROOT" diff --name-only HEAD 2>/dev/null
+                       git -C "$AS_ROOT" diff --name-only "origin/$AS_DEFAULT...HEAD" 2>/dev/null
+                       git -C "$AS_ROOT" ls-files --others --exclude-standard 2>/dev/null
+                     } | awk -F/ 'NF > 1 {print $1}' | sort -u | paste -sd, - )
+  else
+    PROJECT_SCOPE=""
+  fi
+
+  AS_BRANCH=$(git -C "$AS_ROOT" branch --show-current 2>/dev/null)
+  AS_DIRTY=$(git -C "$AS_ROOT" status --porcelain 2>/dev/null)
+
+  # A fresh start may only be DECLARED when it can be OBSERVED — hence the
+  # AS_BASE_OK conjunct.
+  if [ "$AS_BASE_OK" = "true" ] && [ -z "$PROJECT_SCOPE" ] \
+     && [ "$AS_BRANCH" = "$AS_DEFAULT" ] && [ -z "$AS_DIRTY" ]; then
+    if [ "$BUCKET" = "all" ]; then
+      BUCKET=no-runtime
+      [ "$QUIET" = "true" ] || echo "auto-scope: fresh start — skipping runtime bucket"
+    else
+      # Printing "skipping runtime bucket" here and then running it (because
+      # --bucket was explicit) is a lie that gets believed later.
+      [ "$QUIET" = "true" ] || echo "auto-scope: fresh start, but --bucket $BUCKET was requested explicitly — running it anyway"
+    fi
+  elif [ -n "$PROJECT_SCOPE" ]; then
+    [ "$QUIET" = "true" ] || echo "auto-scope: runtime checks scoped to '$PROJECT_SCOPE'"
+  fi
+fi
 
 # ---------- result tracking ------------------------------------------------
 
@@ -77,10 +180,9 @@ emit() {
 
 # ---------- shared context -------------------------------------------------
 
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+ROOT=$(hero_root)
 HERO="$ROOT/HERO.md"
-DEFAULT_BRANCH=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$HERO" 2>/dev/null | xargs)
-DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
+DEFAULT_BRANCH=$(hero_default_branch "$ROOT")
 
 # Lazy gh-auth probe — set on first call, cached for the rest of the run.
 # Used by check_repo / check_pipeline so they don't re-shell `gh auth status`
@@ -476,6 +578,14 @@ case "$BUCKET" in
     check_tooling
     check_repo
     check_runtime
+    check_pipeline
+    ;;
+  # Internal, set only by --auto-scope on a fresh start: everything except the
+  # runtime bucket, which needs a diff to be meaningful. Not accepted from the
+  # command line (the --bucket validator above rejects it).
+  no-runtime)
+    check_tooling
+    check_repo
     check_pipeline
     ;;
 esac
