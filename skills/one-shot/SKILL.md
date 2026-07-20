@@ -212,7 +212,9 @@ The existence guard matters: without it a missing script makes the command subst
 
 **Unknown is not zero.** Any value whose source call failed is emitted as the literal string `unknown`, never as a number. `AHEAD=0` means "verified nothing to push"; `AHEAD=unknown` means the fetch or the ref lookup failed and the count was never established. Because the rows below compare against `0`, an `unknown` cannot match them — the guard is structural rather than something to remember.
 
-`STATE_OK` is `false` if any source failed, with `STATE_ERRORS` naming which (`jq`, `fetch`, `default-ref`, `detached-head`, `gh-pr-list`, `gh-comments`, `bot-username`, `lib`). One row guarding `STATE_OK` covers every case, so adding a source later cannot bypass a guard that enumerated the old ones.
+`STATE_OK` is `false` if any source failed, with `STATE_ERRORS` naming which: `lib`, `no-hero-md`, `default-branch-rejected`, `default-branch-invalid`, `detached-head`, `jq`, `fetch`, `default-ref`, `git-status`, `rev-list-ahead`, `rev-list-unpushed`, `gh-pr-list`, `gh-comments`, `self-review-count`, `bot-count`.
+
+`default-branch-rejected` and `default-branch-invalid` are the most safety-relevant: they mean HERO.md's value was refused and every `AHEAD`/`UNPUSHED` measurement was taken against the `main` fallback rather than the repo's real base. One row guarding `STATE_OK` covers every case, so adding a source later cannot bypass a guard that enumerated the old ones.
 
 Two distinctions the table depends on:
 
@@ -240,7 +242,7 @@ Use the decision tree below to pick the **resume step** (1–9). Each row is the
 
 **Diagnostic exit format.** When a row says "exit with diagnostic" or "exit with hint," print:
 
-1. The detected state: `CURRENT_BRANCH`, `UNCOMMITTED`, `AHEAD`, `UNPUSHED`, `FETCH_OK`, `GH_OK`, and any non-empty `PR_*` values.
+1. The detected state: `CURRENT_BRANCH`, `UNCOMMITTED`, `AHEAD`, `UNPUSHED`, `STATE_OK`, `STATE_ERRORS`, and any non-empty `PR_*` values.
 2. Which row in the table matched, paraphrased in one sentence.
 3. The recommended individual skill(s) to invoke next (e.g., `hero-skills:push-pr test`, `hero-skills:push-pr`, `hero-skills:review-pr`).
 
@@ -323,6 +325,8 @@ Match `$ARGUMENTS` against both sets:
 | `$ARGUMENTS` matches exactly one READY item (id, filename slug, or title) | That item is the plan → 1c |
 | `$ARGUMENTS` matches an open tracker issue but no `my-work/` item | Fetch the issue body; it is the plan → 1c |
 | `$ARGUMENTS` matches a **blocked** item | STOP — print the item's unmet `depends_on` ids and their titles. Do not implement past a dependency. |
+| `$ARGUMENTS` matches a **done** item | STOP — report that it already landed, with the item's `success` criteria as evidence. Offer the next READY item. Do NOT re-grill it; that writes a duplicate. |
+| `$ARGUMENTS` matches an **active** (in-progress) item | STOP and confirm — another session may hold it. Step 2 marks items `in-progress` before the first edit precisely so two runs cannot claim one item. |
 | `$ARGUMENTS` matches nothing, or is empty | Print the readiness view and ask: pick a READY item, or grill this as new work → 1d |
 | `$ARGUMENTS` matches more than one READY item | Ask which one. Never guess. |
 
@@ -344,17 +348,27 @@ Before implementing, check the item's `success` criteria and its `Verification` 
 1. **Read the criteria** — they state observable behavior. Go observe it: read the files the item names, run the command it names.
 2. **Search history** for the work having already landed. Check each command's status — an empty result from a command that *failed* is not evidence of absence:
 
-   ```bash
-   # ITEM_SLUG must be non-empty: `--grep ""` matches EVERY commit, which reads
-   # as "it already landed" and stops a run that should have proceeded.
-   [ -n "$ITEM_SLUG" ] || { echo "1c: no slug to search — cannot verify"; EVIDENCE_OK=false; }
+   `ITEM_SLUG` is the resolved item's filename slug from 1b (`007-add-oauth.md` → `add-oauth`). Set it there; without it the guard below is the default path, not an edge case.
 
-   git log --all --oneline --grep "$ITEM_SLUG" -i | head || EVIDENCE_OK=false
+   ```bash
+   EVIDENCE_OK=true   # must be initialized: the classify table reads it as
+                      # "false", and an unset var is neither, plus a hard
+                      # error under set -u.
+
+   # `--grep ""` matches EVERY commit, which reads as "it already landed" and
+   # stops a run that should have proceeded. Skip the searches entirely rather
+   # than merely flagging — a bare flag still let the next line run.
+   if [ -z "${ITEM_SLUG:-}" ]; then
+     echo "1c: no slug to search — cannot verify from history"
+     EVIDENCE_OK=false
+   else
+     git log --all --oneline --grep "$ITEM_SLUG" -i | head || EVIDENCE_OK=false
 
    # No 2>/dev/null: a swallowed gh failure yields an empty list that reads
    # exactly like "no merged PR", which is the answer that says "go build it".
-   gh pr list --state merged --search "$ITEM_SLUG" --limit 5 \
-     --json number,title,mergedAt || EVIDENCE_OK=false
+     gh pr list --state merged --search "$ITEM_SLUG" --limit 5 \
+       --json number,title,mergedAt || EVIDENCE_OK=false
+   fi
    ```
 
    Note this is only as good as the repo's conventions: a repo that doesn't put slugs in commit subjects, or a shallow clone, yields zero hits for a reason unrelated to whether the work landed. Weigh the criteria check in step 1 more heavily than history when the two disagree.
@@ -452,7 +466,9 @@ This is a **hard gate**. If the user declines, render `(✗) mark-ready` plus `S
 
 ### Step 7: await-review
 
-Render DAG with `await-review` active. If `HERO.md` declares a Code Review Agent (CodeRabbit, Greptile, Copilot review, etc.), poll the PR comments for the bot's first comment for **up to 60 seconds total, polling every 15 seconds**. If the bot has not posted by then, render `(–) await-review` (the gate behavior is delegated to Step 9's auto-approve, which will refuse on unresolved threads) and advance to Step 8 only if `BOT_REPLIED=true` — otherwise skip Step 8 with `(–)` too and go straight to Step 9.
+Render DAG with `await-review` active. If `HERO.md` declares a Code Review Agent (CodeRabbit, Greptile, Copilot review, etc.), poll the PR comments for the bot's first comment for **up to 60 seconds total, polling every 15 seconds**. If the bot has not posted by then, render `(–) await-review` (the gate behavior is delegated to Step 9's auto-approve, which will refuse on unresolved threads) and skip Step 8 with `(–)` too, going straight to Step 9.
+
+Advance to Step 8 **only if this step's own poll found a comment** — i.e. `BOT_COMMENT` is non-empty. Do not gate on `BOT_REPLIED`: that is set by `resume-state.sh` at Step 0.5, in a different shell, and on a fresh run it was evaluated before any PR existed, so it is permanently `false`. Gating on it means `respond-to-comments` never runs and bot feedback is silently skipped.
 
 ```bash
 # shellcheck source=/dev/null

@@ -53,7 +53,8 @@ own output.
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-sed -n '/## Design System/,/^## /p' "$ROOT/HERO.md" 2>/dev/null || echo "NO_DESIGN_SYSTEM_CONFIG"
+# Reads a whole SECTION, not a scalar field — hero_field cannot express this.
+sed -n '/## Design System/,/^## /p' "$ROOT/HERO.md" 2>/dev/null `# hero-lint: allow-inline` || echo "NO_DESIGN_SYSTEM_CONFIG"
 ```
 
 A repo is a producer if it builds a `registry.json`, serves `/r/*`, or its

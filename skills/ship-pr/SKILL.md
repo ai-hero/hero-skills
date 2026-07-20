@@ -330,7 +330,9 @@ Show the comment body to the user verbatim — it contains the gate results and 
 Resolve the merge method from HERO.md (default `squash`), normalize the value (lowercase, strip quotes/whitespace) so `Squash`, `"squash"`, ` squash ` all resolve to `squash`, and reject anything else loudly:
 
 ```bash
-MERGE_METHOD_RAW=$(awk -F': ' '/^- merge-method:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null)
+# shellcheck source=/dev/null
+. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+MERGE_METHOD_RAW=$(hero_field merge-method || true)
 MERGE_METHOD=$(printf '%s' "${MERGE_METHOD_RAW:-squash}" \
   | tr -d '[:space:]' | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]')
 
@@ -490,8 +492,7 @@ if [ "$RESET_OK" = "true" ] && [ "$MERGED" = "true" ]; then
   # Non-admins may not see this field.
   AUTO_DELETE=$(gh repo view --json deleteBranchOnMerge --jq '.deleteBranchOnMerge // empty' 2>/dev/null)
 
-  HERO_AUTO_DELETE=$(awk -F': ' '/^- auto-delete-branches:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null \
-    | tr -d '[:space:]' | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]')
+  HERO_AUTO_DELETE=$(hero_field auto-delete-branches 2>/dev/null | tr '[:upper:]' '[:lower:]')
   HERO_AUTO_DELETE=${HERO_AUTO_DELETE:-true}
 
   if [ "$AUTO_DELETE" = "true" ]; then
@@ -623,8 +624,7 @@ This check is **advisory only**. It surfaces a DEGRADED or unreachable deploymen
 if [ "$MERGED" != "true" ]; then
   DEPLOY_STATUS="skipped"
 else
-  DEPLOY_PLATFORM=$(awk -F': ' '/^- platform:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null \
-    | tr -d '[:space:]' | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]')
+  DEPLOY_PLATFORM=$(hero_field platform 2>/dev/null | tr '[:upper:]' '[:lower:]')
   DEPLOY_PLATFORM=${DEPLOY_PLATFORM:-none}
 fi
 ```
@@ -688,7 +688,9 @@ Classify in this order:
 **`vm` / `paas` / `serverless`** — curl the HERO.md-configured health endpoint(s). HERO.md's Deployment section lists one or more, e.g. `- health-endpoint: https://api.example.com/healthz`; read them all first:
 
 ```bash
-HEALTH_ENDPOINTS=$(awk -F': ' '/^- health-endpoint:/ {print $2}' "$ROOT/HERO.md" 2>/dev/null \
+# hero_field returns only the FIRST match; health-endpoint legitimately repeats,
+# so this list is read directly.
+HEALTH_ENDPOINTS=$(awk -F': ' '/^- health-endpoint:/ {print $2}' "$ROOT/HERO.md" 2>/dev/null `# hero-lint: allow-inline` \
   | tr -d '"' | tr -d "'")
 
 if [ -z "$HEALTH_ENDPOINTS" ]; then

@@ -186,7 +186,14 @@ elif [ "$PR_EXISTS" = "true" ]; then
     # BOT_REPLIED is only meaningful if we know who the bot is. Without
     # bot-username configured, a `false` here is indistinguishable from "no
     # reply yet" and await-review waits forever for a reply already posted.
-    if BOT_USER=$(hero_field bot-username 2>/dev/null); then
+    # `agent: none` is a first-class supported setting (init-hero writes it when
+    # no review bot is detected), and such a repo has no bot-username. Treating
+    # that as a failed source made STATE_OK=false on every resume, so one-shot
+    # stopped with a diagnostic on a perfectly valid configuration.
+    REVIEW_AGENT=$(hero_field agent 2>/dev/null | tr '[:upper:]' '[:lower:]')
+    if [ "$REVIEW_AGENT" = "none" ]; then
+      BOT_REPLIED=none
+    elif BOT_USER=$(hero_field bot-username 2>/dev/null); then
       # `|| echo 0` here produced BOT_REPLIED=false with STATE_OK=true — a
       # reply that exists, reported as absent, so await-review polls forever.
       if BOT_COUNT=$(printf '%s' "$COMMENTS" \

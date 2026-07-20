@@ -367,47 +367,69 @@ echo ""
 echo "────────────────────────────"
 
 # ── re-inlined shared helpers ──────────────────────────────────────
-# Every pattern below used to be pasted into three or more SKILL.md files and
-# had already drifted between copies (push-pr listed a `test/` branch prefix,
-# one-shot did not; one asked for a 3-5 word slug, the other 2-3). They now
-# live in scripts/hero-lib.sh. A skill re-inlining one is not a style nit — it
-# forks the behavior silently, and the fork only surfaces when two skills
-# disagree at runtime.
+# HERO.md parsing, .git/info/exclude writes, and work-item status parsing live
+# in scripts/hero-lib.sh. A file that re-implements one forks the behavior
+# silently, and the fork only surfaces when two skills disagree at runtime.
 #
-# Format: "regex|hero-lib replacement"
-INLINED_PATTERNS=(
-  "awk -F': ' '/\\^- default-branch:/|hero_default_branch"
-  "rev-parse --git-path info/exclude|hero_exclude_add"
-  "Stale-HERO check|hero_check_staleness"
-  "norm() { printf|hero_ready_items"
+# This checks SEMANTICS, not literal byte strings. An earlier version matched
+# the exact awk one-liners that existed at the time; those strings stopped
+# appearing the moment hero-lib.sh was rewritten, so the guard matched nothing
+# anywhere in the repo — including the canonical implementation — and reported
+# clean over every possible violation. Any reworded copy (awk -F":", sed -n,
+# grep|cut) escaped it too.
+#
+# The inverted rule: if a file TOUCHES shared state, it must also reference the
+# library. That has no phrasing to evade — you cannot parse default-branch
+# without naming default-branch.
+#
+# Format: "marker-regex|hero-lib replacement|human description"
+# Match the PARSING IDIOM, not the field name. Matching field names both
+# over-fired (prose mentioning "default-branch", init-hero GENERATING the
+# HERO.md template, a test writing fixtures) and under-fired (it never named
+# merge-method / platform / health-endpoint, so four hand-rolled parsers in
+# ship-pr went unseen). Reading HERO.md through a text tool is the actual
+# duplication; writing it is not.
+# Match the PARSING IDIOM, not the field name. Field names both over-fired
+# (prose, init-hero GENERATING the HERO.md template, tests writing fixtures)
+# and under-fired (never naming merge-method / platform, so four hand-rolled
+# parsers in ship-pr went unseen). Reading HERO.md through a text tool is the
+# duplication; writing it is not.
+#
+# Fields are :: separated — the patterns contain `|` alternations.
+# `.*` not `[^\n]*`: grep -E reads the latter as "not backslash or n", which
+# cannot span an ordinary word like `print`. grep is line-based regardless.
+# \b word boundaries are required too — without them `sed` matches inside
+# "pas_sed_" and "ba_sed_", flagging ordinary prose.
+SHARED_STATE=(
+  "\\b(awk|sed|cut)\\b.*HERO\\.md::hero_field::hand-rolled HERO.md parsing"
+  "rev-parse.*info/exclude::hero_exclude_add::.git/info/exclude resolution"
 )
-for entry in "${INLINED_PATTERNS[@]}"; do
-  pattern="${entry%%|*}"
-  replacement="${entry##*|}"
-  # Scan BOTH skills/*.md and scripts/*.sh. Scanning only skills/ meant the
-  # guard reported "pass" while two live re-inlinings sat in scripts/preflight.sh
-  # — a guard that is clean over a known violation is worse than no guard.
-  # Two files necessarily contain these patterns and must be excluded:
-  # hero-lib.sh is the canonical home, and this file declares them as the
-  # literals it searches for.
-  HITS=$(grep -rln "$pattern" --include='*.md' --include='*.sh' \
-    "$SKILLS_DIR" "$PLUGIN_ROOT/scripts" 2>/dev/null \
-    | grep -vE '/(hero-lib|validate)\.sh$' || true)
-  if [[ -n "$HITS" ]]; then
-    while IFS= read -r hit; do
-      [[ -z "$hit" ]] && continue
-      error "re-inlines logic that lives in hero-lib.sh — use $replacement" \
-        "${hit#"$PLUGIN_ROOT/"}" \
-        "$(grep -n "$pattern" "$hit" | head -1 | cut -d: -f1)" \
-        "Source scripts/hero-lib.sh and call $replacement instead of pasting the implementation"
-    done <<< "$HITS"
-  else
-    pass "no skill re-inlines $replacement"
-  fi
-done
+ALLOW_MARKER="hero-lint: allow-inline"
 
-echo ""
-echo "────────────────────────────"
+while IFS= read -r f; do
+  case "$f" in
+    */hero-lib.sh|*/validate.sh) continue ;;
+  esac
+  for entry in "${SHARED_STATE[@]}"; do
+    marker="${entry%%::*}"
+    rest="${entry#*::}"
+    replacement="${rest%%::*}"
+    description="${rest##*::}"
+    # Report only lines that BOTH match the idiom and lack the opt-out marker.
+    # Checked per line, not per file: a file may legitimately use the library
+    # in one place and document the anti-pattern in another.
+    hits=$(grep -nE "$marker" "$f" 2>/dev/null | grep -vF "$ALLOW_MARKER" || true)
+    [ -z "$hits" ] && continue
+    error "$description — use $replacement" \
+      "${f#"$PLUGIN_ROOT/"}" \
+      "$(printf '%s' "$hits" | head -1 | cut -d: -f1)" \
+      "Source scripts/hero-lib.sh and call $replacement, or append a '$ALLOW_MARKER' comment on that line if it is deliberate"
+  done
+done < <(find "$SKILLS_DIR" "$PLUGIN_ROOT/scripts" -type f 2>/dev/null)
+
+if [[ $ERRORS -eq 0 ]]; then
+  pass "no file touches shared state without hero-lib.sh"
+fi
 
 # ── work-item store: producers must have a consumer ────────────────
 # think-it-through, handoff, and harden all WRITE work-items into my-work/.
@@ -420,7 +442,20 @@ if [[ ! -f "$ONE_SHOT" ]]; then
   error "skills/one-shot/SKILL.md is missing" "skills/one-shot/SKILL.md" "" \
     "one-shot owns Pipeline 2; restore it or update this guard"
 else
-  if grep -q 'hero-skills:think-it-through' "$ONE_SHOT"; then
+  # Strip HTML comments and fenced blocks before matching, and require the
+  # reference in an ACTIVE position (an Invoke instruction or a table row).
+  # A bare substring check was satisfied by leaving the name in a comment —
+  # "this pipeline used to call hero-skills:think-it-through" passed while
+  # every real delegation had been deleted, which is exactly the drift this
+  # guard exists to catch.
+  ONE_SHOT_ACTIVE=$(awk '
+    /^```/           { fence = !fence; next }
+    fence            { next }
+    /<!--/           { next }
+    { print }
+  ' "$ONE_SHOT")
+  if printf '%s\n' "$ONE_SHOT_ACTIVE" \
+      | grep -qE '(Invoke|Skill tool|^\|).*hero-skills:think-it-through'; then
     pass "one-shot's plan step delegates to think-it-through"
   else
     error "one-shot no longer references think-it-through — the plan step has drifted back to planning from scratch" \
@@ -428,8 +463,11 @@ else
       "" \
       "think-it-through is the planning skill; one-shot's Step 1 must resolve against my-work/ and delegate to it. See PIPELINES.md Pipeline 2"
   fi
-  if grep -q 'my-work' "$ONE_SHOT"; then
-    pass "one-shot reads the my-work/ store"
+  # Require several real references, not one incidental mention — `my-work` is
+  # a short string that appears in ordinary prose.
+  MY_WORK_HITS=$(printf '%s\n' "$ONE_SHOT_ACTIVE" | grep -c 'my-work' || true)
+  if [[ "${MY_WORK_HITS:-0}" -ge 3 ]]; then
+    pass "one-shot reads the my-work/ store ($MY_WORK_HITS references)"
   else
     error "one-shot does not read my-work/ — the work-item store has no consumer" \
       "skills/one-shot/SKILL.md" \

@@ -137,6 +137,17 @@ OUT="$(run)"
 check "invalid branch name falls back to main" "main" "$(val DEFAULT_BRANCH)"
 check "invalid branch name sets STATE_OK=false" "false" "$(val STATE_OK)"
 
+# `agent: none` is a supported setting with no bot-username. Treating the
+# missing key as a failed source made STATE_OK=false on every resume, so
+# one-shot stopped with a diagnostic on a valid configuration.
+printf '# H\n\n- default-branch: main\n\n## Code Review Agent\n\n- agent: none\n' > "$REPO/HERO.md"
+make_gh '[{"number":42,"url":"u","isDraft":true,"reviewDecision":null,"state":"OPEN"}]' '[]'
+OUT="$(run)"
+case "$(val STATE_ERRORS)" in
+  *bot-username*) FAIL=$((FAIL + 1)); echo "FAIL  agent:none must not flag bot-username (got: $(val STATE_ERRORS))" ;;
+  *) PASS=$((PASS + 1)) ;;
+esac
+
 # ---------- the eval contract ----------------------------------------------
 
 # Output is consumed via `eval`, so a hostile branch name or config value must
