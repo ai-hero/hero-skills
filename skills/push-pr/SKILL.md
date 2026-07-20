@@ -62,7 +62,9 @@ Never commit or push directly to the default branch.
 # shellcheck source=/dev/null
 . "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
 BRANCH=$(git branch --show-current)
-DEFAULT_BRANCH=$(hero_default_branch)
+# _verbose: this value is branched off and pulled, so a silent fallback to the
+# wrong branch would rebase the work onto an unrelated base.
+DEFAULT_BRANCH=$(hero_default_branch_verbose)
 echo "Current branch: $BRANCH (default: $DEFAULT_BRANCH)"
 ```
 

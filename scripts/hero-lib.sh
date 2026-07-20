@@ -2,10 +2,9 @@
 # hero-lib.sh — shared helpers for hero-skills.
 #
 # Sourced by skills, not executed. Every function here exists because the same
-# logic was previously inlined in three or more SKILL.md files and had already
-# drifted between copies (see git history for the branch-naming divergence that
-# prompted this). If you find yourself pasting the same awk/grep into a second
-# skill, it belongs here instead.
+# logic was previously inlined in two or more SKILL.md files and had already
+# drifted between copies. If you find yourself pasting the same awk/grep into a
+# second skill, it belongs here instead.
 #
 # Usage from a skill:
 #
@@ -14,9 +13,16 @@
 #   # shellcheck source=/dev/null
 #   . "$HERO_LIB"
 #
-# All functions are read-only except hero_exclude_add. None of them exit the
-# calling shell; they return non-zero and print to stderr so the caller decides
-# whether a failure is fatal.
+# Contract:
+#   - Values go to stdout. Human-readable notes go to stderr. A function that
+#     returns data never mixes the two, so a caller can parse stdout blindly.
+#   - Absence/failure is a non-zero return, never an exit — the caller decides
+#     what is fatal. No function exits the calling shell.
+#   - Callers' shell state (cwd, variables) is never modified. Functions that
+#     need to cd do it inside a subshell.
+#   - MUTATING FUNCTIONS: hero_exclude_add (appends to .git/info/exclude) and
+#     hero_work_store (mkdir, and migrates a legacy plan-work/ directory via
+#     mv). Everything else is read-only.
 
 # ---------- repo + config --------------------------------------------------
 
@@ -28,9 +34,17 @@ hero_root() {
 # Read a single `- key: value` field from HERO.md.
 #   hero_field default-branch
 #   hero_field bot-username
-# Prints the value (trimmed, comments stripped) or nothing. Returns 1 if the
-# field is absent so callers can distinguish "missing" from "set to empty" —
-# a distinction that matters for fields whose fallback is destructive.
+# Prints the value (trimmed, comments stripped) on stdout.
+#
+# Returns: 0 found, 1 absent or present-but-empty, 2 rejected as unsafe.
+#
+# HERO.md is repo content, so in a cloned repo it is attacker-controlled. Its
+# values flow into git and gh command lines across the skills. A value starting
+# with `-` is read by those tools as an OPTION rather than an argument, and
+# `git fetch origin --upload-pack=...` executes its value through a shell —
+# arbitrary command execution from nothing but a checked-in config file.
+# Rejecting here covers every call site at once, which is the whole point of
+# having one reader.
 hero_field() {
   local key root value
   key="$1"
@@ -42,7 +56,27 @@ hero_field() {
   # Strip surrounding whitespace and any stray quotes.
   value=$(printf '%s' "$value" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//')
   [ -n "$value" ] || return 1
+  case "$value" in
+    -*)
+      echo "hero_field: refusing '$key' — value starts with '-' and would be read as a command-line option: $value" >&2
+      return 2 ;;
+  esac
+  # Control characters (newline, NUL-ish, escape) have no legitimate place in a
+  # HERO.md scalar and break line-oriented consumers.
+  case "$value" in
+    *[[:cntrl:]]*)
+      echo "hero_field: refusing '$key' — value contains control characters" >&2
+      return 2 ;;
+  esac
   printf '%s' "$value"
+}
+
+# Is this a shape git will accept as a branch name? Used to gate values that
+# reach `git fetch`/`checkout`/`merge` and `gh pr create --base`.
+hero_is_valid_branch() {
+  [ -n "$1" ] || return 1
+  case "$1" in -*|*' '*) return 1 ;; esac
+  git check-ref-format --branch "$1" >/dev/null 2>&1
 }
 
 # The repo's default branch per HERO.md, falling back to `main`.
@@ -140,67 +174,141 @@ hero_work_store() {
   local root store
   root="${1:-$(hero_root)}"
   store="$root/my-work"
-  if [ -d "$root/plan-work" ] && [ ! -d "$store" ]; then
-    mv "$root/plan-work" "$store"
+
+  # Establish we can actually ignore the store BEFORE creating or migrating
+  # anything. Doing it after meant a non-git directory got a store created and
+  # left un-ignored, with the function still returning 0.
+  hero_exclude_path >/dev/null || {
+    echo "hero_work_store: not a git repo — refusing to create an un-ignorable store" >&2
+    return 1
+  }
+
+  # `[ -d ]` is true for a symlink to a directory, and `mv` renames the LINK.
+  # A repo that commits `plan-work -> ../../../.claude` (git preserves symlinks
+  # on clone) would silently become `my-work -> ../../../.claude`, redirecting
+  # every later work-item write outside the checkout — into a directory the
+  # agent itself reads back. Refuse rather than migrate.
+  if [ -L "$root/plan-work" ]; then
+    echo "hero_work_store: refusing to migrate '$root/plan-work' — it is a symlink" >&2
+    return 1
+  fi
+  if [ -L "$store" ]; then
+    echo "hero_work_store: refusing to use '$store' — it is a symlink" >&2
+    return 1
+  fi
+  if [ -d "$root/plan-work" ] && [ ! -e "$store" ]; then
+    mv "$root/plan-work" "$store" || return 1
     echo "Migrated legacy plan-work/ store to my-work/." >&2
   fi
+
   mkdir -p "$store" || return 1
   # Keep both names excluded through the transition so a not-yet-migrated
   # legacy store is never accidentally committed either.
-  hero_exclude_add my-work/ plan-work/
+  hero_exclude_add my-work/ plan-work/ || return 1
   printf '%s' "$store"
 }
 
 # Read a frontmatter scalar from a work-item, stripping trailing comments.
+#
+# Splits on the FIRST colon only. Splitting on every ': ' truncated any value
+# containing a colon — `title: Fix auth: token refresh` became `Fix auth`, and
+# `success` (the field one-shot Step 1c reads to decide whether to build) is
+# exactly the kind of value that carries one.
 hero_item_field() {
-  awk -F': ' -v k="$2" '
-    $1 == k { v = $2; sub(/ *#.*/, "", v); gsub(/^[[:space:]]+|[[:space:]]+$/, "", v); print v; exit }
+  awk -v k="$2" '
+    index($0, k ":") == 1 {
+      sub(/^[^:]*: */, "")
+      sub(/ *#.*/, "")
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "")
+      print
+      exit
+    }
   ' "$1"
 }
 
-# Print every work-item as "READY <file> — <title>" or "blocked <file> — <title>".
-#
-# An item is ready when its status is not `done` and every id in depends_on
-# points at an item that IS done. This is the Beads `ready` primitive without a
-# database. Ids are normalized to base-10 so `007` and `7` compare equal.
-#
-# NOTE: readiness is a claim about dependencies, not about the codebase. An
-# item stays READY after its work lands until someone marks it done — consumers
-# must verify against the repo before acting. See one-shot Step 1c.
-# shellcheck disable=SC2120  # optional arg; callers usually rely on the default
-hero_ready_items() {
-  local store f d deps ready title done_ids
-  store="${1:-$(hero_work_store)}"
-  cd "$store" 2>/dev/null || { echo "no my-work/ yet"; return 0; }
+# Normalize a work-item status: lowercase, empty defaults to `todo`.
+# `Done` silently not matching `done` left every dependent blocked forever.
+hero_item_status() {
+  local s
+  s=$(hero_item_field "$1" status | tr '[:upper:]' '[:lower:]')
+  printf '%s' "${s:-todo}"
+}
 
+# Print one line per work-item:  STATE  file — title
+#
+# STATE is one of:
+#   READY    not done, and every depends_on target is done
+#   blocked  not done, but a dependency is unmet or unresolvable
+#   active   status is in-progress — someone is already on it
+#   done     completed
+#
+# `done` rows are PRINTED, not hidden. Callers need to see them: one-shot's
+# Step 1c resolves an argument against this listing to answer "has this already
+# landed?", and handoff reads it to update an existing item rather than
+# duplicating it. Filtering them out silently defeated both.
+#
+# `active` is separated from READY so two sessions cannot both pick up the same
+# in-flight item — one-shot marks an item in-progress before its first edit
+# specifically to prevent that, and folding it into READY undid it.
+#
+# NOTE: readiness is a claim about DEPENDENCIES, not about the codebase. An item
+# stays READY after its work lands until someone marks it done — consumers must
+# verify against the repo before acting.
+#
+# Runs in a subshell: it cds, and leaking that into a sourced caller's shell
+# silently reroutes every later relative path.
+hero_ready_items() (
+  local store f d deps ready title id state done_ids
+  store="${1:-$(hero_work_store)}" || return 1
+  cd "$store" 2>/dev/null || { echo "hero_ready_items: no store at ${store}" >&2; return 0; }
+
+  # Collect done ids. A non-numeric or absent id is skipped with a warning
+  # rather than evaluated: `$((10#AH-12))` is a FATAL arithmetic error that
+  # aborts mid-loop and emits nothing at all, which a caller reads as an empty
+  # plate. One malformed hand-written item must not erase the whole listing.
   done_ids=" "
   for f in *.md; do
     [ -e "$f" ] || continue
-    [ "$(hero_item_field "$f" status)" = "done" ] \
-      && done_ids="$done_ids$((10#$(hero_item_field "$f" id))) "
+    [ "$(hero_item_status "$f")" = "done" ] || continue
+    id=$(hero_item_field "$f" id)
+    case "$id" in
+      ''|*[!0-9]*)
+        echo "hero_ready_items: $f has a non-numeric id ('$id') — dependents on it cannot resolve" >&2
+        continue ;;
+    esac
+    done_ids="$done_ids$((10#$id)) "
   done
 
   for f in *.md; do
     [ -e "$f" ] || continue
-    [ "$(hero_item_field "$f" status)" = "done" ] && continue
-    deps=$(awk -F': ' '/^depends_on:/ { v = $2; sub(/ *#.*/, "", v); gsub(/[][, ]+/, "\n", v); print v; exit }' "$f")
+    state=$(hero_item_status "$f")
+    title=$(hero_item_field "$f" title)
+    case "$state" in
+      done)        echo "done    $f — $title"; continue ;;
+      in-progress) echo "active  $f — $title"; continue ;;
+    esac
+    deps=$(awk '/^depends_on:/ { v = $0; sub(/^[^:]*: */, "", v); sub(/ *#.*/, "", v); gsub(/[][, ]+/, "\n", v); print v; exit }' "$f")
     ready=1
-    # Heredoc keeps the loop in the current shell (so `ready` persists) and
-    # works under both bash and zsh, which does not word-split unquoted vars.
+    # Heredoc keeps the loop in this shell (so `ready` persists) and works under
+    # both bash and zsh, which does not word-split unquoted vars.
     while IFS= read -r d; do
       [ -z "$d" ] && continue
+      case "$d" in
+        ''|*[!0-9]*)
+          echo "hero_ready_items: $f depends_on '$d', which is not a numeric id — treating as unmet" >&2
+          ready=0; continue ;;
+      esac
       case "$done_ids" in *" $((10#$d)) "*) ;; *) ready=0 ;; esac
     done <<EOF
 $deps
 EOF
-    title=$(hero_item_field "$f" title)
     if [ "$ready" = 1 ]; then
-      echo "READY  $f — $title"
+      echo "READY   $f — $title"
     else
       echo "blocked $f — $title"
     fi
   done
-}
+)
 
 # ---------- branch naming ---------------------------------------------------
 #

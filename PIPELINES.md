@@ -80,11 +80,13 @@ internally for standalone use; running one-shot just makes that step visible
 in the DAG and pays a no-op cost on the second invocation.
 
 **The work-item store closes this pipeline's loop.** `think-it-through`,
-`handoff`, and `harden` write items into the git-ignored `my-work/` store;
-one-shot is the only skill that reads them. Step 1 resolves against the store
-before it will grill anything new, and Step 9 marks the merged item `done`.
+`handoff`, and `harden` write items into the git-ignored `my-work/` store, and
+all three read it back so they build on the plate rather than beside it. What
+one-shot alone does is *execute* an item and close it out: Step 1 resolves
+against the store before grilling anything new, and Step 9a marks the merged
+item `done` — no other skill does that automatically.
 Because nothing else observes the codebase on the store's behalf, Step 1 also
-re-checks a resolved item's `success` criteria against reality — `status: ready`
+re-checks a resolved item's `success` criteria against reality — `status: todo`
 only means nobody edited the file, not that the work is still outstanding.
 
 `mark-ready` is split from `self-review` so the conversion from draft → ready

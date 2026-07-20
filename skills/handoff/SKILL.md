@@ -64,7 +64,7 @@ One file at `my-work/NNN-slug.md`, id continuing from the highest existing id (t
 ---
 id: 9
 title: Finish the payment-retry migration
-status: ready # ready | blocked | in-progress | done
+status: todo # todo | in-progress | done  (readiness is derived from depends_on)
 depends_on: []
 one_way_door: false
 success: "Retries drain the backlog in staging; alert AL-42 stays green for 24h"
@@ -132,7 +132,9 @@ Handing work to another team's repo is outward-facing and visible to people who 
 
    The target repo's labels/templates are its own — do not pass `--label` unless the user named one that exists there.
 
-5. **Write the local stub.** Keep a `my-work/` item here with `status: blocked` and the issue URL in its Context, titled for *this* repo's side of the work (e.g. "Await rate-limit support in acme/api-service"). This repo's plate should show that it is waiting on someone, otherwise the dependency is invisible the moment this conversation ends.
+5. **Write the local stub.** Keep a `my-work/` item here titled for *this* repo's side of the work (e.g. "Await rate-limit support in acme/api-service"), with the issue URL in its Context. This repo's plate should show that it is waiting on someone, otherwise the dependency is invisible the moment this conversation ends.
+
+   Use `status: todo` and state the external gate in Context. `depends_on` holds numeric ids of items in **this** store only — a cross-repo dependency cannot be expressed there, and putting a non-numeric value in it makes the item permanently unresolvable. Say "blocked on OWNER/NAME#88" in the body, where a human will read it.
 
 If the target repo uses Linear rather than GitHub Issues, create the issue in the corresponding Linear team via the MCP tools instead, and confirm the team with the user — `--repo` names a git repo, which does not by itself identify a Linear team.
 
@@ -140,7 +142,7 @@ If the target repo uses Linear rather than GitHub Issues, create the issue in th
 
 ```
 Handoff written: my-work/009-finish-payment-retry-migration.md
-Status: ready (no blocking dependencies)
+Status: READY (no blocking dependencies)
 Tracker: #123 filed (or: not filed)
 
 Downstream pickup:

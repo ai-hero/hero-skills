@@ -102,6 +102,90 @@ exit_ empty_payload     2 ''
 exit_ no_file_path      0 '{"tool_input":{"other":"x"}}'
 exit_ notebook_payload  0 '{"tool_input":{"notebook_path":"/a/b.ipynb"}}'
 
+# ---------- multi-line className ------------------------------------------
+#
+# Prettier wraps className={cn(...)} across lines whenever it exceeds the print
+# width, which for real components is most of the time. grep is line-based, so
+# every className-anchored rule once matched NOTHING here while the same
+# violation on one line reported correctly. The whole table was single-line, so
+# it attested to far more coverage than it had.
+
+case_ ml_margin hit "Margin in a component" 'export const A = () => (
+  <div
+    className={cn(
+      "mb-4 rounded",
+    )}
+  />
+)'
+case_ ml_arb hit "Arbitrary value" 'export const B = () => (
+  <div
+    className={cn(
+      "w-[300px]",
+    )}
+  />
+)'
+case_ ml_shadow hit "Shadow class" 'export const C = () => (
+  <div
+    className={cn(
+      "shadow-lg",
+    )}
+  />
+)'
+case_ ml_zindex hit "Numeric z-index" 'export const D = () => (
+  <div
+    className={cn(
+      "z-50",
+    )}
+  />
+)'
+
+# The false-positive twins must survive newline collapsing too: [^>]* stops at
+# the first `>`, so a class-looking word in one element's BODY must not be
+# attributed to a previous element's className.
+case_ ml_fp_cross miss "Margin in a component" 'export const E = () => (
+  <div className={cn("flex")}>
+    <span>mb-4 is prose here</span>
+  </div>
+)'
+case_ ml_fp_maxw miss "Arbitrary value" 'export const F = () => (
+  <div
+    className={cn(
+      "max-w-md",
+    )}
+  />
+)'
+
+# ---------- no-jq fallback -------------------------------------------------
+#
+# Without jq the hook parses the payload with grep. That path once could not
+# tell an unparsable payload from one carrying no file_path — both yielded
+# empty and exited 0, so a schema change would silently disable the hook on
+# every jq-less machine. CI has jq, so nothing else exercises this.
+
+# Shadow jq with a stub that FAILS. Stripping PATH does not work: jq commonly
+# lives in /usr/bin, so the fallback would never be reached and these rows would
+# pass for the wrong reason. The hook probes that jq works, so a broken stub is
+# what actually routes it down the grep path.
+NOJQ_BIN="$TMP/nojq-bin"
+mkdir -p "$NOJQ_BIN"
+printf '#!/bin/sh\nexit 127\n' > "$NOJQ_BIN/jq"
+chmod +x "$NOJQ_BIN/jq"
+
+nojq_() { # NAME EXPECTED_CODE PAYLOAD
+  local name="$1" want="$2" payload="$3" rc
+  printf '%s' "$payload" | PATH="$NOJQ_BIN:$PATH" bash "$HOOK" >/dev/null 2>&1
+  rc=$?
+  if [ "$rc" = "$want" ]; then
+    PASS=$((PASS + 1))
+  else
+    FAIL=$((FAIL + 1))
+    echo "FAIL: $name — expected exit $want, got $rc"
+  fi
+}
+
+nojq_ nojq_garbage     2 'not json at all'
+nojq_ nojq_no_filepath 0 '{"tool_input":{"other":"x"}}'
+
 echo ""
 if [ "$FAIL" -eq 0 ]; then
   echo "check-design-tokens: $PASS passed"

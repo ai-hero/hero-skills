@@ -201,7 +201,7 @@ One markdown file per item at `my-work/NNN-slug.md`:
 ---
 id: 7 # a plain integer; only the filename is zero-padded (007-slug.md) for sorting
 title: Add OAuth device-flow login
-status: ready # ready | blocked | in-progress | done
+status: todo # todo | in-progress | done  (readiness is DERIVED, not stored)
 depends_on: [3, 5] # ids that must be `done` before this can start
 one_way_door: false # true = expensive to reverse; got extra scrutiny
 success: "User completes device-flow login in under 30s; e2e test green"
@@ -234,8 +234,11 @@ section. The frontmatter fields are always present.
 
 ## "What's Ready" — the one query that matters
 
-An item is **ready** when its `status` is not `done` and every id in its
-`depends_on` points to an item that _is_ `done`. That is the Beads `ready`
+`status` stores only what the author knows: `todo`, `in-progress`, or `done`.
+It deliberately does NOT carry `ready` or `blocked` — those are _derived_ from
+`depends_on`, and storing them alongside the thing they are computed from means
+the two can disagree. An item is **ready** when its `status` is `todo` and every
+id in its `depends_on` points to an item that _is_ `done`. That is the Beads `ready`
 primitive without a database — a plain read over the folder, implemented as
 `hero_ready_items` in `scripts/hero-lib.sh`:
 

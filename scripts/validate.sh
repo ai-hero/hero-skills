@@ -384,8 +384,15 @@ INLINED_PATTERNS=(
 for entry in "${INLINED_PATTERNS[@]}"; do
   pattern="${entry%%|*}"
   replacement="${entry##*|}"
-  # hero-lib.sh itself is the canonical home — exclude it from the scan.
-  HITS=$(grep -rln "$pattern" --include='*.md' "$SKILLS_DIR" 2>/dev/null || true)
+  # Scan BOTH skills/*.md and scripts/*.sh. Scanning only skills/ meant the
+  # guard reported "pass" while two live re-inlinings sat in scripts/preflight.sh
+  # — a guard that is clean over a known violation is worse than no guard.
+  # Two files necessarily contain these patterns and must be excluded:
+  # hero-lib.sh is the canonical home, and this file declares them as the
+  # literals it searches for.
+  HITS=$(grep -rln "$pattern" --include='*.md' --include='*.sh' \
+    "$SKILLS_DIR" "$PLUGIN_ROOT/scripts" 2>/dev/null \
+    | grep -vE '/(hero-lib|validate)\.sh$' || true)
   if [[ -n "$HITS" ]]; then
     while IFS= read -r hit; do
       [[ -z "$hit" ]] && continue

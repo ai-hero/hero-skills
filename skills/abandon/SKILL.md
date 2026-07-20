@@ -68,7 +68,11 @@ Note: this does NOT auto-pop the stash since the purpose is to switch away from 
 ```bash
 # shellcheck source=/dev/null
 . "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
-DEFAULT_BRANCH=$(hero_default_branch)
+# _verbose, not the silent variant: this value gates a force-delete. On a repo
+# whose real default is `master`, a silent fallback to `main` makes
+# `gh pr list --base main` return 0, the branch reads as never-merged, and
+# Delete is offered on work that was merged.
+DEFAULT_BRANCH=$(hero_default_branch_verbose)
 if ! git fetch origin "$DEFAULT_BRANCH"; then
   echo "WARN: 'git fetch origin $DEFAULT_BRANCH' failed — the merged-check below may be unreliable. Resolve network/auth before trusting its result."
 fi

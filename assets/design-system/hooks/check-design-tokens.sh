@@ -26,13 +26,34 @@ fi
 
 # Extract the edited path. Prefer jq; fall back to a narrow grep so the hook
 # still works on machines without jq rather than silently passing everything.
-if command -v jq >/dev/null 2>&1; then
+# Probe that jq WORKS, not merely that it is on PATH: a jq that is present but
+# broken (wrong arch, missing lib, shim on a stripped PATH) passes an existence
+# check and then fails every parse, taking the hook down a path that assumes it
+# succeeded.
+if printf '{}' | jq -e . >/dev/null 2>&1; then
   if ! FILE="$(printf '%s' "$PAYLOAD" | jq -r '.tool_input.file_path // empty' 2>/dev/null)"; then
     echo "check-design-tokens: unparsable hook payload" >&2
     exit 2
   fi
 else
-  FILE="$(printf '%s' "$PAYLOAD" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+  # No jq. Require the payload to at least look like JSON before concluding
+  # anything from it: without this, an unparsable payload and a payload with no
+  # file_path are identical (both yield empty → exit 0), so a schema change
+  # would silently disable the hook on every jq-less machine — the exact
+  # scenario the block above refuses to allow.
+  case "$PAYLOAD" in
+    *'{'*'}'*) ;;
+    *) echo "check-design-tokens: unparsable hook payload (no jq available)" >&2
+       exit 2 ;;
+  esac
+  # Scope the search to tool_input. `grep -o ... | head -1` over the whole
+  # payload takes whichever file_path appears FIRST — with tool_response
+  # ordered before tool_input, that is the response's path, and the hook lints
+  # the wrong file.
+  FILE="$(printf '%s' "$PAYLOAD" \
+    | sed 's/.*"tool_input"[[:space:]]*:[[:space:]]*{//' \
+    | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' \
+    | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
 fi
 
 # No file_path at all means a tool that doesn't write files (or a notebook,
@@ -61,11 +82,42 @@ fi
 FINDINGS=""
 add() { FINDINGS="${FINDINGS}  - $1\n"; }
 
+# grep is line-based, but Prettier wraps the exact construct these checks anchor
+# on across several lines:
+#
+#   <div
+#     className={cn(
+#       "mb-4 shadow-lg w-[300px]",
+#     )}
+#   />
+#
+# With one line per grep record, `className=` and the offending class are never
+# in the same record, so every className-anchored rule below silently passes —
+# the same undetectable false negative this hook exists to eliminate, in what is
+# the DOMINANT real-world formatting. Scan a newline-collapsed copy instead.
+# `[^>]*` still bounds each match to a single JSX tag, so collapsing does not
+# let a match run from one element's className into another element's body.
+SCAN_FILE="$FILE"
+NORM_FILE=""
+# LC_ALL=C makes tr/sed/grep byte-oriented. Without it, BSD tools abort with
+# "illegal byte sequence" on a single non-UTF-8 byte (a latin-1 'é', a pasted
+# smart quote) — which would either disable a check silently or, once the rc is
+# checked, fail the whole hook on an otherwise fine file. Byte mode scans it.
+if NORM_FILE="$(mktemp 2>/dev/null)" && LC_ALL=C tr '\n' ' ' < "$FILE" > "$NORM_FILE" 2>/dev/null; then
+  SCAN_FILE="$NORM_FILE"
+  trap 'rm -f "$NORM_FILE"' EXIT
+else
+  # Losing the normalized copy means the multi-line cases silently stop being
+  # checked — report rather than degrade to the bug we just fixed.
+  echo "check-design-tokens: cannot normalize $FILE for scanning" >&2
+  exit 2
+fi
+
 # grep exits 1 for "no match" and >=1 for an error. Collapsing those means an
 # unreadable or binary file reports as clean; every check would "pass" on a
 # file nobody could read.
 scan() {
-  grep -qE "$1" "$FILE"
+  LC_ALL=C grep -qE "$1" "$SCAN_FILE"
   local rc=$?
   if [ "$rc" -gt 1 ]; then
     echo "check-design-tokens: grep failed (rc=$rc) on $FILE" >&2
@@ -78,7 +130,16 @@ scan() {
 # token layer is exactly the file that defines them in hex/oklch, so a CSS file
 # carrying @theme is the one place they are correct.
 if [ "$KIND" = css ]; then
-  if ! grep -q '@theme' "$FILE" && scan '#[0-9a-fA-F]{3,8}\b|oklch\('; then
+  # The @theme probe needs the same rc discipline as scan(): `!` would invert an
+  # error (rc>=2) into "no @theme", and && then short-circuits to exit 0 — a
+  # clean report from a check that never ran.
+  LC_ALL=C grep -q '@theme' "$FILE"
+  THEME_RC=$?
+  if [ "$THEME_RC" -gt 1 ]; then
+    echo "check-design-tokens: grep failed (rc=$THEME_RC) probing @theme in $FILE" >&2
+    exit 2
+  fi
+  if [ "$THEME_RC" -ne 0 ] && scan '#[0-9a-fA-F]{3,8}\b|oklch\('; then
     printf 'Design-system check — %s\n  - Color literal outside the @theme layer. Define it as a token.\n' "$FILE" >&2
     exit 2
   fi
@@ -99,8 +160,22 @@ fi
 # A URL fragment is not a color, and plenty of slugs are valid hex: #feed,
 # #face, #decade. Strip link-ish attributes before looking, or the rule cries
 # wolf on ordinary anchors — which is how a check gets ignored, and then muted.
-if printf '%s' "$(sed -E 's/(href|to|src|action|xlink:href)=("[^"]*"|\{[^}]*\})//g' "$FILE")" \
-  | grep -qE '#[0-9a-fA-F]{3,8}\b|oklch\('; then
+#
+# This was the one rule that bypassed scan(), and it inherited exactly the
+# defect scan() exists to prevent: BSD sed aborts with "illegal byte sequence"
+# on a single non-UTF-8 byte (a latin-1 'é', a pasted smart quote), emitting
+# nothing — so grep matched nothing and the rule reported clean while its
+# siblings on the same file correctly exited 2. Check sed's status, then route
+# the stripped text through scan() like everything else.
+STRIPPED_FILE="$(mktemp 2>/dev/null)" || STRIPPED_FILE=""
+if [ -z "$STRIPPED_FILE" ] \
+  || ! LC_ALL=C sed -E 's/(href|to|src|action|xlink:href)=("[^"]*"|\{[^}]*\})//g' "$SCAN_FILE" > "$STRIPPED_FILE" 2>/dev/null; then
+  rm -f "$STRIPPED_FILE"
+  echo "check-design-tokens: cannot strip link attributes from $FILE (encoding?)" >&2
+  exit 2
+fi
+trap 'rm -f "$NORM_FILE" "$STRIPPED_FILE"' EXIT
+if SCAN_FILE="$STRIPPED_FILE" scan '#[0-9a-fA-F]{3,8}\b|oklch\('; then
   add "Color literal (hex/oklch) in a component. Define it as a token in the @theme layer."
 fi
 

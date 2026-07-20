@@ -198,13 +198,21 @@ Before doing anything destructive, read the current git/PR state and figure out 
 
 ```bash
 PLUGIN="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}"
-[ -x "$PLUGIN/scripts/resume-state.sh" ] || PLUGIN="$(git rev-parse --show-toplevel)"
+[ -x "$PLUGIN/scripts/resume-state.sh" ] || PLUGIN="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [ ! -x "$PLUGIN/scripts/resume-state.sh" ]; then
+  echo "ERROR: cannot find scripts/resume-state.sh — reinstall the plugin."
+  exit 1
+fi
 eval "$("$PLUGIN/scripts/resume-state.sh")"
 ```
 
-`resume-state.sh` gathers the state and makes no routing decision — the decision table below stays the single source of truth for that. It sets `DEFAULT_BRANCH`, `CURRENT_BRANCH`, `UNCOMMITTED`, `AHEAD`, `UNPUSHED`, `PR_EXISTS`, `PR_NUMBER`, `PR_STATE`, `PR_IS_DRAFT`, `PR_REVIEW`, `SELF_REVIEW_DONE`, `BOT_REPLIED`, plus three health flags.
+The existence guard matters: without it a missing script makes the command substitution empty, `eval` sets nothing, and every variable the table reads is **unset** — including `STATE_OK`, so the guard row would not match and the run would route on nothing at all.
 
-**The health flags are load-bearing.** `FETCH_OK`, `GH_OK`, and `COMMENTS_OK` are `false` when the underlying call failed. A failed fetch or API call produces values indistinguishable from a legitimate clean state — `AHEAD=0` reads as "nothing to push" whether or not the fetch succeeded. Never route on a false flag; the first row of the table below refuses to.
+`resume-state.sh` gathers the state and makes no routing decision — the decision table below stays the single source of truth for that. It sets `DEFAULT_BRANCH`, `CURRENT_BRANCH`, `UNCOMMITTED`, `AHEAD`, `UNPUSHED`, `PR_EXISTS`, `PR_NUMBER`, `PR_STATE`, `PR_IS_DRAFT`, `PR_REVIEW`, `SELF_REVIEW_DONE`, `BOT_REPLIED`, plus `STATE_OK` and `STATE_ERRORS`.
+
+**Unknown is not zero.** Any value whose source call failed is emitted as the literal string `unknown`, never as a number. `AHEAD=0` means "verified nothing to push"; `AHEAD=unknown` means the fetch or the ref lookup failed and the count was never established. Because the rows below compare against `0`, an `unknown` cannot match them — the guard is structural rather than something to remember.
+
+`STATE_OK` is `false` if any source failed, with `STATE_ERRORS` naming which (`jq`, `fetch`, `default-ref`, `detached-head`, `gh-pr-list`, `gh-comments`, `bot-username`, `lib`). One row guarding `STATE_OK` covers every case, so adding a source later cannot bypass a guard that enumerated the old ones.
 
 Two distinctions the table depends on:
 
@@ -215,8 +223,7 @@ Use the decision tree below to pick the **resume step** (1–9). Each row is the
 
 | Condition | Resume at | Reason |
 |-----------|-----------|--------|
-| `FETCH_OK=false` OR `GH_OK=false` | exit with diagnostic | resume rows depend on remote state — fix network/auth and re-run, or invoke individual skills |
-| `COMMENTS_OK=false` AND `PR_EXISTS=true` | ask the user | the comments fetch failed, so `SELF_REVIEW_DONE` and `BOT_REPLIED` are unknown, not zero. Defaulting to zero silently re-runs a review that may already have happened (Steps 5/6) or skips a bot reply (Steps 7/8). Say the state is unknown and let the user pick the step |
+| `STATE_OK=false` | STOP with diagnostic | print `STATE_ERRORS`; every row below depends on state that was not established. `bot-username` alone is the one recoverable case — say the review bot cannot be identified and offer to continue at the user's chosen step. For anything else, fix it and re-run, or invoke the individual skills |
 | `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0`, `UNPUSHED == 0` | exit with hint | `MERGED` → done; suggest re-running `hero-skills:ship-pr` if the local checkout still has the branch (Step 7b retries the cleanup for an already-merged PR — `abandon` refuses merged branches by design). `CLOSED` without merge → the work never landed; say so explicitly and suggest reopening the PR or starting a new branch |
 | `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0`, `UNPUSHED > 0` | exit with hint | local commits exist that never reached the merged/closed PR — do NOT suggest a reset; push them to a new branch (or reopen) so the work is saved remotely first |
 | `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED > 0` | exit with hint | merged/closed PR but local edits exist — branch off `DEFAULT_BRANCH` for follow-up work |
@@ -330,27 +337,38 @@ If no Linear MCP is configured or the ID does not resolve, say so and fall back 
 
 #### 1c: Verify the item is still outstanding
 
-**A `status: ready` item is a claim, not a fact.** Nothing in the plugin marks items `done` when work lands out-of-band — a teammate's PR, a previous session, or the user doing it by hand. Implementing already-finished work is worse than a wasted run: it produces a confusing empty-or-conflicting diff that the later pipeline steps will happily push.
+**A `todo` item is a claim, not a fact.** Nothing marks items `done` automatically when work lands out-of-band — a teammate's PR, a previous session, or the user doing it by hand. Implementing already-finished work is worse than a wasted run: it produces a confusing empty-or-conflicting diff that the later pipeline steps will happily push.
 
 Before implementing, check the item's `success` criteria and its `Verification` section against reality:
 
 1. **Read the criteria** — they state observable behavior. Go observe it: read the files the item names, run the command it names.
-2. **Search history** for the work having already landed:
+2. **Search history** for the work having already landed. Check each command's status — an empty result from a command that *failed* is not evidence of absence:
 
    ```bash
-   # Slug and issue id both appear in commit subjects/bodies by convention.
-   git log --all --oneline --grep "ITEM_SLUG" --grep "ISSUE_ID" -i | head
-   gh pr list --state merged --search "ITEM_SLUG" --limit 5 \
-     --json number,title,mergedAt 2>/dev/null
+   # ITEM_SLUG must be non-empty: `--grep ""` matches EVERY commit, which reads
+   # as "it already landed" and stops a run that should have proceeded.
+   [ -n "$ITEM_SLUG" ] || { echo "1c: no slug to search — cannot verify"; EVIDENCE_OK=false; }
+
+   git log --all --oneline --grep "$ITEM_SLUG" -i | head || EVIDENCE_OK=false
+
+   # No 2>/dev/null: a swallowed gh failure yields an empty list that reads
+   # exactly like "no merged PR", which is the answer that says "go build it".
+   gh pr list --state merged --search "$ITEM_SLUG" --limit 5 \
+     --json number,title,mergedAt || EVIDENCE_OK=false
    ```
+
+   Note this is only as good as the repo's conventions: a repo that doesn't put slugs in commit subjects, or a shallow clone, yields zero hits for a reason unrelated to whether the work landed. Weigh the criteria check in step 1 more heavily than history when the two disagree.
 
 3. **Classify** and act:
 
 | Finding | Action |
 |---|---|
 | No evidence of the work → genuinely outstanding | Continue to Step 2 |
-| Criteria already hold; history shows it landed | STOP the pipeline. Report the evidence, offer to mark the item `done` (edit its `status` frontmatter), and offer the next READY item. Do NOT implement. |
+| Criteria already hold; history shows it landed | STOP the pipeline. Report the evidence, offer to mark the item `done`, and offer the next READY item. Do NOT implement. |
 | Partially done (some criteria hold, some don't) | Report exactly which criteria still fail. Ask whether to scope this run to the remainder or re-grill the item via `hero-skills:think-it-through`. Never silently implement the delta. |
+| **Could not evaluate** — `EVIDENCE_OK=false`, `gh` unauthenticated, a criteria command that errored for an unrelated reason, or criteria too vague to check | **STOP and ask.** Do not treat an unevaluable criterion as a failing one. Say which check could not run and let the user decide whether to build. |
+
+The last row exists because every other uncertain path here resolves toward implementing — which is the outcome this step exists to prevent. An empty result must never stand in for a negative one.
 
 State the verdict explicitly before advancing — "verified outstanding: SUCCESS_CRITERION does not hold" — so a wrong resolution is visible rather than assumed.
 
@@ -508,7 +526,7 @@ If the pipeline stopped early, render the DAG with `(✗)` on the failed step, t
 
 - This skill **does not skip user gates**. think-it-through's shared-understanding gate, mark-ready, and merge confirmation are all explicit. Auto mode does not change that.
 - **one-shot consumes work-items; it does not author them.** `think-it-through`, `handoff`, and `harden` are the producers into `my-work/`. Step 1 resolves against that store (and the tracker) before it will grill anything new, and Step 9 is what marks an item `done` — one-shot is the store's only consumer, so if it skips the close-out nothing else will do it.
-- **Trust the criteria, not the status field.** `status: ready` only means "nobody has updated this file", which is not the same as "not yet done" — work lands out-of-band all the time. Step 1c re-verifies against the codebase before implementing.
+- **Trust the criteria, not the status field.** `status: todo` only means "nobody has updated this file", which is not the same as "not yet done" — work lands out-of-band all the time. Step 1c re-verifies against the codebase before implementing.
 - This skill **does not retry** on judgment-call failures (test design, large bot feedback). Retrying without human input is how small PRs become broken merges.
 - Step 0.4's `git checkout -b` is unconfirmed by design — one-shot never works on the default branch and assumes the auto-derived name is acceptable. To rename later, use `git branch -m`. The sibling skill `push-pr` prompts for the name because it's invoked deliberately on an existing branch; one-shot's auto-mode contract precludes that prompt.
 - For larger work, run the same skills individually so you can pause between them.

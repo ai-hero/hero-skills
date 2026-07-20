@@ -38,6 +38,13 @@
 
 set -uo pipefail
 
+# Shared helpers. HERO.md parsing lives in exactly one place — this script
+# previously carried two hand-rolled variants that disagreed with hero_field
+# and with each other on a value carrying a trailing `# comment`.
+HERO_LIB="$(cd "$(dirname "$0")" && pwd)/hero-lib.sh"
+# shellcheck source=/dev/null
+. "$HERO_LIB" || { echo "preflight: cannot source hero-lib.sh" >&2; exit 2; }
+
 # ---------- arg parsing ----------------------------------------------------
 
 BUCKET=all
@@ -79,9 +86,8 @@ if [ "$AUTO_SCOPE" = "true" ]; then
     echo "ERROR: --auto-scope and --projects are mutually exclusive" >&2
     exit 2
   fi
-  AS_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-  AS_DEFAULT=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$AS_ROOT/HERO.md" 2>/dev/null | tr -d '[:space:]')
-  AS_DEFAULT=${AS_DEFAULT:-main}
+  AS_ROOT=$(hero_root)
+  AS_DEFAULT=$(hero_default_branch "$AS_ROOT")
 
   # Top-level directory of every changed path, deduped. Files at the repo root
   # (NF == 1) belong to no project and are intentionally excluded.
@@ -121,10 +127,9 @@ emit() {
 
 # ---------- shared context -------------------------------------------------
 
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+ROOT=$(hero_root)
 HERO="$ROOT/HERO.md"
-DEFAULT_BRANCH=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$HERO" 2>/dev/null | xargs)
-DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
+DEFAULT_BRANCH=$(hero_default_branch "$ROOT")
 
 # Lazy gh-auth probe — set on first call, cached for the rest of the run.
 # Used by check_repo / check_pipeline so they don't re-shell `gh auth status`

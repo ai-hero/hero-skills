@@ -215,7 +215,7 @@ Write each unit as a work-item in `my-work/` using think-it-through's format (id
 ---
 id: 12
 title: Update lodash + minimist for critical CVEs
-status: ready
+status: todo
 depends_on: []
 one_way_door: false
 success: "gh api dependabot/alerts shows 0 open critical/high; test suite green"
