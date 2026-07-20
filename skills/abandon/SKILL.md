@@ -1,5 +1,5 @@
 ---
-name: abandon-branch
+name: abandon
 # prettier-ignore
 description: Abandon or pause work on a branch that hasn't merged — stash uncommitted changes, switch to the default branch, and clear conversation context.
 disable-model-invocation: true
@@ -42,7 +42,7 @@ You have uncommitted changes on '$CURRENT':
   (list changed files from git status)
 
 Options:
-1. Stash changes (saved as "abandon-branch: WIP on $CURRENT") — you can restore later with `git stash pop`
+1. Stash changes (saved as "abandon: WIP on $CURRENT") — you can restore later with `git stash pop`
 2. Cancel — go back and commit or handle changes first
 ```
 
@@ -51,13 +51,13 @@ Options:
 **If user chooses option 1 (stash):**
 
 ```bash
-git stash push -m "abandon-branch: WIP on $CURRENT"
+git stash push -m "abandon: WIP on $CURRENT"
 ```
 
 Report the stash ref:
 
 ```
-Stashed as: stash@{0} — "abandon-branch: WIP on $CURRENT"
+Stashed as: stash@{0} — "abandon: WIP on $CURRENT"
 You can restore later with: git stash pop
 ```
 
@@ -151,7 +151,7 @@ Status: Up to date with origin
 
 Previous branch: {previous-branch} [paused, kept locally / deleted (local + remote/PR, if confirmed) / was already on default]
 Pulled: N new commits
-Stashed: [yes — "abandon-branch: WIP on {branch}" (restore with `git stash pop`) / no]
+Stashed: [yes — "abandon: WIP on {branch}" (restore with `git stash pop`) / no]
 Context: Cleared
 
 Next step: hero-skills:one-shot — start the next task (print only — model-invocation-restricted, cannot auto-run)

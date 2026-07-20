@@ -7,7 +7,7 @@ argument-hint: [pr-number]
 
 # Ship — Trigger Auto-Approve, Merge, Reset Local Branch
 
-This skill posts `@auto-approve` on the PR, waits for the workflow run to finish, reads the verdict, and — if APPROVE — asks whether to merge. If REQUEST_CHANGES, it shows what to fix and offers to re-trigger after fixes land. After a successful merge, it switches to the default branch, pulls latest, deletes the merged head branch (remote + local), and offers cleanup of other stale merged branches (the merged-branch counterpart to `hero-skills:abandon-branch`). It then runs an advisory post-merge deployment-health check (Kubernetes, VM, PaaS, or serverless, per HERO.md).
+This skill posts `@auto-approve` on the PR, waits for the workflow run to finish, reads the verdict, and — if APPROVE — asks whether to merge. If REQUEST_CHANGES, it shows what to fix and offers to re-trigger after fixes land. After a successful merge, it switches to the default branch, pulls latest, deletes the merged head branch (remote + local), and offers cleanup of other stale merged branches (the merged-branch counterpart to `hero-skills:abandon`). It then runs an advisory post-merge deployment-health check (Kubernetes, VM, PaaS, or serverless, per HERO.md).
 
 ## Pipeline DAG
 
@@ -387,9 +387,9 @@ fi
 
 **Never force-merge or override branch protection.** Never pass `--admin`. The fallback above is *only* for the specific "auto-merge not enabled on this repo" case; every other failure is surfaced and stops the skill.
 
-#### Step 7b: Reset to the Default Branch (the merged-branch counterpart to `hero-skills:abandon-branch`)
+#### Step 7b: Reset to the Default Branch (the merged-branch counterpart to `hero-skills:abandon`)
 
-After a successful merge, leave the user on the default branch, pulled, with the merged PR branch cleaned up — we're usually still on the just-merged head. `abandon-branch` mirrors this for the never-merged case; not shared logic.
+After a successful merge, leave the user on the default branch, pulled, with the merged PR branch cleaned up — we're usually still on the just-merged head. `abandon` mirrors this for the never-merged case; not shared logic.
 
 If Step 1 skipped straight here, `$OWNER`/`$REPO` were never set (only Step 3 sets them):
 
@@ -756,7 +756,7 @@ Next step: (one only — omit for REQUEST_CHANGES/WORKFLOW_FAILED, already cover
 ```
 
 - Merged → `/clear` — plain suggestion, not Skill-tool invocable, no y/N offer.
-- Abandoning mid-flight → `hero-skills:abandon-branch` — restricted, print only.
+- Abandoning mid-flight → `hero-skills:abandon` — restricted, print only.
 
 Skip `hero-skills:one-shot`; it's not the deterministic next action.
 

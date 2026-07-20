@@ -193,7 +193,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
 | Command | What it does |
 |---------|-------------|
-| `hero-skills:abandon-branch` | Abandon or pause an unmerged branch — stash uncommitted work, switch to default, clear context |
+| `hero-skills:abandon` | Abandon or pause an unmerged branch — stash uncommitted work, switch to default, clear context |
 | `hero-skills:audit-plugin` | Audit the hero-skills plugin itself for quality and consistency |
 
 ## Updating vendored assets in a downstream repo
