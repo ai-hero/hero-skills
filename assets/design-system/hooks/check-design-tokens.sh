@@ -26,6 +26,10 @@ fi
 
 CWD=""
 DIFF_SCAN=""
+# Left "" (never "true") on the no-jq path, where diff-scoping is unavailable
+# entirely — that correctly routes every payload there to the whole-file
+# fallback below, matching this path's behavior before diff-scoping existed.
+HAS_DIFF_FIELD=""
 
 # Extract the edited path. Prefer jq; fall back to a narrow grep so the hook
 # still works on machines without jq rather than silently passing everything.
@@ -56,6 +60,15 @@ if printf '{}' | jq -e . >/dev/null 2>&1; then
   DIFF_SCAN="$(printf '%s' "$PAYLOAD" | jq -r '
     [.tool_input.new_string?, .tool_input.content?, (.tool_input.edits? // [] | .[].new_string?)]
     | map(select(. != null)) | join("\n")
+  ' 2>/dev/null)"
+  # Presence, not content — a pure deletion (new_string is the empty string)
+  # must still count as diff-scoped, or it silently falls back to a whole-file
+  # scan and re-lints every pre-existing violation elsewhere in the file, the
+  # exact noise diff-scoping exists to suppress. `[ -n "$DIFF_SCAN" ]` alone
+  # cannot tell "field absent" from "field present but empty" — this can.
+  HAS_DIFF_FIELD="$(printf '%s' "$PAYLOAD" | jq -r '
+    [.tool_input.new_string, .tool_input.content, .tool_input.edits]
+    | map(select(. != null)) | length > 0
   ' 2>/dev/null)"
 else
   # No jq. Require the payload to at least look like JSON before concluding
@@ -107,16 +120,24 @@ case "$FILE" in
 esac
 
 # The text to scan: the payload's own written content when present
-# (diff-scoped, see DIFF_SCAN above), else the whole file on disk.
+# (diff-scoped, see DIFF_SCAN/HAS_DIFF_FIELD above), else the whole file on
+# disk. Gated on HAS_DIFF_FIELD, not on DIFF_SCAN being non-empty — a pure
+# deletion (new_string == "") must still count as diff-scoped, or it falls
+# through to the whole-file branch below and re-lints every pre-existing
+# violation elsewhere in the file, on an edit that introduced nothing.
 IS_DIFF_SCOPED=0
-if [ -n "$DIFF_SCAN" ]; then
+if [ "$HAS_DIFF_FIELD" = "true" ]; then
   RAW="$DIFF_SCAN"
   IS_DIFF_SCOPED=1
 else
-  # Past the point where "not our file" is the answer, an unreadable path
-  # means the check did not run — which is not the same as passing.
-  [ -f "$FILE" ] || exit 0
-  if [ ! -r "$FILE" ]; then
+  # Missing and unreadable are the SAME failure, not two: a hook that cannot
+  # see the file has NOT confirmed it clean either way, and both must fail
+  # the same way this whole hook does elsewhere for that reason. An earlier
+  # draft of this branch split them (`[ -f ] || exit 0`, unreadable-only exit
+  # 2) and silently downgraded "file was deleted or never landed" to a clean
+  # pass — reintroducing, one level down, the exact "check did not run read
+  # as passing" bug this file exists to keep out.
+  if [ ! -f "$FILE" ] || [ ! -r "$FILE" ]; then
     echo "check-design-tokens: cannot read $FILE" >&2
     exit 2
   fi
@@ -223,6 +244,15 @@ scan() {
 }
 
 if [ "$KIND" = css ]; then
+  # `&&`, not `!`: inverting THEME_RC (grep's own exit code, which is also
+  # >=2 on a scan failure) would fold "grep errored" into "no @theme found",
+  # and the short-circuit after it would then report a clean scan for a check
+  # that never actually ran. `-ne 0` treats anything but a clean @theme MATCH
+  # as "keep scanning" and lets the earlier THEME_RC>1 guard above catch a
+  # real grep error before this line is ever reached.
+  # {3,8} here (not JSX's {3,4}|{6}|{8}) is a known, accepted gap: a CSS file
+  # already gets no other exemption for hex outside @theme, so a 5- or
+  # 7-digit false match here is lower-stakes than in prose.
   if [ "$THEME_RC" -ne 0 ] && scan '#[0-9a-fA-F]{3,8}\b|oklch\('; then
     printf 'Design-system check — %s\n  - Color literal outside the @theme layer. Define it as a token.\n' "$FILE" >&2
     exit 2
