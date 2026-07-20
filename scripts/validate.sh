@@ -299,7 +299,7 @@ fi
 # (there is no per-caller allowlist). Keep this list in sync with one-shot's
 # step→skill mapping. `preflight` is intentionally absent — one-shot runs it
 # via scripts/preflight.sh, not the Skill tool, so it may stay user-only.
-CHAINED_SKILLS="push-pr review-pr respond-to-comments ship-pr"
+CHAINED_SKILLS="think-it-through push-pr review-pr respond-to-comments ship-pr"
 for chained in $CHAINED_SKILLS; do
   chained_file="$SKILLS_DIR/$chained/SKILL.md"
   # A missing chained skill silently breaks one-shot at that step, so error
@@ -362,6 +362,38 @@ for absorbed in $ABSORBED_SKILLS; do
     pass "no dangling references to deleted skill '$absorbed'"
   fi
 done
+
+echo ""
+echo "────────────────────────────"
+
+# ── work-item store: producers must have a consumer ────────────────
+# think-it-through, handoff, and harden all WRITE work-items into my-work/.
+# one-shot's plan step is the only thing that READS them. If that delegation
+# is ever edited away, the store silently becomes write-only: items pile up,
+# nothing marks them done, and one-shot goes back to planning from scratch
+# while ignoring the plate. Nothing else in this repo would catch that.
+ONE_SHOT="$SKILLS_DIR/one-shot/SKILL.md"
+if [[ ! -f "$ONE_SHOT" ]]; then
+  error "skills/one-shot/SKILL.md is missing" "skills/one-shot/SKILL.md" "" \
+    "one-shot owns Pipeline 2; restore it or update this guard"
+else
+  if grep -q 'hero-skills:think-it-through' "$ONE_SHOT"; then
+    pass "one-shot's plan step delegates to think-it-through"
+  else
+    error "one-shot no longer references think-it-through — the plan step has drifted back to planning from scratch" \
+      "skills/one-shot/SKILL.md" \
+      "" \
+      "think-it-through is the planning skill; one-shot's Step 1 must resolve against my-work/ and delegate to it. See PIPELINES.md Pipeline 2"
+  fi
+  if grep -q 'my-work' "$ONE_SHOT"; then
+    pass "one-shot reads the my-work/ store"
+  else
+    error "one-shot does not read my-work/ — the work-item store has no consumer" \
+      "skills/one-shot/SKILL.md" \
+      "" \
+      "think-it-through, handoff, and harden all emit into my-work/; one-shot Step 1 must resolve against it and Step 9 must mark the merged item done"
+  fi
+fi
 
 echo ""
 echo "────────────────────────────"

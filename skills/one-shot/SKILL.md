@@ -10,7 +10,7 @@ disable-model-invocation: true
 
 Take a small task from a ticket (or plain description) — or, **without arguments**, the current in-progress goal — all the way through to a merged PR and a clean local checkout, by chaining the existing hero skills in order. This is the orchestrator for **Pipeline 2** in `PIPELINES.md`.
 
-> **Scope guard:** one-shot is for small, low-risk PRs only. If, during planning, the change looks larger than a single focused diff (multiple subsystems, schema changes, breaking API changes, anything you would normally split into a stack), STOP after the `plan` step and tell the user to fall back to running the individual skills. Do NOT push a large PR through unattended automation.
+> **Scope guard:** one-shot is for small, low-risk PRs only — **one work-item, one PR**. If the `plan` step resolves or produces more than one work-item, or the item is flagged `one_way_door: true`, STOP and hand back to the user (Step 1e). Do NOT push a large PR through unattended automation.
 
 ## Pipeline DAG
 
@@ -36,8 +36,8 @@ Each DAG node delegates to a single skill (or runs inline when the work is just 
 
 | # | Step | Skill to run standalone |
 |---|------|-------------------------|
-| 1 | `plan` | inline (Plan Mode; fetches a Linear issue if `$ARGUMENTS` is an issue ID) |
-| 2 | `implement` | inline (Plan Mode → edits) |
+| 1 | `plan` | `hero-skills:think-it-through` (only when nothing resolves from `my-work/` or the tracker) |
+| 2 | `implement` | inline (executes the resolved work-item) |
 | 3 | `simplify` | `/simplify` (external skill) |
 | 4 | `push` | `hero-skills:push-pr` (tests — verification + UI smoke — then commits + pushes a draft PR) |
 | 5 | `self-review` | `hero-skills:review-pr --no-mark-ready` |
@@ -379,33 +379,95 @@ Render the DAG with `plan` as the active step:
 Now running: plan
 ```
 
-Plan inline — there is no standalone planning skill to delegate to; one-shot owns the full plan flow itself:
+**one-shot does not plan from scratch.** `hero-skills:think-it-through` is the planning skill; this step's job is to arrive at exactly one work-item and confirm it is still outstanding. Resolve first, grill only if nothing resolves.
 
-1. **Parse `$ARGUMENTS`.** If the first token matches a Linear/issue-ID pattern (e.g., `PROJ-123` — letters, dash, digits), treat it as an issue ID; otherwise treat the entire argument as a plain-text description. Any remaining text after the issue ID is additional context. If `$ARGUMENTS` is empty, ask the user what to plan — Step 0.5 routes here only when it found no current goal on the current branch to resume (PRs on other branches are not scanned).
-2. **If an issue ID was found, fetch it from Linear** using the Linear MCP tools:
+#### 1a: Parse `$ARGUMENTS`
 
+If the first token matches an issue-ID pattern (e.g., `PROJ-123` — letters, dash, digits), treat it as an issue ID; otherwise treat the entire argument as a plain-text description. Any remaining text after the issue ID is additional context. If `$ARGUMENTS` is empty, fall through to 1b and offer the ready items — Step 0.5 routes here only when it found no current goal on the current branch to resume (PRs on other branches are not scanned).
+
+#### 1b: Resolve against the work stores
+
+Read both stores before considering a grill. `think-it-through`, `handoff`, and `harden` all emit into `my-work/`; `handoff --issue`/`--repo` also files to the tracker.
+
+```bash
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+ls "$ROOT/my-work"/*.md 2>/dev/null || echo "my-work/ is empty"
+```
+
+Run think-it-through's **"What's Ready"** query (that skill's SKILL.md holds the canonical implementation — read and run it rather than reimplementing the readiness rule here) to classify every item as READY or blocked. Then, if a tracker is configured in HERO.md **Project Management**, list open issues assigned to the user:
+
+```bash
+gh issue list --assignee @me --state open --limit 20 \
+  --json number,title,url 2>/dev/null || echo "NO_TRACKER"
+```
+
+Match `$ARGUMENTS` against both sets:
+
+| Situation | Action |
+|---|---|
+| `$ARGUMENTS` names an issue ID that a `my-work/` item cross-links | That item is the plan → 1c |
+| `$ARGUMENTS` matches exactly one READY item (id, filename slug, or title) | That item is the plan → 1c |
+| `$ARGUMENTS` matches an open tracker issue but no `my-work/` item | Fetch the issue body; it is the plan → 1c |
+| `$ARGUMENTS` matches a **blocked** item | STOP — print the item's unmet `depends_on` ids and their titles. Do not implement past a dependency. |
+| `$ARGUMENTS` matches nothing, or is empty | Print the readiness view and ask: pick a READY item, or grill this as new work → 1d |
+| `$ARGUMENTS` matches more than one READY item | Ask which one. Never guess. |
+
+For an issue ID with a Linear MCP configured, fetch it for the fuller context:
+
+```
+mcp__linear-server__get_issue with id: ISSUE_ID
+mcp__linear-server__list_comments with issueId: ISSUE_ID
+```
+
+If no Linear MCP is configured or the ID does not resolve, say so and fall back to treating `$ARGUMENTS` as a plain description.
+
+#### 1c: Verify the item is still outstanding
+
+**A `status: ready` item is a claim, not a fact.** Nothing in the plugin marks items `done` when work lands out-of-band — a teammate's PR, a previous session, or the user doing it by hand. Implementing already-finished work is worse than a wasted run: it produces a confusing empty-or-conflicting diff that the later pipeline steps will happily push.
+
+Before implementing, check the item's `success` criteria and its `Verification` section against reality:
+
+1. **Read the criteria** — they state observable behavior. Go observe it: read the files the item names, run the command it names.
+2. **Search history** for the work having already landed:
+
+   ```bash
+   # Slug and issue id both appear in commit subjects/bodies by convention.
+   git log --all --oneline --grep "ITEM_SLUG" --grep "ISSUE_ID" -i | head
+   gh pr list --state merged --search "ITEM_SLUG" --limit 5 \
+     --json number,title,mergedAt 2>/dev/null
    ```
-   mcp__linear-server__get_issue with id: ISSUE_ID
-   mcp__linear-server__list_comments with issueId: ISSUE_ID
-   ```
 
-   Extract and summarize the title, description, acceptance criteria, labels/priority, and any related/linked issues, plus comments for extra context. Present the summary to the user. If no Linear MCP is configured or the ID does not resolve, tell the user and fall back to treating `$ARGUMENTS` as a plain description.
-3. **If a plain-text description was provided**, use it directly as the task context. Summarize what you understand the task to be and confirm with the user.
-4. **Enter Plan Mode** via `EnterPlanMode`. This ensures Claude cannot modify files while planning and the user must approve the plan before implementation begins. Analyze the codebase (identify affected systems, search for related code, note existing patterns, identify dependencies), then draft an implementation plan covering summary, files to modify/create, implementation steps, testing approach, and risks. Ask clarifying questions about anything unclear before finalizing.
-5. **Exit Plan Mode** via `ExitPlanMode` once the plan is ready — this hands it to the user for approval. The user either approves (Plan Mode exits, implementation begins in the same conversation) or rejects (stay in Plan Mode and revise).
+3. **Classify** and act:
 
-**Scope check after planning.** Read the plan output. If any of the following holds, STOP and hand back to the user:
+| Finding | Action |
+|---|---|
+| No evidence of the work → genuinely outstanding | Continue to Step 2 |
+| Criteria already hold; history shows it landed | STOP the pipeline. Report the evidence, offer to mark the item `done` (edit its `status` frontmatter), and offer the next READY item. Do NOT implement. |
+| Partially done (some criteria hold, some don't) | Report exactly which criteria still fail. Ask whether to scope this run to the remainder or re-grill the item via `hero-skills:think-it-through`. Never silently implement the delta. |
 
-- Touches >5 files across unrelated subsystems
-- Adds or changes a public API contract / DB schema / CI workflow
-- Plan has an "out-of-scope follow-up" list with non-trivial items
-- The user did not approve the plan in Plan Mode
+State the verdict explicitly before advancing — "verified outstanding: SUCCESS_CRITERION does not hold" — so a wrong resolution is visible rather than assumed.
 
-Otherwise continue.
+#### 1d: Grill it (only when nothing resolved)
+
+Invoke `hero-skills:think-it-through` via the Skill tool, passing `$ARGUMENTS`. It grills the idea one question at a time and emits dependency-aware work-items into `my-work/`. It gates on the user confirming shared understanding — one-shot does not bypass that gate.
+
+Skip the grill and plan inline only when the task is one think-it-through itself calls out as not worth grilling (`think-it-through`'s "When to Use": a typo, a copy tweak, a dependency bump). Say which exemption applied. For anything else, grill.
+
+When think-it-through returns, re-run the readiness query and pick the item to implement.
+
+#### 1e: Scope check
+
+one-shot drives **one work-item to one PR**. After 1b–1d:
+
+- **Exactly one READY item** to implement → continue to Step 2.
+- **think-it-through emitted more than one item** → STOP. This is the scope guard firing: the work decomposed into a stack, which is the signal it is too large for unattended automation. Print the readiness view and tell the user to run one-shot per item, starting with the READY one(s).
+- **The single item is flagged `one_way_door: true`** → STOP and confirm with the user before proceeding. One-way doors (schema, public API, data model, money) do not belong in an unattended pipeline without an explicit go-ahead.
+
+The item's own `Non-goals` and `success` fields replace the old file-count heuristics — think-it-through sizes items to "the smallest units that each deliver something testable and can be reviewed on their own", which is exactly one-shot's contract.
 
 ### Step 2: implement
 
-Render DAG with `implement` active. Implement the plan inline (Plan Mode exits naturally into implementation). Follow these rules:
+Render DAG with `implement` active. Implement the work-item resolved in Step 1, working from its `Approach` section and holding its `success` criteria as the target. Mark the item `status: in-progress` in `my-work/` before the first edit, so a session that dies mid-flight leaves an honest store behind. Follow these rules:
 
 - **Read before edit** — Always Read a file before modifying it.
 - **Match existing patterns** — Follow naming, structure, and style already in the codebase. Don't introduce new conventions.
@@ -504,6 +566,14 @@ Render DAG with `ship` active. Run `hero-skills:ship-pr`. This:
 
 If auto-approve returns REQUEST_CHANGES or WORKFLOW_FAILED, STOP. The user should run `hero-skills:respond-to-comments` again or fix the workflow before re-attempting.
 
+**After a successful merge, close the loop on the work-item.** This is the only place the store gets marked `done`, and skipping it is what makes a later run re-implement finished work (Step 1c exists to catch that, but catching it late wastes the resolution):
+
+1. Set the item's `status: done` in `my-work/NNN-slug.md`.
+2. If the item cross-links a tracker issue, close it — `gh issue close ISSUE_NUMBER --repo TARGET_REPO --comment "Merged in PR_URL"`, or the Linear MCP equivalent. Use the item's recorded repo, which for a `handoff --repo` item is **not** this one.
+3. Re-run the readiness query and report what the merge unblocked — items whose `depends_on` just went green are the natural next run.
+
+If the pipeline stopped before merge, leave the item `in-progress`. Do not mark `done` on an unmerged PR.
+
 ### Final Summary
 
 After ship-pr completes successfully, print the final pipeline DAG and a one-shot summary:
@@ -530,7 +600,9 @@ If the pipeline stopped early, render the DAG with `(✗)` on the failed step, t
 
 ## Notes
 
-- This skill **does not skip user gates**. Plan approval, mark-ready, merge confirmation are all explicit. Auto mode does not change that.
+- This skill **does not skip user gates**. think-it-through's shared-understanding gate, mark-ready, and merge confirmation are all explicit. Auto mode does not change that.
+- **one-shot consumes work-items; it does not author them.** `think-it-through`, `handoff`, and `harden` are the producers into `my-work/`. Step 1 resolves against that store (and the tracker) before it will grill anything new, and Step 9 is what marks an item `done` — one-shot is the store's only consumer, so if it skips the close-out nothing else will do it.
+- **Trust the criteria, not the status field.** `status: ready` only means "nobody has updated this file", which is not the same as "not yet done" — work lands out-of-band all the time. Step 1c re-verifies against the codebase before implementing.
 - This skill **does not retry** on judgment-call failures (test design, large bot feedback). Retrying without human input is how small PRs become broken merges.
 - Step 0.4's `git checkout -b` is unconfirmed by design — one-shot never works on the default branch and assumes the auto-derived name is acceptable. To rename later, use `git branch -m`. The sibling skill `push-pr` prompts for the name because it's invoked deliberately on an existing branch; one-shot's auto-mode contract precludes that prompt.
 - For larger work, run the same skills individually so you can pause between them.

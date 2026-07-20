@@ -355,9 +355,16 @@ Arch Mode rules: always read the relevant source before creating/updating; specs
 
 - **The store is private.** `my-work/` is git-ignored on purpose — it is the
   user's plate, not a shared board. Never commit it; never push it.
-- **Emit, don't implement.** This skill produces understanding and work-items.
-  Handing off to implementation (e.g. `hero-skills:one-shot` on a ready item) is
-  a separate, deliberate step the user takes.
+- **Emit, don't implement.** This skill produces understanding and work-items;
+  `hero-skills:one-shot` consumes them. The two point at each other on purpose:
+  one-shot's `plan` step delegates here when nothing on the plate matches, and
+  this skill's next step points back at one-shot once an item is READY. That is
+  a hand-off, not a loop — one-shot only grills when it could not resolve an
+  existing item, so a second lap has nothing left to grill.
+- **`status` is a claim, not a fact.** Nothing observes the codebase on your
+  behalf. An item stays `ready` after the work lands unless someone edits it —
+  which is why one-shot re-verifies an item's `success` criteria against the
+  repo before implementing, and marks it `done` only after its PR merges.
 - **Discovered work goes back in.** If grilling one item surfaces new work, write
   it as its own item with a `depends_on` link rather than smuggling it into the
   current one.
