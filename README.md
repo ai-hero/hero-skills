@@ -29,7 +29,7 @@ Most dev work follows the same loop: grab a ticket, plan, implement, test, revie
 
 Hero Skills gives you **slash commands for the entire dev lifecycle** that adapt to your stack. Configure once with `HERO.md`, then every skill knows your conventions, your tools, and your preferences.
 
-- **Plan and implement from tickets** — Fetch from Linear/Jira/GitHub Issues, create branches, draft implementation plans in Plan Mode, then implement on approval
+- **Plan and implement from tickets** — Fetch from Linear/Jira/GitHub Issues, grill the work into dependency-aware work-items, create branches, then implement on approval
 - **Verify changes** — Auto-detect project type (API, frontend, CLI, MCP) and run lint, typecheck, unit tests, and smoke tests
 - **Ship with confidence** — Pre-commit checks, conventional commits, draft PRs by default, automated parallel review before requesting human review
 - **Stay informed** — CI/CD status, cluster health, security scans
@@ -94,8 +94,8 @@ Use `--scope user` to share the registration across every project on the machine
 # 1. Configure your project (run once per repo)
 hero-skills:init-hero
 
-# 2. Plan and implement from a ticket — Plan Mode drafts the approach,
-#    approve it, and Claude implements in the same conversation (inline, no skill)
+# 2. Plan and implement from a ticket — think-it-through grills the work into
+#    work-items, you confirm, and Claude implements one in the same conversation
 #                                              # Steps 1–2: plan, implement
 
 # 3. Simplify, then test + push as draft, then review your own PR
@@ -120,7 +120,7 @@ hero-skills:one-shot PROJ-123   # start a new ticket (or a plain-text descriptio
 hero-skills:one-shot            # resume the current goal to merged + reset branch
 ```
 
-This chains all nine steps end-to-end — `plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship` — with explicit user gates at plan-approval, mark-ready, and merge. `simplify` runs the `/simplify` skill on the dirty diff so the commit lands clean. `push` tests first (lint/typecheck/unit tests plus a UI smoke check via Playwright MCP for routes affected by the diff, skipped automatically on backend-only PRs), then commits and opens the draft PR. `self-review` runs the review agents plus a security pass. `mark-ready` is the explicit draft → ready gate; `await-review` polls for your configured Code Review Agent (Copilot, CodeRabbit, Greptile, …) before `respond` addresses its feedback.
+This chains all nine steps end-to-end — `plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship` — with explicit user gates at plan-approval, mark-ready, and merge. `plan` resolves what you asked for against your `my-work/` store and this repo's tracker before it plans anything new, delegating to `hero-skills:think-it-through` only when nothing matches — and it re-checks a matched item against the codebase first, so already-finished work is reported rather than rebuilt. `simplify` runs the `/simplify` skill on the dirty diff so the commit lands clean. `push` tests first (lint/typecheck/unit tests plus a UI smoke check via Playwright MCP for routes affected by the diff, skipped automatically on backend-only PRs), then commits and opens the draft PR. `self-review` runs the review agents plus a security pass. `mark-ready` is the explicit draft → ready gate; `await-review` polls for your configured Code Review Agent (Copilot, CodeRabbit, Greptile, …) before `respond` addresses its feedback.
 
 At each step transition, one-shot prints a progress line so you always know where you are:
 
@@ -134,8 +134,8 @@ Each step maps to a skill you can run on its own when you don't want the whole p
 
 | # | Step | Skill to run standalone |
 |---|------|-------------------------|
-| 1 | `plan` | inline (Plan Mode; fetches a Linear issue if given an issue ID) |
-| 2 | `implement` | inline (Plan Mode → edits) |
+| 1 | `plan` | `hero-skills:think-it-through` (only when nothing resolves from `my-work/` or the tracker) |
+| 2 | `implement` | inline (executes the resolved work-item) |
 | 3 | `simplify` | `/simplify` (external skill) |
 | 4 | `push` | `hero-skills:push-pr` (tests — verification + UI smoke — then commits + pushes a draft PR) |
 | 5 | `self-review` | `hero-skills:review-pr --no-mark-ready` |
@@ -187,7 +187,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 |---------|-------------|
 | `hero-skills:harden` | Audit read-only for hardening — dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness — and emit execution-ready plans as `my-work/` items |
 | `hero-skills:think-it-through` | Brainstorm + grill an idea one question at a time into shared understanding and dependency-aware work-items; `arch` mode manages `specs/` docs + ADRs |
-| `hero-skills:handoff` | Distill the current conversation into one self-contained work-item for a downstream agent (optionally filed to the tracker) |
+| `hero-skills:handoff` | Distill the current conversation into one self-contained work-item for a downstream agent (optionally filed to the tracker, or to **another repo** with `--repo OWNER/NAME`) |
 
 ### Utilities
 
