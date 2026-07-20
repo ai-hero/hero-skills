@@ -108,6 +108,11 @@ case_ shadow_none  miss Shadow '<div className="shadow-none rounded" />'
 case_ cn_margin   hit Margin      '<div className={cn("mb-4", x)} />'
 case_ cn_zindex   hit z-index     '<div className={cn("z-50", x)} />'
 case_ cn_arb      hit Arbitrary   '<div className={cn("rounded-[10px]", x)} />'
+# ${x} below is literal fixture content (a JS template literal being tested
+# as-is), not a shell variable. Switching to double quotes to satisfy a
+# lint hint about it would make bash actually expand $x (undefined, empty),
+# silently changing what this case exercises.
+# shellcheck disable=SC2016
 case_ tmpl_margin hit Margin      '<div className={`mb-4 ${x}`} />'
 case_ sq_margin   hit Margin      "<div className='mb-4' />"
 
