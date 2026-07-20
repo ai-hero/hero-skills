@@ -57,19 +57,31 @@ if printf '{}' | jq -e . >/dev/null 2>&1; then
   # the model did not cause; the channel then gets ignored, which fails
   # silently and looks like passing. Falls back to the whole file below when
   # the payload carries none of these fields.
-  DIFF_SCAN="$(printf '%s' "$PAYLOAD" | jq -r '
+  #
+  # Checked for jq failure the same way FILE= is above (not just 2>/dev/null):
+  # an unexpected shape for tool_input.edits (e.g. anything but an array)
+  # makes `.[]` error, and swallowing that here would silently degrade
+  # diff-scoping to a whole-file scan with zero log signal — reintroducing,
+  # one level down, the exact failure class diff-scoping exists to prevent.
+  if ! DIFF_SCAN="$(printf '%s' "$PAYLOAD" | jq -r '
     [.tool_input.new_string?, .tool_input.content?, (.tool_input.edits? // [] | .[].new_string?)]
     | map(select(. != null)) | join("\n")
-  ' 2>/dev/null)"
+  ' 2>/dev/null)"; then
+    echo "check-design-tokens: could not extract diff scope from payload" >&2
+    exit 2
+  fi
   # Presence, not content — a pure deletion (new_string is the empty string)
   # must still count as diff-scoped, or it silently falls back to a whole-file
   # scan and re-lints every pre-existing violation elsewhere in the file, the
   # exact noise diff-scoping exists to suppress. `[ -n "$DIFF_SCAN" ]` alone
   # cannot tell "field absent" from "field present but empty" — this can.
-  HAS_DIFF_FIELD="$(printf '%s' "$PAYLOAD" | jq -r '
+  if ! HAS_DIFF_FIELD="$(printf '%s' "$PAYLOAD" | jq -r '
     [.tool_input.new_string, .tool_input.content, .tool_input.edits]
     | map(select(. != null)) | length > 0
-  ' 2>/dev/null)"
+  ' 2>/dev/null)"; then
+    echo "check-design-tokens: could not evaluate diff-field presence" >&2
+    exit 2
+  fi
 else
   # No jq. Require the payload to at least look like JSON before concluding
   # anything from it: without this, an unparsable payload and a payload with no
@@ -187,7 +199,16 @@ add() { FINDINGS="${FINDINGS}  - $1\n"; }
 # JSX tag, so collapsing does not let a match run from one element's
 # className into another element's body.
 RAWFILE="$(mktemp 2>/dev/null)" || { echo "check-design-tokens: cannot create temp file" >&2; exit 2; }
-printf '%s' "$RAW" > "$RAWFILE"
+# The one temp-file write in this pipeline an earlier draft left unchecked —
+# every sibling write below (NOCOMMENT_FILE, NORM_FILE, STRIPPED_FILE) already
+# verifies its own exit status. A failure here (disk full, permission denied
+# mid-write) would otherwise leave $RAWFILE empty or truncated and scan THAT,
+# reporting clean on a file that has a real violation.
+if ! printf '%s' "$RAW" > "$RAWFILE"; then
+  rm -f "$RAWFILE"
+  echo "check-design-tokens: cannot write scan buffer for $FILE" >&2
+  exit 2
+fi
 
 # Strip whole-line `//` comments BEFORE collapsing newlines, on text that
 # still has real line boundaries. A comment ends at the newline that
@@ -276,16 +297,21 @@ fi
 # words, and the smaller false-positive surface an anchor buys on a whole
 # file matters less on a snippet that IS the edit under review.
 CLS="className=[{\"'\`][^>]*"
+# 2xs|xs are Tailwind v4's addition to the bottom of the elevation scale
+# (v4 renamed the old shadow-sm to shadow-xs and added a smaller shadow-2xs
+# below it) — an earlier draft's alternation only carried the v3-era
+# sm|md|lg|xl|2xl|inner set, so shadow-xs (the single most common
+# small-elevation utility in a v4 codebase) silently passed.
 if [ "$IS_DIFF_SCOPED" -eq 1 ]; then
   MARGIN_PAT='\bm[trblxyse]?-(auto|px|[0-9])'
   ARB_PAT='\b[a-z][a-z0-9-]*-\[(calc|[0-9])'
   ZIDX_PAT='\bz-[0-9]'
-  SHADOW_PAT='\bshadow(-(sm|md|lg|xl|2xl|inner))?([[:space:]"'"'"'\`}]|$)'
+  SHADOW_PAT='\bshadow(-(2xs|xs|sm|md|lg|xl|2xl|inner))?([[:space:]"'"'"'\`}]|$)'
 else
   MARGIN_PAT="${CLS}\bm[trblxyse]?-(auto|px|[0-9])"
   ARB_PAT="${CLS}\b[a-z][a-z0-9-]*-\[(calc|[0-9])"
   ZIDX_PAT="${CLS}\bz-[0-9]"
-  SHADOW_PAT="${CLS}\bshadow(-(sm|md|lg|xl|2xl|inner))?([[:space:]\"'\`}]|\$)"
+  SHADOW_PAT="${CLS}\bshadow(-(2xs|xs|sm|md|lg|xl|2xl|inner))?([[:space:]\"'\`}]|\$)"
 fi
 
 # Raw palette classes instead of semantic tokens. Unanchored in both modes —

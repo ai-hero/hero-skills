@@ -103,6 +103,11 @@ case_ shadow_mid   hit  Shadow '<div className="rounded shadow-md" />'
 case_ shadow_cn    hit  Shadow '<div className={cn("shadow-lg", x)} />'
 case_ shadow_bare  hit  Shadow '<div className="shadow rounded" />'
 case_ shadow_none  miss Shadow '<div className="shadow-none rounded" />'
+# Tailwind v4 added shadow-2xs/shadow-xs below shadow-sm; an earlier draft's
+# alternation only carried the v3-era suffix set, so the single most common
+# small-elevation utility in a v4 codebase silently passed.
+case_ shadow_xs    hit  Shadow '<div className="shadow-xs rounded" />'
+case_ shadow_2xs   hit  Shadow '<div className="shadow-2xs rounded" />'
 
 # --- className={cn(...)} is the form the rules file mandates ----------------
 case_ cn_margin   hit Margin      '<div className={cn("mb-4", x)} />'
@@ -178,6 +183,17 @@ exit_ malformed_payload 2 'not json at all'
 exit_ empty_payload     2 ''
 exit_ no_file_path      0 '{"tool_input":{"other":"x"}}'
 exit_ notebook_payload  0 '{"tool_input":{"notebook_path":"/a/b.ipynb"}}'
+
+# An `edits` field that isn't an array makes `.[]` a jq error. Both DIFF_SCAN
+# and HAS_DIFF_FIELD extraction must fail loud (exit 2) here, not swallow the
+# error and silently degrade to a whole-file scan with no signal that
+# diff-scoping stopped working. Needs a real, readable file on disk (this is
+# the whole-file-fallback failure path, reached only after the diff-scoped
+# extraction itself errors), so build the payload with jq rather than a
+# literal string.
+printf '%s\n' 'export const A = () => <div className="clean" />;' > "$TMP/bad_edits.tsx"
+BAD_EDITS_PAYLOAD="$(jq -n --arg fp "$TMP/bad_edits.tsx" '{tool_input:{file_path:$fp,edits:"not-an-array"}}')"
+exit_ malformed_edits_field 2 "$BAD_EDITS_PAYLOAD"
 
 # ---------- multi-line className ------------------------------------------
 #
@@ -292,6 +308,8 @@ dcase_ diff_bare_zindex hit "Numeric z-index" \
 # as the whole-file suite, now proven under diff-scoping too.
 dcase_ diff_shadow_none_excluded miss "Shadow class" \
   '<div className="rounded" />' 'shadow-none'
+dcase_ diff_bare_shadow_xs hit "Shadow class" \
+  '<div className="rounded" />' 'shadow-xs'
 
 # The reason diff-scoping exists at all: a REAL violation sitting untouched
 # elsewhere in the file must not surface just because this edit touched a
