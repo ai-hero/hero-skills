@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Regression table for check-design-tokens.sh.
 #
-# The seven checks are pure string -> bool functions, and three of them once
-# shipped with regexes that silently matched nothing in the most common case:
-# a shadow class in first position, and any class inside className={cn(...)}.
+# The seven checks are pure string -> bool functions, and four of them
+# (margin, arbitrary-value, z-index, shadow — the ones anchored on className=
+# in whole-file mode) once shipped with regexes that silently matched nothing
+# in the most common case: a shadow class in first position, and any class
+# inside className={cn(...)}.
 # Both read as "no findings", which is indistinguishable from a clean file.
 # Every row below is a case that was, or could again be, wrong in that
 # undetectable direction.
@@ -195,6 +197,28 @@ printf '%s\n' 'export const A = () => <div className="clean" />;' > "$TMP/bad_ed
 BAD_EDITS_PAYLOAD="$(jq -n --arg fp "$TMP/bad_edits.tsx" '{tool_input:{file_path:$fp,edits:"not-an-array"}}')"
 exit_ malformed_edits_field 2 "$BAD_EDITS_PAYLOAD"
 
+# ---------- vendored-registry path exemption --------------------------------
+#
+# Regression coverage this suite had before the diff-scoping rewrite, and lost
+# entirely in that rewrite (caught by a downstream self-review, not by this
+# suite itself). Each payload carries a real violation in new_string —
+# `case_`/`dcase_` can't express these (they always resolve to a real absolute
+# path under $TMP), so these go through `exit_` directly: the vendored-path
+# check exits 0 before the file is ever read, so the file doesn't need to
+# exist for this to prove the exemption fires ahead of the scan.
+#
+# Both case arms matter: `*/components/ui/*` requires a literal `/` before
+# "components", so it cannot match a relative file_path with no directory
+# prefix at all — which is exactly why the bare `components/ui/*` /
+# `components/blocks/*` arm exists. Losing either arm's coverage would let a
+# future "simplification" silently start linting vendored files that are
+# meant to be skipped.
+exit_ vendored_slash_ui     0 '{"tool_input":{"file_path":"/repo/src/components/ui/button.tsx","new_string":"shadow-lg"}}'
+exit_ vendored_slash_blocks 0 '{"tool_input":{"file_path":"/repo/src/components/blocks/card.tsx","new_string":"shadow-lg"}}'
+exit_ vendored_node_modules 0 '{"tool_input":{"file_path":"/repo/node_modules/pkg/file.tsx","new_string":"shadow-lg"}}'
+exit_ vendored_bare_ui      0 '{"tool_input":{"file_path":"components/ui/button.tsx","new_string":"shadow-lg"}}'
+exit_ vendored_bare_blocks  0 '{"tool_input":{"file_path":"components/blocks/card.tsx","new_string":"shadow-lg"}}'
+
 # ---------- multi-line className ------------------------------------------
 #
 # Prettier wraps className={cn(...)} across lines whenever it exceeds the print
@@ -331,6 +355,15 @@ dcase_ diff_css_theme_on_disk_suppresses miss "Color literal" \
   '@theme{--color-x:#ff0000;} .btn{color:blue}' 'color:#112233' css
 dcase_ diff_css_no_theme_still_hits hit "Color literal" \
   '.btn{color:blue}' 'color:#112233' css
+
+# The THEME_RC=1 fallback for "no file on disk at all" (as opposed to "file
+# exists, no @theme in it") had zero coverage — every other CSS case pre-writes
+# the file. A nonexistent path with a real hex violation in the diff must
+# still fire, matching the fallback's own "treat as no @theme, still check"
+# comment.
+NOFILE_CSS_PAYLOAD="$(jq -n --arg fp "$TMP/does-not-exist-$$.css" --arg ns 'color:#112233' \
+  '{tool_input:{file_path:$fp, old_string:"x", new_string:$ns}}')"
+exit_ diff_css_nonexistent_file_still_hits 2 "$NOFILE_CSS_PAYLOAD"
 
 # Write-shaped (tool_input.content) diff-scoping, not just Edit's new_string.
 wcase_ write_diff_scoped_shadow hit "Shadow class" \

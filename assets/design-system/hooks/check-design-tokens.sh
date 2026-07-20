@@ -245,8 +245,12 @@ if NORM_FILE="$(mktemp 2>/dev/null)" && LC_ALL=C tr '\n' ' ' < "$SRC_FOR_NORM" >
   trap 'rm -f "$RAWFILE" "$NOCOMMENT_FILE" "$NORM_FILE" "${STRIPPED_FILE:-}" 2>/dev/null' EXIT
 else
   # Losing the normalized copy means the multi-line cases silently stop being
-  # checked — report rather than degrade to the bug we just fixed.
-  rm -f "$RAWFILE" "$NOCOMMENT_FILE"
+  # checked — report rather than degrade to the bug we just fixed. $NORM_FILE
+  # is included here too: mktemp can succeed and leave a real path in it even
+  # when the following tr write is what actually failed, and an early draft's
+  # cleanup list missed it on exactly that path — a real, if minor, temp-file
+  # leak rather than a silent correctness bug.
+  rm -f "$RAWFILE" "$NOCOMMENT_FILE" "$NORM_FILE"
   echo "check-design-tokens: cannot normalize $FILE for scanning" >&2
   exit 2
 fi

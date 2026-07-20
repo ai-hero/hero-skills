@@ -56,7 +56,10 @@ Semantic classes only — `bg-background`, `text-muted-foreground`, `border-inpu
   design is wrong, not the scale.
 - Radii from the token scale (`rounded-sm|md|lg|full`); no `rounded-[10px]`.
 - **No shadows** — elevation is borders and hairlines. `--shadow-*: initial` makes
-  any `shadow-*` class a lint error, by design.
+  any `shadow-*` class a lint error, by design, once `@aihero/theme` is adopted —
+  check `design-system.local.md` for whether that's actually landed in this repo
+  yet; the design-token hook flags shadows either way, but only the token-layer
+  override turns it into a hard lint failure.
 - z-index from the named scale (`z-dropdown` < `z-sticky` < `z-overlay` <
   `z-modal` < `z-toast`); never `z-[9999]`.
 - Type from the scale (`text-sm`, `font-medium`, tracking tokens); no arbitrary
