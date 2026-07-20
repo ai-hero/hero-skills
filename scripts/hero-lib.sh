@@ -50,8 +50,17 @@ hero_field() {
   key="$1"
   root="${2:-$(hero_root)}"
   [ -r "$root/HERO.md" ] || return 1
+  # Skip fenced code blocks (HERO.md documents its own syntax in examples) and
+  # keep scanning past a key whose value is empty, so a real setting later in
+  # the file is not masked by a placeholder earlier in it.
   value=$(awk -v k="- $key" '
-    index($0, k ":") == 1 { sub(/^[^:]*: */, ""); sub(/ *#.*/, ""); print; exit }
+    /^```/ { fence = !fence; next }
+    fence  { next }
+    index($0, k ":") == 1 {
+      v = $0; sub(/^[^:]*: */, "", v); sub(/ *#.*/, "", v)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+      if (v != "") { print v; exit }
+    }
   ' "$root/HERO.md")
   # Strip surrounding whitespace and any stray quotes.
   value=$(printf '%s' "$value" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//')
@@ -87,21 +96,42 @@ hero_is_valid_branch() {
 # can't silently target the wrong branch.
 # shellcheck disable=SC2120  # optional arg; callers usually rely on the default
 hero_default_branch() {
-  hero_field default-branch "$@" || printf 'main'
+  local b
+  if b=$(hero_field default-branch "$@") && hero_is_valid_branch "$b"; then
+    printf '%s' "$b"
+    return 0
+  fi
+  # A value that is not a valid branch name is as dangerous as one starting with
+  # `-`: `main:refs/heads/evil`, `..`, `@{u}` and `main^` are all accepted by
+  # `git fetch`/`checkout` as something other than the branch they resemble.
+  # hero_field's character gate cannot catch those; check-ref-format can.
+  [ -n "${b:-}" ] && echo "hero_default_branch: '$b' is not a valid branch name — using main" >&2
+  printf 'main'
 }
 
 # Same, but reports where the value came from on stderr. Use before any
 # destructive or outward-facing operation.
 # shellcheck disable=SC2120  # optional arg; callers usually rely on the default
 hero_default_branch_verbose() {
-  local b
-  if b=$(hero_field default-branch "$@"); then
+  local b rc
+  b=$(hero_field default-branch "$@"); rc=$?
+  if [ "$rc" = 0 ] && hero_is_valid_branch "$b"; then
     printf '%s' "$b"
     echo "default branch: $b (from HERO.md)" >&2
-  else
-    printf 'main'
-    echo "default branch: main (fallback — HERO.md default-branch not found)" >&2
+    return 0
   fi
+  printf 'main'
+  # Distinct messages: "not found" sends an operator hunting for a missing key
+  # that is actually present and was rejected.
+  case "$rc" in
+    2) echo "default branch: main (fallback — HERO.md value REJECTED as unsafe)" >&2 ;;
+    *) if [ -n "${b:-}" ]; then
+         echo "default branch: main (fallback — '$b' is not a valid branch name)" >&2
+       else
+         echo "default branch: main (fallback — HERO.md default-branch not found)" >&2
+       fi ;;
+  esac
+  return 3
 }
 
 # Advisory staleness hint: warn when HERO.md is older than the config files
@@ -126,7 +156,7 @@ hero_check_staleness() {
     .github/workflows .pre-commit-config.yaml \
     CLAUDE.md Makefile justfile Taskfile.yml 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
   if [ "${config_time:-0}" -gt "${hero_time:-0}" ]; then
-    echo "note: HERO.md may be out of date — run hero-skills:init-hero --update to refresh."
+    echo "note: HERO.md may be out of date — run hero-skills:init-hero --update to refresh." >&2
   fi
   return 0
 }
@@ -201,28 +231,76 @@ hero_work_store() {
     echo "Migrated legacy plan-work/ store to my-work/." >&2
   fi
 
-  mkdir -p "$store" || return 1
+  if [ -d "$root/plan-work" ] && [ -d "$store" ]; then
+    echo "hero_work_store: both plan-work/ and my-work/ exist — items in plan-work/ are NOT migrated and will be invisible. Merge them by hand." >&2
+  fi
+  mkdir -p "$store" || {
+    echo "hero_work_store: cannot create '$store'" >&2
+    return 1
+  }
   # Keep both names excluded through the transition so a not-yet-migrated
   # legacy store is never accidentally committed either.
   hero_exclude_add my-work/ plan-work/ || return 1
   printf '%s' "$store"
 }
 
-# Read a frontmatter scalar from a work-item, stripping trailing comments.
+# Read a frontmatter scalar from a work-item.
 #
-# Splits on the FIRST colon only. Splitting on every ': ' truncated any value
-# containing a colon — `title: Fix auth: token refresh` became `Fix auth`, and
-# `success` (the field one-shot Step 1c reads to decide whether to build) is
-# exactly the kind of value that carries one.
+# Bounded to the frontmatter block between the first two `---` fences: without
+# that, a `status: done` line appearing in the BODY (acceptance criteria, a
+# pasted log) was read as the item's status.
+#
+# Splits on the FIRST colon only and strips surrounding quotes. Splitting on
+# every ': ' truncated any value containing a colon; not stripping quotes made
+# `status: "done"` fail to equal `done`, which silently blocked every dependent
+# forever. hero_field already strips quotes — the two readers in this file must
+# agree on the same syntax.
 hero_item_field() {
   awk -v k="$2" '
+    /^---[[:space:]]*$/ { fence++; if (fence >= 2) exit; next }
+    fence != 1 { next }
     index($0, k ":") == 1 {
-      sub(/^[^:]*: */, "")
-      sub(/ *#.*/, "")
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "")
-      print
+      v = $0; sub(/^[^:]*: */, "", v); sub(/ *#.*/, "", v)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+      gsub(/^["'"'"']|["'"'"']$/, "", v)
+      print v
       exit
     }
+  ' "$1"
+}
+
+# Print an item'"'"'s depends_on ids, one per line.
+#
+# Handles BOTH YAML forms. Only the inline form was parsed before, so a block
+# sequence —
+#
+#   depends_on:
+#     - 99
+#
+# — yielded an empty value, the readiness loop never ran, and the item was
+# reported READY despite depending on work that does not exist. Silently: there
+# was no `d` for the numeric guard to reject.
+hero_item_deps() {
+  awk '
+    /^---[[:space:]]*$/ { fence++; if (fence >= 2) exit; next }
+    fence != 1 { next }
+    /^depends_on:/ {
+      v = $0; sub(/^[^:]*: */, "", v); sub(/ *#.*/, "", v)
+      gsub(/[][,]/, " ", v)
+      n = split(v, parts, /[[:space:]]+/)
+      for (i = 1; i <= n; i++) if (parts[i] != "") print parts[i]
+      block = 1
+      next
+    }
+    # A block sequence continues while lines are indented `- item` entries.
+    block && /^[[:space:]]+-[[:space:]]*/ {
+      v = $0; sub(/^[[:space:]]*-[[:space:]]*/, "", v); sub(/ *#.*/, "", v)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+      gsub(/^["'"'"']|["'"'"']$/, "", v)
+      if (v != "") print v
+      next
+    }
+    { block = 0 }
   ' "$1"
 }
 
@@ -260,7 +338,7 @@ hero_item_status() {
 hero_ready_items() (
   local store f d deps ready title id state done_ids
   store="${1:-$(hero_work_store)}" || return 1
-  cd "$store" 2>/dev/null || { echo "hero_ready_items: no store at ${store}" >&2; return 0; }
+  cd "$store" 2>/dev/null || { echo "hero_ready_items: no store at ${store}" >&2; return 1; }
 
   # Collect done ids. A non-numeric or absent id is skipped with a warning
   # rather than evaluated: `$((10#AH-12))` is a FATAL arithmetic error that
@@ -276,6 +354,10 @@ hero_ready_items() (
         echo "hero_ready_items: $f has a non-numeric id ('$id') — dependents on it cannot resolve" >&2
         continue ;;
     esac
+    case "$done_ids" in
+      *" $((10#$id)) "*)
+        echo "hero_ready_items: duplicate id $id — dependents may resolve against the wrong item" >&2 ;;
+    esac
     done_ids="$done_ids$((10#$id)) "
   done
 
@@ -287,7 +369,7 @@ hero_ready_items() (
       done)        echo "done    $f — $title"; continue ;;
       in-progress) echo "active  $f — $title"; continue ;;
     esac
-    deps=$(awk '/^depends_on:/ { v = $0; sub(/^[^:]*: */, "", v); sub(/ *#.*/, "", v); gsub(/[][, ]+/, "\n", v); print v; exit }' "$f")
+    deps=$(hero_item_deps "$f")
     ready=1
     # Heredoc keeps the loop in this shell (so `ready` persists) and works under
     # both bash and zsh, which does not word-split unquoted vars.

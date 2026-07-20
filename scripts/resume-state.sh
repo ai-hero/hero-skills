@@ -62,7 +62,18 @@ fi
 
 # ---------- branch context -------------------------------------------------
 
-DEFAULT_BRANCH=$(hero_default_branch)
+# Capture hero_field's rc directly: hero_default_branch collapses "absent" and
+# "rejected as unsafe" into the same silent `main`, so a HERO.md the security
+# gate refused would otherwise leave every AHEAD/REF measurement pointed at the
+# wrong branch while STATE_OK still read healthy.
+DEFAULT_BRANCH=$(hero_field default-branch); HF_RC=$?
+case "$HF_RC" in
+  0) hero_is_valid_branch "$DEFAULT_BRANCH" || { DEFAULT_BRANCH=main; fail_source "default-branch-invalid"; } ;;
+  2) DEFAULT_BRANCH=main; fail_source "default-branch-rejected" ;;
+  *) DEFAULT_BRANCH=main
+     [ -r "$(hero_root)/HERO.md" ] || fail_source "no-hero-md" ;;
+esac
+
 CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
 
 # Detached HEAD yields an empty branch name, and `gh pr list --head ""` does not
@@ -94,10 +105,21 @@ REF_OK=true
 git rev-parse --verify --quiet "origin/$DEFAULT_BRANCH" >/dev/null 2>&1 \
   || { REF_OK=false; fail_source "default-ref"; }
 
-UNCOMMITTED=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+# `git status | wc -l` yields 0 when git FAILS, which is byte-identical to a
+# clean tree. It was the only emitted count with no unknown branch.
+if UNCOMMITTED_RAW=$(git status --porcelain 2>/dev/null); then
+  UNCOMMITTED=$(printf '%s' "$UNCOMMITTED_RAW" | grep -c . | tr -d ' ')
+else
+  UNCOMMITTED=unknown
+  fail_source "git-status"
+fi
 
 if [ "$FETCH_OK" = true ] && [ "$REF_OK" = true ]; then
-  AHEAD=$(git rev-list --count "origin/$DEFAULT_BRANCH..HEAD" 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
+  # `|| echo 0` here would fabricate a zero when rev-list itself fails, which
+  # is indistinguishable from "nothing to push" — the guarded refs only prove
+  # the ref resolves, not that the count succeeded.
+  AHEAD=$(git rev-list --count "origin/$DEFAULT_BRANCH..HEAD" 2>/dev/null | grep -E '^[0-9]+$') \
+    || { AHEAD=unknown; fail_source "rev-list-ahead"; }
 else
   AHEAD=unknown
 fi
@@ -110,7 +132,8 @@ fi
 # @{u}..HEAD` fails silently and would yield 0 — which routes the user past the
 # push step and skips the initial push entirely. Fall back to AHEAD instead.
 if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
-  UNPUSHED=$(git rev-list --count '@{u}..HEAD' 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
+  UNPUSHED=$(git rev-list --count '@{u}..HEAD' 2>/dev/null | grep -E '^[0-9]+$') \
+    || { UNPUSHED=unknown; fail_source "rev-list-unpushed"; }
 else
   UNPUSHED=$AHEAD
 fi
@@ -126,12 +149,23 @@ SELF_REVIEW_DONE=unknown
 BOT_REPLIED=unknown
 
 if [ "$JQ_OK" = true ] && [ -n "$CURRENT_BRANCH" ]; then
-  if PR_LIST=$(gh pr list --head "$CURRENT_BRANCH" \
+  # --state all is required: the default is `open`, so a merged or closed PR
+  # returns [] and reads as "no PR" — which made every MERGED/CLOSED row in
+  # one-shot's decision table unreachable, including the one that stops a
+  # merged branch from being pushed again as a duplicate.
+  if PR_LIST=$(gh pr list --state all --head "$CURRENT_BRANCH" \
       --json number,url,isDraft,reviewDecision,state 2>/dev/null); then
-    PR_JSON=$(printf '%s' "$PR_LIST" | jq -r '.[0] // empty' 2>/dev/null)
+    # With --state all, a branch that had a closed PR and then a new open one
+    # returns both. Prefer the OPEN one — that is the PR this pipeline is
+    # working — and fall back to the first entry when none is open.
+    PR_JSON=$(printf '%s' "$PR_LIST" \
+      | jq -r '((map(select(.state == "OPEN")) | .[0]) // .[0]) // empty' 2>/dev/null)
     PR_NUMBER=$(printf '%s' "$PR_JSON" | jq -r '.number // empty' 2>/dev/null)
     PR_STATE=$(printf '%s' "$PR_JSON" | jq -r '.state // empty' 2>/dev/null)
-    PR_IS_DRAFT=$(printf '%s' "$PR_JSON" | jq -r '.isDraft // empty' 2>/dev/null)
+    # `.isDraft // empty` returns empty for BOTH null and false, so PR_IS_DRAFT
+    # could never be the string "false" and every table row testing for it was
+    # dead. Convert explicitly instead of relying on //.
+    PR_IS_DRAFT=$(printf '%s' "$PR_JSON" | jq -r 'if .isDraft == null then empty else (.isDraft|tostring) end' 2>/dev/null)
     PR_REVIEW=$(printf '%s' "$PR_JSON" | jq -r '.reviewDecision // empty' 2>/dev/null)
     if [ -n "$PR_NUMBER" ]; then PR_EXISTS=true; else PR_EXISTS=false; fi
   else
@@ -146,15 +180,22 @@ if [ "$PR_EXISTS" = "false" ]; then
 elif [ "$PR_EXISTS" = "true" ]; then
   if COMMENTS=$(gh api "/repos/{owner}/{repo}/issues/$PR_NUMBER/comments" 2>/dev/null); then
     SELF_REVIEW_DONE=$(printf '%s' "$COMMENTS" \
-      | jq '[.[] | select(.body | test("ai-hero:self-review"))] | length' 2>/dev/null || echo unknown)
+      | jq '[.[] | select(.body | test("ai-hero:self-review"))] | length' 2>/dev/null) \
+      || { SELF_REVIEW_DONE=unknown; fail_source "self-review-count"; }
 
     # BOT_REPLIED is only meaningful if we know who the bot is. Without
     # bot-username configured, a `false` here is indistinguishable from "no
     # reply yet" and await-review waits forever for a reply already posted.
     if BOT_USER=$(hero_field bot-username 2>/dev/null); then
-      BOT_COUNT=$(printf '%s' "$COMMENTS" \
-        | jq --arg u "$BOT_USER" '[.[] | select(.user.login == $u)] | length' 2>/dev/null || echo 0)
-      if [ "${BOT_COUNT:-0}" -gt 0 ]; then BOT_REPLIED=true; else BOT_REPLIED=false; fi
+      # `|| echo 0` here produced BOT_REPLIED=false with STATE_OK=true — a
+      # reply that exists, reported as absent, so await-review polls forever.
+      if BOT_COUNT=$(printf '%s' "$COMMENTS" \
+        | jq --arg u "$BOT_USER" '[.[] | select(.user.login == $u)] | length' 2>/dev/null); then
+        if [ "${BOT_COUNT:-0}" -gt 0 ]; then BOT_REPLIED=true; else BOT_REPLIED=false; fi
+      else
+        BOT_REPLIED=unknown
+        fail_source "bot-count"
+      fi
     else
       BOT_REPLIED=unknown
       fail_source "bot-username"

@@ -149,6 +149,84 @@ check "item_field: title keeps its colon" \
 check "item_field: success keeps its colon" \
   "e2e green: login under 30s" "$(hero_item_field "$W/010-colon.md" success)"
 
+# ---------- silent-READY regressions ---------------------------------------
+#
+# Each of these reported an item as READY (or its dependent as permanently
+# blocked) with nothing on stderr — an agent would have picked up work whose
+# dependencies do not exist, or skipped work that was actually unblocked.
+
+cat > "$W/011-mldeps.md" <<'EOF'
+---
+id: 11
+title: Block sequence deps
+status: todo
+depends_on:
+  - 99
+  - 100
+---
+EOF
+# YAML block sequences are the standard list form. Only the inline form parsed,
+# so this yielded "no dependencies" and the item was handed out as READY.
+OUT3="$(hero_ready_items "$W" 2>/dev/null)"
+check "deps: block sequence blocks" "blocked" \
+  "$(printf '%s' "$OUT3" | awk '$2 == "011-mldeps.md" { print $1; exit }')"
+
+cat > "$W/012-quoted.md" <<'EOF'
+---
+id: 12
+title: Quoted status
+status: "done"
+depends_on: []
+---
+EOF
+cat > "$W/013-dep.md" <<'EOF'
+---
+id: 13
+title: Depends on the quoted-done item
+status: todo
+depends_on: [12]
+---
+EOF
+OUT4="$(hero_ready_items "$W" 2>/dev/null)"
+st4() { printf '%s' "$OUT4" | awk -v f="$1" '$2 == f { print $1; exit }'; }
+# A quoted status did not equal `done`, so every dependent blocked forever.
+check "status: quoted done counts as done" "done"  "$(st4 012-quoted.md)"
+check "status: its dependent unblocks"     "READY" "$(st4 013-dep.md)"
+
+cat > "$W/014-body.md" <<'EOF'
+---
+id: 14
+title: Body mentions a status
+depends_on: []
+---
+
+Run until `status: done` appears in the log.
+EOF
+OUT5="$(hero_ready_items "$W" 2>/dev/null)"
+# Frontmatter only — a body line must not be read as the item's own field.
+check "field: body line is not frontmatter" "READY" \
+  "$(printf '%s' "$OUT5" | awk '$2 == "014-body.md" { print $1; exit }')"
+
+hero_ready_items "$TMP/definitely-not-a-store" >/dev/null 2>&1
+check "ready: missing store returns non-zero" "1" "$?"
+
+# ---------- branch-name gate -----------------------------------------------
+#
+# hero_field's character gate cannot catch a value that is a valid STRING but
+# not a valid BRANCH: git reads these as something other than the branch they
+# resemble. This gate existed but was never wired to a caller.
+
+branch_case() { # value expected
+  printf '# H\n\n- default-branch: %s\n' "$1" > "$TMP/cfg/HERO.md"
+  check "branch: $1" "$2" "$(hero_default_branch "$TMP/cfg" 2>/dev/null)"
+}
+branch_case "main:refs/heads/evil" "main"
+branch_case "main^"                "main"
+branch_case "@{u}"                 "main"
+branch_case ".."                   "main"
+branch_case "develop"              "develop"
+branch_case "release/2.0"          "release/2.0"
+
 # ---------- report ---------------------------------------------------------
 
 if [ "$FAIL" -gt 0 ]; then

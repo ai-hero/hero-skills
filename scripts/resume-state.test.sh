@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+# Regression table for scripts/resume-state.sh.
+#
+# Scoped to the two things that broke and could break again silently:
+#   1. Emitted values that must never be a plausible number when their source
+#      failed (the unknown sentinel), and must always set STATE_OK=false.
+#   2. Agreement with one-shot's decision table — two fields were emitted in a
+#      shape no table row could ever match, which made six of twelve rows dead
+#      with no error anywhere.
+#
+# `gh` and `git` are stubbed, so this runs offline and deterministically.
+#
+# Usage: bash scripts/resume-state.test.sh
+
+set -uo pipefail
+
+SCRIPT="$(cd "$(dirname "$0")" && pwd)/resume-state.sh"
+PLUGIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+PASS=0
+FAIL=0
+check() { # name expected actual
+  if [ "$2" = "$3" ]; then
+    PASS=$((PASS + 1))
+  else
+    FAIL=$((FAIL + 1))
+    printf 'FAIL  %s\n      expected: [%s]\n      actual:   [%s]\n' "$1" "$2" "$3"
+  fi
+}
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+# A real repo with a remote, so git calls behave; gh is stubbed per-case.
+REPO="$TMP/repo"
+git init -q "$REPO"
+git -C "$REPO" commit -q --allow-empty -m init
+printf '# H\n\n- default-branch: main\n- bot-username: reviewbot\n' > "$REPO/HERO.md"
+
+make_gh() { # PR_LIST_JSON COMMENTS_JSON
+  mkdir -p "$TMP/bin"
+  cat > "$TMP/bin/gh" <<EOF
+#!/bin/sh
+case "\$*" in
+  *"pr list"*) cat <<'PRJSON'
+$1
+PRJSON
+  ;;
+  *"api"*) cat <<'CJSON'
+$2
+CJSON
+  ;;
+  *) exit 1 ;;
+esac
+EOF
+  chmod +x "$TMP/bin/gh"
+}
+
+run() { # -> emits KEY=VALUE lines
+  ( cd "$REPO" && CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" \
+      PATH="$TMP/bin:$PATH" bash "$SCRIPT" 2>/dev/null )
+}
+
+val() { # KEY  (from $OUT)
+  printf '%s\n' "$OUT" | sed -n "s/^$1=//p" | tr -d "'\\\\"
+}
+
+# ---------- consumer agreement ---------------------------------------------
+
+# `.isDraft // empty` returns empty for BOTH null and false, so PR_IS_DRAFT
+# could never be the string "false" — and all three table rows that test for it
+# (await-review, respond, ship) were unreachable.
+make_gh '[{"number":42,"url":"u","isDraft":false,"reviewDecision":"APPROVED","state":"OPEN"}]' \
+        '[{"body":"x","user":{"login":"reviewbot"}}]'
+OUT="$(run)"
+check "non-draft PR emits the string false" "false" "$(val PR_IS_DRAFT)"
+check "non-draft PR: review decision passes through" "APPROVED" "$(val PR_REVIEW)"
+
+make_gh '[{"number":42,"url":"u","isDraft":true,"reviewDecision":null,"state":"OPEN"}]' '[]'
+OUT="$(run)"
+check "draft PR emits the string true" "true" "$(val PR_IS_DRAFT)"
+
+# `gh pr list` defaults to --state open, so a merged PR returned [] and read as
+# "no PR at all" — killing the rows that stop a merged branch being re-pushed.
+make_gh '[{"number":37,"url":"u","isDraft":false,"reviewDecision":null,"state":"MERGED"}]' '[]'
+OUT="$(run)"
+check "merged PR is visible"        "true"   "$(val PR_EXISTS)"
+check "merged PR reports its state" "MERGED" "$(val PR_STATE)"
+
+# With --state all, a branch carrying an old closed PR and a current open one
+# returns both; the open one is the PR this pipeline is working.
+make_gh '[{"number":9,"url":"u","isDraft":false,"reviewDecision":null,"state":"CLOSED"},{"number":42,"url":"u","isDraft":true,"reviewDecision":null,"state":"OPEN"}]' '[]'
+OUT="$(run)"
+check "prefers the OPEN PR over a closed one" "42" "$(val PR_NUMBER)"
+
+make_gh '[]' '[]'
+OUT="$(run)"
+check "no PR is false, not unknown" "false" "$(val PR_EXISTS)"
+check "no PR: self-review count is a real zero" "0" "$(val SELF_REVIEW_DONE)"
+
+# ---------- the unknown sentinel -------------------------------------------
+
+# A broken jq leaves gh succeeding while every parse yields empty — which read
+# as PR_EXISTS=false on a repo with a live PR, routing to push and opening a
+# duplicate. Probing that jq WORKS (not that it exists) is what catches it.
+make_gh '[{"number":42,"url":"u","isDraft":true,"reviewDecision":null,"state":"OPEN"}]' '[]'
+printf '#!/bin/sh\nexit 127\n' > "$TMP/bin/jq"
+chmod +x "$TMP/bin/jq"
+OUT="$(run)"
+check "broken jq: PR_EXISTS is unknown"  "unknown" "$(val PR_EXISTS)"
+check "broken jq: STATE_OK is false"     "false"   "$(val STATE_OK)"
+# The scratch repo has no remote, so fetch/default-ref legitimately fail too —
+# assert jq is AMONG the named sources, not that it is the only one.
+case "$(val STATE_ERRORS)" in
+  *jq*) PASS=$((PASS + 1)) ;;
+  *) FAIL=$((FAIL + 1)); echo "FAIL  broken jq is named in STATE_ERRORS (got: $(val STATE_ERRORS))" ;;
+esac
+rm -f "$TMP/bin/jq"
+
+# A HERO.md value the security gate rejects must not degrade to a silent `main`
+# with a healthy STATE_OK — every later ref measurement would target the wrong
+# branch while reporting fine.
+printf '# H\n\n- default-branch: --upload-pack=evil\n- bot-username: reviewbot\n' > "$REPO/HERO.md"
+make_gh '[]' '[]'
+OUT="$(run)"
+check "rejected default-branch falls back to main" "main" "$(val DEFAULT_BRANCH)"
+check "rejected default-branch sets STATE_OK=false" "false" "$(val STATE_OK)"
+case "$(val STATE_ERRORS)" in
+  *default-branch-rejected*) PASS=$((PASS + 1)) ;;
+  *) FAIL=$((FAIL + 1)); echo "FAIL  rejected default-branch is named in STATE_ERRORS (got: $(val STATE_ERRORS))" ;;
+esac
+
+# A value that is a fine string but not a valid branch — git reads these as
+# something other than the branch they resemble.
+printf '# H\n\n- default-branch: main:refs/heads/evil\n- bot-username: reviewbot\n' > "$REPO/HERO.md"
+OUT="$(run)"
+check "invalid branch name falls back to main" "main" "$(val DEFAULT_BRANCH)"
+check "invalid branch name sets STATE_OK=false" "false" "$(val STATE_OK)"
+
+# ---------- the eval contract ----------------------------------------------
+
+# Output is consumed via `eval`, so a hostile branch name or config value must
+# not break out of the quoting.
+printf '# H\n\n- default-branch: main\n- bot-username: reviewbot\n' > "$REPO/HERO.md"
+git -C "$REPO" checkout -q -b 'weird/branch.name-1'
+make_gh '[]' '[]'
+OUT="$(run)"
+rm -f "$TMP/eval_marker"
+eval "$OUT"
+check "output evals cleanly" "weird/branch.name-1" "${CURRENT_BRANCH:-}"
+check "eval executed nothing" "no" "$([ -e "$TMP/eval_marker" ] && echo yes || echo no)"
+
+# Every run must emit the full key set, so a consumer never reads an unset var.
+for key in DEFAULT_BRANCH CURRENT_BRANCH UNCOMMITTED AHEAD UNPUSHED PR_EXISTS \
+           PR_NUMBER PR_STATE PR_IS_DRAFT PR_REVIEW SELF_REVIEW_DONE \
+           BOT_REPLIED STATE_OK STATE_ERRORS; do
+  if printf '%s\n' "$OUT" | grep -q "^$key="; then
+    PASS=$((PASS + 1))
+  else
+    FAIL=$((FAIL + 1)); echo "FAIL  missing key: $key"
+  fi
+done
+
+if [ "$FAIL" -gt 0 ]; then
+  echo "resume-state: $PASS passed, $FAIL FAILED"
+  exit 1
+fi
+echo "resume-state: $PASS passed"
