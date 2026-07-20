@@ -47,6 +47,56 @@ exit_() {
   fi
 }
 
+# dcase_ NAME hit|miss RULE_SUBSTRING DISK_CONTENT NEW_STRING [EXT]
+#
+# Diff-scoped case: DISK_CONTENT is written to the file first, simulating
+# pre-existing content this edit does NOT touch. The hook is then invoked
+# with an Edit-shaped payload carrying NEW_STRING as tool_input.new_string —
+# that field is what makes the scan diff-scoped instead of whole-file.
+dcase_() {
+  local name="$1" expect="$2" rule="$3" disk="$4" new="$5" ext="${6:-tsx}"
+  printf '%s\n' "$disk" > "$TMP/$name.$ext"
+  local payload out got
+  payload="$(jq -n --arg fp "$TMP/$name.$ext" --arg ns "$new" \
+    '{tool_input:{file_path:$fp, old_string:"x", new_string:$ns}}')"
+  out="$(printf '%s' "$payload" | bash "$HOOK" 2>&1)"
+  if printf '%s' "$out" | grep -qF "$rule"; then got=hit; else got=miss; fi
+  if [ "$got" = "$expect" ]; then
+    PASS=$((PASS + 1))
+  else
+    FAIL=$((FAIL + 1))
+    echo "FAIL: $name — expected $expect, got $got"
+    echo "      disk: $disk"
+    echo "      new:  $new"
+    echo "      output: ${out:-(none)}"
+  fi
+}
+
+# wcase_ NAME hit|miss RULE_SUBSTRING CONTENT [EXT]
+#
+# Write-shaped diff-scoped case: CONTENT is the full new file, carried as
+# tool_input.content (what a Write call's payload looks like) rather than
+# file_path alone — proves the content field is also diff/content-scoped,
+# not just new_string. The file is also written to disk first, matching
+# real PostToolUse timing (the write has already landed by the time the
+# hook runs).
+wcase_() {
+  local name="$1" expect="$2" rule="$3" content="$4" ext="${5:-tsx}"
+  printf '%s\n' "$content" > "$TMP/$name.$ext"
+  local payload out got
+  payload="$(jq -n --arg fp "$TMP/$name.$ext" --arg c "$content" \
+    '{tool_input:{file_path:$fp, content:$c}}')"
+  out="$(printf '%s' "$payload" | bash "$HOOK" 2>&1)"
+  if printf '%s' "$out" | grep -qF "$rule"; then got=hit; else got=miss; fi
+  if [ "$got" = "$expect" ]; then
+    PASS=$((PASS + 1))
+  else
+    FAIL=$((FAIL + 1))
+    echo "FAIL: $name — expected $expect, got $got"
+    echo "      output: ${out:-(none)}"
+  fi
+}
+
 # --- shadow: the house rule with no legitimate exception ---------------------
 case_ shadow_first hit  Shadow '<div className="shadow-md rounded" />'
 case_ shadow_mid   hit  Shadow '<div className="rounded shadow-md" />'
@@ -207,6 +257,63 @@ nojq_() { # NAME EXPECTED_CODE PAYLOAD
 
 nojq_ nojq_garbage     2 'not json at all'
 nojq_ nojq_no_filepath 0 '{"tool_input":{"other":"x"}}'
+
+# ---------- diff-scoped scanning (new_string / content) ---------------------
+#
+# Scoping the scan to what the payload says was WRITTEN, rather than always
+# reading the whole file, is what keeps this check reporting only what an
+# edit introduced — a whole-file scan fired on 27 of 49 files in one real,
+# partially-migrated repo, making nearly every edit return findings the model
+# did not cause. The margin/arbitrary/z-index/shadow checks anchor on
+# className= for the whole-file path, but that anchor is WRONG for a diff
+# snippet: an Edit very commonly replaces just the class-list string inside
+# className="...", so className= itself never appears in new_string, and an
+# anchored check against just that string would silently stop catching what
+# it always caught — the same undetectable-false-negative shape as the
+# multi-line bug above, one layer further in.
+
+# The anchor-drop itself: none of these new_strings contain `className=`, so
+# an anchored pattern run against just the string would MISS every one.
+dcase_ diff_bare_margin hit "Margin in a component" \
+  '<div className="gap-4" />' 'mb-4'
+dcase_ diff_bare_shadow hit "Shadow class" \
+  '<div className="rounded" />' 'shadow-lg'
+dcase_ diff_bare_arb hit "Arbitrary value" \
+  '<div className="rounded" />' 'w-[300px]'
+dcase_ diff_bare_zindex hit "Numeric z-index" \
+  '<div className="rounded" />' 'z-50'
+
+# shadow-none must stay excluded even unanchored — same false-positive twin
+# as the whole-file suite, now proven under diff-scoping too.
+dcase_ diff_shadow_none_excluded miss "Shadow class" \
+  '<div className="rounded" />' 'shadow-none'
+
+# The reason diff-scoping exists at all: a REAL violation sitting untouched
+# elsewhere in the file must not surface just because this edit touched a
+# different, clean part of the same file.
+dcase_ diff_preexisting_not_flagged miss "Margin in a component" \
+  '<div className="mb-4 shadow-lg" /><div className="gap-4" />' 'gap-6'
+
+# Hex/palette/dark: checks are unanchored in both modes already — confirm
+# they still fire and still exempt prose under diff-scoping too.
+dcase_ diff_component_hex_hit hit "Color literal" \
+  '<div className="rounded" />' 'style={{color:"#3D4AB8"}}'
+dcase_ diff_prose_hex_excluded miss "Color literal" \
+  '<div className="rounded" />' 'Visit us at Ste #1100 downtown.'
+
+# CSS: @theme presence is a FILE-level fact a diff snippet cannot answer, so
+# it must still be read from disk regardless of diff-scoping — these two
+# prove that path independently of the JSX cases above.
+dcase_ diff_css_theme_on_disk_suppresses miss "Color literal" \
+  '@theme{--color-x:#ff0000;} .btn{color:blue}' 'color:#112233' css
+dcase_ diff_css_no_theme_still_hits hit "Color literal" \
+  '.btn{color:blue}' 'color:#112233' css
+
+# Write-shaped (tool_input.content) diff-scoping, not just Edit's new_string.
+wcase_ write_diff_scoped_shadow hit "Shadow class" \
+  'export const A = () => <div className="shadow-md rounded" />;'
+wcase_ write_diff_scoped_clean miss "  - " \
+  'export const A = () => <div className="bg-background gap-4" />;'
 
 echo ""
 if [ "$FAIL" -eq 0 ]; then

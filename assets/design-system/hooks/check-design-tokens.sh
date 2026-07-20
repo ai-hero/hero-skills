@@ -24,6 +24,9 @@ if [ -z "$PAYLOAD" ]; then
   exit 2
 fi
 
+CWD=""
+DIFF_SCAN=""
+
 # Extract the edited path. Prefer jq; fall back to a narrow grep so the hook
 # still works on machines without jq rather than silently passing everything.
 # Probe that jq WORKS, not merely that it is on PATH: a jq that is present but
@@ -31,10 +34,29 @@ fi
 # check and then fails every parse, taking the hook down a path that assumes it
 # succeeded.
 if printf '{}' | jq -e . >/dev/null 2>&1; then
+  # Plain -r, not -e: a genuinely malformed payload already fails here (jq's
+  # own parse error is a non-zero exit regardless of -e), but -e ALSO treats
+  # "valid JSON, key just absent" (// empty producing no output at all) as a
+  # failure — indistinguishable from real malformation, and exactly the
+  # legitimate no-file_path case (a tool call that doesn't write files) that
+  # must fall through to the harmless exit 0 below, not a false exit 2.
   if ! FILE="$(printf '%s' "$PAYLOAD" | jq -r '.tool_input.file_path // empty' 2>/dev/null)"; then
     echo "check-design-tokens: unparsable hook payload" >&2
     exit 2
   fi
+  # Relative paths in the payload resolve against its cwd, not ours.
+  CWD="$(printf '%s' "$PAYLOAD" | jq -r '.cwd // empty' 2>/dev/null)"
+  # What the model just wrote. Scoping the scan to this — rather than the
+  # whole file — is what keeps the check reporting only what THIS edit
+  # introduced. Against a not-yet-migrated codebase, a whole-file scan fired
+  # on 27 of 49 files in one real repo, so nearly every edit returned findings
+  # the model did not cause; the channel then gets ignored, which fails
+  # silently and looks like passing. Falls back to the whole file below when
+  # the payload carries none of these fields.
+  DIFF_SCAN="$(printf '%s' "$PAYLOAD" | jq -r '
+    [.tool_input.new_string?, .tool_input.content?, (.tool_input.edits? // [] | .[].new_string?)]
+    | map(select(. != null)) | join("\n")
+  ' 2>/dev/null)"
 else
   # No jq. Require the payload to at least look like JSON before concluding
   # anything from it: without this, an unparsable payload and a payload with no
@@ -49,7 +71,8 @@ else
   # Scope the search to tool_input. `grep -o ... | head -1` over the whole
   # payload takes whichever file_path appears FIRST — with tool_response
   # ordered before tool_input, that is the response's path, and the hook lints
-  # the wrong file.
+  # the wrong file. No diff-scoping without jq: DIFF_SCAN stays empty, and the
+  # whole-file fallback below runs, exactly as it always has on this path.
   FILE="$(printf '%s' "$PAYLOAD" \
     | sed 's/.*"tool_input"[[:space:]]*:[[:space:]]*{//' \
     | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' \
@@ -66,24 +89,68 @@ case "$FILE" in
   *) exit 0 ;;
 esac
 
-# Vendored registry components are not ours to lint — they are overwritten by
-# the next `shadcn add`.
 case "$FILE" in
-  */components/ui/*|*/components/blocks/*|*/node_modules/*) exit 0 ;;
+  /*) ;;
+  *) [ -n "$CWD" ] && FILE="$CWD/$FILE" ;;
 esac
 
-# Past the point where "not our file" is the answer, an unreadable path means
-# the check did not run — which is not the same as passing.
-if [ ! -f "$FILE" ] || [ ! -r "$FILE" ]; then
-  echo "check-design-tokens: cannot read $FILE" >&2
-  exit 2
+# Vendored registry components are not ours to lint — they are overwritten by
+# the next `shadcn add`. Both case arms matter: the bare form (no leading `/`)
+# catches a relative file_path with no directory prefix, which the `*/`-form
+# arm cannot match at all — that form requires an actual `/` before
+# "components", so a payload carrying exactly "components/ui/button.tsx" (no
+# CWD available to prepend, or a repo laid out at its own root) slips through
+# silently without it.
+case "$FILE" in
+  */components/ui/*|*/components/blocks/*|*/node_modules/*) exit 0 ;;
+  components/ui/*|components/blocks/*) exit 0 ;;
+esac
+
+# The text to scan: the payload's own written content when present
+# (diff-scoped, see DIFF_SCAN above), else the whole file on disk.
+IS_DIFF_SCOPED=0
+if [ -n "$DIFF_SCAN" ]; then
+  RAW="$DIFF_SCAN"
+  IS_DIFF_SCOPED=1
+else
+  # Past the point where "not our file" is the answer, an unreadable path
+  # means the check did not run — which is not the same as passing.
+  [ -f "$FILE" ] || exit 0
+  if [ ! -r "$FILE" ]; then
+    echo "check-design-tokens: cannot read $FILE" >&2
+    exit 2
+  fi
+  if ! RAW="$(cat -- "$FILE" 2>/dev/null)"; then
+    echo "check-design-tokens: cannot read $FILE" >&2
+    exit 2
+  fi
+fi
+
+# For CSS: whether hex/oklch belongs here at all is a FILE-level fact — does
+# this file declare @theme anywhere — which a diff snippet cannot answer about
+# the surrounding file. Always read from disk for this, regardless of
+# diff-scoping; PostToolUse fires after the write already landed, so the file
+# on disk reflects it.
+if [ "$KIND" = css ]; then
+  if [ -f "$FILE" ]; then
+    LC_ALL=C grep -q '@theme' "$FILE"
+    THEME_RC=$?
+    if [ "$THEME_RC" -gt 1 ]; then
+      echo "check-design-tokens: grep failed (rc=$THEME_RC) probing @theme in $FILE" >&2
+      exit 2
+    fi
+  else
+    # No file on disk to check (should not normally happen post-write) —
+    # treat as "no @theme", i.e. still subject to the hex check below.
+    THEME_RC=1
+  fi
 fi
 
 FINDINGS=""
 add() { FINDINGS="${FINDINGS}  - $1\n"; }
 
-# grep is line-based, but Prettier wraps the exact construct these checks anchor
-# on across several lines:
+# grep is line-based, but Prettier wraps the exact construct these checks
+# anchor on across several lines:
 #
 #   <div
 #     className={cn(
@@ -91,19 +158,21 @@ add() { FINDINGS="${FINDINGS}  - $1\n"; }
 #     )}
 #   />
 #
-# With one line per grep record, `className=` and the offending class are never
-# in the same record, so every className-anchored rule below silently passes —
-# the same undetectable false negative this hook exists to eliminate, in what is
-# the DOMINANT real-world formatting. Scan a newline-collapsed copy instead.
-# `[^>]*` still bounds each match to a single JSX tag, so collapsing does not
-# let a match run from one element's className into another element's body.
-SCAN_FILE="$FILE"
+# With one line per grep record, `className=` and the offending class are
+# never in the same record, so every className-anchored rule below silently
+# passes — the same undetectable false negative this hook exists to
+# eliminate, in what is the DOMINANT real-world formatting. Scan a
+# newline-collapsed copy instead. `[^>]*` still bounds each match to a single
+# JSX tag, so collapsing does not let a match run from one element's
+# className into another element's body.
+RAWFILE="$(mktemp 2>/dev/null)" || { echo "check-design-tokens: cannot create temp file" >&2; exit 2; }
+printf '%s' "$RAW" > "$RAWFILE"
 
-# Strip whole-line `//` comments BEFORE collapsing newlines, on the ORIGINAL
-# file where line boundaries still mean something. A comment ends at the
-# newline that terminates it — collapse first and there is no newline left to
-# stop at, so a whole-file strip-to-first-// would delete everything after the
-# FIRST comment anywhere in the file, JSX included.
+# Strip whole-line `//` comments BEFORE collapsing newlines, on text that
+# still has real line boundaries. A comment ends at the newline that
+# terminates it — collapse first and there is no newline left to stop at, so
+# a whole-text strip-to-first-// would delete everything after the FIRST
+# comment anywhere in the scanned text, JSX included.
 #
 # Only a comment that is the SOLE content of its line is stripped
 # (^[[:space:]]*//), deliberately narrower than "strip from // to end of
@@ -114,28 +183,28 @@ SCAN_FILE="$FILE"
 # dropping a real className that followed it on the same line. A whole-line
 # comment can never contain that prefix, so this form is not exposed to it.
 NOCOMMENT_FILE=""
-SRC_FOR_NORM="$FILE"
+SRC_FOR_NORM="$RAWFILE"
 if NOCOMMENT_FILE="$(mktemp 2>/dev/null)" \
-  && LC_ALL=C sed -E '/^[[:space:]]*\/\//d' "$FILE" > "$NOCOMMENT_FILE" 2>/dev/null; then
+  && LC_ALL=C sed -E '/^[[:space:]]*\/\//d' "$RAWFILE" > "$NOCOMMENT_FILE" 2>/dev/null; then
   SRC_FOR_NORM="$NOCOMMENT_FILE"
 else
-  rm -f "$NOCOMMENT_FILE"
+  rm -f "$RAWFILE" "$NOCOMMENT_FILE"
   echo "check-design-tokens: cannot strip comments from $FILE (encoding?)" >&2
   exit 2
 fi
 
-NORM_FILE=""
 # LC_ALL=C makes tr/sed/grep byte-oriented. Without it, BSD tools abort with
 # "illegal byte sequence" on a single non-UTF-8 byte (a latin-1 'é', a pasted
 # smart quote) — which would either disable a check silently or, once the rc is
 # checked, fail the whole hook on an otherwise fine file. Byte mode scans it.
+NORM_FILE=""
 if NORM_FILE="$(mktemp 2>/dev/null)" && LC_ALL=C tr '\n' ' ' < "$SRC_FOR_NORM" > "$NORM_FILE" 2>/dev/null; then
   SCAN_FILE="$NORM_FILE"
-  trap 'rm -f "$NOCOMMENT_FILE" "$NORM_FILE"' EXIT
+  trap 'rm -f "$RAWFILE" "$NOCOMMENT_FILE" "$NORM_FILE" "${STRIPPED_FILE:-}" 2>/dev/null' EXIT
 else
   # Losing the normalized copy means the multi-line cases silently stop being
   # checked — report rather than degrade to the bug we just fixed.
-  rm -f "$NOCOMMENT_FILE"
+  rm -f "$RAWFILE" "$NOCOMMENT_FILE"
   echo "check-design-tokens: cannot normalize $FILE for scanning" >&2
   exit 2
 fi
@@ -153,19 +222,7 @@ scan() {
   return "$rc"
 }
 
-# Color literals belong in the @theme layer, never in a component — but the
-# token layer is exactly the file that defines them in hex/oklch, so a CSS file
-# carrying @theme is the one place they are correct.
 if [ "$KIND" = css ]; then
-  # The @theme probe needs the same rc discipline as scan(): `!` would invert an
-  # error (rc>=2) into "no @theme", and && then short-circuits to exit 0 — a
-  # clean report from a check that never ran.
-  LC_ALL=C grep -q '@theme' "$FILE"
-  THEME_RC=$?
-  if [ "$THEME_RC" -gt 1 ]; then
-    echo "check-design-tokens: grep failed (rc=$THEME_RC) probing @theme in $FILE" >&2
-    exit 2
-  fi
   if [ "$THEME_RC" -ne 0 ] && scan '#[0-9a-fA-F]{3,8}\b|oklch\('; then
     printf 'Design-system check — %s\n  - Color literal outside the @theme layer. Define it as a token.\n' "$FILE" >&2
     exit 2
@@ -173,13 +230,36 @@ if [ "$KIND" = css ]; then
   exit 0
 fi
 
-# Anchor the class-level checks on the className attribute in ANY of its forms.
-# Anchoring on the literal `className="` misses className={cn(...)} — which is
-# the form the rules file mandates and every registry component uses, i.e. the
-# majority of real code. [^>]* keeps the match inside one JSX tag.
+# Anchor the class-level checks on the className attribute in ANY of its
+# forms, but ONLY when scanning the whole file. Anchoring on the literal
+# `className="` misses className={cn(...)} — which is the form the rules file
+# mandates and every registry component uses, i.e. the majority of real code.
+# [^>]* keeps the match inside one JSX tag.
+#
+# When diff-scoped, the anchor is actively wrong rather than merely
+# unnecessary: an Edit call very commonly replaces just the class-list STRING
+# inside className="...", so `className=` itself never appears in
+# new_string — an anchored check against just that snippet would silently
+# stop catching what it always caught on the whole file, the exact
+# reads-as-installed-catches-nothing failure this hook exists to avoid. Use
+# the bare, unanchored pattern there instead; \b still keeps it off partial
+# words, and the smaller false-positive surface an anchor buys on a whole
+# file matters less on a snippet that IS the edit under review.
 CLS="className=[{\"'\`][^>]*"
+if [ "$IS_DIFF_SCOPED" -eq 1 ]; then
+  MARGIN_PAT='\bm[trblxyse]?-(auto|px|[0-9])'
+  ARB_PAT='\b[a-z][a-z0-9-]*-\[(calc|[0-9])'
+  ZIDX_PAT='\bz-[0-9]'
+  SHADOW_PAT='\bshadow(-(sm|md|lg|xl|2xl|inner))?([[:space:]"'"'"'\`}]|$)'
+else
+  MARGIN_PAT="${CLS}\bm[trblxyse]?-(auto|px|[0-9])"
+  ARB_PAT="${CLS}\b[a-z][a-z0-9-]*-\[(calc|[0-9])"
+  ZIDX_PAT="${CLS}\bz-[0-9]"
+  SHADOW_PAT="${CLS}\bshadow(-(sm|md|lg|xl|2xl|inner))?([[:space:]\"'\`}]|\$)"
+fi
 
-# Raw palette classes instead of semantic tokens.
+# Raw palette classes instead of semantic tokens. Unanchored in both modes —
+# a raw palette class is wrong wherever it appears, className= context or not.
 if scan '\b(bg|text|border|ring|divide|outline|fill|stroke|from|via|to)-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-[0-9]{2,3}\b'; then
   add "Raw palette class. Use a semantic token (bg-background, text-muted-foreground, bg-muted)."
 fi
@@ -201,7 +281,6 @@ if [ -z "$STRIPPED_FILE" ] \
   echo "check-design-tokens: cannot strip link attributes from $FILE (encoding?)" >&2
   exit 2
 fi
-trap 'rm -f "$NOCOMMENT_FILE" "$NORM_FILE" "$STRIPPED_FILE"' EXIT
 # A colour literal in JSX is always inside a value context — a quoted string
 # (style={{color:"#fff"}}), a template literal, or Tailwind's bracket notation
 # (bg-[#3D4AB8]) — while prose never is. Requiring one of ["'`[ immediately
@@ -226,7 +305,7 @@ fi
 # preceding space to anchor on. Matching on a word boundary catches that,
 # the mid-string case, responsive prefixes (sm:mb-2), and negatives (-mt-4),
 # while leaving max-w-md / from-blue-500 / zoom-2 alone.
-if scan "${CLS}\bm[trblxyse]?-(auto|px|[0-9])"; then
+if scan "$MARGIN_PAT"; then
   add "Margin in a component. Parents own spacing: use gap-* / space-* on the parent layout."
 fi
 
@@ -236,17 +315,18 @@ fi
 # required the bracket to follow the FIRST hyphen. Requiring a digit or calc(
 # inside the bracket is what keeps Tailwind's own data-[state=open] and
 # aria-[…] variants out.
-if scan "${CLS}\b[a-z][a-z0-9-]*-\[(calc|[0-9])"; then
+if scan "$ARB_PAT"; then
   add "Arbitrary value. Use the token scale (spacing, radius, type, z-index)."
 fi
 
 # Numeric z-index (z-50) — outside the named scale, same class of defect as
 # z-[9999] and just as common in hand-written UI.
-if scan "${CLS}\bz-[0-9]"; then
+if scan "$ZIDX_PAT"; then
   add "Numeric z-index. Use the named z-scale (z-dropdown < z-sticky < z-overlay < z-modal < z-toast)."
 fi
 
-# A dark: color override means the wrong token was chosen.
+# A dark: color override means the wrong token was chosen. Unanchored in both
+# modes — like the palette check, wrong wherever it appears.
 if scan 'dark:(bg|text|border|ring)-'; then
   add "dark: color override. Dark mode comes free via tokens — this means the wrong token was used."
 fi
@@ -254,7 +334,7 @@ fi
 # Shadows: the @aihero house rule is borders and hairlines only.
 # The trailing class is what excludes shadow-none, which is the absence of a
 # shadow and therefore always allowed.
-if scan "${CLS}\bshadow(-(sm|md|lg|xl|2xl|inner))?([[:space:]\"'\`}]|$)"; then
+if scan "$SHADOW_PAT"; then
   add "Shadow class. Elevation is expressed with borders and hairlines (house rule)."
 fi
 
