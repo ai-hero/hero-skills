@@ -51,13 +51,25 @@ if grep -qE '#[0-9a-fA-F]{3,8}\b|oklch\(' "$FILE"; then
 fi
 
 # Margins on components — parents own layout.
-if grep -qE 'className="[^"]*(^|[[:space:]"])-?m[trblxyse]?-(auto|px|[0-9])' "$FILE"; then
+# \b (not a leading space/quote) is load-bearing: a margin is very often the
+# FIRST class in the string (className="mb-2 ..."), where there is no
+# preceding space to anchor on. Matching on a word boundary catches that,
+# the mid-string case, responsive prefixes (sm:mb-2), and negatives (-mt-4),
+# while leaving max-w-md / from-blue-500 / zoom-2 alone.
+if grep -qE 'className="[^"]*\bm[trblxyse]?-(auto|px|[0-9])' "$FILE"; then
   add "Margin in a component. Parents own spacing: use gap-* / space-* on the parent layout."
 fi
 
-# Arbitrary values that should come from a scale.
-if grep -qE 'className="[^"]*(z-\[|rounded-\[|shadow-\[|text-\[[0-9]|[pgm][a-z]*-\[[0-9])' "$FILE"; then
+# Arbitrary values that should come from a scale. Same first-class problem,
+# so anchor on \b rather than a preceding space.
+if grep -qE 'className="[^"]*\b(z-\[|rounded-\[|shadow-\[|text-\[[0-9]|[pgm][a-z]*-\[[0-9])' "$FILE"; then
   add "Arbitrary value. Use the token scale (spacing, radius, type, z-index)."
+fi
+
+# Numeric z-index (z-50) — outside the named scale, same class of defect as
+# z-[9999] and just as common in hand-written UI.
+if grep -qE 'className="[^"]*\bz-[0-9]' "$FILE"; then
+  add "Numeric z-index. Use the named z-scale (z-dropdown < z-sticky < z-overlay < z-modal < z-toast)."
 fi
 
 # A dark: color override means the wrong token was chosen.
