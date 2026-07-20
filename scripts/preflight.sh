@@ -18,8 +18,12 @@
 #
 # Usage:
 #   scripts/preflight.sh [--bucket tooling|repo|runtime|pipeline|all]
-#                        [--projects path1,path2]
+#                        [--projects path1,path2 | --auto-scope]
 #                        [--quiet]
+#
+#   --auto-scope  derive --projects from the diff, and skip the runtime bucket
+#                 entirely on a fresh start (default branch, clean tree). Use
+#                 this instead of computing the scope in the caller.
 #
 # Output (one line per check):
 #   [OK]      bucket: detail
@@ -39,12 +43,14 @@ set -uo pipefail
 BUCKET=all
 PROJECT_SCOPE=""
 QUIET=false
+AUTO_SCOPE=false
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --bucket)    BUCKET="${2:-all}"; shift 2 ;;
-    --projects)  PROJECT_SCOPE="${2:-}"; shift 2 ;;
-    --quiet)     QUIET=true; shift ;;
+    --bucket)     BUCKET="${2:-all}"; shift 2 ;;
+    --projects)   PROJECT_SCOPE="${2:-}"; shift 2 ;;
+    --auto-scope) AUTO_SCOPE=true; shift ;;
+    --quiet)      QUIET=true; shift ;;
     -h|--help)
       sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
@@ -57,6 +63,44 @@ case "$BUCKET" in tooling|repo|runtime|pipeline|all) ;; *)
   echo "ERROR: --bucket must be one of: tooling, repo, runtime, pipeline, all" >&2
   exit 2 ;;
 esac
+
+# ---------- auto-scope -----------------------------------------------------
+#
+# Deciding which projects a run should runtime-check is this script's job, not
+# its caller's. --auto-scope derives --projects from the diff (uncommitted plus
+# committed-but-unpushed) and, on a truly fresh start with nothing changed yet,
+# skips the runtime bucket entirely rather than checking every project in the
+# repo for a diff that does not exist.
+#
+# Callers previously reimplemented this inline; one-shot's copy was ~40 lines.
+
+if [ "$AUTO_SCOPE" = "true" ]; then
+  if [ -n "$PROJECT_SCOPE" ]; then
+    echo "ERROR: --auto-scope and --projects are mutually exclusive" >&2
+    exit 2
+  fi
+  AS_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+  AS_DEFAULT=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$AS_ROOT/HERO.md" 2>/dev/null | tr -d '[:space:]')
+  AS_DEFAULT=${AS_DEFAULT:-main}
+
+  # Top-level directory of every changed path, deduped. Files at the repo root
+  # (NF == 1) belong to no project and are intentionally excluded.
+  PROJECT_SCOPE=$( { git -C "$AS_ROOT" diff --name-only HEAD 2>/dev/null
+                     git -C "$AS_ROOT" diff --name-only "origin/$AS_DEFAULT...HEAD" 2>/dev/null
+                   } | awk -F/ 'NF > 1 {print $1}' | sort -u | paste -sd, - )
+
+  AS_BRANCH=$(git -C "$AS_ROOT" branch --show-current 2>/dev/null)
+  AS_DIRTY=$(git -C "$AS_ROOT" status --porcelain 2>/dev/null)
+
+  if [ -z "$PROJECT_SCOPE" ] && [ "$AS_BRANCH" = "$AS_DEFAULT" ] && [ -z "$AS_DIRTY" ]; then
+    # Fresh start: nothing has changed, so there is nothing to runtime-check.
+    # Narrow `all` to the three buckets that do not depend on a diff.
+    [ "$BUCKET" = "all" ] && BUCKET=no-runtime
+    [ "$QUIET" = "true" ] || echo "auto-scope: fresh start — skipping runtime bucket"
+  elif [ -n "$PROJECT_SCOPE" ]; then
+    [ "$QUIET" = "true" ] || echo "auto-scope: runtime checks scoped to '$PROJECT_SCOPE'"
+  fi
+fi
 
 # ---------- result tracking ------------------------------------------------
 
@@ -476,6 +520,14 @@ case "$BUCKET" in
     check_tooling
     check_repo
     check_runtime
+    check_pipeline
+    ;;
+  # Internal, set only by --auto-scope on a fresh start: everything except the
+  # runtime bucket, which needs a diff to be meaningful. Not accepted from the
+  # command line (the --bucket validator above rejects it).
+  no-runtime)
+    check_tooling
+    check_repo
     check_pipeline
     ;;
 esac

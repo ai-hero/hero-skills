@@ -35,21 +35,17 @@ Inspired by [shadcn/improve](https://github.com/shadcn/improve): the expensive, 
 ### Step 0: Load Hero Configuration and the my-work Store
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+[ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel)/scripts/hero-lib.sh"
+# shellcheck source=/dev/null
+. "$HERO_LIB"
+
+ROOT=$(hero_root)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 
 # Same store think-it-through and handoff emit into — one plate per repo,
 # git-ignored via .git/info/exclude so no tracked file is ever dirtied.
-mkdir -p "$ROOT/my-work"
-EXCLUDE_FILE=$(git -C "$ROOT" rev-parse --git-path info/exclude 2>/dev/null)
-case "$EXCLUDE_FILE" in
-  /*) ;;
-  *)  EXCLUDE_FILE="$ROOT/$EXCLUDE_FILE" ;;
-esac
-mkdir -p "$(dirname "$EXCLUDE_FILE")"
-grep -qxF 'my-work/' "$EXCLUDE_FILE" 2>/dev/null \
-  || printf '\nmy-work/\n' >> "$EXCLUDE_FILE"
-ls "$ROOT/my-work"/*.md 2>/dev/null || echo "my-work/ is empty"
+hero_ready_items "$(hero_work_store)"
 ```
 
 Read `HERO.md` for **Deployment** (registry for Docker Scout), **Projects** (languages/frameworks → which dependency files and which code-audit angles apply), and **Code Quality** (existing tooling so plans don't re-propose what a linter already enforces). Read existing my-work items so new plans reference or supersede rather than duplicate.

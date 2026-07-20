@@ -66,8 +66,9 @@ Note: this does NOT auto-pop the stash since the purpose is to switch away from 
 ### Step 2: Confirm the Branch Is Actually Unmerged, Then Switch Away
 
 ```bash
-DEFAULT_BRANCH=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | xargs)
-DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
+# shellcheck source=/dev/null
+. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+DEFAULT_BRANCH=$(hero_default_branch)
 if ! git fetch origin "$DEFAULT_BRANCH"; then
   echo "WARN: 'git fetch origin $DEFAULT_BRANCH' failed — the merged-check below may be unreliable. Resolve network/auth before trusting its result."
 fi

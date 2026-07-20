@@ -366,6 +366,42 @@ done
 echo ""
 echo "────────────────────────────"
 
+# ── re-inlined shared helpers ──────────────────────────────────────
+# Every pattern below used to be pasted into three or more SKILL.md files and
+# had already drifted between copies (push-pr listed a `test/` branch prefix,
+# one-shot did not; one asked for a 3-5 word slug, the other 2-3). They now
+# live in scripts/hero-lib.sh. A skill re-inlining one is not a style nit — it
+# forks the behavior silently, and the fork only surfaces when two skills
+# disagree at runtime.
+#
+# Format: "regex|hero-lib replacement"
+INLINED_PATTERNS=(
+  "awk -F': ' '/\\^- default-branch:/|hero_default_branch"
+  "rev-parse --git-path info/exclude|hero_exclude_add"
+  "Stale-HERO check|hero_check_staleness"
+  "norm() { printf|hero_ready_items"
+)
+for entry in "${INLINED_PATTERNS[@]}"; do
+  pattern="${entry%%|*}"
+  replacement="${entry##*|}"
+  # hero-lib.sh itself is the canonical home — exclude it from the scan.
+  HITS=$(grep -rln "$pattern" --include='*.md' "$SKILLS_DIR" 2>/dev/null || true)
+  if [[ -n "$HITS" ]]; then
+    while IFS= read -r hit; do
+      [[ -z "$hit" ]] && continue
+      error "re-inlines logic that lives in hero-lib.sh — use $replacement" \
+        "${hit#"$PLUGIN_ROOT/"}" \
+        "$(grep -n "$pattern" "$hit" | head -1 | cut -d: -f1)" \
+        "Source scripts/hero-lib.sh and call $replacement instead of pasting the implementation"
+    done <<< "$HITS"
+  else
+    pass "no skill re-inlines $replacement"
+  fi
+done
+
+echo ""
+echo "────────────────────────────"
+
 # ── work-item store: producers must have a consumer ────────────────
 # think-it-through, handoff, and harden all WRITE work-items into my-work/.
 # one-shot's plan step is the only thing that READS them. If that delegation

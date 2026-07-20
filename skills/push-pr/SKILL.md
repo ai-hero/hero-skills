@@ -24,23 +24,17 @@ The test phase (Step 2) absorbed the former `hero-skills:test-changes` skill —
 ### Step 0: Load Hero Configuration
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
+HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+[ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel)/scripts/hero-lib.sh"
+# shellcheck source=/dev/null
+. "$HERO_LIB" || { echo "ERROR: cannot source hero-lib.sh — reinstall the plugin."; exit 1; }
 
-# Stale-HERO check — fast subset of the plugin's check-hero-staleness.sh.
-# Keep aligned with the copy in one-shot.
-HERO_TIME=$(git -C "$ROOT" log -1 --format=%ct -- HERO.md 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
-CONFIG_TIME=$(git -C "$ROOT" log -1 --format=%ct -- \
-  pyproject.toml ':(glob)**/pyproject.toml' \
-  package.json ':(glob)**/package.json' \
-  go.mod ':(glob)**/go.mod' \
-  Cargo.toml ':(glob)**/Cargo.toml' \
-  .github/workflows .pre-commit-config.yaml \
-  CLAUDE.md Makefile justfile Taskfile.yml 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
-if [ "${CONFIG_TIME:-0}" -gt "${HERO_TIME:-0}" ]; then
-  echo "note: HERO.md may be out of date — run hero-skills:init-hero --update to refresh."
-fi
+ROOT=$(hero_root)
+cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
+hero_check_staleness
 ```
+
+> Each bash block below runs in a fresh shell, so re-source `hero-lib.sh` at the top of any block that calls a `hero_*` function.
 
 Read `HERO.md` if it exists. This skill uses:
 
@@ -65,9 +59,10 @@ Parse only the first whitespace-separated token — a target branch that happens
 Never commit or push directly to the default branch.
 
 ```bash
+# shellcheck source=/dev/null
+. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
 BRANCH=$(git branch --show-current)
-DEFAULT_BRANCH=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | xargs)
-DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
+DEFAULT_BRANCH=$(hero_default_branch)
 echo "Current branch: $BRANCH (default: $DEFAULT_BRANCH)"
 ```
 
@@ -87,11 +82,15 @@ fi
 
 Then derive a feature-branch name from the diff and check out a new branch. Uncommitted changes follow the checkout automatically — do **not** stash.
 
-Generate `BRANCH_NAME` as `{type}/{slug}`:
+Generate `BRANCH_NAME` by applying `hero_branch_policy` — the shared naming rules, also used by one-shot's auto-branch step so the two cannot drift:
 
-- Infer `{type}` from the changed files and diff content: `docs/` for docs-only changes, `test/` for test-only changes, `feat/` for new functionality, `fix/` for bug fixes, `refactor/` for restructuring, `chore/` for tooling/CI/dependency bumps.
-- Derive a 3-5 word `{slug}` from the diff summary — lowercase, hyphens instead of spaces, strip filler words (the, a, an, for, to, in), max 50 characters.
-- If an issue prefix is configured in HERO.md and an issue ID appears in the diff or a commit message draft, prefer `{issue-id}-{slug}`.
+```bash
+# shellcheck source=/dev/null
+. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+hero_branch_policy   # apply these rules to the diff to derive BRANCH_NAME
+```
+
+Deriving the name is a model task, not a shell one — read the diff, then apply the policy. Unlike one-shot (which derives and proceeds), push-pr proposes and waits for confirmation.
 
 Present the proposed name and let the user confirm or modify:
 
@@ -288,19 +287,12 @@ On `y`, start the dev server with output captured to a log under `.test-output/`
 # screenshot — doing them here too is cheap and lets the dev-server log
 # exist before the drive phase ever runs.
 mkdir -p "$ROOT/.test-output"
-# Write the ignore rule to .git/info/exclude (repo-local, untracked) rather
-# than .gitignore (tracked) — modifying a tracked file would leave the
-# working tree dirty and contradict the test phase's "never modifies tracked
-# source files" contract. Resolve the path via git so worktrees / bare repos
-# / non-default gitdirs work too.
-EXCLUDE_FILE=$(git -C "$ROOT" rev-parse --git-path info/exclude 2>/dev/null)
-case "$EXCLUDE_FILE" in
-  /*) ;;
-  *)  EXCLUDE_FILE="$ROOT/$EXCLUDE_FILE" ;;
-esac
-mkdir -p "$(dirname "$EXCLUDE_FILE")"
-grep -qxF '.test-output/' "$EXCLUDE_FILE" 2>/dev/null \
-  || printf '\n.test-output/\n' >> "$EXCLUDE_FILE"
+# hero_exclude_add writes to .git/info/exclude (repo-local, untracked) rather
+# than .gitignore (tracked) — modifying a tracked file would leave the working
+# tree dirty and contradict the test phase's "never modifies tracked source
+# files" contract. It resolves the path via git, so worktrees / bare repos /
+# non-default gitdirs all work.
+hero_exclude_add .test-output/
 DEV_LOG="$ROOT/.test-output/dev-server.log"
 # Truncate any stale log from a previous run so this run's diagnostics
 # only reflect the current invocation.
@@ -421,18 +413,11 @@ For each route in order, run the same recipe via Playwright MCP:
 5. `mcp__playwright__browser_take_screenshot` — save a PNG named `smoke-ROUTE_SLUG.png` under `$ROOT/.test-output/playwright-mcp/`. **Before the first screenshot of this run**, do the three-step setup once:
 
    ```bash
+   # shellcheck source=/dev/null
+   . "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
    mkdir -p "$ROOT/.test-output/playwright-mcp"
-   # Ensure the exclude file covers .test-output/. Use .git/info/exclude
-   # (repo-local, untracked) instead of .gitignore so we don't modify a
-   # tracked file — see the dev-server note above.
-   EXCLUDE_FILE=$(git -C "$ROOT" rev-parse --git-path info/exclude 2>/dev/null)
-   case "$EXCLUDE_FILE" in
-     /*) ;;
-     *)  EXCLUDE_FILE="$ROOT/$EXCLUDE_FILE" ;;
-   esac
-   mkdir -p "$(dirname "$EXCLUDE_FILE")"
-   grep -qxF '.test-output/' "$EXCLUDE_FILE" 2>/dev/null \
-     || printf '\n.test-output/\n' >> "$EXCLUDE_FILE"
+   # Idempotent — safe whether or not the dev-server block above already ran.
+   hero_exclude_add .test-output/
    # Clear stale artifacts from previous runs so this report only reflects
    # the current diff. Scope the delete to this skill's artifacts so
    # co-located Playwright traces / videos from unrelated sessions are not
@@ -719,17 +704,13 @@ gh pr list --head $(git branch --show-current) --json number,url,title,state
 ### A3: Create Pull Request
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-RAW_DEFAULT=$(awk -F': ' '/^- default-branch:/ {print $2; exit}' "$ROOT/HERO.md" 2>/dev/null | xargs)
-DEFAULT_BRANCH=${RAW_DEFAULT:-main}
-# Surface the resolved base and whether it came from HERO.md or the fallback,
-# so a missing/mistyped default-branch key can't silently open the PR against
-# the wrong base (e.g. `main` on a repo whose real default is `master`).
-if [ -z "$RAW_DEFAULT" ]; then
-  echo "PR base: $DEFAULT_BRANCH (fallback — HERO.md default-branch not found)"
-else
-  echo "PR base: $DEFAULT_BRANCH (from HERO.md)"
-fi
+# shellcheck source=/dev/null
+. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+ROOT=$(hero_root)
+# The _verbose variant reports whether the value came from HERO.md or the
+# fallback, so a missing/mistyped default-branch key can't silently open the PR
+# against the wrong base (e.g. `main` on a repo whose real default is `master`).
+DEFAULT_BRANCH=$(hero_default_branch_verbose)
 # Refresh the remote-tracking ref before diffing against it — Step 1 only
 # fetches when this branch came from the default branch; a branch that
 # existed before this run may never have fetched at all this session.
