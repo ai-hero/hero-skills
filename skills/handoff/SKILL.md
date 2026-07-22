@@ -134,7 +134,7 @@ Handing work to another team's repo is outward-facing and visible to people who 
 
 5. **Write the local stub.** Keep a `.plans/` item here titled for *this* repo's side of the work (e.g. "Await rate-limit support in acme/api-service"), with the issue URL in its Context. This repo's plate should show that it is waiting on someone, otherwise the dependency is invisible the moment this conversation ends.
 
-   Use `status: todo` and state the external gate in Context. `depends_on` holds numeric ids of items in **this** store only — a cross-repo dependency cannot be expressed there, and putting a non-numeric value in it makes the item permanently unresolvable. Say "blocked on OWNER/NAME#88" in the body, where a human will read it.
+   Use `status: todo` and state the external gate in Context. `depends_on` holds ids of items in **this** store only — a cross-repo dependency cannot be expressed there, and an entry no local item carries leaves the item blocked forever, flagged `[missing dep: …]` on every listing. Say "blocked on OWNER/NAME#88" in the body, where a human will read it.
 
 If the target repo uses Linear rather than GitHub Issues, create the issue in the corresponding Linear team via the MCP tools instead, and confirm the team with the user — `--repo` names a git repo, which does not by itself identify a Linear team.
 

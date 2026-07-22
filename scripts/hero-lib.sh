@@ -180,24 +180,36 @@ hero_exclude_path() {
 
 # Idempotently add one or more entries to .git/info/exclude.
 #   hero_exclude_add .plans/ .test-output/
+#
+# Fails PER ENTRY, not per call: returning only the last iteration's status
+# meant a failed append for entry 1 was swallowed when entry 2 succeeded —
+# the store stayed un-ignored with nothing programmatically detectable.
 hero_exclude_add() {
-  local exclude entry
+  local exclude entry rc
   exclude=$(hero_exclude_path) || {
     echo "hero_exclude_add: not a git repo" >&2
     return 1
   }
-  mkdir -p "$(dirname "$exclude")" || return 1
+  mkdir -p "$(dirname "$exclude")" || {
+    echo "hero_exclude_add: cannot create $(dirname "$exclude")" >&2
+    return 1
+  }
+  rc=0
   for entry in "$@"; do
-    grep -qxF "$entry" "$exclude" 2>/dev/null \
-      || printf '\n%s\n' "$entry" >> "$exclude"
+    grep -qxF "$entry" "$exclude" 2>/dev/null && continue
+    printf '\n%s\n' "$entry" >> "$exclude" 2>/dev/null || {
+      echo "hero_exclude_add: cannot append '$entry' to $exclude" >&2
+      rc=1
+    }
   done
+  return "$rc"
 }
 
 # ---------- the .plans store ------------------------------------------------
 
 # Absolute path to the work-item store, created and git-ignored on first use.
 # A dot-directory: tool-private state, like `.beads/` — it keeps the repo root
-# clean and cannot collide with a real project directory.
+# clean and is far less likely to collide with a real project directory.
 #
 # One-time migration: the store was formerly `my-work/`, and before that
 # `plan-work/`. Move a legacy store rather than orphaning its items behind
@@ -210,42 +222,56 @@ hero_work_store() {
 
   # Establish we can actually ignore the store BEFORE creating or migrating
   # anything. Doing it after meant a non-git directory got a store created and
-  # left un-ignored, with the function still returning 0.
-  hero_exclude_path >/dev/null || {
-    echo "hero_work_store: not a git repo — refusing to create an un-ignorable store" >&2
+  # left un-ignored, with the function still returning 0. Check — and later
+  # write — against $root, not the cwd: with an explicit root argument, the
+  # cwd may be a DIFFERENT repo, and the guard passing on the wrong repo
+  # created an un-ignored store in $root while polluting the cwd's excludes.
+  hero_exclude_path "$root" >/dev/null || {
+    echo "hero_work_store: '$root' is not a git repo — refusing to create an un-ignorable store" >&2
     return 1
   }
 
-  # `[ -d ]` is true for a symlink to a directory, and `mv` renames the LINK.
-  # A repo that commits `my-work -> ../../../.claude` (git preserves symlinks
-  # on clone) would silently become `.plans -> ../../../.claude`, redirecting
-  # every later work-item write outside the checkout — into a directory the
-  # agent itself reads back. Refuse rather than migrate.
+  # A store that is a symlink redirects every later work-item write outside
+  # the checkout — into a directory the agent itself reads back. Refuse.
   if [ -L "$store" ]; then
     echo "hero_work_store: refusing to use '$store' — it is a symlink" >&2
     return 1
   fi
   for legacy in my-work plan-work; do
+    # `[ -d ]` is true for a symlink to a directory, and `mv` renames the
+    # LINK: a repo that commits `my-work -> ../../../.claude` (git preserves
+    # symlinks on clone) would silently become `.plans -> ../../../.claude`.
+    # Refuse rather than migrate — but only when a migration would actually
+    # happen; a stale legacy symlink next to a healthy `.plans/` must not
+    # brick the store forever.
     if [ -L "$root/$legacy" ]; then
-      echo "hero_work_store: refusing to migrate '$root/$legacy' — it is a symlink" >&2
-      return 1
+      if [ ! -e "$store" ]; then
+        echo "hero_work_store: refusing to migrate '$root/$legacy' — it is a symlink" >&2
+        return 1
+      fi
+      echo "hero_work_store: ignoring legacy '$root/$legacy' — it is a symlink" >&2
+      continue
     fi
     if [ -d "$root/$legacy" ] && [ ! -e "$store" ]; then
-      mv "$root/$legacy" "$store" || return 1
+      mv "$root/$legacy" "$store" || {
+        echo "hero_work_store: cannot migrate '$root/$legacy' to '$store'" >&2
+        return 1
+      }
       echo "Migrated legacy $legacy/ store to .plans/." >&2
     fi
     if [ -d "$root/$legacy" ] && [ -d "$store" ]; then
       echo "hero_work_store: both $legacy/ and .plans/ exist — items in $legacy/ are NOT migrated and will be invisible. Merge them by hand." >&2
     fi
     # Keep the legacy name excluded through the transition so a not-yet-migrated
-    # legacy store is never accidentally committed either.
-    hero_exclude_add "$legacy/" || return 1
+    # legacy store is never accidentally committed either. The subshell cd
+    # targets $root's excludes even when the caller's cwd is another repo.
+    ( cd "$root" && hero_exclude_add "$legacy/" ) || return 1
   done
   mkdir -p "$store" || {
     echo "hero_work_store: cannot create '$store'" >&2
     return 1
   }
-  hero_exclude_add .plans/ || return 1
+  ( cd "$root" && hero_exclude_add .plans/ ) || return 1
   printf '%s' "$store"
 }
 
@@ -284,7 +310,7 @@ hero_item_field() {
 #
 # — yielded an empty value, the readiness loop never ran, and the item was
 # reported READY despite depending on work that does not exist. Silently: there
-# was no `d` for the numeric guard to reject.
+# was no `d` for the readiness loop's existence check to flag as missing.
 hero_item_deps() {
   awk '
     /^---[[:space:]]*$/ { fence++; if (fence >= 2) exit; next }
@@ -336,12 +362,16 @@ hero_norm_id() {
 }
 
 # Print one line per work-item:  STATE  file — title
+# A blocked row whose dependency does not exist anywhere in the store gets a
+# trailing ` [missing dep: ID…]` annotation — that reference can NEVER be
+# satisfied, which is different from ordinary waiting.
 #
 # STATE is one of:
 #   READY    not done, and every depends_on target is done
 #   blocked  not done, but a dependency is unmet or unresolvable
 #   active   status is in-progress — someone is already on it
 #   done     completed
+#   invalid  no usable id — the item cannot participate in dependency order
 #
 # `done` rows are PRINTED, not hidden. Callers need to see them: one-shot's
 # Step 1c resolves an argument against this listing to answer "has this already
@@ -359,22 +389,34 @@ hero_norm_id() {
 # Runs in a subshell: it cds, and leaking that into a sourced caller's shell
 # silently reroutes every later relative path.
 hero_ready_items() (
-  local store f d deps ready title id state all_ids done_ids missing
+  local store f d raw deps ready title id state all_ids done_ids missing
   store="${1:-$(hero_work_store)}" || return 1
   cd "$store" 2>/dev/null || { echo "hero_ready_items: no store at ${store}" >&2; return 1; }
+  # zsh errors out on an unmatched glob (bash leaves it literal for the
+  # `[ -e ]` guard to skip), so an EMPTY store aborted with a raw "no matches
+  # found" and rc=1 — indistinguishable from a missing store. nullglob makes
+  # it an empty listing in both shells.
+  setopt localoptions nullglob 2>/dev/null || true
 
   # Collect every id and the done subset. Ids are integers by convention, but
-  # comparison is string-tolerant (hero_norm_id), so the only malformed id is
-  # an EMPTY one — a hand-written oddball id must not erase the whole listing.
+  # comparison is string-tolerant (hero_norm_id), so the ids rejected here are
+  # EMPTY ones and ids containing whitespace — whitespace would inject extra
+  # tokens into the space-delimited sets below, letting a dep on a NONEXISTENT
+  # id resolve (and even count as done) with no warning at all. A malformed
+  # hand-written item must not erase or corrupt the whole listing.
   all_ids=" "
   done_ids=" "
   for f in *.md; do
     [ -e "$f" ] || continue
     id=$(hero_norm_id "$(hero_item_field "$f" id)")
-    if [ -z "$id" ]; then
-      echo "hero_ready_items: $f has no id — dependents on it cannot resolve" >&2
-      continue
-    fi
+    case "$id" in
+      '')
+        echo "hero_ready_items: $f has no id — dependents on it cannot resolve" >&2
+        continue ;;
+      *[[:space:]]*)
+        echo "hero_ready_items: $f has a whitespace-containing id ('$id') — dependents on it cannot resolve" >&2
+        continue ;;
+    esac
     case "$all_ids" in
       *" $id "*)
         echo "hero_ready_items: duplicate id $id — dependents may resolve against the wrong item" >&2 ;;
@@ -391,22 +433,31 @@ hero_ready_items() (
       done)        echo "done    $f — $title"; continue ;;
       in-progress) echo "active  $f — $title"; continue ;;
     esac
+    # An item whose id was rejected above must not be handed out as READY —
+    # it cannot be depended on, and a consumer acting on the row would work
+    # an item the dependency order knows nothing about.
+    id=$(hero_norm_id "$(hero_item_field "$f" id)")
+    case "$id" in
+      ''|*[[:space:]]*) echo "invalid $f — $title"; continue ;;
+    esac
     deps=$(hero_item_deps "$f")
     ready=1
     missing=""
     # Heredoc keeps the loop in this shell (so `ready` persists) and works under
     # both bash and zsh, which does not word-split unquoted vars.
-    while IFS= read -r d; do
-      [ -z "$d" ] && continue
-      d=$(hero_norm_id "$d")
+    while IFS= read -r raw; do
+      [ -z "$raw" ] && continue
+      d=$(hero_norm_id "$raw")
       case "$all_ids" in
         *" $d "*) ;;
         *)
           # A dangling reference blocks FOREVER, silently, unless it is named:
           # nothing will ever mark a nonexistent id done. Say so on both the
-          # listing (so the model sees it) and stderr (so a human does).
-          echo "hero_ready_items: $f depends_on '$d', which no item carries — blocked until the reference is fixed" >&2
-          missing="$missing $d"
+          # listing (so the model sees it) and stderr (so a human does) — and
+          # say it with the RAW value as written in the file, so grepping the
+          # store for the printed token actually finds it.
+          echo "hero_ready_items: $f depends_on '$raw', which no item carries — blocked until the reference is fixed" >&2
+          missing="$missing $raw"
           ready=0
           continue ;;
       esac

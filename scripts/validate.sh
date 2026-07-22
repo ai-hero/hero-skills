@@ -432,8 +432,9 @@ if [[ $ERRORS -eq 0 ]]; then
 fi
 
 # ── work-item store: producers must have a consumer ────────────────
-# think-it-through, handoff, and harden all WRITE work-items into .plans/.
-# one-shot's plan step is the only thing that READS them. If that delegation
+# think-it-through, handoff, and harden all WRITE work-items into .plans/
+# (and read the plate back to build on it). one-shot is the only CONSUMER —
+# it resolves an item to execute and marks it done. If that delegation
 # is ever edited away, the store silently becomes write-only: items pile up,
 # nothing marks them done, and one-shot goes back to planning from scratch
 # while ignoring the plate. Nothing else in this repo would catch that.

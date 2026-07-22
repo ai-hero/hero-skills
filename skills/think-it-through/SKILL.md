@@ -122,8 +122,8 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 
 # The store is a git-ignored folder of markdown work-items — your private plate
 # for THIS repo. hero_work_store creates it, excludes it via .git/info/exclude
-# (repo-local, untracked, so no tracked file is dirtied), and migrates any
-# legacy store it finds (it names the directory on stderr when it does).
+# (repo-local, untracked, so no tracked file is dirtied), and migrates either
+# legacy store name (it names the directory on stderr when it does).
 STORE=$(hero_work_store)
 
 # Show what's already on the plate so grilling builds on it, not beside it.

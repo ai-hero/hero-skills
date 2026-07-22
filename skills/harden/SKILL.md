@@ -253,7 +253,7 @@ Before printing the Step 4 summary, verify the Hard Rule actually held — don't
 
 ```bash
 git diff --stat --exit-code || echo "VIOLATION: tracked files were modified — this run broke the read-only contract"
-git status --porcelain | grep -v '^?? .plans/' && echo "VIOLATION: unexpected changes outside .plans/"
+git status --porcelain | grep -v '^?? \.plans/' && echo "VIOLATION: unexpected changes outside .plans/"
 ```
 
 If either check reports a violation, do not print "Source files modified: NONE" — say what changed instead and treat it as a bug in this run, not a footnote.
