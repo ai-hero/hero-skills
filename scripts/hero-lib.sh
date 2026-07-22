@@ -88,6 +88,66 @@ hero_is_valid_branch() {
   git check-ref-format --branch "$1" >/dev/null 2>&1
 }
 
+# Validate + normalize a git repo reference before it reaches `git ls-remote`,
+# `git clone`, or `git -C` as a REMOTE URL. This is to a repo URL what
+# hero_is_valid_branch is to a branch name.
+#
+# HERO.md is attacker-controlled in a cloned repo, and hero_field only blocks a
+# leading `-` and control chars — NOT git's `ext::sh -c "..."` transport helper,
+# which git executes as a shell command. A `target-repo: ext::sh -c "curl …|sh"`
+# therefore sails through hero_field and runs on the victim's machine the moment
+# a skill feeds it to `git ls-remote`. This gate closes that at the one place
+# every call site can share.
+#
+# Accepts and echoes a NORMALIZED value on stdout:
+#   OWNER/NAME        -> https://github.com/OWNER/NAME  (GitHub shorthand git won't resolve itself)
+#   https:// ssh://   -> unchanged
+#   git@host:path     -> unchanged (scp-style ssh)
+#   an existing local directory -> unchanged
+#   none              -> unchanged (callers treat "disabled" uniformly)
+# Everything else — `::` transport helpers, file://, other URL schemes, a
+# non-existent bare path — is REJECTED: non-zero return, message on stderr.
+hero_normalize_repo_ref() {
+  local ref="$1"
+  [ -n "$ref" ] || return 1
+  [ "$ref" = none ] && { printf 'none'; return 0; }
+  # `word::rest` is the transport-helper syntax (ext::, fd::, …) — the RCE path.
+  case "$ref" in
+    *::*)
+      echo "hero_normalize_repo_ref: refusing '$ref' — '::' transport-helper syntax runs a command" >&2
+      return 2 ;;
+  esac
+  case "$ref" in
+    https://*|ssh://*) printf '%s' "$ref"; return 0 ;;
+    file://*)
+      echo "hero_normalize_repo_ref: refusing '$ref' — file:// is not an allowed transport" >&2
+      return 2 ;;
+    *://*)
+      echo "hero_normalize_repo_ref: refusing '$ref' — only https:// and ssh:// URL transports are allowed" >&2
+      return 2 ;;
+  esac
+  # scp-style ssh (git@host:path): a colon, no scheme, no space.
+  case "$ref" in
+    *' '*) ;;                         # a space is never a valid ref → reject below
+    *@*:*) printf '%s' "$ref"; return 0 ;;
+  esac
+  # An existing local directory is a safe, non-executing target.
+  if [ -d "$ref" ]; then printf '%s' "$ref"; return 0; fi
+  # GitHub OWNER/NAME shorthand: exactly one slash, safe chars, no colon/space.
+  # In `case` globs `*` matches `/` too, so guard the slash count explicitly
+  # (*/*/* = two+ slashes) rather than relying on char classes to exclude it.
+  case "$ref" in
+    *' '*|*:*|*/*/*) ;;                     # space, colon, or 2+ slashes → not shorthand
+    */*)
+      case "$ref" in
+        *[!A-Za-z0-9_./-]*) ;;              # any char outside the safe set → reject
+        *) printf 'https://github.com/%s' "$ref"; return 0 ;;
+      esac ;;
+  esac
+  echo "hero_normalize_repo_ref: refusing '$ref' — not OWNER/NAME, https://, ssh://, git@host:path, or an existing local directory" >&2
+  return 2
+}
+
 # The repo's default branch per HERO.md, falling back to `main`.
 #
 # The fallback is silent by design at the call sites that only *read* (a diff
@@ -372,7 +432,8 @@ hero_norm_id() {
 #   plan     status is planning — still being shaped; a HUMAN marks it todo
 #   active   status is in-progress — someone is already on it
 #   done     completed
-#   invalid  no usable id — the item cannot participate in dependency order
+#   invalid  no usable id, OR an unrecognized status — either way the item
+#            cannot participate in dependency order and is never handed out READY
 #
 # `done` rows are PRINTED, not hidden. Callers need to see them: one-shot's
 # Step 1c resolves an argument against this listing to answer "has this already
@@ -439,6 +500,17 @@ hero_ready_items() (
       done)        echo "done    $f — $title"; continue ;;
       in-progress) echo "active  $f — $title"; continue ;;
       planning)    echo "plan    $f — $title"; continue ;;
+      todo)        ;;  # the only state eligible to become READY below
+      *)
+        # An UNRECOGNIZED status must never fall through to the READY path. The
+        # display label is `plan` while the keyword is `planning`, so `status:
+        # plan` — or any typo like `plannig` — is an easy hand/model error that
+        # would otherwise be handed straight to one-shot with no human
+        # ready-mark, silently defeating the gate the planning state exists to
+        # enforce. Treat it like a rejected id: name it loudly, never READY.
+        echo "hero_ready_items: $f has unrecognized status '$state' — not one of planning/todo/in-progress/done; not eligible for READY" >&2
+        echo "invalid $f — $title"
+        continue ;;
     esac
     # An item whose id was rejected above must not be handed out as READY —
     # it cannot be depended on, and a consumer acting on the row would work
