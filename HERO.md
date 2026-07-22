@@ -44,6 +44,13 @@
 - linters: markdownlint, shellcheck, codespell
 - hooks: detect-secrets, validate-plugin, audit, init-update
 
+## Wayfare
+
+- source-repo: .
+- target-repo: none # set to OWNER/NAME, a local path, or a git URL to enable the target substrate
+- target-branch: main
+- target-path: none # optional subtree holding the target design
+
 ## Projects
 
 ### hero-skills
