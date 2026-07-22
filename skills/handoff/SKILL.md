@@ -64,7 +64,7 @@ One file at `.plans/NNN-slug.md`, id continuing from the highest existing id (th
 ---
 id: 9
 title: Finish the payment-retry migration
-status: todo # todo | in-progress | done  (readiness is derived from depends_on)
+status: planning # planning | todo | in-progress | done  (flipped to todo by the user's ready-mark; readiness is derived from depends_on)
 depends_on: []
 one_way_door: false
 success: "Retries drain the backlog in staging; alert AL-42 stays green for 24h"
@@ -134,7 +134,7 @@ Handing work to another team's repo is outward-facing and visible to people who 
 
 5. **Write the local stub.** Keep a `.plans/` item here titled for *this* repo's side of the work (e.g. "Await rate-limit support in acme/api-service"), with the issue URL in its Context. This repo's plate should show that it is waiting on someone, otherwise the dependency is invisible the moment this conversation ends.
 
-   Use `status: todo` and state the external gate in Context. `depends_on` holds ids of items in **this** store only — a cross-repo dependency cannot be expressed there, and an entry no local item carries leaves the item blocked forever, flagged `[missing dep: …]` on every listing. Say "blocked on OWNER/NAME#88" in the body, where a human will read it.
+   Use `status: planning` — the external gate cannot be expressed in `depends_on` (it holds ids of items in **this** store only, and an entry no local item carries leaves the item blocked forever, flagged `[missing dep: …]` on every listing), and `planning` keeps the stub off the READY listing until the external work lands and the user marks it ready. Say "blocked on OWNER/NAME#88" in the Context, where a human will read it.
 
 If the target repo uses Linear rather than GitHub Issues, create the issue in the corresponding Linear team via the MCP tools instead, and confirm the team with the user — `--repo` names a git repo, which does not by itself identify a Linear team.
 
@@ -142,13 +142,17 @@ If the target repo uses Linear rather than GitHub Issues, create the issue in th
 
 ```
 Handoff written: .plans/009-finish-payment-retry-migration.md
-Status: READY (no blocking dependencies)
+Status: plan — awaiting your ready-mark
 Tracker: #123 filed (or: not filed)
 
-Downstream pickup:
+Downstream pickup (after the ready-mark):
   hero-skills:one-shot         # execute it ticket-to-merge in a fresh session
   # or point any agent at the .plans/ file — it is self-contained by design
 ```
+
+A handoff usually wants immediate pickup, so end by offering the flip:
+"Mark it ready for pickup now? [y/N]" — on yes, set `status: todo` and add
+`ready_marked:` with the date.
 
 For a `--repo` handoff, report both sides so it's clear what left the building:
 
@@ -157,7 +161,7 @@ Handed off to: acme/api-service#88 — Add per-tenant rate limiting
                 https://github.com/acme/api-service/issues/88
 
 Local stub:    .plans/010-await-rate-limit-support.md
-Status:        blocked (waiting on acme/api-service#88)
+Status:        plan (waiting on acme/api-service#88 — mark ready when it lands)
 
 Nothing in this repo picks that issue up — the receiving team runs
 hero-skills:one-shot (or anything else) against their own tracker.
