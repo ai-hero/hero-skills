@@ -325,6 +325,7 @@ Match `$ARGUMENTS` against both sets:
 | `$ARGUMENTS` matches exactly one READY item (id, filename slug, or title) | That item is the plan → 1c |
 | `$ARGUMENTS` matches an open tracker issue but no `.plans/` item | Fetch the issue body; it is the plan → 1c |
 | `$ARGUMENTS` matches a **blocked** item | STOP — print the item's unmet `depends_on` ids and their titles. Do not implement past a dependency. |
+| `$ARGUMENTS` matches a **plan** (planning) item | STOP — the item awaits the user's ready-mark. Show its title and `success` criteria and ask whether to mark it ready; on yes, set `status: todo` + `ready_marked:` date and it is the plan → 1c. Do NOT re-grill it — that writes a duplicate. |
 | `$ARGUMENTS` matches a **done** item | STOP — report that it already landed, with the item's `success` criteria as evidence. Offer the next READY item. Do NOT re-grill it; that writes a duplicate. |
 | `$ARGUMENTS` matches an **active** (in-progress) item | STOP and confirm — another session may hold it. Step 2 marks items `in-progress` before the first edit precisely so two runs cannot claim one item. |
 | `$ARGUMENTS` matches nothing, or is empty | Print the readiness view and ask: pick a READY item, or grill this as new work → 1d |

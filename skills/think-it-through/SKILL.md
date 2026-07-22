@@ -166,9 +166,9 @@ yes. Do not emit anything before it.
 
 Break the understood work into the smallest units that each deliver something
 testable and can be reviewed on their own. For each, write one file to
-`.plans/` (see the format below). Set `depends_on` to encode the real order —
-this is the payoff over a flat TODO list. Flag any one-way-door item with
-`one_way_door: true`.
+`.plans/` (see the format below) with `status: planning`. Set `depends_on` to
+encode the real order — this is the payoff over a flat TODO list. Flag any
+one-way-door item with `one_way_door: true`.
 
 Number items sequentially from the highest existing `id` in `.plans/`,
 re-checked immediately before writing (not cached from earlier in the
@@ -189,14 +189,23 @@ item can start. Provenance is not a blocker: an item discovered while grilling
 another records that link in `discovered_from`, which the readiness check
 ignores.
 
-After writing, print the readiness view (below) so the user sees what to
-start first.
+After writing, print the readiness view (below) — new items show as `plan`
+rows — then run the ready-mark gate (Step 5).
 
 When the grilling settled a **one-way-door architectural decision** (schema,
 public API, data model, service boundary), offer to also record it as an ADR
 under `specs/decisions/` via Arch Mode — the grilled Context / Alternatives /
 Reversibility answers _are_ the ADR content; don't make the user re-derive
 them later.
+
+### Step 5: The ready-mark gate
+
+Emitted items are `planning` — shaped, but not yet approved to implement. The
+ready-mark is the **user's act, never yours**: ask which items to mark ready,
+flip only the confirmed ones to `status: todo` (append `ready_marked:` with
+the date), and leave the rest in `planning` for a later session. Never flip an
+item unprompted, and never batch beyond what the user named — an unmarked item
+is invisible to `hero-skills:one-shot` by design.
 
 ## The Work-Item Format
 
@@ -206,7 +215,7 @@ One markdown file per item at `.plans/NNN-slug.md`:
 ---
 id: 7 # a plain integer; only the filename is zero-padded (007-slug.md) for sorting
 title: Add OAuth device-flow login
-status: todo # todo | in-progress | done  (readiness is DERIVED, not stored)
+status: planning # planning | todo | in-progress | done  (planning = awaiting the user's ready-mark; readiness is DERIVED, not stored)
 depends_on: [3, 5] # ids that must be `done` before this can start — blockers only
 discovered_from: 4 # optional; the item this was found while working — provenance, never blocks
 one_way_door: false # true = expensive to reverse; got extra scrutiny
@@ -236,16 +245,22 @@ Second-order effects, ongoing cost, and any open question still worth flagging.
 
 Keep the body proportional to the risk: a two-way-door chore might have a
 one-line Approach and empty Non-goals; a one-way-door schema change earns every
-section. The frontmatter fields are always present, except `discovered_from`,
-which appears only on items that were found while working another.
+section. The frontmatter fields are always present, with two exceptions:
+`discovered_from` appears only on items that were found while working another,
+and `ready_marked:` — a `YYYY-MM-DD` date stamped by Step 5's flip — appears
+from the moment the user marks the item ready. This block is the canonical
+field definition; other skills (wayfare, harden, handoff, one-shot) reference
+it rather than redefining fields.
 
 ## "What's Ready" — the one query that matters
 
-`status` stores only what the author knows: `todo`, `in-progress`, or `done`.
-It deliberately does NOT carry `ready` or `blocked` — those are _derived_ from
-`depends_on`, and storing them alongside the thing they are computed from means
-the two can disagree. An item is **ready** when its `status` is `todo` and every
-id in its `depends_on` points to an item that _is_ `done`. That is the Beads `ready`
+`status` stores only what the author knows: `planning`, `todo`, `in-progress`,
+or `done`. It deliberately does NOT carry `ready` or `blocked` — those are
+_derived_ from `depends_on`, and storing them alongside the thing they are
+computed from means the two can disagree. `planning` items are never ready no
+matter their dependencies — they list as `plan` rows and wait for the user's
+ready-mark (Step 5). An item is **ready** when its `status` is `todo` and
+every id in its `depends_on` points to an item that _is_ `done`. That is the Beads `ready`
 primitive without a database — a plain read over the folder, implemented as
 `hero_ready_items` in `scripts/hero-lib.sh`:
 
@@ -357,6 +372,7 @@ Arch Mode rules: always read the relevant source before creating/updating; specs
 | Asking what the codebase already answers         | Wastes attention. Go read it first.                             |
 | Declaring "we're aligned" yourself               | The user signals shared understanding, not you.                 |
 | Emitting work-items before the gate              | Violates the Prime Directive. Wait for the yes.                 |
+| Marking your own items ready                     | The ready-mark is the user's. Emitted items stay `planning`.    |
 | A work-item with an empty `success`              | If you can't state done, you don't understand it yet.           |
 | Skipping the one-way-door question               | The most expensive mistakes hide behind unasked reversibility.  |
 
@@ -365,4 +381,5 @@ Arch Mode rules: always read the relevant source before creating/updating; specs
 Pick exactly one, based on `.plans/`'s current state:
 
 - **A READY item exists**: `Next step: hero-skills:one-shot — drive it ticket-to-merge` (print only — model-invocation-restricted, cannot auto-run).
+- **Only `plan` rows** (items await the ready-mark): tell the user which items are waiting and that saying so flips them — nothing runs until they do.
 - **No READY item** (everything's still blocked, or there's another piece to grill): `Next step: hero-skills:think-it-through — think the next piece through, or re-grill a blocked item` (print only — re-invoking this same skill right after it finishes isn't auto-chained).

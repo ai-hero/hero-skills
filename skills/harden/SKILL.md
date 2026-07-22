@@ -209,13 +209,13 @@ Rank everything found by `severity × blast radius ÷ effort`. Cluster related f
 
 ## Step 3: Emit Plan Items
 
-Write each unit as a work-item in `.plans/` using think-it-through's format (id numbering continues from the highest existing id; filename `NNN-slug.md`; `depends_on` when one plan must land first, `discovered_from` for provenance only), with two extra sections the executor needs:
+Write each unit as a work-item in `.plans/` using think-it-through's format (id numbering continues from the highest existing id; filename `NNN-slug.md`; `depends_on` when one plan must land first, `discovered_from` for provenance only), with two extra sections the executor needs. Emit every plan with `status: planning`.
 
 ```markdown
 ---
 id: 12
 title: Update lodash + minimist for critical CVEs
-status: todo
+status: planning # the user marks audit plans ready — audit output never goes straight to build
 depends_on: []
 one_way_door: false
 success: "gh api dependabot/alerts shows 0 open critical/high; test suite green"
@@ -279,7 +279,8 @@ Plans emitted: .plans/012-*.md … 016-*.md (5 items, 0 cut)
 Source files modified: NONE (read-only by contract)
 
 Next steps:
-  hero-skills:one-shot         # execute a READY plan item ticket-to-merge
+  review the emitted plans and mark the ones to run ready (planning -> todo)
+  hero-skills:one-shot         # then execute a READY plan item ticket-to-merge
   hero-skills:think-it-through # re-grill a plan that needs a human decision
 ```
 

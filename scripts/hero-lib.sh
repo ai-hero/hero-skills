@@ -369,6 +369,7 @@ hero_norm_id() {
 # STATE is one of:
 #   READY    not done, and every depends_on target is done
 #   blocked  not done, but a dependency is unmet or unresolvable
+#   plan     status is planning — still being shaped; a HUMAN marks it todo
 #   active   status is in-progress — someone is already on it
 #   done     completed
 #   invalid  no usable id — the item cannot participate in dependency order
@@ -381,6 +382,11 @@ hero_norm_id() {
 # `active` is separated from READY so two sessions cannot both pick up the same
 # in-flight item — one-shot marks an item in-progress before its first edit
 # specifically to prevent that, and folding it into READY undid it.
+#
+# `planning` is never READY regardless of dependencies: the item is still being
+# shaped and awaits a human ready-mark. Skills that emit items write them as
+# `planning`; only the user's explicit say-so flips one to `todo` — without
+# this state, freshly emitted items were handed straight to one-shot.
 #
 # NOTE: readiness is a claim about DEPENDENCIES, not about the codebase. An item
 # stays READY after its work lands until someone marks it done — consumers must
@@ -432,6 +438,7 @@ hero_ready_items() (
     case "$state" in
       done)        echo "done    $f — $title"; continue ;;
       in-progress) echo "active  $f — $title"; continue ;;
+      planning)    echo "plan    $f — $title"; continue ;;
     esac
     # An item whose id was rejected above must not be handed out as READY —
     # it cannot be depended on, and a consumer acting on the row would work
