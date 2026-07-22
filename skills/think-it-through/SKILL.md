@@ -249,8 +249,9 @@ section. The frontmatter fields are always present, with two exceptions:
 `discovered_from` appears only on items that were found while working another,
 and `ready_marked:` — a `YYYY-MM-DD` date stamped by Step 5's flip — appears
 from the moment the user marks the item ready. This block is the canonical
-field definition; other skills (wayfare, harden, handoff, one-shot) reference
-it rather than redefining fields.
+field definition: the status enum and `ready_marked:` semantics are defined
+here, and where other skills (wayfare, harden, handoff) show frontmatter of
+their own they follow these meanings rather than reinventing them.
 
 ## "What's Ready" — the one query that matters
 

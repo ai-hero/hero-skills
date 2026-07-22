@@ -305,7 +305,7 @@ If the first token matches an issue-ID pattern (e.g., `PROJ-123` — letters, da
 
 #### 1b: Resolve against the work stores
 
-Read both stores before considering a grill. `think-it-through`, `handoff`, and `harden` all emit into `.plans/`; `handoff --issue`/`--repo` also files to the tracker.
+Read both stores before considering a grill. `think-it-through`, `handoff`, `harden`, and `wayfare` all emit into `.plans/`; `handoff --issue`/`--repo` also files to the tracker.
 
 ```bash
 # shellcheck source=/dev/null
@@ -542,8 +542,8 @@ If the pipeline stopped early, render the DAG with `(✗)` on the failed step, t
 ## Notes
 
 - This skill **does not skip user gates**. think-it-through's shared-understanding gate, mark-ready, and merge confirmation are all explicit. Auto mode does not change that.
-- **one-shot consumes work-items; it does not author them.** `think-it-through`, `handoff`, and `harden` are the producers into `.plans/`. Step 1 resolves against that store (and the tracker) before it will grill anything new, and Step 9 is what marks an item `done` — one-shot is the store's only consumer, so if it skips the close-out nothing else will do it.
-- **Trust the criteria, not the status field.** `status: todo` only means "nobody has updated this file", which is not the same as "not yet done" — work lands out-of-band all the time. Step 1c re-verifies against the codebase before implementing.
+- **one-shot consumes work-items; it does not author them.** `think-it-through`, `handoff`, `harden`, and `wayfare` are the producers into `.plans/`. Step 1 resolves against that store (and the tracker) before it will grill anything new, and Step 9 is what marks an item `done` — one-shot is the store's only consumer, so if it skips the close-out nothing else will do it.
+- **Trust the criteria, not the status field.** `status: todo` means a human marked the item ready but says nothing about whether the work has since landed — work lands out-of-band all the time. Step 1c re-verifies against the codebase before implementing.
 - This skill **does not retry** on judgment-call failures (test design, large bot feedback). Retrying without human input is how small PRs become broken merges.
 - Step 0.4's `git checkout -b` is unconfirmed by design — one-shot never works on the default branch and assumes the auto-derived name is acceptable. To rename later, use `git branch -m`. The sibling skill `push-pr` prompts for the name because it's invoked deliberately on an existing branch; one-shot's auto-mode contract precludes that prompt.
 - For larger work, run the same skills individually so you can pause between them.
