@@ -1,7 +1,7 @@
 ---
 name: harden
 # prettier-ignore
-description: Audit the codebase for hardening opportunities — dependency CVEs, container CVEs (Scout + Trivy), code-level robustness — read-only, and emit execution-ready plans as my-work items. Never edits source.
+description: Audit the codebase for hardening opportunities — dependency CVEs, container CVEs (Scout + Trivy), code-level robustness — read-only, and emit execution-ready plans as .plans items. Never edits source.
 argument-hint: "[deps|docker|code|all]"
 disable-model-invocation: true
 ---
@@ -14,7 +14,7 @@ Inspired by [shadcn/improve](https://github.com/shadcn/improve): the expensive, 
 
 ## The Hard Rule
 
-**This skill never edits source code, dependency files, Dockerfiles, or workflows. Read-only, always.** Its only writes are plan items under the git-ignored `my-work/` store. If you catch yourself about to run `npm install`, edit a Dockerfile, or `git commit` — stop; that command belongs *inside* a plan item's execution recipe.
+**This skill never edits source code, dependency files, Dockerfiles, or workflows. Read-only, always.** Its only writes are plan items under the git-ignored `.plans/` store. If you catch yourself about to run `npm install`, edit a Dockerfile, or `git commit` — stop; that command belongs *inside* a plan item's execution recipe.
 
 ## Arguments
 
@@ -32,7 +32,7 @@ Inspired by [shadcn/improve](https://github.com/shadcn/improve): the expensive, 
 
 ## Instructions
 
-### Step 0: Load Hero Configuration and the my-work Store
+### Step 0: Load Hero Configuration and the .plans Store
 
 ```bash
 HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
@@ -48,7 +48,7 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 hero_ready_items "$(hero_work_store)"
 ```
 
-Read `HERO.md` for **Deployment** (registry for Docker Scout), **Projects** (languages/frameworks → which dependency files and which code-audit angles apply), and **Code Quality** (existing tooling so plans don't re-propose what a linter already enforces). Read existing my-work items so new plans reference or supersede rather than duplicate.
+Read `HERO.md` for **Deployment** (registry for Docker Scout), **Projects** (languages/frameworks → which dependency files and which code-audit angles apply), and **Code Quality** (existing tooling so plans don't re-propose what a linter already enforces). Read existing .plans items so new plans reference or supersede rather than duplicate.
 
 ### Step 1: Detect Repository Context
 
@@ -209,7 +209,7 @@ Rank everything found by `severity × blast radius ÷ effort`. Cluster related f
 
 ## Step 3: Emit Plan Items
 
-Write each unit as a work-item in `my-work/` using think-it-through's format (id numbering continues from the highest existing id; filename `NNN-slug.md`; `depends_on` when one plan must land first), with two extra sections the executor needs:
+Write each unit as a work-item in `.plans/` using think-it-through's format (id numbering continues from the highest existing id; filename `NNN-slug.md`; `depends_on` when one plan must land first, `discovered_from` for provenance only), with two extra sections the executor needs:
 
 ```markdown
 ---
@@ -253,7 +253,7 @@ Before printing the Step 4 summary, verify the Hard Rule actually held — don't
 
 ```bash
 git diff --stat --exit-code || echo "VIOLATION: tracked files were modified — this run broke the read-only contract"
-git status --porcelain | grep -v '^?? my-work/' && echo "VIOLATION: unexpected changes outside my-work/"
+git status --porcelain | grep -v '^?? \.plans/' && echo "VIOLATION: unexpected changes outside .plans/"
 ```
 
 If either check reports a violation, do not print "Source files modified: NONE" — say what changed instead and treat it as a bug in this run, not a footnote.
@@ -275,7 +275,7 @@ Automated scanning: NONE (no dependabot config, no CI scan)
   -> this audit is a snapshot; pinned tags rot unwatched. Note in the plan
      whether to add a scheduled CI gate.
 
-Plans emitted: my-work/012-*.md … 016-*.md (5 items, 0 cut)
+Plans emitted: .plans/012-*.md … 016-*.md (5 items, 0 cut)
 Source files modified: NONE (read-only by contract)
 
 Next steps:
@@ -289,7 +289,7 @@ Next steps:
 - Flag major version updates as breaking-change risks in the plan; default the recipe to the non-breaking path.
 - Never assume Dependabot auto-closes its own PRs once a batched fix lands — it doesn't reliably fire for a fix that lands via a different commit than its own PR (see A4 step 6). The execution recipe must close each superseded Dependabot PR explicitly after merge, with a comment referencing the merged PR.
 - Always specify rescanning with **both** Scout and Trivy in a Docker plan item's verification — neither scanner alone is sufficient (see B1).
-- `my-work/` is private and git-ignored; never commit or push it.
+- `.plans/` is private and git-ignored; never commit or push it.
 
 ### Before a plan says "no fix available"
 

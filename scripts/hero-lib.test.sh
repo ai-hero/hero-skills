@@ -74,7 +74,7 @@ check "field: rejected value falls back to main" \
 
 # ---------- hero_ready_items -----------------------------------------------
 
-W="$TMP/w/my-work"
+W="$TMP/w/.plans"
 mkdir -p "$W"
 
 item() { # file id title status deps
@@ -99,27 +99,39 @@ item 008-caps.md 9 "Capitalized status" "DONE" "[]"
 
 OUT="$(hero_ready_items "$W" 2>/dev/null)"
 
-state_of() { printf '%s' "$OUT" | awk -v f="$1" '$2 == f { print $1; exit }'; }
+# state_of FILE [LISTING] — the STATE column for FILE, defaulting to $OUT.
+state_of() { printf '%s' "${2:-$OUT}" | awk -v f="$1" '$2 == f { print $1; exit }'; }
 
 check "ready: satisfied dep is READY"        "READY"   "$(state_of 002-todo.md)"
 check "ready: unmet dep is blocked"          "blocked" "$(state_of 003-blocked.md)"
 check "ready: in-progress is active, not READY" "active" "$(state_of 004-active.md)"
 check "ready: done items are listed"         "done"    "$(state_of 001-done.md)"
-# 007 and 7 must compare equal, or a zero-padded id blocks its dependents.
+# 007 and 7 must compare equal, or a zero-padded legacy id blocks its dependents.
 check "ready: zero-padded id resolves"       "READY"   "$(state_of 006-padref.md)"
-# A dangling reference must block, not silently resolve.
+# A dangling reference must block, not silently resolve — and must SAY it is
+# dangling: nothing will ever mark a nonexistent id done, so an unnamed
+# dangling ref reads as ordinary waiting when it is actually forever.
 check "ready: dangling dep blocks"           "blocked" "$(state_of 007-dangling.md)"
+printf '%s' "$OUT" | grep -q '007-dangling.md.*\[missing dep: 99\]'
+check "ready: dangling dep is named on the listing" "0" "$?"
+# Capture stderr rather than piping into grep -q: with pipefail, grep's early
+# exit SIGPIPEs the producer and the pipeline reports 141 despite a match.
+ERR0="$(hero_ready_items "$W" 2>&1 >/dev/null)"
+printf '%s' "$ERR0" | grep -q "no item carries"
+check "ready: dangling dep warns on stderr" "0" "$?"
 # `DONE` must count as done, or every dependent stays blocked forever.
 check "ready: status match is case-insensitive" "done"  "$(state_of 008-caps.md)"
 
-# A non-numeric id used to be a FATAL arithmetic error: the function emitted
-# NOTHING, which a caller reads as an empty plate rather than as a failure.
-item 009-badid.md "AH-12" "Non-numeric id" "done" "[]"
+# Ids are integers by convention, but a hand-written oddball must degrade
+# gracefully: a non-numeric id used to be a FATAL arithmetic error that
+# emitted NOTHING — a caller reads that as an empty plate, not as a failure.
+item 009-strid.md "AH-12" "String id" "done" "[]"
+item 00a-strdep.md "b3f2" "Depends on string id" "todo" "[ah-12]"
 OUT2="$(hero_ready_items "$W" 2>/dev/null)"
 COUNT2="$(printf '%s' "$OUT2" | grep -c . )"
-check "ready: non-numeric id does not blank the listing" "9" "$COUNT2"
-hero_ready_items "$W" 2>&1 >/dev/null | grep -q "non-numeric id"
-check "ready: non-numeric id warns on stderr" "0" "$?"
+check "ready: string id does not blank the listing" "10" "$COUNT2"
+# Ids compare case-insensitively — `ah-12` must resolve against `AH-12`.
+check "ready: string-id dep resolves case-insensitively" "READY" "$(state_of 00a-strdep.md "$OUT2")"
 
 # The store listing is data; notes belong on stderr.
 NOTE="$(hero_ready_items "$TMP/nonexistent-store" 2>/dev/null)"
@@ -168,8 +180,7 @@ EOF
 # YAML block sequences are the standard list form. Only the inline form parsed,
 # so this yielded "no dependencies" and the item was handed out as READY.
 OUT3="$(hero_ready_items "$W" 2>/dev/null)"
-check "deps: block sequence blocks" "blocked" \
-  "$(printf '%s' "$OUT3" | awk '$2 == "011-mldeps.md" { print $1; exit }')"
+check "deps: block sequence blocks" "blocked" "$(state_of 011-mldeps.md "$OUT3")"
 
 cat > "$W/012-quoted.md" <<'EOF'
 ---
@@ -187,11 +198,14 @@ status: todo
 depends_on: [12]
 ---
 EOF
+item 015-qdep.md 15 "Quoted inline dep" "todo" '["12"]'
 OUT4="$(hero_ready_items "$W" 2>/dev/null)"
-st4() { printf '%s' "$OUT4" | awk -v f="$1" '$2 == f { print $1; exit }'; }
 # A quoted status did not equal `done`, so every dependent blocked forever.
-check "status: quoted done counts as done" "done"  "$(st4 012-quoted.md)"
-check "status: its dependent unblocks"     "READY" "$(st4 013-dep.md)"
+check "status: quoted done counts as done" "done"  "$(state_of 012-quoted.md "$OUT4")"
+check "status: its dependent unblocks"     "READY" "$(state_of 013-dep.md "$OUT4")"
+# The inline-array parser must strip entry quotes like the block parser does,
+# or `depends_on: ["12"]` emits `"12"` and never matches id 12.
+check "deps: quoted inline entry resolves" "READY" "$(state_of 015-qdep.md "$OUT4")"
 
 cat > "$W/014-body.md" <<'EOF'
 ---
@@ -204,11 +218,103 @@ Run until `status: done` appears in the log.
 EOF
 OUT5="$(hero_ready_items "$W" 2>/dev/null)"
 # Frontmatter only — a body line must not be read as the item's own field.
-check "field: body line is not frontmatter" "READY" \
-  "$(printf '%s' "$OUT5" | awk '$2 == "014-body.md" { print $1; exit }')"
+check "field: body line is not frontmatter" "READY" "$(state_of 014-body.md "$OUT5")"
 
 hero_ready_items "$TMP/definitely-not-a-store" >/dev/null 2>&1
 check "ready: missing store returns non-zero" "1" "$?"
+
+# An empty store is a healthy empty plate, not a failure (zsh aborted here
+# with a raw unmatched-glob error and rc=1 before nullglob was set).
+mkdir -p "$TMP/empty-store"
+EMPTY="$(hero_ready_items "$TMP/empty-store" 2>/dev/null)"
+check "ready: empty store returns success" "0" "$?"
+check "ready: empty store prints nothing" "" "$EMPTY"
+
+# ---------- id integrity -----------------------------------------------------
+#
+# The space-delimited id sets are only sound if no id can contain the
+# delimiter. A whitespace id (`id: AH 12`) used to inject two tokens, letting
+# a dep on a NONEXISTENT id resolve — and count as done — with no warning:
+# the exact silent-READY failure the dangling-dep report exists to prevent.
+
+item 016-wsid.md "WS tok9" "Whitespace id" "done" "[]"
+item 017-wsdep.md 17 "Deps on token of whitespace id" "todo" "[tok9]"
+OUT6="$(hero_ready_items "$W" 2>/dev/null)"
+ERR6="$(hero_ready_items "$W" 2>&1 >/dev/null)"
+check "ready: dep on a whitespace-id token stays blocked" "blocked" "$(state_of 017-wsdep.md "$OUT6")"
+printf '%s' "$ERR6" | grep -q "whitespace-containing id"
+check "ready: whitespace id warns on stderr" "0" "$?"
+
+# Duplicate ids (after normalization — 007 is already item 005's id) must be
+# named: dependents may resolve against the wrong twin.
+item 018-dup7.md 7 "Duplicate of padded id 007" "todo" "[]"
+ERR7="$(hero_ready_items "$W" 2>&1 >/dev/null)"
+printf '%s' "$ERR7" | grep -q "duplicate id 7"
+check "ready: normalized duplicate id warns on stderr" "0" "$?"
+
+# An item with no usable id cannot participate in dependency order — handing
+# it out as READY would have a consumer work an item nothing can depend on.
+printf 'just prose, no frontmatter\n' > "$W/019-prose.md"
+OUT7="$(hero_ready_items "$W" 2>/dev/null)"
+check "ready: id-less item is invalid, not READY" "invalid" "$(state_of 019-prose.md "$OUT7")"
+
+# discovered_from is provenance, never a blocker: a DANGLING discovered_from
+# must not block (or even warn) — the readiness engine only parses depends_on.
+cat > "$W/020-disc.md" <<'EOF'
+---
+id: 20
+title: Discovered while working another item
+status: todo
+depends_on: []
+discovered_from: 999
+---
+EOF
+OUT8="$(hero_ready_items "$W" 2>/dev/null)"
+check "ready: dangling discovered_from never blocks" "READY" "$(state_of 020-disc.md "$OUT8")"
+
+# ---------- hero_work_store migration ---------------------------------------
+#
+# The only mutating function: an mv of the agent's entire work queue. Each
+# case pins a path a refactor of the migration loop could silently drop.
+
+R1="$TMP/mig1"; git init -q "$R1"
+mkdir "$R1/my-work"; printf -- '---\nid: 1\ntitle: L\nstatus: todo\ndepends_on: []\n---\n' > "$R1/my-work/001-x.md"
+S1="$(hero_work_store "$R1" 2>/dev/null)"
+check "store: returns the .plans path"     "$R1/.plans" "$S1"
+check "store: legacy item migrated"        "yes" "$([ -e "$R1/.plans/001-x.md" ] && echo yes)"
+check "store: legacy dir gone after move"  "yes" "$([ ! -e "$R1/my-work" ] && echo yes)"
+grep -qxF ".plans/" "$R1/.git/info/exclude"
+check "store: .plans excluded in the TARGET repo" "0" "$?"
+check "store: second call is idempotent"   "$R1/.plans" "$(hero_work_store "$R1" 2>/dev/null)"
+
+# Symlink refusal — only when a migration would actually happen. A stale
+# legacy symlink next to a healthy .plans/ must not brick the store.
+R2="$TMP/mig2"; git init -q "$R2"; ln -s /etc "$R2/my-work"
+hero_work_store "$R2" >/dev/null 2>&1
+check "store: symlinked legacy refused when migrating" "1" "$?"
+check "store: no .plans created on refusal" "yes" "$([ ! -e "$R2/.plans" ] && echo yes)"
+mkdir "$R2/.plans"
+S2="$(hero_work_store "$R2" 2>/dev/null)"
+check "store: healthy .plans survives a legacy symlink" "$R2/.plans" "$S2"
+
+# Both legacy dirs: my-work (newer) wins; shadowed plan-work is warned loudly.
+R3="$TMP/mig3"; git init -q "$R3"
+mkdir "$R3/my-work" "$R3/plan-work"; touch "$R3/my-work/a.md" "$R3/plan-work/b.md"
+ERR3="$(hero_work_store "$R3" 2>&1 >/dev/null)"
+check "store: my-work wins over plan-work" "yes" "$([ -e "$R3/.plans/a.md" ] && echo yes)"
+printf '%s' "$ERR3" | grep -q "both plan-work/ and .plans/ exist"
+check "store: shadowed plan-work warned loudly" "0" "$?"
+
+# Explicit-root safety: run from a NON-repo cwd, the store must land in (and
+# only mutate) the target repo — previously the exclude writes hit the cwd.
+R4="$TMP/mig4"; git init -q "$R4"
+NOREPO="$TMP/norepo"; mkdir -p "$NOREPO"
+S4="$(cd "$NOREPO" && hero_work_store "$R4" 2>/dev/null)"
+check "store: explicit root works from non-repo cwd" "$R4/.plans" "$S4"
+grep -qxF ".plans/" "$R4/.git/info/exclude"
+check "store: excludes written to the target repo" "0" "$?"
+hero_work_store "$NOREPO" >/dev/null 2>&1
+check "store: non-repo root still refused" "1" "$?"
 
 # ---------- branch-name gate -----------------------------------------------
 #

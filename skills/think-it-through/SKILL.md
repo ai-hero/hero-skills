@@ -11,7 +11,7 @@ Take a rough idea or a vague task and think it all the way through with the
 user: brainstorm it, then grill it — one question at a time — until it is
 understood at a principal-engineer level: goals and non-goals explicit, failure
 modes named, reversibility judged, success measurable. Then break it into
-dependency-aware work-items in a private, git-ignored `my-work/` store — your
+dependency-aware work-items in a private, git-ignored `.plans/` store — your
 plate, not the team's.
 
 This is the sharp, thorough sibling of ordinary planning. Ordinary
@@ -109,7 +109,7 @@ none may be silently skipped. Skipping is how a two-week detour begins.
 
 **Mode dispatch:** if `$ARGUMENTS` starts with `arch`, skip the grilling flow and jump to **Arch Mode** below (absorbed from the former `hero-skills:document-arch`). Everything else is an idea or task to think through.
 
-### Step 0: Load context and the my-work store
+### Step 0: Load context and the .plans store
 
 ```bash
 HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
@@ -122,8 +122,8 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 
 # The store is a git-ignored folder of markdown work-items — your private plate
 # for THIS repo. hero_work_store creates it, excludes it via .git/info/exclude
-# (repo-local, untracked, so no tracked file is dirtied), and migrates a legacy
-# plan-work/ store if one exists.
+# (repo-local, untracked, so no tracked file is dirtied), and migrates either
+# legacy store name (it names the directory on stderr when it does).
 STORE=$(hero_work_store)
 
 # Show what's already on the plate so grilling builds on it, not beside it.
@@ -159,18 +159,18 @@ Announce progress lightly so the user sees the tree being walked, e.g.
 
 State plainly: "I think we have shared understanding — here's the shape of it:
 [2–4 sentence synthesis covering goals, non-goals, chosen approach, the riskiest
-decision]. Ready for me to write this into `my-work/`?" Wait for the user's
+decision]. Ready for me to write this into `.plans/`?" Wait for the user's
 yes. Do not emit anything before it.
 
 ### Step 4: Emit work-items
 
 Break the understood work into the smallest units that each deliver something
 testable and can be reviewed on their own. For each, write one file to
-`my-work/` (see the format below). Set `depends_on` to encode the real order —
+`.plans/` (see the format below). Set `depends_on` to encode the real order —
 this is the payoff over a flat TODO list. Flag any one-way-door item with
 `one_way_door: true`.
 
-Number items sequentially from the highest existing `id` in `my-work/`,
+Number items sequentially from the highest existing `id` in `.plans/`,
 re-checked immediately before writing (not cached from earlier in the
 session) — this doesn't eliminate a collision between two truly concurrent
 writers, but it closes the common case of a stale count from a session that
@@ -178,11 +178,16 @@ has been running a while. The `id` frontmatter field is a plain integer;
 zero-pad only the **filename** prefix (`007-slug.md`) so `ls` sorts them —
 `depends_on` references the plain integer id.
 
-Before writing, verify every `depends_on` id actually exists in `my-work/`.
-A typo'd or stale id (e.g. referencing a since-renumbered or removed item)
-doesn't error — it just makes the readiness check treat the item as
-permanently blocked, silently, with nothing in this skill's output pointing
-at the dangling reference.
+Before writing, verify every `depends_on` id actually exists in `.plans/` —
+reference ids, never titles. `hero_ready_items` names a dangling reference
+loudly (`[missing dep: …]` on the listing, a warning on stderr), but the item
+still sits blocked until someone fixes the typo — catch it at write time
+instead.
+
+`depends_on` is for real blockers only — work that must be `done` before this
+item can start. Provenance is not a blocker: an item discovered while grilling
+another records that link in `discovered_from`, which the readiness check
+ignores.
 
 After writing, print the readiness view (below) so the user sees what to
 start first.
@@ -195,14 +200,15 @@ them later.
 
 ## The Work-Item Format
 
-One markdown file per item at `my-work/NNN-slug.md`:
+One markdown file per item at `.plans/NNN-slug.md`:
 
 ```markdown
 ---
 id: 7 # a plain integer; only the filename is zero-padded (007-slug.md) for sorting
 title: Add OAuth device-flow login
 status: todo # todo | in-progress | done  (readiness is DERIVED, not stored)
-depends_on: [3, 5] # ids that must be `done` before this can start
+depends_on: [3, 5] # ids that must be `done` before this can start — blockers only
+discovered_from: 4 # optional; the item this was found while working — provenance, never blocks
 one_way_door: false # true = expensive to reverse; got extra scrutiny
 success: "User completes device-flow login in under 30s; e2e test green"
 ---
@@ -230,7 +236,8 @@ Second-order effects, ongoing cost, and any open question still worth flagging.
 
 Keep the body proportional to the risk: a two-way-door chore might have a
 one-line Approach and empty Non-goals; a one-way-door schema change earns every
-section. The frontmatter fields are always present.
+section. The frontmatter fields are always present, except `discovered_from`,
+which appears only on items that were found while working another.
 
 ## "What's Ready" — the one query that matters
 
@@ -248,9 +255,9 @@ primitive without a database — a plain read over the folder, implemented as
 hero_ready_items
 ```
 
-Ids are normalized to base-10, so `007` and `7` compare equal. A `depends_on`
-pointing at an id that does not exist leaves the item permanently blocked —
-which is why Step 4 verifies every reference before writing.
+Ids are normalized to base-10, so `007` and `7` compare equal. A dangling
+`depends_on` shows as `[missing dep: …]` on the listing — permanently blocked
+until fixed, which is why Step 4 verifies every reference at write time.
 
 Run this any time to see what to pick up next. Pick the highest-priority ready
 item (or the user's choice) and start it, moving its `status` to `in-progress`,
@@ -321,7 +328,7 @@ Arch Mode rules: always read the relevant source before creating/updating; specs
 
 ## Notes
 
-- **The store is private.** `my-work/` is git-ignored on purpose — it is the
+- **The store is private.** `.plans/` is git-ignored on purpose — it is the
   user's plate, not a shared board. Never commit it; never push it.
 - **Emit, don't implement.** This skill produces understanding and work-items;
   `hero-skills:one-shot` consumes them. The two point at each other on purpose:
@@ -333,9 +340,11 @@ Arch Mode rules: always read the relevant source before creating/updating; specs
   behalf. An item stays `ready` after the work lands unless someone edits it —
   which is why one-shot re-verifies an item's `success` criteria against the
   repo before implementing, and marks it `done` only after its PR merges.
-- **Discovered work goes back in.** If grilling one item surfaces new work, write
-  it as its own item with a `depends_on` link rather than smuggling it into the
-  current one.
+- **Discovered work goes back in.** If grilling one item surfaces new work,
+  write it as its own item rather than smuggling it into the current one. Link
+  it with `discovered_from` for provenance; add a `depends_on` edge only if one
+  genuinely cannot start before the other is done — conflating the two blocks
+  work that is actually startable.
 - **Update status as you go.** A stale store is worse than none — mark items
   `in-progress` and `done` so the readiness query stays honest.
 
@@ -353,7 +362,7 @@ Arch Mode rules: always read the relevant source before creating/updating; specs
 
 ## Next steps
 
-Pick exactly one, based on `my-work/`'s current state:
+Pick exactly one, based on `.plans/`'s current state:
 
 - **A READY item exists**: `Next step: hero-skills:one-shot — drive it ticket-to-merge` (print only — model-invocation-restricted, cannot auto-run).
 - **No READY item** (everything's still blocked, or there's another piece to grill): `Next step: hero-skills:think-it-through — think the next piece through, or re-grill a blocked item` (print only — re-invoking this same skill right after it finishes isn't auto-chained).

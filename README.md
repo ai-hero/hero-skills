@@ -120,7 +120,7 @@ hero-skills:one-shot PROJ-123   # start a new ticket (or a plain-text descriptio
 hero-skills:one-shot            # resume the current goal to merged + reset branch
 ```
 
-This chains all nine steps end-to-end — `plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship` — with explicit user gates at plan-approval, mark-ready, and merge. `plan` resolves what you asked for against your `my-work/` store and this repo's tracker before it plans anything new, delegating to `hero-skills:think-it-through` only when nothing matches — and it re-checks a matched item against the codebase first, so already-finished work is reported rather than rebuilt. `simplify` runs the `/simplify` skill on the dirty diff so the commit lands clean. `push` tests first (lint/typecheck/unit tests plus a UI smoke check via Playwright MCP for routes affected by the diff, skipped automatically on backend-only PRs), then commits and opens the draft PR. `self-review` runs the review agents plus a security pass. `mark-ready` is the explicit draft → ready gate; `await-review` polls for your configured Code Review Agent (Copilot, CodeRabbit, Greptile, …) before `respond` addresses its feedback.
+This chains all nine steps end-to-end — `plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship` — with explicit user gates at plan-approval, mark-ready, and merge. `plan` resolves what you asked for against your `.plans/` store and this repo's tracker before it plans anything new, delegating to `hero-skills:think-it-through` only when nothing matches — and it re-checks a matched item against the codebase first, so already-finished work is reported rather than rebuilt. `simplify` runs the `/simplify` skill on the dirty diff so the commit lands clean. `push` tests first (lint/typecheck/unit tests plus a UI smoke check via Playwright MCP for routes affected by the diff, skipped automatically on backend-only PRs), then commits and opens the draft PR. `self-review` runs the review agents plus a security pass. `mark-ready` is the explicit draft → ready gate; `await-review` polls for your configured Code Review Agent (Copilot, CodeRabbit, Greptile, …) before `respond` addresses its feedback.
 
 At each step transition, one-shot prints a progress line so you always know where you are:
 
@@ -134,7 +134,7 @@ Each step maps to a skill you can run on its own when you don't want the whole p
 
 | # | Step | Skill to run standalone |
 |---|------|-------------------------|
-| 1 | `plan` | `hero-skills:think-it-through` (only when nothing resolves from `my-work/` or the tracker) |
+| 1 | `plan` | `hero-skills:think-it-through` (only when nothing resolves from `.plans/` or the tracker) |
 | 2 | `implement` | inline (executes the resolved work-item) |
 | 3 | `simplify` | `/simplify` (external skill) |
 | 4 | `push` | `hero-skills:push-pr` (tests — verification + UI smoke — then commits + pushes a draft PR) |
@@ -185,7 +185,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
 | Command | What it does |
 |---------|-------------|
-| `hero-skills:harden` | Audit read-only for hardening — dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness — and emit execution-ready plans as `my-work/` items |
+| `hero-skills:harden` | Audit read-only for hardening — dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness — and emit execution-ready plans as `.plans/` items |
 | `hero-skills:think-it-through` | Brainstorm + grill an idea one question at a time into shared understanding and dependency-aware work-items; `arch` mode manages `specs/` docs + ADRs |
 | `hero-skills:handoff` | Distill the current conversation into one self-contained work-item for a downstream agent (optionally filed to the tracker, or to **another repo** with `--repo OWNER/NAME`) |
 
