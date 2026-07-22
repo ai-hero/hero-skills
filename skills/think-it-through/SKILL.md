@@ -251,7 +251,11 @@ and `ready_marked:` — a `YYYY-MM-DD` date stamped by Step 5's flip — appears
 from the moment the user marks the item ready. This block is the canonical
 field definition: the status enum and `ready_marked:` semantics are defined
 here, and where other skills (wayfare, harden, handoff) show frontmatter of
-their own they follow these meanings rather than reinventing them.
+their own they follow these meanings rather than reinventing them. `kind` and
+`origin` are reserved extension fields owned by `hero-skills:wayfare` (feature
+/ work-order typing and producer provenance) — this skill, harden, and handoff
+never write them, so an item lacking `kind` is an ordinary task and one
+lacking `origin` claims nothing about its author.
 
 ## "What's Ready" — the one query that matters
 
