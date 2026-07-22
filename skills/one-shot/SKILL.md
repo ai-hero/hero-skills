@@ -36,7 +36,7 @@ Each DAG node delegates to a single skill (or runs inline when the work is just 
 
 | # | Step | Skill to run standalone |
 |---|------|-------------------------|
-| 1 | `plan` | `hero-skills:think-it-through` (only when nothing resolves from `my-work/` or the tracker) |
+| 1 | `plan` | `hero-skills:think-it-through` (only when nothing resolves from `.plans/` or the tracker) |
 | 2 | `implement` | inline (executes the resolved work-item) |
 | 3 | `simplify` | `/simplify` (external skill) |
 | 4 | `push` | `hero-skills:push-pr` (tests — verification + UI smoke — then commits + pushes a draft PR) |
@@ -305,7 +305,7 @@ If the first token matches an issue-ID pattern (e.g., `PROJ-123` — letters, da
 
 #### 1b: Resolve against the work stores
 
-Read both stores before considering a grill. `think-it-through`, `handoff`, and `harden` all emit into `my-work/`; `handoff --issue`/`--repo` also files to the tracker.
+Read both stores before considering a grill. `think-it-through`, `handoff`, and `harden` all emit into `.plans/`; `handoff --issue`/`--repo` also files to the tracker.
 
 ```bash
 # shellcheck source=/dev/null
@@ -321,9 +321,9 @@ Match `$ARGUMENTS` against both sets:
 
 | Situation | Action |
 |---|---|
-| `$ARGUMENTS` names an issue ID that a `my-work/` item cross-links | That item is the plan → 1c |
+| `$ARGUMENTS` names an issue ID that a `.plans/` item cross-links | That item is the plan → 1c |
 | `$ARGUMENTS` matches exactly one READY item (id, filename slug, or title) | That item is the plan → 1c |
-| `$ARGUMENTS` matches an open tracker issue but no `my-work/` item | Fetch the issue body; it is the plan → 1c |
+| `$ARGUMENTS` matches an open tracker issue but no `.plans/` item | Fetch the issue body; it is the plan → 1c |
 | `$ARGUMENTS` matches a **blocked** item | STOP — print the item's unmet `depends_on` ids and their titles. Do not implement past a dependency. |
 | `$ARGUMENTS` matches a **done** item | STOP — report that it already landed, with the item's `success` criteria as evidence. Offer the next READY item. Do NOT re-grill it; that writes a duplicate. |
 | `$ARGUMENTS` matches an **active** (in-progress) item | STOP and confirm — another session may hold it. Step 2 marks items `in-progress` before the first edit precisely so two runs cannot claim one item. |
@@ -388,7 +388,7 @@ State the verdict explicitly before advancing — "verified outstanding: SUCCESS
 
 #### 1d: Grill it (only when nothing resolved)
 
-Invoke `hero-skills:think-it-through` via the Skill tool, passing `$ARGUMENTS`. It grills the idea one question at a time and emits dependency-aware work-items into `my-work/`. It gates on the user confirming shared understanding — one-shot does not bypass that gate.
+Invoke `hero-skills:think-it-through` via the Skill tool, passing `$ARGUMENTS`. It grills the idea one question at a time and emits dependency-aware work-items into `.plans/`. It gates on the user confirming shared understanding — one-shot does not bypass that gate.
 
 Skip the grill and plan inline only when the task is one think-it-through itself calls out as not worth grilling (`think-it-through`'s "When to Use": a typo, a copy tweak, a dependency bump). Say which exemption applied. For anything else, grill.
 
@@ -406,7 +406,7 @@ The item's own `Non-goals` and `success` fields replace the old file-count heuri
 
 ### Step 2: implement
 
-Render DAG with `implement` active. Implement the work-item resolved in Step 1, working from its `Approach` section and holding its `success` criteria as the target. Mark the item `status: in-progress` in `my-work/` before the first edit, so a session that dies mid-flight leaves an honest store behind. Follow these rules:
+Render DAG with `implement` active. Implement the work-item resolved in Step 1, working from its `Approach` section and holding its `success` criteria as the target. Mark the item `status: in-progress` in `.plans/` before the first edit, so a session that dies mid-flight leaves an honest store behind. Follow these rules:
 
 - **Read before edit** — Always Read a file before modifying it.
 - **Match existing patterns** — Follow naming, structure, and style already in the codebase. Don't introduce new conventions.
@@ -510,7 +510,7 @@ Render DAG with `ship` active. Run `hero-skills:ship-pr`. It owns the auto-appro
 
 The only place the store is marked `done`. one-shot is its sole consumer, so skipping this is what makes a later run re-resolve finished work (Step 1c catches it, but catching it late wastes the resolution):
 
-1. Set `status: done` in the item's `my-work/NNN-slug.md`.
+1. Set `status: done` in the item's `.plans/NNN-slug.md`.
 2. Close any cross-linked tracker issue — `gh issue close ISSUE_NUMBER --repo TARGET_REPO --comment "Merged in PR_URL"`, or the Linear MCP equivalent. Use the item's **recorded** repo; for a `handoff --repo` item that is not this one.
 3. Run `hero_ready_items` and report what the merge unblocked — items whose `depends_on` just went green are the natural next run.
 
@@ -541,7 +541,7 @@ If the pipeline stopped early, render the DAG with `(✗)` on the failed step, t
 ## Notes
 
 - This skill **does not skip user gates**. think-it-through's shared-understanding gate, mark-ready, and merge confirmation are all explicit. Auto mode does not change that.
-- **one-shot consumes work-items; it does not author them.** `think-it-through`, `handoff`, and `harden` are the producers into `my-work/`. Step 1 resolves against that store (and the tracker) before it will grill anything new, and Step 9 is what marks an item `done` — one-shot is the store's only consumer, so if it skips the close-out nothing else will do it.
+- **one-shot consumes work-items; it does not author them.** `think-it-through`, `handoff`, and `harden` are the producers into `.plans/`. Step 1 resolves against that store (and the tracker) before it will grill anything new, and Step 9 is what marks an item `done` — one-shot is the store's only consumer, so if it skips the close-out nothing else will do it.
 - **Trust the criteria, not the status field.** `status: todo` only means "nobody has updated this file", which is not the same as "not yet done" — work lands out-of-band all the time. Step 1c re-verifies against the codebase before implementing.
 - This skill **does not retry** on judgment-call failures (test design, large bot feedback). Retrying without human input is how small PRs become broken merges.
 - Step 0.4's `git checkout -b` is unconfirmed by design — one-shot never works on the default branch and assumes the auto-derived name is acceptable. To rename later, use `git branch -m`. The sibling skill `push-pr` prompts for the name because it's invoked deliberately on an existing branch; one-shot's auto-mode contract precludes that prompt.

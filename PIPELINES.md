@@ -62,7 +62,7 @@ Owner: `hero-skills:one-shot`. Invoked with an issue ID or description it starts
 
 | # | Step | Skill to run standalone | Notes |
 |---|------|-------------------------|-------|
-| 1 | `plan` | `hero-skills:think-it-through` | resolve `$ARGUMENTS` against `my-work/` and the tracker first; grill only if nothing matches. Re-verifies the item is still outstanding before building |
+| 1 | `plan` | `hero-skills:think-it-through` | resolve `$ARGUMENTS` against `.plans/` and the tracker first; grill only if nothing matches. Re-verifies the item is still outstanding before building |
 | 2 | `implement` | `inline` | executes the resolved work-item against its `success` criteria |
 | 3 | `simplify` | `/simplify` (external) | review the dirty diff for reuse/quality/efficiency and fix; `(–)` if `/simplify` unavailable |
 | 4 | `push` | `hero-skills:push-pr` | tests first (lint/typecheck/unit + UI smoke via Playwright MCP), then commits outstanding work with a conventional commit and pushes a draft PR |
@@ -80,7 +80,7 @@ internally for standalone use; running one-shot just makes that step visible
 in the DAG and pays a no-op cost on the second invocation.
 
 **The work-item store closes this pipeline's loop.** `think-it-through`,
-`handoff`, and `harden` write items into the git-ignored `my-work/` store, and
+`handoff`, and `harden` write items into the git-ignored `.plans/` store, and
 all three read it back so they build on the plate rather than beside it. What
 one-shot alone does is *execute* an item and close it out: Step 1 resolves
 against the store before grilling anything new, and Step 9a marks the merged

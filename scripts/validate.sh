@@ -432,7 +432,7 @@ if [[ $ERRORS -eq 0 ]]; then
 fi
 
 # ── work-item store: producers must have a consumer ────────────────
-# think-it-through, handoff, and harden all WRITE work-items into my-work/.
+# think-it-through, handoff, and harden all WRITE work-items into .plans/.
 # one-shot's plan step is the only thing that READS them. If that delegation
 # is ever edited away, the store silently becomes write-only: items pile up,
 # nothing marks them done, and one-shot goes back to planning from scratch
@@ -461,18 +461,18 @@ else
     error "one-shot no longer references think-it-through — the plan step has drifted back to planning from scratch" \
       "skills/one-shot/SKILL.md" \
       "" \
-      "think-it-through is the planning skill; one-shot's Step 1 must resolve against my-work/ and delegate to it. See PIPELINES.md Pipeline 2"
+      "think-it-through is the planning skill; one-shot's Step 1 must resolve against .plans/ and delegate to it. See PIPELINES.md Pipeline 2"
   fi
-  # Require several real references, not one incidental mention — `my-work` is
-  # a short string that appears in ordinary prose.
-  MY_WORK_HITS=$(printf '%s\n' "$ONE_SHOT_ACTIVE" | grep -c 'my-work' || true)
-  if [[ "${MY_WORK_HITS:-0}" -ge 3 ]]; then
-    pass "one-shot reads the my-work/ store ($MY_WORK_HITS references)"
+  # Require several real references, not one incidental mention — "plans" is
+  # a word that appears in ordinary prose, so match the literal `.plans` token.
+  STORE_HITS=$(printf '%s\n' "$ONE_SHOT_ACTIVE" | grep -cF '.plans' || true)
+  if [[ "${STORE_HITS:-0}" -ge 3 ]]; then
+    pass "one-shot reads the .plans/ store ($STORE_HITS references)"
   else
-    error "one-shot does not read my-work/ — the work-item store has no consumer" \
+    error "one-shot does not read .plans/ — the work-item store has no consumer" \
       "skills/one-shot/SKILL.md" \
       "" \
-      "think-it-through, handoff, and harden all emit into my-work/; one-shot Step 1 must resolve against it and Step 9 must mark the merged item done"
+      "think-it-through, handoff, and harden all emit into .plans/; one-shot Step 1 must resolve against it and Step 9 must mark the merged item done"
   fi
 fi
 

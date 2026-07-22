@@ -74,7 +74,7 @@ check "field: rejected value falls back to main" \
 
 # ---------- hero_ready_items -----------------------------------------------
 
-W="$TMP/w/my-work"
+W="$TMP/w/.plans"
 mkdir -p "$W"
 
 item() { # file id title status deps
@@ -99,27 +99,36 @@ item 008-caps.md 9 "Capitalized status" "DONE" "[]"
 
 OUT="$(hero_ready_items "$W" 2>/dev/null)"
 
-state_of() { printf '%s' "$OUT" | awk -v f="$1" '$2 == f { print $1; exit }'; }
+# state_of FILE [LISTING] — the STATE column for FILE, defaulting to $OUT.
+state_of() { printf '%s' "${2:-$OUT}" | awk -v f="$1" '$2 == f { print $1; exit }'; }
 
 check "ready: satisfied dep is READY"        "READY"   "$(state_of 002-todo.md)"
 check "ready: unmet dep is blocked"          "blocked" "$(state_of 003-blocked.md)"
 check "ready: in-progress is active, not READY" "active" "$(state_of 004-active.md)"
 check "ready: done items are listed"         "done"    "$(state_of 001-done.md)"
-# 007 and 7 must compare equal, or a zero-padded id blocks its dependents.
+# 007 and 7 must compare equal, or a zero-padded legacy id blocks its dependents.
 check "ready: zero-padded id resolves"       "READY"   "$(state_of 006-padref.md)"
-# A dangling reference must block, not silently resolve.
+# A dangling reference must block, not silently resolve — and must SAY it is
+# dangling: nothing will ever mark a nonexistent id done, so an unnamed
+# dangling ref reads as ordinary waiting when it is actually forever.
 check "ready: dangling dep blocks"           "blocked" "$(state_of 007-dangling.md)"
+printf '%s' "$OUT" | grep -q '007-dangling.md.*\[missing dep: 99\]'
+check "ready: dangling dep is named on the listing" "0" "$?"
+hero_ready_items "$W" 2>&1 >/dev/null | grep -q "no item carries"
+check "ready: dangling dep warns on stderr" "0" "$?"
 # `DONE` must count as done, or every dependent stays blocked forever.
 check "ready: status match is case-insensitive" "done"  "$(state_of 008-caps.md)"
 
-# A non-numeric id used to be a FATAL arithmetic error: the function emitted
-# NOTHING, which a caller reads as an empty plate rather than as a failure.
-item 009-badid.md "AH-12" "Non-numeric id" "done" "[]"
+# Ids are integers by convention, but a hand-written oddball must degrade
+# gracefully: a non-numeric id used to be a FATAL arithmetic error that
+# emitted NOTHING — a caller reads that as an empty plate, not as a failure.
+item 009-strid.md "AH-12" "String id" "done" "[]"
+item 00a-strdep.md "b3f2" "Depends on string id" "todo" "[ah-12]"
 OUT2="$(hero_ready_items "$W" 2>/dev/null)"
 COUNT2="$(printf '%s' "$OUT2" | grep -c . )"
-check "ready: non-numeric id does not blank the listing" "9" "$COUNT2"
-hero_ready_items "$W" 2>&1 >/dev/null | grep -q "non-numeric id"
-check "ready: non-numeric id warns on stderr" "0" "$?"
+check "ready: string id does not blank the listing" "10" "$COUNT2"
+# Ids compare case-insensitively — `ah-12` must resolve against `AH-12`.
+check "ready: string-id dep resolves case-insensitively" "READY" "$(state_of 00a-strdep.md "$OUT2")"
 
 # The store listing is data; notes belong on stderr.
 NOTE="$(hero_ready_items "$TMP/nonexistent-store" 2>/dev/null)"
@@ -168,8 +177,7 @@ EOF
 # YAML block sequences are the standard list form. Only the inline form parsed,
 # so this yielded "no dependencies" and the item was handed out as READY.
 OUT3="$(hero_ready_items "$W" 2>/dev/null)"
-check "deps: block sequence blocks" "blocked" \
-  "$(printf '%s' "$OUT3" | awk '$2 == "011-mldeps.md" { print $1; exit }')"
+check "deps: block sequence blocks" "blocked" "$(state_of 011-mldeps.md "$OUT3")"
 
 cat > "$W/012-quoted.md" <<'EOF'
 ---
@@ -187,11 +195,14 @@ status: todo
 depends_on: [12]
 ---
 EOF
+item 015-qdep.md 15 "Quoted inline dep" "todo" '["12"]'
 OUT4="$(hero_ready_items "$W" 2>/dev/null)"
-st4() { printf '%s' "$OUT4" | awk -v f="$1" '$2 == f { print $1; exit }'; }
 # A quoted status did not equal `done`, so every dependent blocked forever.
-check "status: quoted done counts as done" "done"  "$(st4 012-quoted.md)"
-check "status: its dependent unblocks"     "READY" "$(st4 013-dep.md)"
+check "status: quoted done counts as done" "done"  "$(state_of 012-quoted.md "$OUT4")"
+check "status: its dependent unblocks"     "READY" "$(state_of 013-dep.md "$OUT4")"
+# The inline-array parser must strip entry quotes like the block parser does,
+# or `depends_on: ["12"]` emits `"12"` and never matches id 12.
+check "deps: quoted inline entry resolves" "READY" "$(state_of 015-qdep.md "$OUT4")"
 
 cat > "$W/014-body.md" <<'EOF'
 ---
@@ -204,8 +215,7 @@ Run until `status: done` appears in the log.
 EOF
 OUT5="$(hero_ready_items "$W" 2>/dev/null)"
 # Frontmatter only — a body line must not be read as the item's own field.
-check "field: body line is not frontmatter" "READY" \
-  "$(printf '%s' "$OUT5" | awk '$2 == "014-body.md" { print $1; exit }')"
+check "field: body line is not frontmatter" "READY" "$(state_of 014-body.md "$OUT5")"
 
 hero_ready_items "$TMP/definitely-not-a-store" >/dev/null 2>&1
 check "ready: missing store returns non-zero" "1" "$?"

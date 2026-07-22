@@ -21,8 +21,8 @@
 #   - Callers' shell state (cwd, variables) is never modified. Functions that
 #     need to cd do it inside a subshell.
 #   - MUTATING FUNCTIONS: hero_exclude_add (appends to .git/info/exclude) and
-#     hero_work_store (mkdir, and migrates a legacy plan-work/ directory via
-#     mv). Everything else is read-only.
+#     hero_work_store (mkdir, and migrates a legacy store directory via mv).
+#     Everything else is read-only.
 
 # ---------- repo + config --------------------------------------------------
 
@@ -179,7 +179,7 @@ hero_exclude_path() {
 }
 
 # Idempotently add one or more entries to .git/info/exclude.
-#   hero_exclude_add my-work/ .test-output/
+#   hero_exclude_add .plans/ .test-output/
 hero_exclude_add() {
   local exclude entry
   exclude=$(hero_exclude_path) || {
@@ -193,17 +193,20 @@ hero_exclude_add() {
   done
 }
 
-# ---------- the my-work store ----------------------------------------------
+# ---------- the .plans store ------------------------------------------------
 
 # Absolute path to the work-item store, created and git-ignored on first use.
+# A dot-directory: tool-private state, like `.beads/` — it keeps the repo root
+# clean and cannot collide with a real project directory.
 #
-# One-time migration: the store was formerly `plan-work/`. Move a legacy store
-# rather than orphaning its items behind the new name.
+# One-time migration: the store was formerly `my-work/`, and before that
+# `plan-work/`. Move a legacy store rather than orphaning its items behind
+# the new name.
 # shellcheck disable=SC2120  # optional arg; callers usually rely on the default
 hero_work_store() {
-  local root store
+  local root store legacy
   root="${1:-$(hero_root)}"
-  store="$root/my-work"
+  store="$root/.plans"
 
   # Establish we can actually ignore the store BEFORE creating or migrating
   # anything. Doing it after meant a non-git directory got a store created and
@@ -214,33 +217,35 @@ hero_work_store() {
   }
 
   # `[ -d ]` is true for a symlink to a directory, and `mv` renames the LINK.
-  # A repo that commits `plan-work -> ../../../.claude` (git preserves symlinks
-  # on clone) would silently become `my-work -> ../../../.claude`, redirecting
+  # A repo that commits `my-work -> ../../../.claude` (git preserves symlinks
+  # on clone) would silently become `.plans -> ../../../.claude`, redirecting
   # every later work-item write outside the checkout — into a directory the
   # agent itself reads back. Refuse rather than migrate.
-  if [ -L "$root/plan-work" ]; then
-    echo "hero_work_store: refusing to migrate '$root/plan-work' — it is a symlink" >&2
-    return 1
-  fi
   if [ -L "$store" ]; then
     echo "hero_work_store: refusing to use '$store' — it is a symlink" >&2
     return 1
   fi
-  if [ -d "$root/plan-work" ] && [ ! -e "$store" ]; then
-    mv "$root/plan-work" "$store" || return 1
-    echo "Migrated legacy plan-work/ store to my-work/." >&2
-  fi
-
-  if [ -d "$root/plan-work" ] && [ -d "$store" ]; then
-    echo "hero_work_store: both plan-work/ and my-work/ exist — items in plan-work/ are NOT migrated and will be invisible. Merge them by hand." >&2
-  fi
+  for legacy in my-work plan-work; do
+    if [ -L "$root/$legacy" ]; then
+      echo "hero_work_store: refusing to migrate '$root/$legacy' — it is a symlink" >&2
+      return 1
+    fi
+    if [ -d "$root/$legacy" ] && [ ! -e "$store" ]; then
+      mv "$root/$legacy" "$store" || return 1
+      echo "Migrated legacy $legacy/ store to .plans/." >&2
+    fi
+    if [ -d "$root/$legacy" ] && [ -d "$store" ]; then
+      echo "hero_work_store: both $legacy/ and .plans/ exist — items in $legacy/ are NOT migrated and will be invisible. Merge them by hand." >&2
+    fi
+    # Keep the legacy name excluded through the transition so a not-yet-migrated
+    # legacy store is never accidentally committed either.
+    hero_exclude_add "$legacy/" || return 1
+  done
   mkdir -p "$store" || {
     echo "hero_work_store: cannot create '$store'" >&2
     return 1
   }
-  # Keep both names excluded through the transition so a not-yet-migrated
-  # legacy store is never accidentally committed either.
-  hero_exclude_add my-work/ plan-work/ || return 1
+  hero_exclude_add .plans/ || return 1
   printf '%s' "$store"
 }
 
@@ -288,7 +293,13 @@ hero_item_deps() {
       v = $0; sub(/^[^:]*: */, "", v); sub(/ *#.*/, "", v)
       gsub(/[][,]/, " ", v)
       n = split(v, parts, /[[:space:]]+/)
-      for (i = 1; i <= n; i++) if (parts[i] != "") print parts[i]
+      # Strip surrounding quotes per entry, mirroring the block branch below —
+      # quoting is handled here, in the parser, not by the id normalizer.
+      for (i = 1; i <= n; i++) {
+        p = parts[i]
+        gsub(/^["'"'"']|["'"'"']$/, "", p)
+        if (p != "") print p
+      }
       block = 1
       next
     }
@@ -310,6 +321,18 @@ hero_item_status() {
   local s
   s=$(hero_item_field "$1" status | tr '[:upper:]' '[:lower:]')
   printf '%s' "${s:-todo}"
+}
+
+# Normalize a work-item id for comparison: all-digit ids (the standard form)
+# drop leading zeros so `007` equals `7`; anything else lowercases and
+# compares verbatim rather than aborting — the old `$((10#$id))` arithmetic
+# was a FATAL error on any non-digit and silently blanked the whole listing.
+# Quote-stripping is the frontmatter readers' job, not this function's.
+hero_norm_id() {
+  case "$1" in
+    ''|*[!0-9]*) printf '%s' "$1" | tr '[:upper:]' '[:lower:]' ;;
+    *) printf '%s' "$((10#$1))" ;;
+  esac
 }
 
 # Print one line per work-item:  STATE  file — title
@@ -336,29 +359,28 @@ hero_item_status() {
 # Runs in a subshell: it cds, and leaking that into a sourced caller's shell
 # silently reroutes every later relative path.
 hero_ready_items() (
-  local store f d deps ready title id state done_ids
+  local store f d deps ready title id state all_ids done_ids missing
   store="${1:-$(hero_work_store)}" || return 1
   cd "$store" 2>/dev/null || { echo "hero_ready_items: no store at ${store}" >&2; return 1; }
 
-  # Collect done ids. A non-numeric or absent id is skipped with a warning
-  # rather than evaluated: `$((10#AH-12))` is a FATAL arithmetic error that
-  # aborts mid-loop and emits nothing at all, which a caller reads as an empty
-  # plate. One malformed hand-written item must not erase the whole listing.
+  # Collect every id and the done subset. Ids are integers by convention, but
+  # comparison is string-tolerant (hero_norm_id), so the only malformed id is
+  # an EMPTY one — a hand-written oddball id must not erase the whole listing.
+  all_ids=" "
   done_ids=" "
   for f in *.md; do
     [ -e "$f" ] || continue
-    [ "$(hero_item_status "$f")" = "done" ] || continue
-    id=$(hero_item_field "$f" id)
-    case "$id" in
-      ''|*[!0-9]*)
-        echo "hero_ready_items: $f has a non-numeric id ('$id') — dependents on it cannot resolve" >&2
-        continue ;;
-    esac
-    case "$done_ids" in
-      *" $((10#$id)) "*)
+    id=$(hero_norm_id "$(hero_item_field "$f" id)")
+    if [ -z "$id" ]; then
+      echo "hero_ready_items: $f has no id — dependents on it cannot resolve" >&2
+      continue
+    fi
+    case "$all_ids" in
+      *" $id "*)
         echo "hero_ready_items: duplicate id $id — dependents may resolve against the wrong item" >&2 ;;
     esac
-    done_ids="$done_ids$((10#$id)) "
+    all_ids="$all_ids$id "
+    [ "$(hero_item_status "$f")" = "done" ] && done_ids="$done_ids$id "
   done
 
   for f in *.md; do
@@ -371,23 +393,31 @@ hero_ready_items() (
     esac
     deps=$(hero_item_deps "$f")
     ready=1
+    missing=""
     # Heredoc keeps the loop in this shell (so `ready` persists) and works under
     # both bash and zsh, which does not word-split unquoted vars.
     while IFS= read -r d; do
       [ -z "$d" ] && continue
-      case "$d" in
-        ''|*[!0-9]*)
-          echo "hero_ready_items: $f depends_on '$d', which is not a numeric id — treating as unmet" >&2
-          ready=0; continue ;;
+      d=$(hero_norm_id "$d")
+      case "$all_ids" in
+        *" $d "*) ;;
+        *)
+          # A dangling reference blocks FOREVER, silently, unless it is named:
+          # nothing will ever mark a nonexistent id done. Say so on both the
+          # listing (so the model sees it) and stderr (so a human does).
+          echo "hero_ready_items: $f depends_on '$d', which no item carries — blocked until the reference is fixed" >&2
+          missing="$missing $d"
+          ready=0
+          continue ;;
       esac
-      case "$done_ids" in *" $((10#$d)) "*) ;; *) ready=0 ;; esac
+      case "$done_ids" in *" $d "*) ;; *) ready=0 ;; esac
     done <<EOF
 $deps
 EOF
     if [ "$ready" = 1 ]; then
       echo "READY   $f — $title"
     else
-      echo "blocked $f — $title"
+      echo "blocked $f — $title${missing:+ [missing dep:$missing]}"
     fi
   done
 )

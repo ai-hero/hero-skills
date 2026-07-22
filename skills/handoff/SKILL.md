@@ -7,7 +7,7 @@ argument-hint: "[TITLE_OR_FOCUS] [--issue] [--repo OWNER/NAME]"
 
 # Handoff — Package This Conversation for a Downstream Agent
 
-Turn whatever this conversation has established — the goal, the decisions made and why, the work already done, the work still open — into a single work-item in the `my-work/` store that a downstream agent (a fresh session, a cheaper model, `hero-skills:one-shot`, or a teammate) can execute **without asking anything this conversation already answered**.
+Turn whatever this conversation has established — the goal, the decisions made and why, the work already done, the work still open — into a single work-item in the `.plans/` store that a downstream agent (a fresh session, a cheaper model, `hero-skills:one-shot`, or a teammate) can execute **without asking anything this conversation already answered**.
 
 The receiving agent has zero context from this session. That is the quality bar: if the item would make its reader scroll back through this chat, it is not a handoff yet.
 
@@ -20,7 +20,7 @@ The receiving agent has zero context from this session. That is the quality bar:
 
 ## Instructions
 
-### Step 0: Load Hero Configuration and the my-work Store
+### Step 0: Load Hero Configuration and the .plans Store
 
 ```bash
 HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
@@ -58,7 +58,7 @@ Show the user a 3–6 line synthesis (goal, key decisions, remaining work, accep
 
 ### Step 3: Write the Work-Item
 
-One file at `my-work/NNN-slug.md`, id continuing from the highest existing id (think-it-through's numbering rules: integer `id`, zero-padded filename only). Use the shared format plus the handoff sections:
+One file at `.plans/NNN-slug.md`, id continuing from the highest existing id (think-it-through's numbering rules: integer `id`, zero-padded filename only). Use the shared format plus the handoff sections:
 
 ```markdown
 ---
@@ -97,13 +97,13 @@ How the downstream agent proves completion (commands, tests, observable behavior
 
 ### Step 4: Optionally File to the Tracker (`--issue`)
 
-When `--issue` is passed (or the user asks): read **Project Management** from HERO.md. For `github-issues`, `gh issue create --title TITLE --body-file THE_ITEM` (the body is the work-item minus frontmatter, plus a line noting the `my-work/` path). For Linear, create the issue via the Linear MCP tools. Then add the issue URL to the work-item's Context so the two stay cross-linked.
+When `--issue` is passed (or the user asks): read **Project Management** from HERO.md. For `github-issues`, `gh issue create --title TITLE --body-file THE_ITEM` (the body is the work-item minus frontmatter, plus a line noting the `.plans/` path). For Linear, create the issue via the Linear MCP tools. Then add the issue URL to the work-item's Context so the two stay cross-linked.
 
 Filing to a tracker is outward-facing — do it only on the explicit flag or an explicit ask, never by default.
 
 ### Step 5: Hand Off to Another Repo (`--repo`)
 
-`my-work/` is git-ignored and repo-local — it cannot carry work to another repository, and copying a file into a sibling checkout's `my-work/` would land somewhere that never syncs and that no teammate can see. **The tracker is the transport.** `--repo` files the distilled item as an issue on the target repo and leaves a stub here so this repo still remembers it delegated the work.
+`.plans/` is git-ignored and repo-local — it cannot carry work to another repository, and copying a file into a sibling checkout's `.plans/` would land somewhere that never syncs and that no teammate can see. **The tracker is the transport.** `--repo` files the distilled item as an issue on the target repo and leaves a stub here so this repo still remembers it delegated the work.
 
 Handing work to another team's repo is outward-facing and visible to people who are not in this conversation. **Confirm the target and show the body before filing** — never file to a repo the user did not name in this session.
 
@@ -119,7 +119,7 @@ Handing work to another team's repo is outward-facing and visible to people who 
 2. **Rewrite for a reader in that repo.** The distillation from Step 1 assumes this repo's context, which the receiving team does not share. Before filing, strip or qualify anything repo-local:
    - Bare paths (`src/auth.ts`) become `THIS_REPO/src/auth.ts` — the target repo has its own `src/`.
    - Bare PR/issue numbers (`#42`) become full `OWNER/NAME#42` cross-links.
-   - Branch names, local commands, and `my-work/` ids mean nothing there — either qualify them or drop them.
+   - Branch names, local commands, and `.plans/` ids mean nothing there — either qualify them or drop them.
    - State plainly what the target repo has to *do*, and what this repo will do in response. A cross-repo item without that contract is just a complaint.
 
 3. **Show the rendered body and confirm.** One question: "File this to OWNER/NAME?" Wait for the yes.
@@ -132,7 +132,7 @@ Handing work to another team's repo is outward-facing and visible to people who 
 
    The target repo's labels/templates are its own — do not pass `--label` unless the user named one that exists there.
 
-5. **Write the local stub.** Keep a `my-work/` item here titled for *this* repo's side of the work (e.g. "Await rate-limit support in acme/api-service"), with the issue URL in its Context. This repo's plate should show that it is waiting on someone, otherwise the dependency is invisible the moment this conversation ends.
+5. **Write the local stub.** Keep a `.plans/` item here titled for *this* repo's side of the work (e.g. "Await rate-limit support in acme/api-service"), with the issue URL in its Context. This repo's plate should show that it is waiting on someone, otherwise the dependency is invisible the moment this conversation ends.
 
    Use `status: todo` and state the external gate in Context. `depends_on` holds numeric ids of items in **this** store only — a cross-repo dependency cannot be expressed there, and putting a non-numeric value in it makes the item permanently unresolvable. Say "blocked on OWNER/NAME#88" in the body, where a human will read it.
 
@@ -141,13 +141,13 @@ If the target repo uses Linear rather than GitHub Issues, create the issue in th
 ### Step 6: Report
 
 ```
-Handoff written: my-work/009-finish-payment-retry-migration.md
+Handoff written: .plans/009-finish-payment-retry-migration.md
 Status: READY (no blocking dependencies)
 Tracker: #123 filed (or: not filed)
 
 Downstream pickup:
   hero-skills:one-shot         # execute it ticket-to-merge in a fresh session
-  # or point any agent at the my-work/ file — it is self-contained by design
+  # or point any agent at the .plans/ file — it is self-contained by design
 ```
 
 For a `--repo` handoff, report both sides so it's clear what left the building:
@@ -156,7 +156,7 @@ For a `--repo` handoff, report both sides so it's clear what left the building:
 Handed off to: acme/api-service#88 — Add per-tenant rate limiting
                 https://github.com/acme/api-service/issues/88
 
-Local stub:    my-work/010-await-rate-limit-support.md
+Local stub:    .plans/010-await-rate-limit-support.md
 Status:        blocked (waiting on acme/api-service#88)
 
 Nothing in this repo picks that issue up — the receiving team runs
@@ -167,7 +167,7 @@ hero-skills:one-shot (or anything else) against their own tracker.
 
 - **Self-containment is the contract.** Write for a reader with zero session context; decisions without their why are the first thing to rot.
 - **One item per handoff.** If the conversation holds several independent threads, hand off the named one and list the rest as candidates — or run `hero-skills:think-it-through` to decompose properly.
-- **The store is private.** `my-work/` is git-ignored; never commit or push it. The `--issue` and `--repo` paths are the deliberate ways to make a handoff shared — the store itself is not a transport, and never becomes one.
+- **The store is private.** `.plans/` is git-ignored; never commit or push it. The `--issue` and `--repo` paths are the deliberate ways to make a handoff shared — the store itself is not a transport, and never becomes one.
 - **A cross-repo handoff is a request, not an assignment.** Filing an issue on someone else's repo does not schedule their work. Say what you need and by when in the item; do not assume it will be picked up.
-- **Pickup is per-repo.** `hero-skills:one-shot` Step 1 resolves against the local `my-work/` store and this repo's tracker only. A `--repo` handoff is picked up by whoever runs their own tooling in the target repo.
+- **Pickup is per-repo.** `hero-skills:one-shot` Step 1 resolves against the local `.plans/` store and this repo's tracker only. A `--repo` handoff is picked up by whoever runs their own tooling in the target repo.
 - **Update, don't duplicate.** Re-running handoff on the same thread updates the existing item and bumps its sections, keeping the id stable.
