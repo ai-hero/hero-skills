@@ -57,7 +57,7 @@ Two derived flags, never stored in `status`:
 - source-repo: . # the repo wayfare runs in; virtually always `.`
 - target-repo: OWNER/NAME # OWNER/NAME, https://, ssh://, git@host:path, or an existing local path; `none` disables the target
 - target-branch: main # the branch the target design lives on
-- target-path: specs/ # optional subtree holding the design; omit or `none` for the whole repo
+- target-path: design/ # optional subtree holding the design; omit or `none` for the whole repo
 ```
 
 `target-repo` reaches `git` as a remote URL, so Step 0 passes it through
@@ -223,12 +223,12 @@ store that won't list is a failed check — STOP and name the path.
 
 1. **Map the source.** Feature order comes from the source architecture —
    which layers exist and how they depend (e.g. mongo data model → services →
-   routes → CLI → frontend). That map is think-it-through Arch Mode's job,
-   not a wayfare-private format: if `specs/` is missing or stale, offer to
-   run `hero-skills:think-it-through arch` (via the Skill tool — `create` or
-   `update`; specs describe what IS) before roadmapping. If the user
-   declines, derive the layer ordering from a direct read of the source
-   instead — but say the ordering is unverified by a spec.
+   routes → CLI → frontend). That map is `hero-skills:architecture`'s job
+   (the root `ARCHITECTURE.md`, its Boundaries section), not a
+   wayfare-private format: if `ARCHITECTURE.md` is missing or stale, offer
+   to run `hero-skills:architecture sync` (via the Skill tool) before
+   roadmapping. If the user declines, derive the layer ordering from a
+   direct read of the source instead — but say the ordering is unverified.
 2. **Investigate.** Read the target design (the `target-path` subtree at the
    `target-branch` head) and the corresponding source paths. Assert every
    target read succeeded per *Reading the target* above — and that
@@ -248,10 +248,12 @@ store that won't list is a failed check — STOP and name the path.
    rules).
 
 **Update — roadmap exists.** Re-read both ends and report, one table, a row
-per finding. Shipped features change the source, so `specs/` can trail
-reality: when it exists, run think-it-through's `arch review` first and offer
-`arch update` for any spec it reports stale — the refreshed map is what the
-rows below are judged against. Findings:
+per finding. Shipped features change the source, so `ARCHITECTURE.md` can
+trail reality: run `hero-skills:architecture review` first and offer its
+`sync` for anything it reports stale — or to bootstrap the file when it is
+missing (the same offer bootstrap-mode makes; a spec-less update sync judges
+the rows below against an unverified read, and must say so). The refreshed
+map is what the rows below are judged against. Findings:
 
 - **stale** — the target head moved past a feature's `target_ref`: diff the
   feature's target paths between the two SHAs and summarize what actually
@@ -345,8 +347,8 @@ plans the feature in place, and wayfare owns only the contract it fills:
   already-`planning` feature resumes; `ready` and later are refused —
   replanning those goes through `sync`).
 - Grilling runs against the feature's `source` paths, the source
-  architecture (`specs/`, when present — see sync's *Map the source*), and
-  the target design.
+  architecture (`ARCHITECTURE.md`, when present — see sync's *Map the
+  source*), and the target design.
 - Conclusions land IN the feature file per the format below: `## Approach`
   and the one-line `success:`; the ordered `## Subtasks` checklist (**how**
   it gets built), sequenced along the source architecture's dependency

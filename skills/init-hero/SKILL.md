@@ -52,7 +52,7 @@ Each skill needs specific information to work well. This skill figures out what'
 | `hero-skills:push-pr` (test phase) | Language, framework, lint/format/typecheck commands, test/dev/install commands, ports, dependency file |
 | `hero-skills:review-pr` | Code Quality (pre-commit), Code Review Agent (bot username — to dedupe its comments) |
 | `hero-skills:harden` | Registry, language/framework, dependency files per project |
-| `hero-skills:think-it-through` (arch mode) | Repo type, project list, deployment platform |
+| `hero-skills:architecture` | Repo type, project list, deployment platform |
 | `hero-skills:wayfare` | Wayfare (source-repo, target-repo, target-branch, target-path) |
 | `hero-skills:create-project` | Repo type, coding conventions, code quality tools, project scaffold patterns |
 | `hero-skills:setup-dev` | Required tools, recommended tools, MCP servers |
