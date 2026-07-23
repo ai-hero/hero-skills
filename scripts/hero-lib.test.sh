@@ -105,15 +105,12 @@ check "repo-ref: an existing local dir passes through" \
 W="$TMP/w/.plans"
 mkdir -p "$W"
 
-item() { # file id title status deps
-  cat > "$W/$1" <<EOF
----
-id: $2
-title: $3
-status: $4
-depends_on: $5
----
-EOF
+item() { # file id title status deps [kind]
+  {
+    printf -- '---\nid: %s\n' "$2"
+    if [ -n "${6:-}" ]; then printf 'kind: %s\n' "$6"; fi
+    printf 'title: %s\nstatus: %s\ndepends_on: %s\n---\n' "$3" "$4" "$5"
+  } > "$W/$1"
 }
 
 item 001-done.md 1 "Finished" "done" "[]"
@@ -336,6 +333,91 @@ check "planning: unknown status is invalid, not READY" "invalid" "$(state_of 025
 ERR9="$(hero_ready_items "$W" 2>&1 >/dev/null)"
 printf '%s' "$ERR9" | grep -q "unrecognized status 'plan'"
 check "planning: unknown status warns on stderr" "0" "$?"
+
+# ---------- feature lifecycle (kind: feature) --------------------------------
+#
+# Wayfare features carry the extended enum todo|planning|ready|implementing|
+# reviewing|done. Each case pins a way the mapping could silently regress: a
+# `todo` feature handed to one-shot unplanned (backlog must never be READY),
+# or the extended statuses leaking into plain items (they must stay invalid).
+
+# Feature-item fixture: `item` with kind defaulted to `feature`.
+fitem() { item "$1" "$2" "$3" "$4" "$5" "${6:-feature}"; }
+
+fitem 030-backlog.md 30 "Unplanned feature" "todo" "[]"
+fitem 031-fplan.md 31 "Feature being planned" "planning" "[]"
+fitem 032-fready.md 32 "Planned and marked ready" "ready" "[1]"
+fitem 033-fblocked.md 33 "Ready but blocked" "ready" "[30]"
+fitem 034-fimpl.md 34 "Being built" "implementing" "[]"
+fitem 035-flegacy.md 35 "Legacy in-progress feature" "in-progress" "[]"
+fitem 036-frev.md 36 "PR in review" "reviewing" "[]"
+fitem 037-fdone.md 37 "Shipped feature" "done" "[]"
+fitem 038-fcaps.md 38 "Capitalized kind" "todo" "[]" "Feature"
+fitem 039-ftypo.md 39 "Feature status typo" "in-review" "[]"
+# The extended enum is features-only: a PLAIN item claiming `ready` must stay
+# invalid — otherwise any item could skip the human ready-mark by declaring it.
+item 040-plainready.md 40 "Plain item claiming ready" "ready" "[]"
+# Interaction fixtures: dependency resolution, legacy kinds, and the malformed
+# values that must land in the loud invalid arm, never a READY-eligible one.
+fitem 041-fchain.md 41 "Depends on shipped feature" "ready" "[37]"
+item 042-wo.md 42 "Legacy work order" "todo" "[]" "work-order"
+printf -- '---\nid: 43\nkind: feature\ntitle: No status line\ndepends_on: []\n---\n' > "$W/043-fnostatus.md"
+fitem 044-fcaps.md 44 "Capitalized ready" "Ready" "[]"
+# A colon smuggled into status must NOT suffix-match a kind-keyed arm: x:todo
+# reaching READY skips the ready-mark; not:done reaching `done` is a split-brain
+# (listed done, but done_ids uses exact compare so dependents block forever).
+item 045-colon.md 45 "Colon status" "x:todo" "[]"
+fitem 046-fcolon.md 46 "Colon feature status" "plan:todo" "[]"
+item 047-notdone.md 47 "Colon done status" "not:done" "[]"
+# An unknown kind must not silently demote to plain semantics — feature-todo
+# and plain-todo mean OPPOSITE things, so `kind: features` + todo was READY.
+item 048-badkind.md 48 "Typo kind" "todo" "[]" "features"
+# Backlog rows still run the dep check: unmet deps annotate the row (do-next
+# reads it) and a dangling ref warns — a bootstrap typo must not be invisible.
+fitem 049-fwait.md 49 "Backlog waiting on dep" "todo" "[30]"
+fitem 050-fdangle.md 50 "Backlog dangling dep" "todo" "[999]"
+OUTF="$(hero_ready_items "$W" 2>/dev/null)"
+# A todo feature is on the roadmap but UNPLANNED — never READY.
+check "feature: todo lists as backlog, not READY" "backlog" "$(state_of 030-backlog.md "$OUTF")"
+check "feature: planning lists as plan"           "plan"    "$(state_of 031-fplan.md "$OUTF")"
+# `ready` is the feature state eligible for READY, dep-gated like plain todo.
+check "feature: ready with deps done is READY"    "READY"   "$(state_of 032-fready.md "$OUTF")"
+check "feature: ready with unmet dep is blocked"  "blocked" "$(state_of 033-fblocked.md "$OUTF")"
+check "feature: implementing is active"           "active"  "$(state_of 034-fimpl.md "$OUTF")"
+check "feature: legacy in-progress still active"  "active"  "$(state_of 035-flegacy.md "$OUTF")"
+check "feature: reviewing lists as review"        "review"  "$(state_of 036-frev.md "$OUTF")"
+check "feature: done is done"                     "done"    "$(state_of 037-fdone.md "$OUTF")"
+check "feature: kind match is case-insensitive"   "backlog" "$(state_of 038-fcaps.md "$OUTF")"
+check "feature: unknown status is invalid"        "invalid" "$(state_of 039-ftypo.md "$OUTF")"
+check "feature: plain item with ready is invalid" "invalid" "$(state_of 040-plainready.md "$OUTF")"
+# A done FEATURE must count in done_ids, or every roadmap chain stalls forever.
+check "feature: dep on a done feature is READY"   "READY"   "$(state_of 041-fchain.md "$OUTF")"
+# Any known non-feature kind rides the plain arms — legacy work orders still list.
+check "feature: kind work-order behaves as plain" "READY"   "$(state_of 042-wo.md "$OUTF")"
+# Empty status defaults to todo, which for a feature means backlog — never READY.
+check "feature: empty status defaults to backlog" "backlog" "$(state_of 043-fnostatus.md "$OUTF")"
+check "feature: capitalized ready is READY"       "READY"   "$(state_of 044-fcaps.md "$OUTF")"
+check "feature: colon status is invalid (plain)"  "invalid" "$(state_of 045-colon.md "$OUTF")"
+check "feature: colon status is invalid (feature)" "invalid" "$(state_of 046-fcolon.md "$OUTF")"
+check "feature: colon-done is invalid, not done"  "invalid" "$(state_of 047-notdone.md "$OUTF")"
+check "feature: unknown kind is invalid"          "invalid" "$(state_of 048-badkind.md "$OUTF")"
+# Backlog rows carry dep state without ever being READY.
+check "feature: backlog with unmet dep stays backlog" "backlog" "$(state_of 049-fwait.md "$OUTF")"
+printf '%s' "$OUTF" | grep -q '049-fwait.md.*\[deps unmet'
+check "feature: backlog unmet deps are annotated" "0" "$?"
+printf '%s' "$OUTF" | grep -q '050-fdangle.md.*missing dep: 999'
+check "feature: backlog dangling dep is annotated" "0" "$?"
+ERRF="$(hero_ready_items "$W" 2>&1 >/dev/null)"
+printf '%s' "$ERRF" | grep -q "unrecognized status 'in-review'.*kind: feature"
+check "feature: unknown status names the feature enum on stderr" "0" "$?"
+printf '%s' "$ERRF" | grep -q "045-colon.md has a malformed status/kind"
+check "feature: colon status warns on stderr"     "0" "$?"
+printf '%s' "$ERRF" | grep -q "048-badkind.md has unrecognized kind 'features'"
+check "feature: unknown kind warns on stderr"     "0" "$?"
+printf '%s' "$ERRF" | grep -q "050-fdangle.md depends_on '999'"
+check "feature: backlog dangling dep warns on stderr" "0" "$?"
+# Clean up so later sections' listings aren't polluted by these fixtures.
+rm -f "$W"/03[0-9]-*.md "$W"/04[0-9]-*.md "$W"/050-*.md
 
 # ---------- hero_work_store migration ---------------------------------------
 #

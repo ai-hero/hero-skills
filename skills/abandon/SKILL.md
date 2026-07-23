@@ -158,5 +158,5 @@ Pulled: N new commits
 Stashed: [yes — "abandon: WIP on {branch}" (restore with `git stash pop`) / no]
 Context: Cleared
 
-Next step: hero-skills:one-shot — start the next task (print only — model-invocation-restricted, cannot auto-run)
+Next step: hero-skills:one-shot — start the next task (print only — launch it on the user's word, never spontaneously)
 ```
