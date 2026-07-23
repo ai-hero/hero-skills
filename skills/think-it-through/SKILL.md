@@ -109,6 +109,8 @@ none may be silently skipped. Skipping is how a two-week detour begins.
 
 **Mode dispatch:** if `$ARGUMENTS` starts with `arch`, skip the grilling flow and jump to **Arch Mode** below (absorbed from the former `hero-skills:document-arch`). Everything else is an idea or task to think through.
 
+**Feature mode:** if `$ARGUMENTS` resolves to an existing `kind: feature` item in the store (id, filename slug, or title — wayfare's roadmap), this run plans that feature **in place**. Flip `status: todo` → `planning` before grilling (an already-`planning` feature just resumes; refuse `ready` and later — replanning those goes through `wayfare sync`). Grill against the feature's `source` paths, the source architecture (`specs/`, when present), and the target design, then write the conclusions INTO the feature file — `## Approach`, the ordered `## Subtasks` checklist, the `## Definition of Done` checklist, and the one-line `success:` — and refresh `target_ref` to the target head planned against. Wayfare's Feature format section is the canonical shape; emit no new items. Step 5's ready-mark flips a feature to `ready`, not `todo`.
+
 ### Step 0: Load context and the .plans store
 
 ```bash
@@ -202,8 +204,9 @@ them later.
 
 Emitted items are `planning` — shaped, but not yet approved to implement. The
 ready-mark is the **user's act, never yours**: ask which items to mark ready,
-flip only the confirmed ones to `status: todo` (append `ready_marked:` with
-the date), and leave the rest in `planning` for a later session. Never flip an
+flip only the confirmed ones to `status: todo` (`ready` for a `kind: feature`
+item — Feature mode) and append `ready_marked:` with the date, leaving the
+rest in `planning` for a later session. Never flip an
 item unprompted, and never batch beyond what the user named — an unmarked item
 is invisible to `hero-skills:one-shot` by design.
 
