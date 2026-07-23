@@ -3,7 +3,6 @@ name: one-shot
 # prettier-ignore
 description: Drive a small task end-to-end — plan, implement, simplify, push (tests included), self-review, mark ready, await review, respond, ship. No args: resume the current goal (gated). Small, low-risk PRs only.
 argument-hint: "[ISSUE_ID [additional-context] | DESCRIPTION]"
-disable-model-invocation: true
 ---
 
 # One-Shot — Ticket to Merged PR in a Single Pipeline
@@ -546,6 +545,7 @@ If the pipeline stopped early, render the DAG with `(✗)` on the failed step, t
 
 ## Notes
 
+- **Launch is explicit.** Invoke one-shot only when the user asks for it (`/one-shot ...`) or from `hero-skills:wayfare do-next`'s hand-off — never spontaneously as a "helpful next step". It pushes branches and merges PRs; the launch decision belongs to the user even though the pipeline's own gates still prompt.
 - This skill **does not skip user gates**. think-it-through's shared-understanding gate, mark-ready, and merge confirmation are all explicit. Auto mode does not change that.
 - **one-shot consumes work-items; it does not author them.** `think-it-through`, `handoff`, `harden`, and `wayfare` are the producers into `.plans/`. Step 1 resolves against that store (and the tracker) before it will grill anything new, and Step 9 is what marks an item `done` — one-shot is the store's only consumer, so if it skips the close-out nothing else will do it.
 - **Trust the criteria, not the status field.** `status: todo` means a human marked the item ready but says nothing about whether the work has since landed — work lands out-of-band all the time. Step 1c re-verifies against the codebase before implementing.
