@@ -351,6 +351,6 @@ verify before acting — `hero-skills:one-shot` Step 1c does exactly that.
 
 Pick exactly one, based on `.plans/`'s current state:
 
-- **A READY item exists**: `Next step: hero-skills:one-shot — drive it ticket-to-merge` (print only — launch it on the user's word, never spontaneously; `wayfare do-next` is the sanctioned chain).
+- **A READY item exists**: `Next step: hero-skills:one-shot — drive it ticket-to-merge` (print only — launch it on the user's word, never spontaneously; `wayfare next` is the sanctioned chain).
 - **Only `plan` rows** (items await the ready-mark): tell the user which items are waiting and that saying so flips them — nothing runs until they do.
 - **No READY item** (everything's still blocked, or there's another piece to grill): `Next step: hero-skills:think-it-through — think the next piece through, or re-grill a blocked item` (print only — re-invoking this same skill right after it finishes isn't auto-chained).

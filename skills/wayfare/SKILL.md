@@ -2,7 +2,7 @@
 name: wayfare
 # prettier-ignore
 description: Sync a feature roadmap between the source repo and the HERO.md-configured target-design repo; features follow a six-state lifecycle with subtasks, definition of done, comments, and staleness flags.
-argument-hint: "[sync | do-next]"
+argument-hint: "[sync | next]"
 ---
 
 # Wayfare — The Route from Source to Target
@@ -171,13 +171,16 @@ position after `--`, and treat a value starting with `-` as a store defect to
 report loudly — never an argument to forward (`git diff --output=…` is a file
 write).
 
-Then dispatch: `do-next` runs the verb below of that name; anything else —
-including no arguments — is `sync`, with any trailing text carried in as
-context for its proposals (a feature idea to add, an area to focus on). Two
-verbs is the whole surface — a former verb name (`status`, `feature`, `plan`,
-`comment`, `pin`, `gate`, `order`, `ready`, `drift`) in `$ARGUMENTS` deserves
-a one-line "the surface is now sync | do-next" note before treating it as
-sync context.
+Then dispatch: `next` as the sole argument — or its old name `do-next`,
+worth a one-line rename note — runs the `next` verb below. The verb takes
+no arguments, so `next` followed by trailing text is not the verb; anything
+else — including no arguments and a leading `next` with trailing text (say
+in one line that it was read as sync context) — is `sync`, with any
+trailing text carried in as context for its proposals (a feature idea to
+add, an area to focus on). Two verbs is the whole surface — a former verb
+name (`status`, `feature`, `plan`, `comment`, `pin`, `gate`, `order`,
+`ready`, `drift`) in `$ARGUMENTS` deserves a one-line "the surface is now
+sync | next" note before treating it as sync context.
 
 **The roadmap view** — how both verbs report. Run `hero_ready_items "$STORE"`
 and print the features grouped by lifecycle state (backlog → plan →
@@ -190,7 +193,7 @@ READY/blocked → active → review → done), each with:
   defect** to flag for `sync`, never an input to compute staleness from,
 - its subtask progress when planned (checked/total from `## Subtasks`, e.g. `2/4`),
 - its open-comment count (entries in `## Comments`),
-- the single next action: `wayfare do-next` for whichever feature it would
+- the single next action: `wayfare next` for whichever feature it would
   pick (per its selection tiers), `wayfare sync` for stale rows and defects.
 
 Surface `hero_ready_items` stderr warnings (dangling deps, duplicate ids) —
@@ -304,7 +307,7 @@ confirm flow, same format, same `status: todo`. Ids continue the store's
 sequence per think-it-through's numbering rules, re-checked immediately
 before writing; zero-pad only the filename.
 
-### `do-next` — advance the roadmap one leg
+### `next` — advance the roadmap one leg
 
 One command that takes the next feature however far it can go: plan it if
 unplanned (think-it-through), build it if ready (one-shot) — both in one run
@@ -338,9 +341,9 @@ when your ready-mark connects them.
    one-shot on the feature in the same run. Declined → stop; the plan waits,
    and that is the answer, not an obstacle to argue with.
 3. **One feature per run.** one-shot's own gates (scope guard, mark-ready,
-   merge confirmation) all still prompt — do-next chains launches, it never
+   merge confirmation) all still prompt — `next` chains launches, it never
    skips gates. When the leg completes, print the roadmap view and stop; the
-   user runs `do-next` again for the next leg.
+   user runs `next` again for the next leg.
 
 ### Planning a feature — not a wayfare verb
 
@@ -451,6 +454,6 @@ Never add `origin` to an item wayfare did not author.
 
 Pick exactly one, from the store's current state:
 
-- **Any feature is plannable or buildable** (backlog with met deps, planning, ready, or mid-flight): `Next step: hero-skills:wayfare do-next — plan and/or build the next leg`.
+- **Any feature is plannable or buildable** (backlog with met deps, planning, ready, or mid-flight): `Next step: hero-skills:wayfare next — plan and/or build the next leg`.
 - **No roadmap yet, or the world moved** (target changed, work landed out-of-band): `Next step: hero-skills:wayfare sync — bootstraps or converges the roadmap`.
 - **Everything blocked or done**: print the roadmap view — it names each blocker's unmet deps, or the route is complete.

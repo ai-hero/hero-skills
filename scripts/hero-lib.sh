@@ -548,7 +548,7 @@ hero_ready_items() (
       feature:implementing|*:in-progress) echo "active  $f — $title"; continue ;;
       feature:reviewing)                  echo "review  $f — $title"; continue ;;
       *:planning)                         echo "plan    $f — $title"; continue ;;
-      feature:todo)                       row=backlog ;; # never READY, but falls through to the dep check: dangling refs must still warn, and unmet deps must annotate the row (do-next reads them)
+      feature:todo)                       row=backlog ;; # never READY, but falls through to the dep check: dangling refs must still warn, and unmet deps must annotate the row (`wayfare next` reads them)
       feature:ready|*:todo) ;;  # the only READY-eligible arms — dep check below
       *)
         # An UNRECOGNIZED status must never fall through to the READY path. The
@@ -599,7 +599,7 @@ hero_ready_items() (
 $deps
 EOF
     # backlog rows report dep state without ever becoming READY: `[deps unmet]`
-    # is what do-next's "backlog whose deps are all done" tier reads, and the
+    # is what `wayfare next`'s "backlog whose deps are all done" tier reads, and the
     # missing-dep annotation keeps a bootstrap-time typo'd id loud instead of
     # a feature that silently never becomes selectable.
     if [ "$row" = backlog ]; then
