@@ -105,15 +105,12 @@ check "repo-ref: an existing local dir passes through" \
 W="$TMP/w/.plans"
 mkdir -p "$W"
 
-item() { # file id title status deps
-  cat > "$W/$1" <<EOF
----
-id: $2
-title: $3
-status: $4
-depends_on: $5
----
-EOF
+item() { # file id title status deps [kind]
+  {
+    printf -- '---\nid: %s\n' "$2"
+    if [ -n "${6:-}" ]; then printf 'kind: %s\n' "$6"; fi
+    printf 'title: %s\nstatus: %s\ndepends_on: %s\n---\n' "$3" "$4" "$5"
+  } > "$W/$1"
 }
 
 item 001-done.md 1 "Finished" "done" "[]"
@@ -336,6 +333,49 @@ check "planning: unknown status is invalid, not READY" "invalid" "$(state_of 025
 ERR9="$(hero_ready_items "$W" 2>&1 >/dev/null)"
 printf '%s' "$ERR9" | grep -q "unrecognized status 'plan'"
 check "planning: unknown status warns on stderr" "0" "$?"
+
+# ---------- feature lifecycle (kind: feature) --------------------------------
+#
+# Wayfare features carry the extended enum todo|planning|ready|implementing|
+# reviewing|done. Each case pins a way the mapping could silently regress: a
+# `todo` feature handed to one-shot unplanned (backlog must never be READY),
+# or the extended statuses leaking into plain items (they must stay invalid).
+
+# Feature-item fixture: `item` with kind defaulted to `feature`.
+fitem() { item "$1" "$2" "$3" "$4" "$5" "${6:-feature}"; }
+
+fitem 030-backlog.md 30 "Unplanned feature" "todo" "[]"
+fitem 031-fplan.md 31 "Feature being planned" "planning" "[]"
+fitem 032-fready.md 32 "Planned and marked ready" "ready" "[1]"
+fitem 033-fblocked.md 33 "Ready but blocked" "ready" "[30]"
+fitem 034-fimpl.md 34 "Being built" "implementing" "[]"
+fitem 035-flegacy.md 35 "Legacy in-progress feature" "in-progress" "[]"
+fitem 036-frev.md 36 "PR in review" "reviewing" "[]"
+fitem 037-fdone.md 37 "Shipped feature" "done" "[]"
+fitem 038-fcaps.md 38 "Capitalized kind" "todo" "[]" "Feature"
+fitem 039-ftypo.md 39 "Feature status typo" "in-review" "[]"
+# The extended enum is features-only: a PLAIN item claiming `ready` must stay
+# invalid — otherwise any item could skip the human ready-mark by declaring it.
+item 040-plainready.md 40 "Plain item claiming ready" "ready" "[]"
+OUTF="$(hero_ready_items "$W" 2>/dev/null)"
+# A todo feature is on the roadmap but UNPLANNED — never READY.
+check "feature: todo lists as backlog, not READY" "backlog" "$(state_of 030-backlog.md "$OUTF")"
+check "feature: planning lists as plan"           "plan"    "$(state_of 031-fplan.md "$OUTF")"
+# `ready` is the feature state eligible for READY, dep-gated like plain todo.
+check "feature: ready with deps done is READY"    "READY"   "$(state_of 032-fready.md "$OUTF")"
+check "feature: ready with unmet dep is blocked"  "blocked" "$(state_of 033-fblocked.md "$OUTF")"
+check "feature: implementing is active"           "active"  "$(state_of 034-fimpl.md "$OUTF")"
+check "feature: legacy in-progress still active"  "active"  "$(state_of 035-flegacy.md "$OUTF")"
+check "feature: reviewing lists as review"        "review"  "$(state_of 036-frev.md "$OUTF")"
+check "feature: done is done"                     "done"    "$(state_of 037-fdone.md "$OUTF")"
+check "feature: kind match is case-insensitive"   "backlog" "$(state_of 038-fcaps.md "$OUTF")"
+check "feature: unknown status is invalid"        "invalid" "$(state_of 039-ftypo.md "$OUTF")"
+check "feature: plain item with ready is invalid" "invalid" "$(state_of 040-plainready.md "$OUTF")"
+ERRF="$(hero_ready_items "$W" 2>&1 >/dev/null)"
+printf '%s' "$ERRF" | grep -q "unrecognized status 'in-review'.*kind: feature"
+check "feature: unknown status names the feature enum on stderr" "0" "$?"
+# Clean up so later sections' listings aren't polluted by these fixtures.
+rm -f "$W"/03[0-9]-*.md "$W/040-plainready.md"
 
 # ---------- hero_work_store migration ---------------------------------------
 #

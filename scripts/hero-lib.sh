@@ -432,8 +432,18 @@ hero_norm_id() {
 #   plan     status is planning — still being shaped; a HUMAN marks it todo
 #   active   status is in-progress — someone is already on it
 #   done     completed
+#   backlog  kind: feature only — status is todo: on the roadmap, not yet planned
+#   review   kind: feature only — status is reviewing: PR open, awaiting merge
 #   invalid  no usable id, OR an unrecognized status — either way the item
 #            cannot participate in dependency order and is never handed out READY
+#
+# `kind: feature` items (wayfare's roadmap) carry an extended status enum —
+# todo | planning | ready | implementing | reviewing | done — mapped here as
+# backlog | plan | READY-eligible | active | review | done. For a feature,
+# `ready` (not `todo`) is the state eligible to become READY: a feature's
+# `todo` means "identified, unplanned", and handing an unplanned feature to
+# one-shot would skip planning entirely. Plain items keep the original enum;
+# `ready`/`implementing`/`reviewing` on a plain item stay invalid (loud).
 #
 # `done` rows are PRINTED, not hidden. Callers need to see them: one-shot's
 # Step 1c resolves an argument against this listing to answer "has this already
@@ -456,7 +466,7 @@ hero_norm_id() {
 # Runs in a subshell: it cds, and leaking that into a sourced caller's shell
 # silently reroutes every later relative path.
 hero_ready_items() (
-  local store f d raw deps ready title id state all_ids done_ids missing
+  local store f d raw deps ready title id state kind enum all_ids done_ids missing
   store="${1:-$(hero_work_store)}" || return 1
   cd "$store" 2>/dev/null || { echo "hero_ready_items: no store at ${store}" >&2; return 1; }
   # zsh errors out on an unmatched glob (bash leaves it literal for the
@@ -496,11 +506,19 @@ hero_ready_items() (
     [ -e "$f" ] || continue
     state=$(hero_item_status "$f")
     title=$(hero_item_field "$f" title)
-    case "$state" in
-      done)        echo "done    $f — $title"; continue ;;
-      in-progress) echo "active  $f — $title"; continue ;;
-      planning)    echo "plan    $f — $title"; continue ;;
-      todo)        ;;  # the only state eligible to become READY below
+    kind=$(hero_item_field "$f" kind | tr '[:upper:]' '[:lower:]')
+    # One kind-keyed table, not a case block per kind: shared states appear
+    # once, and only the genuinely divergent arms name `feature` (see the
+    # state list above for the mapping and the ready-vs-todo rationale).
+    # `feature:in-progress` aliases to active so features written before the
+    # lifecycle rename still list, not invalidate.
+    case "$kind:$state" in
+      *:done)                             echo "done    $f — $title"; continue ;;
+      feature:implementing|*:in-progress) echo "active  $f — $title"; continue ;;
+      feature:reviewing)                  echo "review  $f — $title"; continue ;;
+      *:planning)                         echo "plan    $f — $title"; continue ;;
+      feature:todo)                       echo "backlog $f — $title"; continue ;;
+      feature:ready|*:todo) ;;  # the only READY-eligible arms — dep check below
       *)
         # An UNRECOGNIZED status must never fall through to the READY path. The
         # display label is `plan` while the keyword is `planning`, so `status:
@@ -508,7 +526,12 @@ hero_ready_items() (
         # would otherwise be handed straight to one-shot with no human
         # ready-mark, silently defeating the gate the planning state exists to
         # enforce. Treat it like a rejected id: name it loudly, never READY.
-        echo "hero_ready_items: $f has unrecognized status '$state' — not one of planning/todo/in-progress/done; not eligible for READY" >&2
+        if [ "$kind" = feature ]; then
+          enum="todo/planning/ready/implementing/reviewing/done (kind: feature)"
+        else
+          enum="planning/todo/in-progress/done"
+        fi
+        echo "hero_ready_items: $f has unrecognized status '$state' — not one of $enum; not eligible for READY" >&2
         echo "invalid $f — $title"
         continue ;;
     esac

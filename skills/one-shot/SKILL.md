@@ -325,7 +325,9 @@ Match `$ARGUMENTS` against both sets:
 | `$ARGUMENTS` matches exactly one READY item (id, filename slug, or title) | That item is the plan → 1c |
 | `$ARGUMENTS` matches an open tracker issue but no `.plans/` item | Fetch the issue body; it is the plan → 1c |
 | `$ARGUMENTS` matches a **blocked** item | STOP — print the item's unmet `depends_on` ids and their titles. Do not implement past a dependency. |
-| `$ARGUMENTS` matches a **plan** (planning) item | STOP — the item awaits the user's ready-mark. Show its title and `success` criteria and ask whether to mark it ready; on yes, set `status: todo` + `ready_marked:` date and it is the plan → 1c. Do NOT re-grill it — that writes a duplicate. |
+| `$ARGUMENTS` matches a **plan** (planning) item | STOP — the item awaits the user's ready-mark. Show its title and `success` criteria and ask whether to mark it ready; on yes, set `status: todo` (`ready` for a `kind: feature` item) + `ready_marked:` date and it is the plan → 1c. Do NOT re-grill it — that writes a duplicate. |
+| `$ARGUMENTS` matches a **backlog** feature (`kind: feature`, `status: todo`) | STOP — the feature is on the roadmap but unplanned. Suggest `hero-skills:wayfare plan FEATURE_ID`; never build a feature that skipped planning. |
+| `$ARGUMENTS` matches a **review** feature (`status: reviewing`) | STOP — its PR is already open; Step 0.5's resume detection on that branch is the way back in, not a fresh run. |
 | `$ARGUMENTS` matches a **done** item | STOP — report that it already landed, with the item's `success` criteria as evidence. Offer the next READY item. Do NOT re-grill it; that writes a duplicate. |
 | `$ARGUMENTS` matches an **active** (in-progress) item | STOP and confirm — another session may hold it. Step 2 marks items `in-progress` before the first edit precisely so two runs cannot claim one item. |
 | `$ARGUMENTS` matches nothing, or is empty | Print the readiness view and ask: pick a READY item, or grill this as new work → 1d |
@@ -407,8 +409,9 @@ The item's own `Non-goals` and `success` fields replace the old file-count heuri
 
 ### Step 2: implement
 
-Render DAG with `implement` active. Implement the work-item resolved in Step 1, working from its `Approach` section and holding its `success` criteria as the target. Mark the item `status: in-progress` in `.plans/` before the first edit, so a session that dies mid-flight leaves an honest store behind. Follow these rules:
+Render DAG with `implement` active. Implement the work-item resolved in Step 1, working from its `Approach` section and holding its `success` criteria as the target. Mark the item `status: in-progress` (`implementing` for a `kind: feature` item — wayfare's lifecycle) in `.plans/` before the first edit, so a session that dies mid-flight leaves an honest store behind. Follow these rules:
 
+- **Work the subtasks in order** — a `kind: feature` item carries an ordered `## Subtasks` checklist (written by `wayfare plan`); implement top to bottom and check each line off (`- [ ]` → `- [x]`) as it completes, so a session that dies mid-flight shows exactly where it stopped. Default to shipping the whole checklist as this one PR; split at a subtask boundary into sequential PRs only when the repo's conventions or reviewable-size norms call for it — then run the pipeline per PR, and the feature stays unfinished until the last one merges (Step 9a).
 - **Read before edit** — Always Read a file before modifying it.
 - **Match existing patterns** — Follow naming, structure, and style already in the codebase. Don't introduce new conventions.
 - **One step at a time** — Announce each step briefly, make the change, then move on. No commentary between steps unless something blocks you.
@@ -433,6 +436,8 @@ If the `simplify` skill is unavailable in this environment, render `(–) simpli
 Render DAG with `push` active. Run `hero-skills:push-pr` (no arguments — runs its test phase first: verification plus smoke tests, including UI smoke via Playwright MCP when a UI project is detected; then commits any outstanding work with a smart conventional commit, branches off the default branch first if needed, pushes, and opens a draft PR). Trust its grouping/commit logic — do not skip pre-commit hooks. Capture the PR number from its output for downstream steps.
 
 Because the test phase runs inside push-pr on every push, resumed runs are re-tested at push time — there is no stale-test window between sessions.
+
+Once the PR exists: if the work-item is a `kind: feature`, flip it to `status: reviewing` — wayfare's roadmap shows it as in review from here until the merge.
 
 Test-phase failure semantics (owned by push-pr, surfaced here):
 
@@ -504,14 +509,14 @@ Render DAG with `ship` active. Run `hero-skills:ship-pr`. It owns the auto-appro
 
 **Contract — what one-shot needs back:** a merged SHA, or a STOP reason.
 
-- **STOP** (REQUEST_CHANGES, WORKFLOW_FAILED, declined merge) → render `(✗)`, report the reason, leave the work-item `in-progress`. Never mark an unmerged PR's item `done`.
+- **STOP** (REQUEST_CHANGES, WORKFLOW_FAILED, declined merge) → render `(✗)`, report the reason, leave the work-item `in-progress` (a `kind: feature` item stays `reviewing` — its PR is still open). Never mark an unmerged PR's item `done`.
 - **Merged** → run Step 9a.
 
 #### Step 9a: Close out the work-item
 
 The only place the store is marked `done`. one-shot is its sole consumer, so skipping this is what makes a later run re-resolve finished work (Step 1c catches it, but catching it late wastes the resolution):
 
-1. Set `status: done` in the item's `.plans/NNN-slug.md`.
+1. Set `status: done` in the item's `.plans/NNN-slug.md`. For a `kind: feature` item, two gates first: every `## Subtasks` line is checked — a merged PR that covered part of the checklist leaves the feature `implementing`, and the remaining subtasks continue on a fresh branch/PR from Step 2 — and every `## Definition of Done` line is verified against the merged code and checked off. A DoD line that cannot be verified is a finding to report, not a box to tick; leave the feature `reviewing` and say which criterion failed.
 2. Close any cross-linked tracker issue — `gh issue close ISSUE_NUMBER --repo TARGET_REPO --comment "Merged in PR_URL"`, or the Linear MCP equivalent. Use the item's **recorded** repo; for a `handoff --repo` item that is not this one.
 3. Run `hero_ready_items` and report what the merge unblocked — items whose `depends_on` just went green are the natural next run.
 

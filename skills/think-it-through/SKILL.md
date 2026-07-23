@@ -252,17 +252,20 @@ from the moment the user marks the item ready. This block is the canonical
 field definition: the status enum and `ready_marked:` semantics are defined
 here, and where other skills (wayfare, harden, handoff) show frontmatter of
 their own they follow these meanings rather than reinventing them. `kind` and
-`origin` are reserved extension fields owned by `hero-skills:wayfare` (feature
-/ work-order typing and producer provenance) — this skill, harden, and handoff
-never write them, so an item lacking `kind` is an ordinary task and one
-lacking `origin` claims nothing about its author.
+`origin` are reserved extension fields owned by `hero-skills:wayfare`
+(`kind: feature` roadmap typing and producer provenance) — this skill, harden,
+and handoff never write them, so an item lacking `kind` is an ordinary task
+and one lacking `origin` claims nothing about its author.
 
 ## "What's Ready" — the one query that matters
 
 `status` stores only what the author knows: `planning`, `todo`, `in-progress`,
 or `done`. It deliberately does NOT carry `ready` or `blocked` — those are
 _derived_ from `depends_on`, and storing them alongside the thing they are
-computed from means the two can disagree. `planning` items are never ready no
+computed from means the two can disagree. (Wayfare's `kind: feature` items
+are the one exception — they carry that skill's extended lifecycle enum, see
+its Lifecycle section; the no-`ready` rule here governs plain items.)
+`planning` items are never ready no
 matter their dependencies — they list as `plan` rows and wait for the user's
 ready-mark (Step 5). An item is **ready** when its `status` is `todo` and
 every id in its `depends_on` points to an item that _is_ `done`. That is the Beads `ready`
