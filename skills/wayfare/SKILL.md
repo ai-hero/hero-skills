@@ -171,14 +171,16 @@ position after `--`, and treat a value starting with `-` as a store defect to
 report loudly — never an argument to forward (`git diff --output=…` is a file
 write).
 
-Then dispatch: `next` — or its old name `do-next`, worth a one-line rename
-note — runs the verb below of that name; anything else — including no
-arguments — is `sync`, with any trailing text carried in as context for its
-proposals (a feature idea to add, an area to focus on). Two verbs is the
-whole surface — a former verb name (`status`, `feature`, `plan`, `comment`,
-`pin`, `gate`, `order`, `ready`, `drift`) in `$ARGUMENTS` deserves a
-one-line "the surface is now sync | next" note before treating it as sync
-context.
+Then dispatch: `next` as the sole argument — or its old name `do-next`,
+worth a one-line rename note — runs the `next` verb below. The verb takes
+no arguments, so `next` followed by trailing text is not the verb; anything
+else — including no arguments and a leading `next` with trailing text (say
+in one line that it was read as sync context) — is `sync`, with any
+trailing text carried in as context for its proposals (a feature idea to
+add, an area to focus on). Two verbs is the whole surface — a former verb
+name (`status`, `feature`, `plan`, `comment`, `pin`, `gate`, `order`,
+`ready`, `drift`) in `$ARGUMENTS` deserves a one-line "the surface is now
+sync | next" note before treating it as sync context.
 
 **The roadmap view** — how both verbs report. Run `hero_ready_items "$STORE"`
 and print the features grouped by lifecycle state (backlog → plan →

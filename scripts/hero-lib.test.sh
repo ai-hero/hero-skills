@@ -373,7 +373,7 @@ item 047-notdone.md 47 "Colon done status" "not:done" "[]"
 # and plain-todo mean OPPOSITE things, so `kind: features` + todo was READY.
 item 048-badkind.md 48 "Typo kind" "todo" "[]" "features"
 # Backlog rows still run the dep check: unmet deps annotate the row
-# (wayfare next reads it) and a dangling ref warns — a bootstrap typo must
+# (`wayfare next` reads it) and a dangling ref warns — a bootstrap typo must
 # not be invisible.
 fitem 049-fwait.md 49 "Backlog waiting on dep" "todo" "[30]"
 fitem 050-fdangle.md 50 "Backlog dangling dep" "todo" "[999]"

@@ -300,8 +300,9 @@ fi
 # calling pipeline breaks at that step (there is no per-caller allowlist).
 # Keep this list in sync with one-shot's step→skill mapping AND
 # wayfare next's tiers — `one-shot` is here because re-adding its flag
-# would silently break it. `architecture` is chained three ways: wayfare sync
-# runs its review/sync in both modes, and think-it-through's `arch` dispatch
+# would silently break `wayfare next`. `architecture` is chained three
+# ways: wayfare sync runs its review/sync in both modes, and
+# think-it-through's `arch` dispatch
 # delegates to it. `preflight` is intentionally absent — one-shot runs
 # it via scripts/preflight.sh, not the Skill tool, so it may stay user-only.
 CHAINED_SKILLS="think-it-through push-pr review-pr respond-to-comments ship-pr one-shot architecture"
