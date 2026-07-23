@@ -187,7 +187,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 |---------|-------------|
 | `hero-skills:harden` | Audit read-only for hardening — dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness — and emit execution-ready plans as `.plans/` items |
 | `hero-skills:think-it-through` | Brainstorm + grill an idea one question at a time into shared understanding and dependency-aware work-items; `arch` mode manages `specs/` docs + ADRs |
-| `hero-skills:wayfare` | Feature roadmap from source to the target-design repo (HERO.md-configured): `sync` reads both ends and converges the `.plans/` roadmap; features follow a six-state dev lifecycle (planned via think-it-through) with subtasks, a definition of done, comments, and staleness flags; one-shot builds `ready` features |
+| `hero-skills:wayfare` | Feature roadmap from source to the target-design repo (HERO.md-configured), two verbs: `sync` reads both ends and converges the `.plans/` roadmap; `do-next` advances one leg — planning via think-it-through and building via one-shot, chained through your ready-mark. Features carry subtasks, a definition of done, comments, and staleness flags |
 | `hero-skills:handoff` | Distill the current conversation into one self-contained work-item for a downstream agent (optionally filed to the tracker, or to **another repo** with `--repo OWNER/NAME`) |
 
 ### Utilities

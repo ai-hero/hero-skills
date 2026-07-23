@@ -292,14 +292,17 @@ else
   echo "  Skills: $SKILL_PASS/$SKILL_COUNT passed"
 fi
 
-# ── one-shot chained-skill invocability guard ──────────────────────
-# one-shot (skills/one-shot/SKILL.md) delegates these steps to child skills
-# via the Skill tool. A child carrying `disable-model-invocation: true`
-# cannot be invoked by the model, so one-shot's pipeline breaks at that step
-# (there is no per-caller allowlist). Keep this list in sync with one-shot's
-# step→skill mapping. `preflight` is intentionally absent — one-shot runs it
-# via scripts/preflight.sh, not the Skill tool, so it may stay user-only.
-CHAINED_SKILLS="think-it-through push-pr review-pr respond-to-comments ship-pr"
+# ── chained-skill invocability guard ───────────────────────────────
+# one-shot (skills/one-shot/SKILL.md) delegates its steps to child skills via
+# the Skill tool, and wayfare do-next chains into think-it-through and
+# one-shot the same way. A chained skill carrying
+# `disable-model-invocation: true` cannot be invoked by the model, so the
+# calling pipeline breaks at that step (there is no per-caller allowlist).
+# Keep this list in sync with one-shot's step→skill mapping AND wayfare
+# do-next's tiers — `one-shot` is here because re-adding its flag would
+# silently break do-next. `preflight` is intentionally absent — one-shot runs
+# it via scripts/preflight.sh, not the Skill tool, so it may stay user-only.
+CHAINED_SKILLS="think-it-through push-pr review-pr respond-to-comments ship-pr one-shot"
 for chained in $CHAINED_SKILLS; do
   chained_file="$SKILLS_DIR/$chained/SKILL.md"
   # A missing chained skill silently breaks one-shot at that step, so error

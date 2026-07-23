@@ -430,9 +430,11 @@ hero_norm_id() {
 #   READY    not done, and every depends_on target is done
 #   blocked  not done, but a dependency is unmet or unresolvable
 #   plan     status is planning — still being shaped; a HUMAN marks it todo
+#            (`ready` for a kind: feature item)
 #   active   status is in-progress — someone is already on it
 #   done     completed
-#   backlog  kind: feature only — status is todo: on the roadmap, not yet planned
+#   backlog  kind: feature only — status is todo: on the roadmap, not yet
+#            planned; annotated `[deps unmet]` when a dependency isn't done
 #   review   kind: feature only — status is reviewing: PR open, awaiting merge
 #   invalid  no usable id, OR an unrecognized status — either way the item
 #            cannot participate in dependency order and is never handed out READY
@@ -451,13 +453,16 @@ hero_norm_id() {
 # duplicating it. Filtering them out silently defeated both.
 #
 # `active` is separated from READY so two sessions cannot both pick up the same
-# in-flight item — one-shot marks an item in-progress before its first edit
-# specifically to prevent that, and folding it into READY undid it.
+# in-flight item — one-shot marks an item in-progress (`implementing` for a
+# feature) before its first edit specifically to prevent that, and folding it
+# into READY undid it.
 #
 # `planning` is never READY regardless of dependencies: the item is still being
-# shaped and awaits a human ready-mark. Skills that emit items write them as
-# `planning`; only the user's explicit say-so flips one to `todo` — without
-# this state, freshly emitted items were handed straight to one-shot.
+# shaped and awaits a human ready-mark. Skills that emit plain items write them
+# as `planning`; only the user's explicit say-so flips one to `todo` (`ready`
+# for a kind: feature item) — without this state, freshly emitted items were
+# handed straight to one-shot. Wayfare emits features as `todo`, which for a
+# feature means backlog — still never READY.
 #
 # NOTE: readiness is a claim about DEPENDENCIES, not about the codebase. An item
 # stays READY after its work lands until someone marks it done — consumers must
@@ -466,7 +471,7 @@ hero_norm_id() {
 # Runs in a subshell: it cds, and leaking that into a sourced caller's shell
 # silently reroutes every later relative path.
 hero_ready_items() (
-  local store f d raw deps ready title id state kind enum all_ids done_ids missing
+  local store f d raw deps ready title id state kind enum row all_ids done_ids missing
   store="${1:-$(hero_work_store)}" || return 1
   cd "$store" 2>/dev/null || { echo "hero_ready_items: no store at ${store}" >&2; return 1; }
   # zsh errors out on an unmatched glob (bash leaves it literal for the
@@ -507,17 +512,43 @@ hero_ready_items() (
     state=$(hero_item_status "$f")
     title=$(hero_item_field "$f" title)
     kind=$(hero_item_field "$f" kind | tr '[:upper:]' '[:lower:]')
+    # Gate the ALPHABET before the table: both values come from hand-editable
+    # frontmatter, and the kind-keyed patterns below anchor on a `:` join — a
+    # smuggled colon (`status: x:todo`) would otherwise match the `*:todo` arm
+    # and walk an unrecognized status straight into READY, the exact silent
+    # fall-through the invalid arm exists to stop. Every legal keyword is
+    # lowercase letters and hyphens only.
+    case "$state$kind" in
+      *[!a-z-]*)
+        echo "hero_ready_items: $f has a malformed status/kind ('$state' / '$kind') — keywords are lowercase letters and hyphens only; not eligible for READY" >&2
+        echo "invalid $f — $title"
+        continue ;;
+    esac
+    # Kinds are a CLOSED set. An unknown kind must not silently demote to
+    # plain-item semantics: `todo` means opposite things in the two enums
+    # (feature = unplanned backlog, plain = READY-eligible), so a typo like
+    # `kind: features` would hand an unplanned feature straight to one-shot.
+    # `work-order` is the pre-simplification legacy kind — it deliberately
+    # rides the plain arms so old stores keep listing until sync migrates them.
+    case "$kind" in
+      ''|feature|work-order) ;;
+      *)
+        echo "hero_ready_items: $f has unrecognized kind '$kind' — not one of feature/work-order; not eligible for READY" >&2
+        echo "invalid $f — $title"
+        continue ;;
+    esac
     # One kind-keyed table, not a case block per kind: shared states appear
     # once, and only the genuinely divergent arms name `feature` (see the
     # state list above for the mapping and the ready-vs-todo rationale).
     # `feature:in-progress` aliases to active so features written before the
     # lifecycle rename still list, not invalidate.
+    row=READY
     case "$kind:$state" in
       *:done)                             echo "done    $f — $title"; continue ;;
       feature:implementing|*:in-progress) echo "active  $f — $title"; continue ;;
       feature:reviewing)                  echo "review  $f — $title"; continue ;;
       *:planning)                         echo "plan    $f — $title"; continue ;;
-      feature:todo)                       echo "backlog $f — $title"; continue ;;
+      feature:todo)                       row=backlog ;; # never READY, but falls through to the dep check: dangling refs must still warn, and unmet deps must annotate the row (do-next reads them)
       feature:ready|*:todo) ;;  # the only READY-eligible arms — dep check below
       *)
         # An UNRECOGNIZED status must never fall through to the READY path. The
@@ -567,7 +598,17 @@ hero_ready_items() (
     done <<EOF
 $deps
 EOF
-    if [ "$ready" = 1 ]; then
+    # backlog rows report dep state without ever becoming READY: `[deps unmet]`
+    # is what do-next's "backlog whose deps are all done" tier reads, and the
+    # missing-dep annotation keeps a bootstrap-time typo'd id loud instead of
+    # a feature that silently never becomes selectable.
+    if [ "$row" = backlog ]; then
+      if [ "$ready" = 1 ]; then
+        echo "backlog $f — $title"
+      else
+        echo "backlog $f — $title [deps unmet${missing:+; missing dep:$missing}]"
+      fi
+    elif [ "$ready" = 1 ]; then
       echo "READY   $f — $title"
     else
       echo "blocked $f — $title${missing:+ [missing dep:$missing]}"

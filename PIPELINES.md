@@ -80,8 +80,8 @@ internally for standalone use; running one-shot just makes that step visible
 in the DAG and pays a no-op cost on the second invocation.
 
 **The work-item store closes this pipeline's loop.** `think-it-through`,
-`handoff`, and `harden` write items into the git-ignored `.plans/` store, and
-all three read it back so they build on the plate rather than beside it. What
+`handoff`, `harden`, and `wayfare` write items into the git-ignored `.plans/`
+store, and all read it back so they build on the plate rather than beside it. What
 one-shot alone does is *execute* an item and close it out: Step 1 resolves
 against the store before grilling anything new, and Step 9a marks the merged
 item `done` — no other skill does that automatically.
