@@ -176,24 +176,37 @@ store that won't list is a failed check — STOP and name the path.
 
 **Bootstrap — no roadmap yet.**
 
-1. **Investigate.** Read the target design (the `target-path` subtree at the
+1. **Map the source.** Feature order comes from the source architecture —
+   which layers exist and how they depend (e.g. mongo data model → services →
+   routes → CLI → frontend). That map is think-it-through Arch Mode's job,
+   not a wayfare-private format: if `specs/` is missing or stale, offer to
+   run `hero-skills:think-it-through arch` (via the Skill tool — `create` or
+   `update`; specs describe what IS) before roadmapping. If the user
+   declines, derive the layer ordering from a direct read of the source
+   instead — but say the ordering is unverified by a spec.
+2. **Investigate.** Read the target design (the `target-path` subtree at the
    `target-branch` head) and the corresponding source paths. Assert every
    target read succeeded per *Reading the target* above — and that
    `target-path`, when set, exists at the resolved SHA — before proposing
    anything; never propose a roadmap from a target you could not see.
-2. **Propose.** One table, a row per candidate feature: title, source paths,
-   target paths, dependencies. Order rows so foundations precede what builds
-   on them. Note any existing plain item that covers similar ground
+3. **Propose.** One table, a row per candidate feature: title, source paths,
+   target paths, dependencies. Order rows and set `depends_on` along the
+   source architecture's dependency direction from step 1 — foundations
+   (data model, shared services) precede what builds on them (routes, CLI,
+   frontend). Note any existing plain item that covers similar ground
    (`overlaps: item N`) — plain items keep their own lifecycle and are never
    edited or converted.
-3. **Confirm, then write.** On the user's confirmation of the list (edits
+4. **Confirm, then write.** On the user's confirmation of the list (edits
    welcome — drop rows, reword, re-scope), write each feature in the format
-   below: `status: todo`, `target_ref` = the target head resolved in step 1.
+   below: `status: todo`, `target_ref` = the target head resolved in step 2.
    Ids continue the store's single sequence (think-it-through's numbering
    rules).
 
 **Update — roadmap exists.** Re-read both ends and report, one table, a row
-per finding:
+per finding. Shipped features change the source, so `specs/` can trail
+reality: when it exists, run think-it-through's `arch review` first and offer
+`arch update` for any spec it reports stale — the refreshed map is what the
+rows below are judged against. Findings:
 
 - **stale** — the target head moved past a feature's `target_ref`: diff the
   feature's target paths between the two SHAs and summarize what actually
@@ -243,12 +256,14 @@ the feature's plan is already locked:
 1. Flip `status: todo` to `planning` (an already-`planning` feature just
    resumes; refuse `ready` and later — replanning those goes through `sync`).
 2. Run `hero-skills:think-it-through` (via the Skill tool) on the feature:
-   grill the idea against the source paths and the target design until shared
-   understanding, per that skill.
+   grill the idea against the source paths, the source architecture
+   (`specs/`, when present — see sync's *Map the source*), and the target
+   design until shared understanding, per that skill.
 3. Write the conclusions into the feature itself:
    - `## Approach` and the one-line `success:` field;
    - an ordered `## Subtasks` checklist breaking the approach into
-     implementation steps (e.g. schema updates → structs → routes → frontend
+     implementation steps, sequenced along the source architecture's
+     dependency direction (e.g. schema updates → structs → routes → frontend
      against the design system) — **how** the feature gets built;
    - a `## Definition of Done` checklist of acceptance criteria — **what must
      be observably true** when it ships (behavior in place, tests green,
