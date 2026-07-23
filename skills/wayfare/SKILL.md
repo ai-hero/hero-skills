@@ -225,10 +225,11 @@ store that won't list is a failed check — STOP and name the path.
    which layers exist and how they depend (e.g. mongo data model → services →
    routes → CLI → frontend). That map is `hero-skills:architecture`'s job
    (the root `ARCHITECTURE.md`, its Boundaries section), not a
-   wayfare-private format: if `ARCHITECTURE.md` is missing or stale, offer
-   to run `hero-skills:architecture sync` (via the Skill tool) before
-   roadmapping. If the user declines, derive the layer ordering from a
-   direct read of the source instead — but say the ordering is unverified.
+   wayfare-private format: run `hero-skills:architecture review` first (via
+   the Skill tool — staleness is its call, never a `Source ref` comparison
+   done here), and when it reports `MISSING` or stale rows, offer its `sync`
+   before roadmapping. If the user declines, derive the layer ordering from
+   a direct read of the source instead — but say the ordering is unverified.
 2. **Investigate.** Read the target design (the `target-path` subtree at the
    `target-branch` head) and the corresponding source paths. Assert every
    target read succeeded per *Reading the target* above — and that
@@ -250,10 +251,13 @@ store that won't list is a failed check — STOP and name the path.
 **Update — roadmap exists.** Re-read both ends and report, one table, a row
 per finding. Shipped features change the source, so `ARCHITECTURE.md` can
 trail reality: run `hero-skills:architecture review` first and offer its
-`sync` for anything it reports stale — or to bootstrap the file when it is
-missing (the same offer bootstrap-mode makes; a spec-less update sync judges
-the rows below against an unverified read, and must say so). The refreshed
-map is what the rows below are judged against. Findings:
+`sync` for anything it reports stale — or to bootstrap the file when it
+reports `MISSING` (the same offer bootstrap-mode makes). The refreshed map
+is what the rows below are judged against; if the user declines the offered
+`sync`, say the rows are judged against a stale (or absent) map and carry
+the review's findings into the report below — a declined refresh must never
+make the staleness disappear, and an unverified judgment must never look
+verified. Findings:
 
 - **stale** — the target head moved past a feature's `target_ref`: diff the
   feature's target paths between the two SHAs and summarize what actually

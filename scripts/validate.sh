@@ -300,9 +300,11 @@ fi
 # calling pipeline breaks at that step (there is no per-caller allowlist).
 # Keep this list in sync with one-shot's step→skill mapping AND wayfare
 # do-next's tiers — `one-shot` is here because re-adding its flag would
-# silently break do-next. `preflight` is intentionally absent — one-shot runs
+# silently break do-next. `architecture` is chained three ways: wayfare sync
+# runs its review/sync in both modes, and think-it-through's `arch` dispatch
+# delegates to it. `preflight` is intentionally absent — one-shot runs
 # it via scripts/preflight.sh, not the Skill tool, so it may stay user-only.
-CHAINED_SKILLS="think-it-through push-pr review-pr respond-to-comments ship-pr one-shot"
+CHAINED_SKILLS="think-it-through push-pr review-pr respond-to-comments ship-pr one-shot architecture"
 for chained in $CHAINED_SKILLS; do
   chained_file="$SKILLS_DIR/$chained/SKILL.md"
   # A missing chained skill silently breaks one-shot at that step, so error
@@ -365,6 +367,41 @@ for absorbed in $ABSORBED_SKILLS; do
     pass "no dangling references to deleted skill '$absorbed'"
   fi
 done
+
+echo ""
+echo "────────────────────────────"
+
+# ── skill-reference resolution guard ───────────────────────────────
+# `hero-skills:NAME` references fan out across skills, README, and
+# PIPELINES.md; a renamed or deleted skill rots every one of them silently.
+# ABSORBED_SKILLS above is the hand-curated tail of that class — this is the
+# generic half: every referenced name must resolve to skills/NAME/SKILL.md.
+# Lineage notes ("absorbed the former hero-skills:X") are exempt, same rule
+# as the absorbed guard.
+REF_NAMES=$(grep -rhoE 'hero-skills:[a-z][a-z0-9-]*' --include='*.md' \
+  "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT/PIPELINES.md" 2>/dev/null \
+  | sort -u | cut -d: -f2)
+DANGLING_REFS=0
+for ref in $REF_NAMES; do
+  [[ -f "$SKILLS_DIR/$ref/SKILL.md" ]] && continue
+  # Trailing-boundary match so `one-shot` never swallows a hit on `one-shots`.
+  HITS=$(grep -rnE "hero-skills:$ref([^a-z0-9-]|\$)" --include='*.md' \
+    "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT/PIPELINES.md" 2>/dev/null \
+    | grep -viE 'absorb' || true)
+  [[ -z "$HITS" ]] && continue # lineage-only references are fine
+  DANGLING_REFS=1
+  while IFS= read -r hit; do
+    hit_file="${hit%%:*}"
+    hit_line=$(printf '%s' "$hit" | cut -d: -f2)
+    error "'hero-skills:$ref' does not resolve to skills/$ref/SKILL.md" \
+      "${hit_file#"$PLUGIN_ROOT"/}" \
+      "$hit_line" \
+      "Point the reference at the skill's current name, or add lineage framing ('absorbed the former $ref ...') if it is a history note"
+  done <<< "$HITS"
+done
+if [[ "$DANGLING_REFS" = 0 ]]; then
+  pass "all hero-skills:NAME references resolve to existing skills"
+fi
 
 echo ""
 echo "────────────────────────────"

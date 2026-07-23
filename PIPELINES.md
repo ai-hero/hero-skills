@@ -89,6 +89,12 @@ Because nothing else observes the codebase on the store's behalf, Step 1 also
 re-checks a resolved item's `success` criteria against reality — `status: todo`
 only means nobody edited the file, not that the work is still outstanding.
 
+**Architecture chains.** `wayfare sync` (both modes) runs
+`hero-skills:architecture review` — and offers its `sync` — before judging
+the roadmap, and `think-it-through` delegates a leading `arch` argument to
+the same skill. Both edges require `architecture` to stay model-invocable
+(guarded by validate.sh's `CHAINED_SKILLS`).
+
 `mark-ready` is split from `self-review` so the conversion from draft → ready
 is a visible, separately-gated step. `await-review` is split from `respond`
 so the poll-for-bot phase is visible even when there is nothing to respond to.
