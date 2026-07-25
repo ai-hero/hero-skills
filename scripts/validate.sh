@@ -303,9 +303,12 @@ fi
 # would silently break `wayfare next`. `architecture` is chained three
 # ways: wayfare sync runs its review/sync in both modes, and
 # think-it-through's `arch` dispatch
-# delegates to it. `preflight` is intentionally absent — one-shot runs
+# delegates to it. `handoff` is chained by wayfare sync's design-feedback
+# finding, which delivers feedback to the target-design repo via
+# `handoff --repo` rather than filing issues itself. `preflight` is
+# intentionally absent — one-shot runs
 # it via scripts/preflight.sh, not the Skill tool, so it may stay user-only.
-CHAINED_SKILLS="think-it-through push-pr review-pr respond-to-comments ship-pr one-shot architecture"
+CHAINED_SKILLS="think-it-through push-pr review-pr respond-to-comments ship-pr one-shot architecture handoff"
 for chained in $CHAINED_SKILLS; do
   chained_file="$SKILLS_DIR/$chained/SKILL.md"
   # A missing chained skill silently breaks one-shot at that step, so error

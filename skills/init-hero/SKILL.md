@@ -53,7 +53,7 @@ Each skill needs specific information to work well. This skill figures out what'
 | `hero-skills:review-pr` | Code Quality (pre-commit), Code Review Agent (bot username — to dedupe its comments) |
 | `hero-skills:harden` | Registry, language/framework, dependency files per project |
 | `hero-skills:architecture` | Repo type, project list, deployment platform |
-| `hero-skills:wayfare` | Wayfare (source-repo, target-repo, target-branch, target-path) |
+| `hero-skills:wayfare` | Wayfare (source-repo, target-repo, target-branch, target-path, ux-flow) |
 | `hero-skills:create-project` | Repo type, coding conventions, code quality tools, project scaffold patterns |
 | `hero-skills:setup-dev` | Required tools, recommended tools, MCP servers |
 | `hero-skills:respond-to-comments` | Code Review Agent (agent, trigger, poll-method, bot-username) |
@@ -931,6 +931,7 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - target-repo: none # OWNER/NAME, a local path, or a git URL; none disables the target substrate
 - target-branch: main
 - target-path: none # optional subtree holding the target design
+- ux-flow: none # optional path to the UX prototype flow / guided tour; none = the design has none
 
 ## Developer Setup
 <!-- What every developer needs installed to work on this project.

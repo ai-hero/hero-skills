@@ -95,6 +95,19 @@ the roadmap, and `think-it-through` delegates a leading `arch` argument to
 the same skill. Both edges require `architecture` to stay model-invocable
 (guarded by validate.sh's `CHAINED_SKILLS`).
 
+**The design return channel.** Every other edge flows target → source. One
+flows back: one-shot logs a divergence it found while building into the
+feature's `## Design Feedback`, and `wayfare sync` delivers the undelivered
+entries to the target-design repo via `hero-skills:handoff --repo` — the only
+transport, since `.plans/` is git-ignored and wayfare never writes the
+target. That edge puts `handoff` in `CHAINED_SKILLS` too.
+
+**one-shot writes one kind of item.** Step 2a's carve-out pushes discovered
+or mis-scoped work out of the running item into its own `.plans/` item
+(`origin: one-shot`), which is how the one-item-one-PR scope guard survives
+contact with implementation. Everything else in the store is authored by the
+producers above.
+
 `mark-ready` is split from `self-review` so the conversion from draft → ready
 is a visible, separately-gated step. `await-review` is split from `respond`
 so the poll-for-bot phase is visible even when there is nothing to respond to.

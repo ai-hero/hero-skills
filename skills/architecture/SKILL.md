@@ -218,9 +218,11 @@ modes).
 
 ## Who else touches the file
 
-- **`hero-skills:wayfare`** derives feature ordering from Boundaries'
-  dependency direction; its sync runs `review` first and offers `sync` when
-  the file is missing or stale.
+- **`hero-skills:wayfare`** uses Boundaries' dependency direction to order the
+  **subtasks inside** a feature — each feature is a vertical slice that cuts
+  down through these layers, and this file says in what order. It does **not**
+  order the features themselves; that comes from the user journey. Its sync
+  runs `review` first and offers `sync` when the file is missing or stale.
 - **`hero-skills:think-it-through`** grills against the file in Feature mode,
   and after settling a one-way-door decision offers to append it to
   `## Decisions` (dated entry, same format) — the grilled answers are the
@@ -248,8 +250,9 @@ modes).
 ## Next steps
 
 - **Rows confirmed and applied, or file freshly bootstrapped**: suggest
-  `hero-skills:wayfare sync` if a roadmap exists — features are ordered by
-  this file's dependency direction, so a changed map can re-order the route.
+  `hero-skills:wayfare sync` if a roadmap exists — a changed map changes how
+  each feature's slice cuts through the layers, so planned subtask order can
+  need revisiting even though the feature order (the user journey) does not.
 - **Findings reported but not applied**: `Next step: hero-skills:architecture
   sync — apply the confirmed rows`.
 - **File holds**: nothing to do until the code moves.
