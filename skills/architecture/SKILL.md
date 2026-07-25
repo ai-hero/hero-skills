@@ -187,8 +187,8 @@ context (an area to focus on, or a decision to record).
    - **obsolete** — a section describing something the code dropped.
    - **defect** — missing/malformed `Source ref`; a missing or extra
      top-level section (the five-section skeleton is the contract wayfare
-     navigates by — a file without `## Boundaries` breaks its ordering
-     silently); a Decisions entry changed or removed since `SOURCE_REF`'s
+     navigates by — a file without `## Boundaries` leaves it with no layer map
+     to order a slice's subtasks by, silently); a Decisions entry changed or removed since `SOURCE_REF`'s
      version of the file (`git show "$SOURCE_REF":ARCHITECTURE.md` makes
      append-only checkable — check it); or content that violates the Hard
      Rule (restated code detail): propose deleting or lifting it to the rule

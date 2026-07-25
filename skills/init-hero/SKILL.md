@@ -911,10 +911,11 @@ After the user responds, merge confirmed findings + user answers and write `HERO
      triggers; a skill alone depends on model discretion. -->
 
 <!-- For a project with a frontend but no design system, record the source so
-     recomponentize-ui knows what to pull primitives from:
-- role: consumer
-- source: shadcn        # or mui, chakra, mantine, antd, none
-- atomic-layers: true
+     recomponentize-ui knows what to pull primitives from (indented — a `- key:`
+     at column 1 inside a comment is still read as live config by hero_field):
+       - role: consumer
+       - source: shadcn        # or mui, chakra, mantine, antd, none
+       - atomic-layers: true
 -->
 
 ## Code Quality
@@ -931,7 +932,15 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - target-repo: none # OWNER/NAME, a local path, or a git URL; none disables the target substrate
 - target-branch: main
 - target-path: none # optional subtree holding the target design
-- ux-flow: none # optional path to the UX prototype flow / guided tour; none = the design has none
+<!-- ux-flow: path of the UX prototype flow / guided tour in the target repo, or
+     `none` if the design genuinely has none. Left unset on purpose: unset means
+     "nobody has looked yet", which is what wayfare needs in order to go looking.
+     Writing `none` here would assert "looked, there isn't one" on your behalf and
+     permanently suppress its no-ux-flow report. Uncomment and set a real path:
+       - ux-flow: design/flows/
+     NOTE the leading indent on that example — hero_field skips fenced blocks but
+     NOT HTML comments, so a `- key:` at column 1 inside a comment is read as live
+     config. Keep commented examples indented. -->
 
 ## Developer Setup
 <!-- What every developer needs installed to work on this project.

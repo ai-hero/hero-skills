@@ -97,16 +97,24 @@ the same skill. Both edges require `architecture` to stay model-invocable
 
 **The design return channel.** Every other edge flows target → source. One
 flows back: one-shot logs a divergence it found while building into the
-feature's `## Design Feedback`, and `wayfare sync` delivers the undelivered
-entries to the target-design repo via `hero-skills:handoff --repo` — the only
-transport, since `.plans/` is git-ignored and wayfare never writes the
-target. That edge puts `handoff` in `CHAINED_SKILLS` too.
+feature's `## Design Feedback`, and `wayfare sync` delivers it. Two
+destinations, no third: a GitHub target gets an issue wayfare files itself
+(entries verbatim plus a manifest, destination confirmed in-session), and
+anything else gets a packet under `$STORE/.feedback/` that the user delivers
+by hand. `.plans/` is git-ignored and wayfare never writes the target, so
+there is no other way out. Delivery deliberately does *not* route through
+`hero-skills:handoff`: that skill distills the *current* conversation, which
+would both narrate the wrong session and carry this repo's branches and PR
+numbers into a third party's tracker. See
+`skills/wayfare/references/design-feedback.md`.
 
-**one-shot writes one kind of item.** Step 2a's carve-out pushes discovered
-or mis-scoped work out of the running item into its own `.plans/` item
-(`origin: one-shot`), which is how the one-item-one-PR scope guard survives
-contact with implementation. Everything else in the store is authored by the
-producers above.
+**one-shot authors only Step 2a items.** Step 2a pushes discovered or
+mis-scoped work out of the running item into its own `.plans/` item — a
+`kind: feature` carve when it satisfies target-design paths
+(`origin: one-shot`), an ordinary `status: planning` work-item otherwise —
+which is how the one-item-one-PR scope guard survives contact with
+implementation. Everything else in the store is authored by the producers
+above.
 
 `mark-ready` is split from `self-review` so the conversion from draft → ready
 is a visible, separately-gated step. `await-review` is split from `respond`
