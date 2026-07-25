@@ -325,7 +325,12 @@ for chained in $CHAINED_SKILLS; do
   # scaffolding example) can't produce a false positive. Allow leading
   # whitespace on the key.
   CHAINED_FM=$(awk '/^---$/{n++; next} n==1{print} n>=2{exit}' "$chained_file")
-  if printf '%s\n' "$CHAINED_FM" | grep -qE '^[[:space:]]*disable-model-invocation:[[:space:]]*true'; then
+  # Here-string, not `printf | grep -q`. Under `set -o pipefail`, grep -q exits
+  # the moment it matches, which SIGPIPEs the still-writing printf; the pipeline
+  # then reports 141 and the `if` takes the FAILURE branch even though the match
+  # succeeded. The bigger the input, the likelier it fires — so the guard would
+  # start lying precisely as a skill grew.
+  if grep -qE '^[[:space:]]*disable-model-invocation:[[:space:]]*true' <<< "$CHAINED_FM"; then
     DMI_LINE=$(grep -nE '^[[:space:]]*disable-model-invocation:[[:space:]]*true' "$chained_file" | head -1 | cut -d: -f1)
     error "'$chained' is chained by one-shot but is user-only (disable-model-invocation: true)" \
       "skills/$chained/SKILL.md" \
@@ -499,8 +504,12 @@ else
     /<!--/           { next }
     { print }
   ' "$ONE_SHOT")
-  if printf '%s\n' "$ONE_SHOT_ACTIVE" \
-      | grep -qE '(Invoke|Skill tool|^\|).*hero-skills:think-it-through'; then
+  # Here-string rather than `printf | grep -q` — see the pipefail/SIGPIPE note
+  # on the chained-skill guard above. This site is the one that actually bit:
+  # the match sits near the top of one-shot's Step->skill table, so grep -q
+  # exited early and killed printf mid-write, and the guard reported drift that
+  # had not happened.
+  if grep -qE '(Invoke|Skill tool|^\|).*hero-skills:think-it-through' <<< "$ONE_SHOT_ACTIVE"; then
     pass "one-shot's plan step delegates to think-it-through"
   else
     error "one-shot no longer references think-it-through — the plan step has drifted back to planning from scratch" \
