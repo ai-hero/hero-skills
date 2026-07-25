@@ -34,7 +34,16 @@ trap 'rm -rf "$TMP"' EXIT
 # A real repo with a remote, so git calls behave; gh is stubbed per-case.
 REPO="$TMP/repo"
 git init -q "$REPO"
-git -C "$REPO" commit -q --allow-empty -m init
+# Repo-local identity so the fixture does not depend on ambient git config.
+# A CI runner with no global user.name makes the commit below fail, which
+# leaves an unborn HEAD and drops 31 of these 33 cases into failure — loud,
+# but for a reason that has nothing to do with the code under test.
+git -C "$REPO" config user.email "tests@hero-skills.invalid"
+git -C "$REPO" config user.name "hero-skills tests"
+git -C "$REPO" commit -q --allow-empty -m init || {
+  echo "FATAL: fixture setup failed — could not create the initial commit." >&2
+  exit 1
+}
 printf '# H\n\n- default-branch: main\n- bot-username: reviewbot\n' > "$REPO/HERO.md"
 
 make_gh() { # PR_LIST_JSON COMMENTS_JSON
