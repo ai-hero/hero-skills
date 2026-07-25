@@ -53,7 +53,7 @@ Each skill needs specific information to work well. This skill figures out what'
 | `hero-skills:review-pr` | Code Quality (pre-commit), Code Review Agent (bot username — to dedupe its comments) |
 | `hero-skills:harden` | Registry, language/framework, dependency files per project |
 | `hero-skills:architecture` | Repo type, project list, deployment platform |
-| `hero-skills:wayfare` | Wayfare (source-repo, target-repo, target-branch, target-path) |
+| `hero-skills:wayfare` | Wayfare (source-repo, target-repo, target-branch, target-path, ux-flow) |
 | `hero-skills:create-project` | Repo type, coding conventions, code quality tools, project scaffold patterns |
 | `hero-skills:setup-dev` | Required tools, recommended tools, MCP servers |
 | `hero-skills:respond-to-comments` | Code Review Agent (agent, trigger, poll-method, bot-username) |
@@ -911,10 +911,11 @@ After the user responds, merge confirmed findings + user answers and write `HERO
      triggers; a skill alone depends on model discretion. -->
 
 <!-- For a project with a frontend but no design system, record the source so
-     recomponentize-ui knows what to pull primitives from:
-- role: consumer
-- source: shadcn        # or mui, chakra, mantine, antd, none
-- atomic-layers: true
+     recomponentize-ui knows what to pull primitives from (indented — a `- key:`
+     at column 1 inside a comment is still read as live config by hero_field):
+       - role: consumer
+       - source: shadcn        # or mui, chakra, mantine, antd, none
+       - atomic-layers: true
 -->
 
 ## Code Quality
@@ -931,6 +932,15 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - target-repo: none # OWNER/NAME, a local path, or a git URL; none disables the target substrate
 - target-branch: main
 - target-path: none # optional subtree holding the target design
+<!-- ux-flow: path of the UX prototype flow / guided tour in the target repo, or
+     `none` if the design genuinely has none. Left unset on purpose: unset means
+     "nobody has looked yet", which is what wayfare needs in order to go looking.
+     Writing `none` here would assert "looked, there isn't one" on your behalf and
+     permanently suppress its no-ux-flow report. Uncomment and set a real path:
+       - ux-flow: design/flows/
+     NOTE the leading indent on that example — hero_field skips fenced blocks but
+     NOT HTML comments, so a `- key:` at column 1 inside a comment is read as live
+     config. Keep commented examples indented. -->
 
 ## Developer Setup
 <!-- What every developer needs installed to work on this project.
@@ -940,26 +950,26 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 <!-- Only tools the project won't build/run/test without -->
 - TOOL_NAME: MIN_VERSION — WHAT_IT_IS_USED_FOR
 <!-- Examples:
-- node: >=20 — runtime
-- pnpm: >=9 — package manager (NOT npm)
-- uv: >=0.4 — Python package manager
-- docker: any — local dev containers
-- gh: any — PR workflows, CI checks
-- tofu: >=1.6 — infrastructure (NOT terraform)
-- kubectl: any — deployment
+  - node: >=20 — runtime
+  - pnpm: >=9 — package manager (NOT npm)
+  - uv: >=0.4 — Python package manager
+  - docker: any — local dev containers
+  - gh: any — PR workflows, CI checks
+  - tofu: >=1.6 — infrastructure (NOT terraform)
+  - kubectl: any — deployment
 -->
 
 ### Recommended Tools
 <!-- Nice to have, but project works without them -->
 <!-- Examples:
-- pre-commit: auto-runs linters on commit
-- linear: CLI for issue management
+  - pre-commit: auto-runs linters on commit
+  - linear: CLI for issue management
 -->
 
 ### MCP Servers
 <!-- MCP servers that hero skills or Claude need to interact with external tools -->
 <!-- Examples:
-- linear (mcp__linear) — for hero-skills:one-shot issue planning
+  - linear (mcp__linear) — for hero-skills:one-shot issue planning
 - slack (mcp__slack) — for notifications
 -->
 
@@ -1010,10 +1020,10 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 <!-- List anything that deviates from what Claude or a new developer would assume.
      These MUST have a reason. Keep the list short — only genuine exceptions. -->
 <!-- Examples:
-- Use OpenTofu, NOT Terraform — reason: licensing; the team migrated after the BSL change
-- Use pnpm, NOT npm or yarn — reason: strict dependency resolution required for monorepo
-- No default exports — reason: refactoring tools can't track default exports across the codebase
-- DB tests hit real Postgres, never mock — reason: mocked tests passed but prod migration failed in Q3
+  - Use OpenTofu, NOT Terraform — reason: licensing; the team migrated after the BSL change
+  - Use pnpm, NOT npm or yarn — reason: strict dependency resolution required for monorepo
+  - No default exports — reason: refactoring tools can't track default exports across the codebase
+  - DB tests hit real Postgres, never mock — reason: mocked tests passed but prod migration failed in Q3
 -->
 
 ## Projects

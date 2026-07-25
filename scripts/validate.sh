@@ -303,7 +303,11 @@ fi
 # would silently break `wayfare next`. `architecture` is chained three
 # ways: wayfare sync runs its review/sync in both modes, and
 # think-it-through's `arch` dispatch
-# delegates to it. `preflight` is intentionally absent — one-shot runs
+# delegates to it. `handoff` is deliberately NOT here: wayfare's
+# design-feedback delivery files its issue directly rather than routing
+# through handoff, because handoff distills the *current conversation* and
+# would carry this repo's session state into a third party's tracker.
+# `preflight` is intentionally absent — one-shot runs
 # it via scripts/preflight.sh, not the Skill tool, so it may stay user-only.
 CHAINED_SKILLS="think-it-through push-pr review-pr respond-to-comments ship-pr one-shot architecture"
 for chained in $CHAINED_SKILLS; do
@@ -311,10 +315,10 @@ for chained in $CHAINED_SKILLS; do
   # A missing chained skill silently breaks one-shot at that step, so error
   # rather than skip — the list above must always resolve to real skills.
   if [[ ! -f "$chained_file" ]]; then
-    error "one-shot chains '$chained' but skills/$chained/SKILL.md is missing" \
+    error "the pipelines chain '$chained' but skills/$chained/SKILL.md is missing" \
       "skills/$chained/SKILL.md" \
       "" \
-      "Restore the skill, or update one-shot's step→skill mapping and this guard's CHAINED_SKILLS list to match"
+      "Restore the skill, or update the calling skill's step→skill mapping and this guard's CHAINED_SKILLS list to match"
     continue
   fi
   # Scope the check to the YAML frontmatter (first --- ... --- block) so a
@@ -322,14 +326,19 @@ for chained in $CHAINED_SKILLS; do
   # scaffolding example) can't produce a false positive. Allow leading
   # whitespace on the key.
   CHAINED_FM=$(awk '/^---$/{n++; next} n==1{print} n>=2{exit}' "$chained_file")
-  if printf '%s\n' "$CHAINED_FM" | grep -qE '^[[:space:]]*disable-model-invocation:[[:space:]]*true'; then
+  # Here-string, not `printf | grep -q`. Under `set -o pipefail`, grep -q exits
+  # the moment it matches, which SIGPIPEs the still-writing printf; the pipeline
+  # then reports 141 and the `if` takes the FAILURE branch even though the match
+  # succeeded. The bigger the input, the likelier it fires — so the guard would
+  # start lying precisely as a skill grew.
+  if grep -qE '^[[:space:]]*disable-model-invocation:[[:space:]]*true' <<< "$CHAINED_FM"; then
     DMI_LINE=$(grep -nE '^[[:space:]]*disable-model-invocation:[[:space:]]*true' "$chained_file" | head -1 | cut -d: -f1)
-    error "'$chained' is chained by one-shot but is user-only (disable-model-invocation: true)" \
+    error "'$chained' is chained by a hero pipeline but is user-only (disable-model-invocation: true)" \
       "skills/$chained/SKILL.md" \
       "$DMI_LINE" \
-      "Remove the 'disable-model-invocation: true' line — one-shot invokes this skill via the Skill tool and cannot call a user-only skill"
+      "Remove the 'disable-model-invocation: true' line — a hero pipeline invokes this skill via the Skill tool and cannot call a user-only skill"
   else
-    pass "$chained: model-invocable (chainable by one-shot)"
+    pass "$chained: model-invocable (chainable by the hero pipelines)"
   fi
 done
 
@@ -474,8 +483,9 @@ fi
 
 # ── work-item store: producers must have a consumer ────────────────
 # think-it-through, handoff, and harden all WRITE work-items into .plans/
-# (and read the plate back to build on it). one-shot is the only CONSUMER —
-# it resolves an item to execute and marks it done. If that delegation
+# (and read the plate back to build on it). one-shot is the only skill that
+# CONSUMES an item — resolving it to execute and marking it done. (It also
+# authors Step 2a carve-outs, but it never plans one from scratch.) If that delegation
 # is ever edited away, the store silently becomes write-only: items pile up,
 # nothing marks them done, and one-shot goes back to planning from scratch
 # while ignoring the plate. Nothing else in this repo would catch that.
@@ -496,8 +506,12 @@ else
     /<!--/           { next }
     { print }
   ' "$ONE_SHOT")
-  if printf '%s\n' "$ONE_SHOT_ACTIVE" \
-      | grep -qE '(Invoke|Skill tool|^\|).*hero-skills:think-it-through'; then
+  # Here-string rather than `printf | grep -q` — see the pipefail/SIGPIPE note
+  # on the chained-skill guard above. This site is the one that actually bit:
+  # the match sits near the top of one-shot's Step->skill table, so grep -q
+  # exited early and killed printf mid-write, and the guard reported drift that
+  # had not happened.
+  if grep -qE '(Invoke|Skill tool|^\|).*hero-skills:think-it-through' <<< "$ONE_SHOT_ACTIVE"; then
     pass "one-shot's plan step delegates to think-it-through"
   else
     error "one-shot no longer references think-it-through — the plan step has drifted back to planning from scratch" \

@@ -34,7 +34,19 @@ trap 'rm -rf "$TMP"' EXIT
 # A real repo with a remote, so git calls behave; gh is stubbed per-case.
 REPO="$TMP/repo"
 git init -q "$REPO"
-git -C "$REPO" commit -q --allow-empty -m init
+# Repo-local identity so the fixture does not depend on ambient git config.
+# A CI runner with no global user.name makes the commit below fail and print a
+# `fatal: empty ident name` into the log. Measured: none of the 33 cases
+# currently depend on that commit existing, so the failure is cosmetic today —
+# the guard is here so it stays that way. If a future case does start depending
+# on a real HEAD, the `|| exit 1` below makes the setup failure loud instead of
+# letting that case quietly assert against an unborn HEAD.
+git -C "$REPO" config user.email "tests@hero-skills.invalid"
+git -C "$REPO" config user.name "hero-skills tests"
+git -C "$REPO" commit -q --allow-empty -m init || {
+  echo "FATAL: fixture setup failed — could not create the initial commit." >&2
+  exit 1
+}
 printf '# H\n\n- default-branch: main\n- bot-username: reviewbot\n' > "$REPO/HERO.md"
 
 make_gh() { # PR_LIST_JSON COMMENTS_JSON
@@ -174,6 +186,16 @@ done
 
 if [ "$FAIL" -gt 0 ]; then
   echo "resume-state: $PASS passed, $FAIL FAILED"
+  exit 1
+fi
+# Floor on the case count. Neither suite runs under `set -e`, so a setup line
+# that starts failing does not fail the run — it just stops incrementing PASS,
+# and a block whose glob went empty runs zero iterations. Without this, a
+# refactor that silently stops executing 25 cases still reports 0 failures and
+# exits 0. The whole reason these cases exist is that each one could be wrong
+# SILENTLY; the suite must not be able to go quiet the same way.
+if [ "$PASS" -lt 33 ]; then
+  echo "resume-state: only $PASS cases ran, expected >= 33 — a block stopped executing" >&2
   exit 1
 fi
 echo "resume-state: $PASS passed"

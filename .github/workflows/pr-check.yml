@@ -37,3 +37,12 @@ jobs:
 
       - name: Validate skills plugin structure
         run: bash scripts/validate.sh
+
+      # These 129 cases exist because each one was, or could again be, wrong
+      # SILENTLY. Until now they ran nowhere — not in CI, not in pre-commit —
+      # so the guarantee they encode was only as good as someone remembering
+      # to run them by hand.
+      - name: Shell library unit tests
+        run: |
+          bash scripts/hero-lib.test.sh
+          bash scripts/resume-state.test.sh

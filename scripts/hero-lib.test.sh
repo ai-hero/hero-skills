@@ -487,4 +487,14 @@ if [ "$FAIL" -gt 0 ]; then
   echo "hero-lib: $PASS passed, $FAIL FAILED"
   exit 1
 fi
+# Floor on the case count. Neither suite runs under `set -e`, so a setup line
+# that starts failing does not fail the run — it just stops incrementing PASS,
+# and a block whose glob went empty runs zero iterations. Without this, a
+# refactor that silently stops executing 25 cases still reports 0 failures and
+# exits 0. The whole reason these cases exist is that each one could be wrong
+# SILENTLY; the suite must not be able to go quiet the same way.
+if [ "$PASS" -lt 96 ]; then
+  echo "hero-lib: only $PASS cases ran, expected >= 96 — a block stopped executing" >&2
+  exit 1
+fi
 echo "hero-lib: $PASS passed"
