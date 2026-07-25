@@ -950,26 +950,26 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 <!-- Only tools the project won't build/run/test without -->
 - TOOL_NAME: MIN_VERSION — WHAT_IT_IS_USED_FOR
 <!-- Examples:
-- node: >=20 — runtime
-- pnpm: >=9 — package manager (NOT npm)
-- uv: >=0.4 — Python package manager
-- docker: any — local dev containers
-- gh: any — PR workflows, CI checks
-- tofu: >=1.6 — infrastructure (NOT terraform)
-- kubectl: any — deployment
+  - node: >=20 — runtime
+  - pnpm: >=9 — package manager (NOT npm)
+  - uv: >=0.4 — Python package manager
+  - docker: any — local dev containers
+  - gh: any — PR workflows, CI checks
+  - tofu: >=1.6 — infrastructure (NOT terraform)
+  - kubectl: any — deployment
 -->
 
 ### Recommended Tools
 <!-- Nice to have, but project works without them -->
 <!-- Examples:
-- pre-commit: auto-runs linters on commit
-- linear: CLI for issue management
+  - pre-commit: auto-runs linters on commit
+  - linear: CLI for issue management
 -->
 
 ### MCP Servers
 <!-- MCP servers that hero skills or Claude need to interact with external tools -->
 <!-- Examples:
-- linear (mcp__linear) — for hero-skills:one-shot issue planning
+  - linear (mcp__linear) — for hero-skills:one-shot issue planning
 - slack (mcp__slack) — for notifications
 -->
 
@@ -1020,10 +1020,10 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 <!-- List anything that deviates from what Claude or a new developer would assume.
      These MUST have a reason. Keep the list short — only genuine exceptions. -->
 <!-- Examples:
-- Use OpenTofu, NOT Terraform — reason: licensing; the team migrated after the BSL change
-- Use pnpm, NOT npm or yarn — reason: strict dependency resolution required for monorepo
-- No default exports — reason: refactoring tools can't track default exports across the codebase
-- DB tests hit real Postgres, never mock — reason: mocked tests passed but prod migration failed in Q3
+  - Use OpenTofu, NOT Terraform — reason: licensing; the team migrated after the BSL change
+  - Use pnpm, NOT npm or yarn — reason: strict dependency resolution required for monorepo
+  - No default exports — reason: refactoring tools can't track default exports across the codebase
+  - DB tests hit real Postgres, never mock — reason: mocked tests passed but prod migration failed in Q3
 -->
 
 ## Projects

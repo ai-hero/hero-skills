@@ -195,7 +195,9 @@ if [ "$rc" = 2 ]; then
 elif [ "$rc" != 0 ]; then
   TARGET_PATH=""
 fi
-[ "$TARGET_PATH" = none ] && TARGET_PATH=""
+# Lowercase first, same as ux-flow below: `target-path: None` must not survive
+# as the literal subtree "None" and reach git as a pathspec.
+[ "$(printf '%s' "$TARGET_PATH" | tr '[:upper:]' '[:lower:]')" = none ] && TARGET_PATH=""
 
 # ux-flow also reaches `git show`/`git diff` in pathspec position, so it gets
 # the same rc split. Three states must stay distinct: UNSET (never looked —
@@ -265,12 +267,19 @@ option the moment it is word-split ahead of `--`. So also treat an **embedded**
 `-` in `$TARGET_PATH` or `$UX_FLOW` as REJECTED at Step 0, and quote every
 expansion.
 
-**The `ux-flow` sentinels are control values, never pathspecs.** `UNSET`,
-`NONE`, and `REJECTED` are bare words that are also perfectly valid relative
-paths — `git show "$SHA:UNSET"` fails as "path does not exist", which is
-indistinguishable from a genuinely missing flow. So throughout this skill,
-"`ux-flow` is set" / "configured" means **`$UX_FLOW` is none of those three**;
-only then is it a path, and only then may it reach git.
+**Sentinels are control values, never pathspecs.** `UNSET`, `NONE`, and
+`REJECTED` are bare words that are also perfectly valid relative paths —
+`git show "$SHA:UNSET"` fails as "path does not exist", which is
+indistinguishable from a genuinely missing flow. So throughout this skill:
+
+- "`ux-flow` is set" / "configured" means **`$UX_FLOW` is none of `UNSET`,
+  `NONE`, `REJECTED`**;
+- "`target-path` is set" means **`$TARGET_PATH` is neither `""` nor
+  `REJECTED`** (it has no `UNSET`/`NONE` — absent and `none` both collapse to
+  `""`, which is why `${TARGET_PATH:+…}` is safe for it and not for ux-flow).
+
+Only a value that passes its own test is a path, and only then may it reach
+git.
 
 Then dispatch: `next` as the sole argument — or its old name `do-next`,
 worth a one-line rename note — runs the `next` verb below. The verb takes
@@ -303,13 +312,15 @@ READY/blocked → active → review → done), each with:
   pick (per its selection tiers), `wayfare sync` for stale rows, defects, and
   undelivered design feedback.
 
-Print one banner line above the groups when `UX_FLOW` is `UNSET` or
-`REJECTED`, or when it holds a path that does not resolve at the target head:
+Print one banner line above the groups when `UX_FLOW` is `UNSET`, or when it
+holds a path that does not resolve at the target head:
 the roadmap's slices were cut without a UX flow to cut them from, so their
 Complete-ness is unverified. Say it once per run, not per feature.
 
 `NONE` prints **nothing** — it is a settled answer, not a warning. Banner-ing
 it would be exactly the "asking again" that setting `none` exists to stop.
+`REJECTED` never reaches here at all: Step 0 halts every verb on it, so a
+banner branch for it would be licensing the degradation that STOP forbids.
 The not-resolving case is the one that would otherwise hide: a configured
 `ux-flow` whose path the design later deleted reads as healthy on every verb
 that never opens it, so `next` resolves it once per run alongside the target
@@ -492,13 +503,17 @@ stopping point.
    2. `review` feature — its PR is recorded in `## Comments` (one-shot
       appends the URL at PR-open). **Check the PR's state first**: open →
       `gh pr checkout` its branch, then invoke one-shot to resume; merged →
-      check `## Comments` for a recorded close-out decision **before**
-      assuming an oversight — a close-out the user *declined* leaves exactly
-      the same `reviewing` + merged state as one that was simply missed, and
-      re-running Step 9a against a decision already made is how that gate
-      self-grants. No such entry → verify Subtasks/DoD per one-shot Step 9a
-      and flip to `done` (or back to `implementing` if the merge covered
-      part of the checklist); no PR found → treat as `active` (tier 1).
+      check `## Comments` for a `[close-out: …]` marker **before** assuming an
+      oversight — a close-out the user *declined* leaves exactly the same
+      `reviewing` + merged state as one that was simply missed, and re-running
+      Step 9a against a decision already made is how that gate self-grants.
+      Latest marker wins. Two branches, both defined:
+      **`[close-out: declined DATE]`** → this is a settled open item, not a
+      stuck one. Report it as such with its date, skip it, and continue to
+      tier 3 — never re-ask, and never leave it rendering as blocked.
+      **No marker** (or `[close-out: accepted …]` with work still open) →
+      verify Subtasks/DoD per one-shot Step 9a and flip to `done` (or back to
+      `implementing` if the merge covered part of the checklist); no PR found → treat as `active` (tier 1).
    3. `READY` feature — planned, marked, unblocked: invoke one-shot on it.
    4. `plan` feature — resume `hero-skills:think-it-through FEATURE_ID`
       (Feature mode), then continue per step 2.
