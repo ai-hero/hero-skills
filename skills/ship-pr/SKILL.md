@@ -27,7 +27,7 @@ Now running: verdict
 
 Mapping to the steps below: Step 3 = `gates`, Step 4 = `trigger`, Steps 5-6 = `verdict`, Step 7a = `merge`, Step 7b = `reset` (merged-branch cleanup — see Step 7b's own note), Step 7e = `verify-deploy` (platform-agnostic post-merge deployment-health check). Steps 1-2 are pre-flight (PR identification, workflow-on-default-branch check) and Step 8 is the summary — neither appears in the DAG. Steps 7c (REQUEST_CHANGES) and 7d (WORKFLOW_FAILED) are alternative end states that *replace* `merge`, `reset`, and `verify-deploy` — there is no merge to verify deployment health for. On those paths render `(✗) merge → ( ) reset → ( ) verify-deploy` and stop, never `(✓) merge → (✓) reset → (✓) verify-deploy`.
 
-The workflow lives at `.github/workflows/auto-approve.yml`. **GitHub only honors `issue_comment`-triggered workflows that already exist on the default branch**, so the workflow file must be merged to `main` (or your default branch) before this skill can do anything useful. This skill checks that first.
+The workflow lives at `.github/workflows/auto-approve.yaml` (or `.yml` — both are honoured). **GitHub only honors `issue_comment`-triggered workflows that already exist on the default branch**, so the workflow file must be merged to `main` (or your default branch) before this skill can do anything useful. This skill checks that first.
 
 ## Arguments
 
@@ -37,7 +37,7 @@ The workflow lives at `.github/workflows/auto-approve.yml`. **GitHub only honors
 ## Prerequisites
 
 - `gh` CLI installed and authenticated with `repo` scope
-- `.github/workflows/auto-approve.yml` present on the default branch — run `hero-skills:init-hero --update` to install it
+- `.github/workflows/auto-approve.yaml` (or `.yml`) present on the default branch — run `hero-skills:init-hero --update` to install it
 - The repo has an `ANTHROPIC_API_KEY` secret configured (used by the workflow)
 - `kubectl`/`argocd` (k8s deploys) or `curl`-reachable health endpoints (VM/PaaS) — only needed if HERO.md declares a deployment platform
 
@@ -90,22 +90,34 @@ Record `PR_NUMBER`, `PR_URL`, `PR_BRANCH`, `BASE_BRANCH`, `IS_DRAFT`.
 
 GitHub only triggers `issue_comment` workflows that already exist on the default branch. If the file is only on the PR branch, the comment will be a no-op.
 
+Probe **both** YAML spellings. GitHub honours `.yml` and `.yaml` equally, so a
+fleet assembled over time carries some of each — treating one as canonical
+reports MISSING for a workflow that is present and active, and stops the ship
+on a filename rather than on anything real.
+
 ```bash
 DEFAULT_BRANCH=$(gh api "/repos/{owner}/{repo}" --jq '.default_branch')
-gh api "/repos/{owner}/{repo}/contents/.github/workflows/auto-approve.yml?ref=$DEFAULT_BRANCH" --jq '.path' 2>/dev/null \
-  || echo "MISSING"
+WF_PATH=""
+for ext in yaml yml; do
+  if gh api "/repos/{owner}/{repo}/contents/.github/workflows/auto-approve.$ext?ref=$DEFAULT_BRANCH" \
+       --jq '.path' >/dev/null 2>&1; then
+    WF_PATH=".github/workflows/auto-approve.$ext"
+    break
+  fi
+done
+[ -n "$WF_PATH" ] && echo "$WF_PATH" || echo "MISSING"
 ```
 
 **If MISSING:** STOP and show:
 
 ```
-auto-approve.yml is not on the default branch (DEFAULT_BRANCH).
+No .github/workflows/auto-approve.yaml (or .yml) on the default branch (DEFAULT_BRANCH).
 
 GitHub only honors issue_comment workflows that already exist on the default branch.
 Posting @auto-approve here will silently do nothing.
 
 Fix:
-  1. Run hero-skills:init-hero --update to install .github/workflows/auto-approve.yml
+  1. Run hero-skills:init-hero --update to install the workflow
   2. Open a PR for that workflow file alone, get it reviewed and merged to DEFAULT_BRANCH
   3. Re-run hero-skills:ship-pr
 ```
@@ -262,7 +274,7 @@ If no run appears within ~50 seconds, surface a clear error:
 Could not find an Auto Approve workflow run for the @auto-approve comment.
 
 Common causes:
-  - auto-approve.yml is not on the default branch (re-check Step 2)
+  - auto-approve.yaml/.yml is not on the default branch (re-check Step 2)
   - The ANTHROPIC_API_KEY repo secret is missing
   - GitHub Actions is disabled for this repo
 

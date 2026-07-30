@@ -337,12 +337,14 @@ grep -l "test\|lint\|build\|deploy\|release" .github/workflows/*.yml 2>/dev/null
 - Which workflows exist and what they do (test, lint, build images, deploy)
 - Whether CI runs on PR, push to main, or both
 - Required status checks (signals what must pass before merge)
-- Whether `.github/workflows/auto-approve.yml` already exists — needed by `hero-skills:ship-pr`
+- Whether `.github/workflows/auto-approve.yaml` (or `.yml`) already exists — needed by `hero-skills:ship-pr`
 
 ```bash
 # Check whether the hero-skills auto-approve workflow is installed
-ls .github/workflows/auto-approve.yml 2>/dev/null && \
-  grep -q '@auto-approve' .github/workflows/auto-approve.yml 2>/dev/null && \
+# Either spelling counts — GitHub honours both, and repos in this family
+# carry a mix. Checking only one reinstalls a workflow that already exists.
+AA=$(ls .github/workflows/auto-approve.yaml .github/workflows/auto-approve.yml 2>/dev/null | head -1)
+[ -n "$AA" ] && grep -q '@auto-approve' "$AA" 2>/dev/null && \
   echo "AUTO_APPROVE_INSTALLED" || echo "AUTO_APPROVE_MISSING"
 
 # And whether it has been merged to the default branch — issue_comment
@@ -355,7 +357,8 @@ DEFAULT_BRANCH=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null |
 # possibly-stale ref produce a silent false AUTO_APPROVE_ON_DEFAULT that
 # suppresses the "will be a no-op" warning the user actually needs.
 if git fetch origin "$DEFAULT_BRANCH" 2>/dev/null; then
-  git cat-file -e "origin/$DEFAULT_BRANCH:.github/workflows/auto-approve.yml" 2>/dev/null \
+  { git cat-file -e "origin/$DEFAULT_BRANCH:.github/workflows/auto-approve.yaml" 2>/dev/null \
+    || git cat-file -e "origin/$DEFAULT_BRANCH:.github/workflows/auto-approve.yml" 2>/dev/null; } \
     && echo "AUTO_APPROVE_ON_DEFAULT" || echo "AUTO_APPROVE_NOT_ON_DEFAULT"
 else
   echo "AUTO_APPROVE_ON_DEFAULT_UNKNOWN (fetch failed — verify manually before trusting this check)"

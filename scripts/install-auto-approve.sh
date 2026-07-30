@@ -20,7 +20,21 @@ fi
 
 TARGET_ROOT="${1:-$(git rev-parse --show-toplevel)}"
 TARGET_DIR="$TARGET_ROOT/.github/workflows"
+
+# Adopt an existing workflow under EITHER spelling as the target. GitHub runs
+# both, so writing auto-approve.yml beside an existing auto-approve.yaml does
+# not "install" anything — it leaves two live issue_comment workflows, which
+# means two Claude verifications and two review submissions per @auto-approve
+# comment, and ship-pr polling whichever of the two same-named workflows the
+# API happens to return first. Every guard below is keyed to TARGET, so a
+# TARGET that cannot see the existing file has no guard at all.
 TARGET="$TARGET_DIR/auto-approve.yml"
+for ext in yaml yml; do
+  if [[ -f "$TARGET_DIR/auto-approve.$ext" ]]; then
+    TARGET="$TARGET_DIR/auto-approve.$ext"
+    break
+  fi
+done
 
 mkdir -p "$TARGET_DIR"
 
