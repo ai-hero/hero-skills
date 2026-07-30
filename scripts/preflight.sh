@@ -342,17 +342,29 @@ check_repo() {
     emit OK "repo: HERO.md fresh"
   fi
 
-  # 3. auto-approve.yml on default branch (Step 12 needs it). Reuse the
+  # 3. auto-approve workflow on default branch (Step 12 needs it). Reuse the
   # GH_AUTH_OK flag set by check_tooling instead of re-shelling gh auth.
+  #
+  # Both spellings, and this one is a BLOCKER: probing only .yml stopped
+  # one-shot at Step 0.3 — before any work started — against a repo whose
+  # workflow was present and active under .yaml, with fix advice telling the
+  # user to install a file they already had.
   if [ "${GH_AUTH_OK:-false}" = "true" ]; then
-    if gh api "/repos/{owner}/{repo}/contents/.github/workflows/auto-approve.yml?ref=$DEFAULT_BRANCH" \
-        --jq '.path' >/dev/null 2>&1; then
-      emit OK "repo: auto-approve.yml present on $DEFAULT_BRANCH"
+    AA_ON_DEFAULT=""
+    for ext in yaml yml; do
+      if gh api "/repos/{owner}/{repo}/contents/.github/workflows/auto-approve.$ext?ref=$DEFAULT_BRANCH" \
+          --jq '.path' >/dev/null 2>&1; then
+        AA_ON_DEFAULT="auto-approve.$ext"
+        break
+      fi
+    done
+    if [ -n "$AA_ON_DEFAULT" ]; then
+      emit OK "repo: $AA_ON_DEFAULT present on $DEFAULT_BRANCH"
     else
-      emit BLOCKER "repo: .github/workflows/auto-approve.yml not on $DEFAULT_BRANCH — Step 12 (ship) will be a no-op. Run hero-skills:init-hero --update, then merge the workflow file to $DEFAULT_BRANCH."
+      emit BLOCKER "repo: no .github/workflows/auto-approve.yaml (or .yml) on $DEFAULT_BRANCH — Step 12 (ship) will be a no-op. Run hero-skills:init-hero --update, then merge the workflow file to $DEFAULT_BRANCH."
     fi
   else
-    emit SKIP "repo: gh unavailable — cannot check auto-approve.yml remotely"
+    emit SKIP "repo: gh unavailable — cannot check the auto-approve workflow remotely"
   fi
 
   # 4. No in-progress merge / rebase / cherry-pick. Resolve each path via
