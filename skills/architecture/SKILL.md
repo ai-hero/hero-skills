@@ -56,9 +56,14 @@ What belongs — exactly what the code cannot say:
   where it drives voice and copy.
 - **Flows** — the paths a user takes through the system, one focused Mermaid
   flowchart each, with the route/handler path named in each node so a flow
-  stays checkable against the router. **Error, empty, and expired branches are
-  drawn, or the flow is rejected** — the happy path is the one that gets built
-  unprompted. A terminal-state table beats a second diagram.
+  stays checkable against the router. Where a target design repo is
+  configured, wayfare's `ux-flow` is authoritative for the _journey_ and this
+  section records how that journey lands on this codebase's routes — the two
+  are not rival copies, and a disagreement is a finding for `wayfare sync`,
+  not something to resolve by rewriting either one. **Error, empty, and
+  expired branches are drawn, or the flow is rejected** — the happy path is
+  the one that gets built unprompted. A terminal-state table beats a second
+  diagram.
 - **Interaction standards** — how the product must behave: confirm vs undo,
   destructive actions, error wording, the states every data surface owes
   (loading, empty, error, populated), expert-vs-novice defaults.
@@ -93,6 +98,9 @@ project) so no later sync re-derives or misjudges it.
 ## Boundaries
 
 ## Invariants
+
+<!-- These three only where the repo ships a user-facing surface. Omit them
+     entirely otherwise — an empty heading is itself a defect. -->
 
 ## Users
 
@@ -151,10 +159,21 @@ elif [ -e "$ROOT/DESIGN.md" ]; then echo "STOP: DESIGN.md exists but is not read
 else echo "NO_DESIGN_MD"
 fi
 
+# LEGACY_ARCHITECTURE_MD is a third state, distinct from both: the file
+# exists under its pre-rename name. Without this probe, "no DESIGN.md"
+# routes a repo that HAS the document into bootstrap, which writes a second
+# file and orphans the first — along with its append-only Decisions trail,
+# the one thing in it that cannot be re-derived.
+[ -e "$ROOT/ARCHITECTURE.md" ] && echo "LEGACY_ARCHITECTURE_MD"
+
 # Extract + mechanically validate the anchor HERE, before it can reach any
 # git command: the file is repo content (untrusted in a cloned repo), so a
 # non-40-hex value must never exist as a substitutable SOURCE_REF.
 SOURCE_REF=$(sed -n '3s/^> Last updated: .* · Source ref: \([0-9a-f]\{40\}\)$/\1/p' "$ROOT/DESIGN.md" 2>/dev/null)
+# Same grammar, legacy path — a migrating repo's anchor lives in the old file
+# until the rename lands, and reading it is what lets `sync` scope drift
+# instead of treating a documented repo as unanchored.
+[ -n "$SOURCE_REF" ] || SOURCE_REF=$(sed -n '3s/^> Last updated: .* · Source ref: \([0-9a-f]\{40\}\)$/\1/p' "$ROOT/ARCHITECTURE.md" 2>/dev/null)
 [ -n "$SOURCE_REF" ] || SOURCE_REF=UNANCHORED
 
 # Only the sections this skill uses — don't cat the whole HERO.md into
@@ -186,6 +205,17 @@ context (an area to focus on, or a decision to record).
 **Investigate, propose, write only what the user confirms** — in both modes.
 
 **Bootstrap — no DESIGN.md yet.**
+
+**First, if Step 0 printed `LEGACY_ARCHITECTURE_MD`, this is a MIGRATION, not
+a bootstrap — do not author a new file.** The document already exists under
+its pre-rename name, and bootstrapping past it writes a second one while
+orphaning the first, taking its append-only `## Decisions` trail with it — the
+one part of the file nobody can re-derive. Propose, in one confirm: `git mv
+ARCHITECTURE.md DESIGN.md`, retitle the H1 to `# Design`, keep `## Decisions`
+byte-for-byte, and then run **update** mode below, where the sections the old
+file lacks (`Tech stack`, and the product three where the repo has a surface)
+are `uncovered` rows like any other. Same rule as the legacy `specs/` tree
+above, and the same reason: never orphan a trail silently.
 
 1. **Investigate top-down.** Entry points, build/dependency manifests, module
    roots, and HERO.md's sections — enough to name the layers, their
@@ -235,7 +265,12 @@ context (an area to focus on, or a decision to record).
      surface and must be absent — not empty — in one without, so a missing
      product section is a defect only in the first case); a Decisions entry changed or removed since `SOURCE_REF`'s
      version of the file (`git show "$SOURCE_REF":DESIGN.md` makes
-     append-only checkable — check it); or content that violates the Hard
+     append-only checkable — check it. For a repo whose anchor predates the
+     rename that path does not exist at that ref and git exits 128: retry
+     `git show "$SOURCE_REF":ARCHITECTURE.md` before concluding anything, and
+     say which name you read. Neither resolving means the trail is
+     unverifiable this pass — report that, exactly as for a failed diff, and
+     never as an append-only defect); or content that violates the Hard
      Rule (restated code detail): propose deleting or lifting it to the rule
      it was gesturing at.
 3. **Confirm, then write.** Apply confirmed rows. **Decisions are
@@ -288,7 +323,7 @@ modes).
 | Route tables, schemas, signatures    | Restated code goes false silently — the Hard Rule exists for this.    |
 | Writing without confirmation         | Both verbs propose first; writes happen only on confirmation.         |
 | Editing or deleting a Decision entry | Append-only — supersede with a new dated entry; the trail is the value. |
-| A diagram per section                | One focused Boundaries graph; prose carries the rest.                 |
+| A diagram where prose would do       | One Boundaries graph and one flowchart per flow earn their place; nothing else does. |
 | `review` that edits the file         | Review reports; sync writes.                                          |
 | Re-growing a specs/ tree             | One file is the design; splitting it re-invites restated code detail. |
 
