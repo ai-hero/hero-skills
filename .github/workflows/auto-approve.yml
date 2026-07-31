@@ -2,9 +2,23 @@ name: Auto Approve
 
 on:
   # Callable as a reusable workflow: other repos run this exact logic through
-  # a thin caller (uses: … + secrets: inherit) instead of copying the file
-  # and drifting. This repo also triggers it directly on its own PR comments.
+  # a thin caller (uses: … + an explicit secrets map) instead of copying the
+  # file and drifting. This repo also triggers it directly on its own PR
+  # comments.
   workflow_call:
+    # Declaring this is what lets callers pass it explicitly instead of
+    # `secrets: inherit` — GitHub rejects a caller that names a secret the
+    # reusable workflow never declared, which is why the callers used
+    # `inherit` (and tripped semgrep's least-privilege rule) before.
+    # GITHUB_TOKEN is deliberately absent: it is provisioned automatically
+    # and cannot be declared here.
+    secrets:
+      ANTHROPIC_API_KEY:
+        # Not `required: true`. The verify step already fails closed with a
+        # REQUEST_CHANGES verdict posted on the PR when this is unset;
+        # making it required replaces that readable verdict with an opaque
+        # workflow-config error raised before any step runs.
+        required: false
   issue_comment:
     types: [created]
 
