@@ -20,8 +20,15 @@ jobs:
       - name: Validate YAML files
         run: |
           python3 -c "
-          import sys, glob, yaml
-          files = glob.glob('**/*.yml', recursive=True) + glob.glob('**/*.yaml', recursive=True)
+          import sys, yaml
+          from pathlib import Path
+          # rglob, not glob.glob: glob drops any path component starting with a
+          # dot, so the old form skipped .github/workflows/ and
+          # .pre-commit-config.yaml entirely — it validated ONE file repo-wide
+          # and printed OK. A malformed workflow merged green and surfaced only
+          # as GitHub's 'Invalid workflow file' annotation, on main, after the
+          # fact. (glob's include_hidden= would also work, but is 3.11+.)
+          files = [str(p) for p in list(Path('.').rglob('*.yml')) + list(Path('.').rglob('*.yaml'))]
           files = [f for f in files if not f.startswith('.git/')]
           errors = []
           for f in files:
@@ -44,5 +51,10 @@ jobs:
       # to run them by hand.
       - name: Shell library unit tests
         run: |
-          bash scripts/hero-lib.test.sh
-          bash scripts/resume-state.test.sh
+          # Glob rather than enumerate: a newly added scripts/*.test.sh
+          # otherwise runs nowhere, which is the failure this step's own
+          # comment describes.
+          for t in scripts/*.test.sh; do
+            echo "-- $t"
+            bash "$t"
+          done

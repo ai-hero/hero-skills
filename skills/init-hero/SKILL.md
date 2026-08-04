@@ -344,7 +344,12 @@ grep -l "test\|lint\|build\|deploy\|release" .github/workflows/*.yml 2>/dev/null
 # Either spelling counts — GitHub honours both, and repos in this family
 # carry a mix. Checking only one reinstalls a workflow that already exists.
 AA=$(ls .github/workflows/auto-approve.yaml .github/workflows/auto-approve.yml 2>/dev/null | head -1)
-[ -n "$AA" ] && grep -q '@auto-approve' "$AA" 2>/dev/null && \
+# Match the caller's `uses:` line first, then the literal trigger for repos
+# still carrying the old inline copy. Matching only '@auto-approve' made this
+# depend on a COMMENT in the caller — the trigger itself moved into the shared
+# workflow — so trimming that comment would have reported every migrated repo
+# as missing and re-prompted to install what it already has.
+[ -n "$AA" ] && grep -qE 'hero-skills/\.github/workflows/auto-approve\.yml@|@auto-approve' "$AA" 2>/dev/null && \
   echo "AUTO_APPROVE_INSTALLED" || echo "AUTO_APPROVE_MISSING"
 
 # And whether it has been merged to the default branch — issue_comment
@@ -1133,10 +1138,10 @@ INSTALL_FRESH_WRITE=false  # the installer actually created or refreshed the fil
 # Capture pre-existence so we can tell "freshly installed" apart from
 # "already up to date" — both produce exit 0, but the user-facing
 # reminder text below should only fire on a fresh write.
-# Check BOTH spellings, the same way the installer does. Checking only
-# .yml reports "freshly installed" for a repo whose file is .yaml — which
-# is most of the fleet — and fires the merge-it-to-main reminder at someone
-# who has had the workflow on main for months.
+# Check BOTH spellings, the same way the installer does. Checking only .yml
+# reports "freshly installed" for a repo whose file is .yaml, and fires the
+# merge-it-to-main reminder at someone who has had the workflow on main for
+# months.
 WF_EXISTED_BEFORE=false
 for ext in yaml yml; do
   [ -f "$ROOT/.github/workflows/auto-approve.$ext" ] && WF_EXISTED_BEFORE=true
@@ -1162,13 +1167,18 @@ case "$INSTALL_RC" in
     fi
     ;;
   2)
+    # Say nothing about paths here. The installer adopts whichever spelling
+    # the repo already uses and has already printed the real diff/replace
+    # commands for it; re-stating them with a hardcoded .yml gave a .yaml repo
+    # two commands that both fail on "No such file or directory" and left the
+    # actual .yaml.new orphaned in the tree.
     echo ""
-    echo "An existing .github/workflows/auto-approve.yml differs from the plugin's."
-    echo "The plugin's version was written to .github/workflows/auto-approve.yml.new."
-    echo "Diff and decide before committing:"
-    echo "  diff -u .github/workflows/auto-approve.yml .github/workflows/auto-approve.yml.new"
-    echo "  # to apply the plugin's version:  mv .github/workflows/auto-approve.yml{.new,}"
-    echo "Skipping auto-stage of the workflow file."
+    echo "Skipping auto-stage of the workflow file — follow the installer's"
+    echo "instructions above, then re-run."
+    ;;
+  3)
+    echo "The hero-skills plugin is missing assets/auto-approve/caller.yml."
+    echo "Reinstall the plugin; this is not a problem with your repo."
     ;;
   255)
     # Plugin not found — already explained above.
@@ -1245,8 +1255,13 @@ Only stage the workflow file when Step 6a reported the file is in sync with the 
 
 ```bash
 FILES_TO_ADD=("HERO.md" "AGENTS.md" "CLAUDE.md")
-if [ "${INSTALL_OK:-false}" = "true" ] && [ -f .github/workflows/auto-approve.yml ]; then
-  FILES_TO_ADD+=(".github/workflows/auto-approve.yml")
+# Whichever spelling the installer adopted — hardcoding .yml stages nothing
+# in a .yaml repo, so the workflow silently never reaches the commit.
+if [ "${INSTALL_OK:-false}" = "true" ]; then
+  for ext in yaml yml; do
+    [ -f ".github/workflows/auto-approve.$ext" ] && \
+      FILES_TO_ADD+=(".github/workflows/auto-approve.$ext")
+  done
 fi
 if [ "${DS_OK:-false}" = "true" ]; then
   FILES_TO_ADD+=(".claude/rules/design-system.md" ".claude/hooks/check-design-tokens.sh" ".claude/settings.json")

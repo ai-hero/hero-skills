@@ -4,16 +4,19 @@
 # Usage: ./install-auto-approve.sh [TARGET_REPO_ROOT]
 #   If TARGET_REPO_ROOT is omitted, uses the current git repo's toplevel.
 #
-# What gets installed is assets/auto-approve/caller.yml — a ~40-line thin
-# caller — NOT this repo's own .github/workflows/auto-approve.yml, which is
-# the shared logic the caller invokes. Installing the logic itself is what
-# this script used to do, and it is how ~25 repos ended up each maintaining
-# a private copy that drifted: six distinct versions, two of them still
-# carrying a fail-OPEN verdict parser fixed here long before.
+# SOURCE is the CALLER, not this repo's own .github/workflows/auto-approve.yml.
+# Point it at the logic and every target repo gets a private copy of the shared
+# workflow, which then drifts — including past security fixes made here.
 #
 # Idempotent: if the target file already matches the source, no-op.
-# Preserves any existing file by writing to .new and asking the caller
-# to diff/merge — the script itself never overwrites without intent.
+# An existing file is never overwritten: the new version lands beside it as
+# .new and the operator decides.
+#
+# Exit codes are a contract — skills/init-hero/SKILL.md branches on them:
+#   0  installed, or already up to date (safe to stage)
+#   2  a different file exists; .new written beside it (do NOT stage)
+#   3  the plugin's own source is missing (the plugin is broken)
+#   1  anything else, e.g. the target filesystem rejected the write
 
 set -euo pipefail
 
@@ -22,8 +25,24 @@ SOURCE="$PLUGIN_ROOT/assets/auto-approve/caller.yml"
 
 if [[ ! -f "$SOURCE" ]]; then
   echo "ERROR: source file not found at $SOURCE" >&2
-  exit 1
+  # Distinct from 1: "the plugin is incompletely installed" and "the write
+  # failed" need different fixes, and 1 is what set -e gives us for the latter.
+  exit 3
 fi
+
+# Printed on BOTH the fresh-install and the already-exists paths. Every repo
+# migrating off an inline copy takes the exit-2 path, so guidance that prints
+# only after a fresh cp reaches nobody who is actually migrating.
+post_install_notes() {
+  echo ""
+  echo "Reminder: GitHub only triggers issue_comment workflows that already"
+  echo "exist on the default branch. Commit and merge this file before"
+  echo "@auto-approve will work on PRs."
+  echo ""
+  echo "The target repo needs an ANTHROPIC_API_KEY secret (org-level is fine),"
+  echo "and must be PRIVATE — the caller is gated on it, and on a public repo"
+  echo "@auto-approve produces a skipped run with no error anywhere."
+}
 
 TARGET_ROOT="${1:-$(git rev-parse --show-toplevel)}"
 TARGET_DIR="$TARGET_ROOT/.github/workflows"
@@ -54,18 +73,34 @@ if [[ -f "$TARGET" ]]; then
   cp "$SOURCE" "$TARGET.new"
   echo "EXISTS: $TARGET"
   echo "  Wrote new version to $TARGET.new"
-  echo "  Diff:  diff -u $TARGET $TARGET.new"
-  echo "  Apply: mv $TARGET.new $TARGET"
+  echo "  Diff:    diff -u $TARGET $TARGET.new"
+  echo "  REPLACE: mv $TARGET.new $TARGET"
+  echo ""
+  # Not "diff and merge". The existing file is almost always the old inline
+  # logic; the new one is a caller. Merging them yields a job with both `uses:`
+  # and `steps:`, which GitHub rejects as an invalid workflow file — and since
+  # the trigger is issue_comment, nothing surfaces that until someone runs
+  # ship-pr and gets a failure with no failing step.
+  echo "  Replace it, do not merge it: the existing file is the old inline"
+  echo "  logic and the new one is a caller. A job holding both 'uses:' and"
+  echo "  'steps:' is an invalid workflow, and it fails silently until used."
+
+  # Both spellings live -> the operator is one mv away from two live
+  # issue_comment workflows, which is the state the adoption logic above
+  # exists to avoid. It can detect that; say so rather than let them find out.
+  OTHER=""
+  [[ "$TARGET" == *.yaml ]] && OTHER="$TARGET_DIR/auto-approve.yml"
+  [[ "$TARGET" == *.yml ]] && OTHER="$TARGET_DIR/auto-approve.yaml"
+  if [[ -n "$OTHER" && -f "$OTHER" ]]; then
+    echo ""
+    echo "  WARNING: $OTHER also exists. GitHub runs both — two verifications"
+    echo "  and two review submissions per @auto-approve. Delete one."
+  fi
+
+  post_install_notes
   exit 2
 fi
 
 cp "$SOURCE" "$TARGET"
 echo "INSTALLED: $TARGET"
-echo ""
-echo "Reminder: GitHub only triggers issue_comment workflows that already"
-echo "exist on the default branch. Commit and merge this file before"
-echo "@auto-approve will work on PRs."
-echo ""
-echo "The target repo needs an ANTHROPIC_API_KEY secret (org-level is fine)."
-echo "The caller names it explicitly rather than using 'secrets: inherit',"
-echo "which would hand this repo's every secret to the shared workflow."
+post_install_notes

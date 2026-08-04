@@ -277,6 +277,8 @@ Common causes:
   - auto-approve.yaml/.yml is not on the default branch (re-check Step 2)
   - The ANTHROPIC_API_KEY repo secret is missing
   - GitHub Actions is disabled for this repo
+  - This repo is PUBLIC — the caller is gated on the repo being private,
+    so the job is skipped and never posts anything
 
 Visit PR_URL/checks to investigate.
 ```
@@ -319,7 +321,21 @@ if [ -z "$COMMENT_BODY" ] && [ -z "$REVIEW_STATE" ]; then
   echo "Workflow completed but posted neither a verdict comment nor a review."
   echo "Run conclusion: $CONCLUSION"
   echo "Run URL:        $(gh api "/repos/{owner}/{repo}/actions/runs/$RUN_ID" --jq '.html_url')"
-  echo "Treating as WORKFLOW_FAILED — see logs for the failing step."
+  # `skipped` is not a failure and has no failing step to look at — sending
+  # someone to "the logs" for a run where nothing executed is a dead end. The
+  # caller is gated on `github.event.repository.private`, so a public repo
+  # skips forever with no error anywhere: the file is on the default branch,
+  # so preflight passes too.
+  if [ "$CONCLUSION" = "skipped" ]; then
+    echo ""
+    echo "The run was SKIPPED — no step failed, the job's \`if:\` did not match."
+    echo "Most likely this repo is public: auto-approve is gated on the repo"
+    echo "being private, because the shared workflow uploads changed-file"
+    echo "contents to a model and public repos take PRs from untrusted forks."
+    echo "Check: gh repo view --json visibility"
+  else
+    echo "Treating as WORKFLOW_FAILED — see logs for the failing step."
+  fi
   VERDICT="WORKFLOW_FAILED"
 elif [ "$REVIEW_STATE" = "APPROVED" ]; then
   VERDICT="APPROVE"

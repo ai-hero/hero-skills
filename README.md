@@ -226,6 +226,34 @@ sides converge on one version instead of alternating.
 
 Exit 2 means "you have a decision to make", not "it failed".
 
+**Auto-approve is the exception: always take `.new`, never merge it.** The two
+files are not two versions of one thing. The existing file is the old inline
+copy of the review *logic*; `.new` is a ~40-line caller into the shared
+workflow. Reconciling them the way you would a design-system hook — keeping the
+local improvement — is exactly how the fleet ended up with a private copy per
+repo, several of them missing security fixes made here. A job holding both
+`uses:` and `steps:` is also an invalid workflow file, and because the trigger
+is `issue_comment` nothing surfaces that until someone tries to ship.
+
+## The `v1` tag is the distribution mechanism
+
+Consumers call `ai-hero/hero-skills/.github/workflows/auto-approve.yml@v1`, so
+**merging a change to `auto-approve.yml` on `main` publishes it to every
+consuming repo.** `.github/workflows/release-tag.yml` moves the tag; there is
+nothing else to run, and no per-repo PR to open.
+
+Two consequences worth internalising:
+
+- That file has a blast radius no other file here has. Review it accordingly.
+- If `v1` stops moving, every consumer silently pins to whatever commit it last
+  pointed at, with no failing build anywhere. That is not hypothetical — it is
+  what happened before `release-tag.yml` existed.
+
+`assets/auto-approve/caller.yml` is what gets installed into consumers. It is
+not the logic and should stay small; `scripts/install-auto-approve.test.sh`
+asserts it stays a caller and that its secrets and permissions still line up
+with what `auto-approve.yml` declares.
+
 ## HERO.md
 
 Every skill reads `HERO.md` from your repo root. It declares your stack so skills don't have to guess. **HERO.md is committed to the repo** — it's team-shared, so every developer and every skill works from the same config.
