@@ -1,0 +1,41 @@
+name: Auto Approve
+
+on:
+  issue_comment:
+    types: [created]
+
+# Restrictive default so any job without an explicit block gets nothing; the
+# caller job below opts into exactly the scopes it needs.
+permissions:
+  contents: read
+
+# Thin caller for the shared auto-approve workflow in ai-hero/hero-skills.
+# All behavior lives there — change it in hero-skills, not here. Keep this
+# file minimal so it never drifts.
+jobs:
+  auto-approve:
+    # Deployment policy (lives in the caller, not the shared logic): only run
+    # on a private repo. The shared workflow uploads changed-file contents to
+    # a model, and a public repo takes PRs from untrusted forks — so if this
+    # repo is ever flipped public, the job stops running until it's private
+    # again. Every other trigger gate (@auto-approve, author_association) is
+    # enforced inside the shared workflow.
+    if: github.event.repository.private
+    permissions:
+      pull-requests: write
+      issues: write
+      contents: read
+    # A moving tag on purpose, and the one CI-01 exception (see its rule):
+    # hero-skills is first-party and this is the fleet's single-source-of-truth
+    # mechanism — retagging v1 there ships a fix to every consumer at once,
+    # where a SHA pin would need a PR in each of ~25 repos to take effect.
+    # Do not "fix" this to a SHA.
+    uses: ai-hero/hero-skills/.github/workflows/auto-approve.yml@v1
+    # Only the secret the shared workflow declares — never `secrets: inherit`,
+    # which hands the callee every secret in this repo and is a BLOCKING
+    # semgrep finding on push (yaml.github-actions.security.secrets-inherit).
+    # A caller may name a secret only if the callee declares it under
+    # `on.workflow_call.secrets`; hero-skills#49 is what added that.
+    # GITHUB_TOKEN is absent because reusable workflows get it automatically.
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

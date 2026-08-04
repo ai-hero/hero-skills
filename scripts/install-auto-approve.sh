@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
-# Install hero-skills' auto-approve.yml into a target repository.
+# Install the auto-approve CALLER into a target repository.
 #
 # Usage: ./install-auto-approve.sh [TARGET_REPO_ROOT]
 #   If TARGET_REPO_ROOT is omitted, uses the current git repo's toplevel.
+#
+# What gets installed is assets/auto-approve/caller.yml — a ~40-line thin
+# caller — NOT this repo's own .github/workflows/auto-approve.yml, which is
+# the shared logic the caller invokes. Installing the logic itself is what
+# this script used to do, and it is how ~25 repos ended up each maintaining
+# a private copy that drifted: six distinct versions, two of them still
+# carrying a fail-OPEN verdict parser fixed here long before.
 #
 # Idempotent: if the target file already matches the source, no-op.
 # Preserves any existing file by writing to .new and asking the caller
@@ -11,7 +18,7 @@
 set -euo pipefail
 
 PLUGIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SOURCE="$PLUGIN_ROOT/.github/workflows/auto-approve.yml"
+SOURCE="$PLUGIN_ROOT/assets/auto-approve/caller.yml"
 
 if [[ ! -f "$SOURCE" ]]; then
   echo "ERROR: source file not found at $SOURCE" >&2
@@ -58,3 +65,7 @@ echo ""
 echo "Reminder: GitHub only triggers issue_comment workflows that already"
 echo "exist on the default branch. Commit and merge this file before"
 echo "@auto-approve will work on PRs."
+echo ""
+echo "The target repo needs an ANTHROPIC_API_KEY secret (org-level is fine)."
+echo "The caller names it explicitly rather than using 'secrets: inherit',"
+echo "which would hand this repo's every secret to the shared workflow."

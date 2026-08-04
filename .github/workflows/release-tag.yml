@@ -1,0 +1,38 @@
+name: Move v1
+
+# ~25 ai-hero repos call auto-approve.yml@v1. The tag IS the distribution
+# mechanism — a caller that pins a SHA would need a PR here and a PR there
+# for every fix. That only works if something moves the tag, and nothing
+# did: v1 sat on a Jul 18 commit for two weeks while main gained the
+# `workflow_call.secrets` declaration callers need, so every caller was
+# running stale logic and no explicit secrets map could validate against it.
+# This job is that missing step.
+on:
+  push:
+    branches: [main]
+    paths:
+      # Only the reusable workflow. The skills, scripts and docs in this repo
+      # are consumed from a checkout, not through the tag, so moving v1 for
+      # them would republish the shared workflow on an unrelated change.
+      - .github/workflows/auto-approve.yml
+
+permissions:
+  contents: write
+
+jobs:
+  move-v1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Point v1 at this commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Force, because v1 is deliberately a moving pointer. PATCH with
+          # force is the update path; creating it only works the first time.
+          if ! gh api -X PATCH "/repos/${{ github.repository }}/git/refs/tags/v1" \
+                 -f sha="${{ github.sha }}" -F force=true >/dev/null; then
+            gh api -X POST "/repos/${{ github.repository }}/git/refs" \
+              -f ref="refs/tags/v1" -f sha="${{ github.sha }}" >/dev/null
+          fi
+          echo "v1 -> ${{ github.sha }}"

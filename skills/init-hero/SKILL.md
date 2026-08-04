@@ -1133,8 +1133,14 @@ INSTALL_FRESH_WRITE=false  # the installer actually created or refreshed the fil
 # Capture pre-existence so we can tell "freshly installed" apart from
 # "already up to date" — both produce exit 0, but the user-facing
 # reminder text below should only fire on a fresh write.
+# Check BOTH spellings, the same way the installer does. Checking only
+# .yml reports "freshly installed" for a repo whose file is .yaml — which
+# is most of the fleet — and fires the merge-it-to-main reminder at someone
+# who has had the workflow on main for months.
 WF_EXISTED_BEFORE=false
-[ -f "$ROOT/.github/workflows/auto-approve.yml" ] && WF_EXISTED_BEFORE=true
+for ext in yaml yml; do
+  [ -f "$ROOT/.github/workflows/auto-approve.$ext" ] && WF_EXISTED_BEFORE=true
+done
 
 if [ -z "$PLUGIN_ROOT" ]; then
   echo "Could not locate hero-skills plugin root in standard locations."
