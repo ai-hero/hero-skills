@@ -147,6 +147,28 @@ caller_ref=$(grep -oE 'auto-approve\.yml@[A-Za-z0-9._-]+' "$SOURCE" | head -1 | 
 check "contract: caller ref is the tag release-tag.yml moves" "yes" \
   "$(grep -q "refs/tags/$caller_ref" "$HERE/../.github/workflows/release-tag.yml" && echo yes || echo no)"
 
+# --- trigger anchoring -------------------------------------------------------
+# Reads as a style preference; it is not. With `contains`, merely MENTIONING
+# the command in any comment posted a real APPROVE, and review-pr's
+# self-review comment does exactly that while also carrying the marker the
+# prior-review gate accepts — one comment both fired the run and satisfied the
+# gate meant to stop auto-approve being the only review.
+trigger_if=$(python3 -c "
+import yaml
+print(yaml.safe_load(open('$CALLEE'))['jobs']['claude-approve']['if'])
+")
+check "trigger: anchored with startsWith" "yes" \
+  "$(grep -qF 'startsWith(github.event.comment.body' <<<"$trigger_if" && echo yes || echo no)"
+# The exact dangerous form, not just "contains(" — the condition legitimately
+# uses !contains(...) to exclude self-review comments.
+UNANCHORED="contains(github.event.comment.body, '@auto-approve')"
+check "trigger: unanchored contains is gone" "yes" \
+  "$(grep -oF "$UNANCHORED" <<<"$trigger_if" | grep -qv '^!' && echo no || echo yes)"
+check "trigger: self-review comments excluded" "yes" \
+  "$(grep -q 'ai-hero:self-review' <<<"$trigger_if" && echo yes || echo no)"
+check "trigger: author_association gate intact" "yes" \
+  "$(grep -q 'author_association' <<<"$trigger_if" && echo yes || echo no)"
+
 echo ""
 echo "install-auto-approve.test.sh: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]
