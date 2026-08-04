@@ -1,8 +1,10 @@
 name: Auto Approve
 
 # Thin caller for the shared auto-approve workflow in ai-hero/hero-skills.
-# All behavior lives there. An edit here reaches no other caller and is
-# overwritten by the next install.
+# All behavior lives there. An edit here reaches no other caller, and the
+# installer will NOT overwrite it — it drops a .new beside it and exits 2,
+# so a local edit sticks silently and this repo quietly stops tracking the
+# shared logic.
 
 on:
   issue_comment:
@@ -28,8 +30,9 @@ jobs:
       contents: read
     # A moving tag on purpose: it is what lets one edit in hero-skills reach
     # every caller. Pinning a SHA here would gate each shared fix behind a PR
-    # in every consuming repo — hero-template's CHECKS.yaml carves this out
-    # explicitly as CI-01's one exception. Do not "fix" it to a SHA.
+    # in every consuming repo — the family's CI-01 pin rule carves this out
+    # as its one exception. A SHA pin is still acceptable, and some repos
+    # use one; a BRANCH ref is not, and CI-01 rejects it.
     uses: ai-hero/hero-skills/.github/workflows/auto-approve.yml@v1
     # Never `secrets: inherit` — it hands the callee every secret this repo
     # holds. Name only what the callee declares.
