@@ -46,9 +46,19 @@ jobs:
     #    review and spends an API key, so without it any commenter — e.g.
     #    on a public fork or clone — could trigger an approval and burn
     #    the key.
+    # 2. The command must START the comment, and a hero-skills self-review is
+    #    never a command. With `contains`, MENTIONING @auto-approve anywhere in
+    #    any comment ran this and posted a real APPROVE — and review-pr's
+    #    self-review comment both says the string in prose AND carries the
+    #    ai-hero:self-review marker that the prior-review gate below accepts,
+    #    so a single comment triggered the approval and satisfied the gate
+    #    meant to stop auto-approve being the only review. Observed, not
+    #    theoretical: hero-skills#50 was approved this way with nobody asking.
+    #    ship-pr posts exactly "@auto-approve", so anchoring costs nothing.
     if: |
       github.event.issue.pull_request &&
-      contains(github.event.comment.body, '@auto-approve') &&
+      startsWith(github.event.comment.body, '@auto-approve') &&
+      !contains(github.event.comment.body, 'ai-hero:self-review') &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
 
     steps:

@@ -1,0 +1,37 @@
+name: Auto Approve
+
+# Thin caller for the shared auto-approve workflow in ai-hero/hero-skills.
+# All behavior lives there. An edit here reaches no other caller and is
+# overwritten by the next install.
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  auto-approve:
+    # Deployment policy, deliberately here and not in the shared logic: the
+    # shared workflow ships changed-file contents to a model, and a public
+    # repo takes PRs from untrusted forks. On a public repo this produces a
+    # SKIPPED run, which ship-pr reports as a workflow failure with no failing
+    # step — if that is what you are staring at, check visibility first.
+    if: github.event.repository.private
+    # This block is the ceiling on the callee's token; the callee cannot
+    # exceed it. Trimming a scope here surfaces as a 403 inside the shared
+    # workflow, in this repo's run, not as an error in this file.
+    permissions:
+      pull-requests: write
+      issues: write
+      contents: read
+    # A moving tag on purpose: it is what lets one edit in hero-skills reach
+    # every caller. Pinning a SHA here would gate each shared fix behind a PR
+    # in every consuming repo — hero-template's CHECKS.yaml carves this out
+    # explicitly as CI-01's one exception. Do not "fix" it to a SHA.
+    uses: ai-hero/hero-skills/.github/workflows/auto-approve.yml@v1
+    # Never `secrets: inherit` — it hands the callee every secret this repo
+    # holds. Name only what the callee declares.
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

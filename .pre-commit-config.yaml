@@ -100,12 +100,15 @@ repos:
 
       # Only fires when the library or its tests change — the suites are fast,
       # but there is no reason to run them on a docs-only commit.
+      # Glob, don't enumerate. Naming each suite meant a newly added
+      # scripts/*.test.sh ran nowhere — it matched neither the entry nor the
+      # trigger below — so the suite silently guaranteed nothing.
       - id: shell-unit-tests
-        name: "Shell library unit tests (hero-lib, resume-state)"
-        entry: bash -c 'bash scripts/hero-lib.test.sh && bash scripts/resume-state.test.sh'
+        name: "Shell library unit tests"
+        entry: bash -c 'for t in scripts/*.test.sh; do echo "-- $t"; bash "$t" || exit 1; done'
         language: system
         pass_filenames: false
-        files: ^scripts/(hero-lib|resume-state)(\.test)?\.sh$
+        files: ^scripts/.*\.sh$
 
       - id: audit
         name: "Audit: check plugin quality"
