@@ -39,9 +39,26 @@ jobs:
       group: move-v1
       cancel-in-progress: false
     steps:
+      # A dedicated App, not GITHUB_TOKEN. The tag ruleset on refs/tags/v*
+      # blocks updates for everyone, and GitHub will NOT accept the built-in
+      # GitHub Actions integration as a bypass actor — creating a ruleset that
+      # names it fails validation ("must be part of the ruleset source or
+      # owner organization"). So the only way to have both a protected tag and
+      # an automated mover is an org-installed App that IS a bypass actor.
+      # Its installation token is minted per run and expires in an hour, which
+      # a PAT in a secret does not: any user with write access could push a
+      # workflow edit that exfiltrates a PAT, and a PAT carries its owner's
+      # reach everywhere.
+      - name: Mint an installation token
+        id: app
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
       - name: Point v1 at this commit
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
           TARGET_SHA: ${{ inputs.sha || github.sha }}
           REPO: ${{ github.repository }}
         run: |
