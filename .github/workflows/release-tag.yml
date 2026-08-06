@@ -62,6 +62,21 @@ jobs:
           TARGET_SHA: ${{ inputs.sha || github.sha }}
           REPO: ${{ github.repository }}
         run: |
+          # The tag ruleset makes this App the ONLY thing that can move v1, so
+          # this job is the whole gate. Without this check the dispatch input
+          # is a way around main's branch protection: any commit is accepted,
+          # including one on an unreviewed branch, and the fleet runs it.
+          # compare returns identical/behind when TARGET is reachable from
+          # main; diverged/ahead means it is not on main.
+          STATUS=$(gh api "/repos/$REPO/compare/main...$TARGET_SHA" --jq '.status')
+          case "$STATUS" in
+            identical|behind) ;;
+            *)
+              echo "::error::$TARGET_SHA is not an ancestor of main (compare=$STATUS). v1 may only point at reviewed history."
+              exit 1
+              ;;
+          esac
+
           # -F, not -f: -f sends the string "true", which the refs API rejects.
           if ! ERR=$(gh api -X PATCH "/repos/$REPO/git/refs/tags/v1" \
                        -f sha="$TARGET_SHA" -F force=true 2>&1 >/dev/null); then
