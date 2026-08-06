@@ -237,8 +237,8 @@ is `issue_comment` nothing surfaces that until someone tries to ship.
 
 ## `main` is the distribution mechanism
 
-Consumers call `ai-hero/hero-skills/.github/workflows/auto-approve.yml@main`, so
-**merging a change to `auto-approve.yml` publishes it to every consuming repo
+Consumers call `ai-hero/hero-skills/.github/workflows/auto-approve.yaml@main`, so
+**merging a change to `auto-approve.yaml` publishes it to every consuming repo
 the moment it lands.** There is no release step, no tag to move, and no per-repo
 PR to open.
 
@@ -261,7 +261,7 @@ to aim.
 `assets/auto-approve/caller.yml` is what gets installed into consumers. It is
 not the logic and should stay small; `scripts/install-auto-approve.test.sh`
 asserts it stays a caller and that its secrets and permissions still line up
-with what `auto-approve.yml` declares.
+with what `auto-approve.yaml` declares.
 
 ## HERO.md
 

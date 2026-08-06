@@ -7,7 +7,7 @@
 # Usage: ./install-auto-approve.sh [TARGET_REPO_ROOT]
 #   If TARGET_REPO_ROOT is omitted, uses the current git repo's toplevel.
 #
-# SOURCE is the CALLER, not this repo's own .github/workflows/auto-approve.yml.
+# SOURCE is the CALLER, not this repo's own .github/workflows/auto-approve.yaml.
 # Point it at the logic and every target repo gets a private copy of the shared
 # workflow, which then drifts — including past security fixes made here.
 #
@@ -24,7 +24,7 @@
 set -euo pipefail
 
 PLUGIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SOURCE="$PLUGIN_ROOT/assets/auto-approve/caller.yml"
+SOURCE="$PLUGIN_ROOT/assets/auto-approve/caller.yaml"
 
 if [[ ! -f "$SOURCE" ]]; then
   echo "ERROR: source file not found at $SOURCE" >&2
@@ -51,13 +51,16 @@ TARGET_ROOT="${1:-$(git rev-parse --show-toplevel)}"
 TARGET_DIR="$TARGET_ROOT/.github/workflows"
 
 # Adopt an existing workflow under EITHER spelling as the target. GitHub runs
-# both, so writing auto-approve.yml beside an existing auto-approve.yaml does
+# both, so writing auto-approve.yaml beside an existing auto-approve.yml does
 # not "install" anything — it leaves two live issue_comment workflows, which
 # means two Claude verifications and two review submissions per @auto-approve
 # comment, and ship-pr polling whichever of the two same-named workflows the
 # API happens to return first. Every guard below is keyed to TARGET, so a
 # TARGET that cannot see the existing file has no guard at all.
-TARGET="$TARGET_DIR/auto-approve.yml"
+# .yaml is the fleet standard (PLACE-06). This is only the default for
+# a repo that has neither spelling yet — the loop below still adopts an
+# existing .yml rather than writing a second live workflow beside it.
+TARGET="$TARGET_DIR/auto-approve.yaml"
 for ext in yaml yml; do
   if [[ -f "$TARGET_DIR/auto-approve.$ext" ]]; then
     TARGET="$TARGET_DIR/auto-approve.$ext"

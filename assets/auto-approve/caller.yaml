@@ -35,7 +35,7 @@ jobs:
     # Roll back by reverting on main. Do not pin this to a tag or SHA without
     # reading CI-01: a pin means every fix to the shared workflow needs a PR
     # in every consuming repo before it is live anywhere.
-    uses: ai-hero/hero-skills/.github/workflows/auto-approve.yml@main
+    uses: ai-hero/hero-skills/.github/workflows/auto-approve.yaml@main
     # Never `secrets: inherit` — it hands the callee every secret this repo
     # holds. Name only what the callee declares.
     secrets:

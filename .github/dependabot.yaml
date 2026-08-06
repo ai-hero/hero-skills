@@ -3,7 +3,7 @@ version: 2
 updates:
   # This repo ships shell, Markdown and YAML — no package ecosystem to track.
   # github-actions is the one that matters: it is the supply chain for the
-  # workflow ~25 repos execute through auto-approve.yml.
+  # workflow ~25 repos execute through auto-approve.yaml.
   - package-ecosystem: github-actions
     directory: /
     schedule:

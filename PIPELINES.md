@@ -134,7 +134,7 @@ Owner: `hero-skills:init-hero`. Four steps:
 
 1. `investigate` — deeply scan the repo for evidence of stack, conventions, CI, deploy
 2. `confirm` — present findings as a numbered list and ask the user to confirm/correct
-3. `write` — write HERO.md, update AGENTS.md summary sections (CLAUDE.md is a symlink to it), and (if the user opted in during `confirm`) install `.github/workflows/auto-approve.yml` via Step 6a and the design-system enforcement layer via Step 6b
+3. `write` — write HERO.md, update AGENTS.md summary sections (CLAUDE.md is a symlink to it), and (if the user opted in during `confirm`) install `.github/workflows/auto-approve.yaml` via Step 6a and the design-system enforcement layer via Step 6b
 4. `commit` — stage and commit HERO.md + AGENTS.md + the CLAUDE.md symlink (and the auto-approve workflow / design-system rule + hook if installed this run)
 
 Run by itself (`hero-skills:init-hero` or `hero-skills:init-hero --update`) or
