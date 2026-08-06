@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 A.I. Hero, Inc.
+# All Rights Reserved.
+
 # Advisory check for stale HERO.md.
 #
 # Compares the last-commit time of HERO.md against the last-commit time of

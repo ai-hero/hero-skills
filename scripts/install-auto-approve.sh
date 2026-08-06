@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 A.I. Hero, Inc.
+# All Rights Reserved.
+
 # Install the auto-approve CALLER into a target repository.
 #
 # Usage: ./install-auto-approve.sh [TARGET_REPO_ROOT]

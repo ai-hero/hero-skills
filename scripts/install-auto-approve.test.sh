@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 A.I. Hero, Inc.
+# All Rights Reserved.
+
 # Tests for install-auto-approve.sh.
 #
 # Not -e: the suite has to OBSERVE non-zero exits (2 and 3 are contract, not

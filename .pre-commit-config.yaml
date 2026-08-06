@@ -8,9 +8,15 @@
 # `hero-skills:init-hero --update` to refresh it.
 # =============================================================================
 
+# Everything below runs on commit unless a hook overrides `stages` itself.
+# Without this, a hook with no `stages` runs at EVERY installed stage — so the
+# whole suite would also fire on push, doubling every commit's cost.
+default_stages: [pre-commit]
+
 default_install_hook_types:
   - pre-commit
   - commit-msg
+  - pre-push
 
 repos:
   # ===========================================================================
@@ -29,6 +35,10 @@ repos:
       - id: check-yaml
       - id: check-toml
       - id: detect-private-key
+      # main is protected server-side too; this catches the mistake before the
+      # push round-trip, and before a rejected push leaves a stranded commit.
+      - id: no-commit-to-branch
+        args: [--branch, main]
       - id: end-of-file-fixer
       - id: trailing-whitespace
       - id: mixed-line-ending
@@ -40,7 +50,10 @@ repos:
     rev: v1.5.0
     hooks:
       - id: detect-secrets
-        args: [--exclude-files, '.*\.lock$']
+        # A committed baseline is what makes this hook actionable: without it
+        # every pre-existing match re-reports on every run, and the noise
+        # trains people to skip the hook. With it, only NEW findings surface.
+        args: [--baseline, .secrets.baseline, --exclude-files, '.*\.lock$']
 
   # ===========================================================================
   # Markdown linting
@@ -80,6 +93,42 @@ repos:
   # ===========================================================================
   # Commit message convention (conventional commits)
   # ===========================================================================
+  # ===========================================================================
+  # Copyright headers
+  # ===========================================================================
+  # The header file is deliberately NOT the repo's LICENSE: insert-license's
+  # own default (LICENSE.txt) would sit in the namespace GitHub scans to detect
+  # the repo license. This repo ships shell and Markdown, so only the shell
+  # scripts get stamped — Markdown carries no comment syntax the hook can use.
+  #
+  # --use-current-year: a frozen wrong year is worse than an annual diff. The
+  # bump is one sweep each January:
+  #   pre-commit run insert-license --all-files
+  - repo: https://github.com/Lucas-C/pre-commit-hooks
+    rev: v1.5.5
+    hooks:
+      - id: insert-license
+        name: copyright header (shell)
+        files: \.sh$
+        args:
+          - --license-filepath=.license-header.txt
+          - --comment-style=#
+          - --use-current-year
+
+  # ===========================================================================
+  # Pre-push: security scanning
+  # ===========================================================================
+  # Pre-push, not pre-commit: it is the slowest hook here, and a push is the
+  # last point where catching a finding is still cheap.
+  - repo: https://github.com/semgrep/semgrep
+    rev: v1.156.0
+    hooks:
+      - id: semgrep
+        stages: [pre-push]
+        args:
+          - --config=auto
+          - --error
+
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v4.0.0
     hooks:

@@ -4,10 +4,28 @@ on:
   pull_request:
     branches: [main]
 
+# Least-privilege floor. Without a top-level block, a job with no permissions:
+# of its own inherits this repo's CONFIGURED default (Settings -> Actions ->
+# Workflow permissions), not a platform constant — so a job added later gets
+# more access than this file appears to grant.
+permissions:
+  contents: read
+
+# Supersede in-flight runs: a PR that gets three pushes in a minute should
+# validate the last one, not burn a runner on each. Safe to cancel because
+# this workflow only validates — it publishes nothing.
+concurrency:
+  group: pr-check-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     name: Validate plugin structure
     runs-on: ubuntu-latest
+    # Cap the run. Structure validation and the shell suites finish in well
+    # under this; the ceiling just stops a wedged step from pinning a runner
+    # for the six-hour default.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 

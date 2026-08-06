@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 A.I. Hero, Inc.
+# All Rights Reserved.
+
 # resume-state.sh — gather the git/PR state one-shot needs to pick a resume point.
 #
 # Prints shell-eval-able KEY=VALUE lines describing where the current branch
