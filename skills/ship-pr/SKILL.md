@@ -258,8 +258,20 @@ fi
 
 RUN_ID=""
 for i in 1 2 3 4 5 6 7 8 9 10; do
+  # Exclude conclusion == "skipped". EVERY comment on the PR creates an
+  # issue_comment run, and the shared workflow's trigger is anchored — it
+  # fires only when the body STARTS with the command — so an ordinary comment
+  # produces a run that is immediately `skipped`. review-pr posts its
+  # self-review comment moments before this step runs, and any bot or human
+  # comment lands in the same window. Taking .[0] unfiltered latches onto that
+  # skipped run, polls it to "completed", finds no verdict comment, and
+  # reports WORKFLOW_FAILED for a run in which nothing executed.
+  # A queued or in-progress run has conclusion null, so it survives this
+  # filter; only genuinely skipped ones are dropped.
   RUN_JSON=$(gh api "/repos/{owner}/{repo}/actions/workflows/$WF_ID/runs?event=issue_comment&per_page=10" \
-    --jq "[.workflow_runs[] | select(.created_at > \"$TRIGGERED_AT\")] | .[0]")
+    --jq "[.workflow_runs[]
+           | select(.created_at > \"$TRIGGERED_AT\")
+           | select(.conclusion != \"skipped\")] | .[0]")
   if [ -n "$RUN_JSON" ] && [ "$RUN_JSON" != "null" ]; then
     RUN_ID=$(echo "$RUN_JSON" | jq -r '.id')
     break
@@ -267,6 +279,11 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
   sleep 5
 done
 ```
+
+If every run after `TRIGGERED_AT` is `skipped`, the command comment itself did
+not match the trigger. On a public repo that is the `github.event.repository.private`
+gate; otherwise check that the comment body *starts with* `@auto-approve` — a
+body that merely contains it no longer fires.
 
 If no run appears within ~50 seconds, surface a clear error:
 
