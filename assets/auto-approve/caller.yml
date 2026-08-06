@@ -28,12 +28,14 @@ jobs:
       pull-requests: write
       issues: write
       contents: read
-    # A moving tag on purpose: it is what lets one edit in hero-skills reach
-    # every caller. Pinning a SHA here would gate each shared fix behind a PR
-    # in every consuming repo — the family's CI-01 pin rule carves this out
-    # as its one exception. A SHA pin is still acceptable, and some repos
-    # use one; a BRANCH ref is not, and CI-01 rejects it.
-    uses: ai-hero/hero-skills/.github/workflows/auto-approve.yml@v1
+    # @main, deliberately: the fleet runs what is on hero-skills' main and
+    # nothing else. main there is PR-protected — approval required, stale
+    # approvals dismissed on push, last-push approval required — so that
+    # protection IS the gate, with no second ref anyone can aim elsewhere.
+    # Roll back by reverting on main. Do not pin this to a tag or SHA without
+    # reading CI-01: a pin means every fix to the shared workflow needs a PR
+    # in every consuming repo before it is live anywhere.
+    uses: ai-hero/hero-skills/.github/workflows/auto-approve.yml@main
     # Never `secrets: inherit` — it hands the callee every secret this repo
     # holds. Name only what the callee declares.
     secrets:

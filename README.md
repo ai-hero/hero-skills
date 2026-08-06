@@ -235,19 +235,28 @@ repo, several of them missing security fixes made here. A job holding both
 `uses:` and `steps:` is also an invalid workflow file, and because the trigger
 is `issue_comment` nothing surfaces that until someone tries to ship.
 
-## The `v1` tag is the distribution mechanism
+## `main` is the distribution mechanism
 
-Consumers call `ai-hero/hero-skills/.github/workflows/auto-approve.yml@v1`, so
-**merging a change to `auto-approve.yml` on `main` publishes it to every
-consuming repo.** `.github/workflows/release-tag.yml` moves the tag; there is
-nothing else to run, and no per-repo PR to open.
+Consumers call `ai-hero/hero-skills/.github/workflows/auto-approve.yml@main`, so
+**merging a change to `auto-approve.yml` publishes it to every consuming repo
+the moment it lands.** There is no release step, no tag to move, and no per-repo
+PR to open.
 
-Two consequences worth internalising:
+Three consequences worth internalising:
 
 - That file has a blast radius no other file here has. Review it accordingly.
-- If `v1` stops moving, every consumer silently pins to whatever commit it last
-  pointed at, with no failing build anywhere. That is not hypothetical — it is
-  what happened before `release-tag.yml` existed.
+- **`main`'s branch protection is the only gate.** Not a formality: approval
+  required, stale approvals dismissed on push, and last-push approval required
+  — without that last pair, an approval collected on a benign diff survives a
+  force-push and ships fleet-wide seconds later.
+- Roll back by reverting on `main`. That is the whole procedure.
+
+This replaced a moving `v1` tag. The tag needed a release workflow to move it,
+an App to be allowed to move it past a ruleset, and a carve-out in the fleet's
+pin rule — and its one distinctive feature, a manual lever to point the tag at
+an arbitrary commit, turned out to be a way around the very branch protection
+the design depended on. A branch ref cannot be aimed anywhere; there is nothing
+to aim.
 
 `assets/auto-approve/caller.yml` is what gets installed into consumers. It is
 not the logic and should stay small; `scripts/install-auto-approve.test.sh`

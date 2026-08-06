@@ -141,11 +141,13 @@ check "contract: caller grants every scope the callee declares" "none" "$missing
 check "contract: caller never uses secrets: inherit" "yes" \
   "$(grep -vE '^\s*#' "$SOURCE" | grep -q 'secrets: *inherit' && echo no || echo yes)"
 
-# The ref the caller resolves must be the tag release-tag.yml maintains.
-# Bump one without the other and every consumer gets "workflow not found".
-caller_ref=$(grep -oE 'auto-approve\.yml@[A-Za-z0-9._-]+' "$SOURCE" | head -1 | cut -d@ -f2)
-check "contract: caller ref is the tag release-tag.yml moves" "yes" \
-  "$(grep -q "refs/tags/$caller_ref" "$HERE/../.github/workflows/release-tag.yml" && echo yes || echo no)"
+# The caller must track this repo's DEFAULT branch. A tag or SHA here means a
+# fix to the shared workflow is not live until a PR lands in each of ~25
+# consumers; a non-default branch means the fleet runs code that main's branch
+# protection never gated. Both fail silently — consumers keep running the old
+# workflow with nothing red anywhere — so assert the ref explicitly.
+caller_ref=$(grep -oE 'auto-approve\.yml@[A-Za-z0-9._/-]+' "$SOURCE" | head -1 | cut -d@ -f2)
+check "contract: caller tracks main" "main" "$caller_ref"
 
 # --- trigger anchoring -------------------------------------------------------
 # Reads as a style preference; it is not. With `contains`, merely MENTIONING
