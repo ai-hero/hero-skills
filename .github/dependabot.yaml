@@ -1,0 +1,19 @@
+version: 2
+
+updates:
+  # This repo ships shell, Markdown and YAML — no package ecosystem to track.
+  # github-actions is the one that matters: it is the supply chain for the
+  # workflow ~25 repos execute through auto-approve.yaml.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    # Quarantine a release before adopting it. Security advisories are exempt
+    # from `schedule` and `cooldown` alike — those PRs open as soon as the
+    # advisory lands, which is the case this delay must not slow down.
+    cooldown:
+      default-days: 7
+    groups:
+      actions-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]

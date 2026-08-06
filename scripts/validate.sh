@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 A.I. Hero, Inc.
+# All Rights Reserved.
+
 # Validate hero-skills plugin structure against Claude Code official requirements.
 # Usage: ./scripts/validate.sh [--verbose]
 

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 A.I. Hero, Inc.
+# All Rights Reserved.
+
 # Scaffold a new hero skill.
 # Usage: ./scripts/new-skill.sh <skill-name> [description]
 # Example: ./scripts/new-skill.sh deploy "Deploy to production environments"

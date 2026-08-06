@@ -205,3 +205,13 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# `.claude/*` and not `.claude/`: git never descends into an excluded
+# DIRECTORY, so the negations below would be unreachable and the checked-in
+# rules would be silently untracked. Ignoring the contents instead leaves the
+# directory itself visible, so re-including specific children works.
+.claude/*
+!.claude/skills/
+!.claude/rules/
+.claude/settings.local.json
+.claude/scheduled_tasks.lock

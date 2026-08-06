@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 A.I. Hero, Inc.
+# All Rights Reserved.
+
 # Fast pre-commit gate for hero-meta.
 # Only runs when skill files are staged. Sends only the diff to Sonnet
 # for a quick quality check.

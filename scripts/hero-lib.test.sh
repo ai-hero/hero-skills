@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 A.I. Hero, Inc.
+# All Rights Reserved.
+
 # Regression table for scripts/hero-lib.sh.
 #
 # Scoped deliberately: only the two functions with real failure modes are

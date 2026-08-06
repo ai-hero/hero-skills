@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 A.I. Hero, Inc.
+# All Rights Reserved.
+
 # Regression table for check-design-tokens.sh.
 #
 # The seven checks are pure string -> bool functions, and four of them

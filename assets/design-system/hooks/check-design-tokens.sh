@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 A.I. Hero, Inc.
+# All Rights Reserved.
+
 # PostToolUse hook — flag off-token styling in UI files after a write.
 #
 # Vendored by scripts/install-design-system.sh, which refuses to overwrite a

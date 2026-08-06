@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 A.I. Hero, Inc.
+# All Rights Reserved.
+
 # Regression table for scripts/resume-state.sh.
 #
 # Scoped to the two things that broke and could break again silently:

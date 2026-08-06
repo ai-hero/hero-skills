@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 A.I. Hero, Inc.
+# All Rights Reserved.
+
 # Pre-flight checks for the hero-skills pipeline.
 #
 # Runs the union of every downstream skill's blocking check so a `one-shot`

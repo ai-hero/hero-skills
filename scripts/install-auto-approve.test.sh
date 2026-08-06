@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 A.I. Hero, Inc.
+# All Rights Reserved.
+
 # Tests for install-auto-approve.sh.
 #
 # Not -e: the suite has to OBSERVE non-zero exits (2 and 3 are contract, not
@@ -7,7 +10,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 INSTALLER="$HERE/install-auto-approve.sh"
-SOURCE="$HERE/../assets/auto-approve/caller.yml"
+SOURCE="$HERE/../assets/auto-approve/caller.yaml"
 
 PASS=0
 FAIL=0
@@ -38,17 +41,17 @@ fixture() {
 d=$(fixture fresh)
 out=$("$INSTALLER" "$d" 2>&1); rc=$?
 check "fresh: rc" "0" "$rc"
-check "fresh: file created" "yes" "$([[ -f "$d/.github/workflows/auto-approve.yml" ]] && echo yes || echo no)"
-check "fresh: matches source" "same" "$(cmp -s "$SOURCE" "$d/.github/workflows/auto-approve.yml" && echo same || echo differs)"
+check "fresh: file created" "yes" "$([[ -f "$d/.github/workflows/auto-approve.yaml" ]] && echo yes || echo no)"
+check "fresh: matches source" "same" "$(cmp -s "$SOURCE" "$d/.github/workflows/auto-approve.yaml" && echo same || echo differs)"
 
 # The regression that matters: SOURCE reverting to the shared logic. Assert on
 # content, not the path — a caller job resolves a `uses:` and cannot carry
 # `runs-on:`, so that pair distinguishes caller from logic no matter how the
 # file is spelled.
 check "fresh: is the caller" "yes" \
-  "$(grep -q 'uses: ai-hero/hero-skills/.github/workflows/auto-approve.yml@' "$d/.github/workflows/auto-approve.yml" && echo yes || echo no)"
+  "$(grep -q 'uses: ai-hero/hero-skills/.github/workflows/auto-approve.yaml@' "$d/.github/workflows/auto-approve.yaml" && echo yes || echo no)"
 check "fresh: is NOT the logic" "yes" \
-  "$(grep -q 'runs-on:' "$d/.github/workflows/auto-approve.yml" && echo no || echo yes)"
+  "$(grep -q 'runs-on:' "$d/.github/workflows/auto-approve.yaml" && echo no || echo yes)"
 
 # Guidance that only prints on this path reaches nobody who is migrating.
 check "fresh: names ANTHROPIC_API_KEY" "yes" "$(grep -q ANTHROPIC_API_KEY <<<"$out" && echo yes || echo no)"
@@ -103,7 +106,7 @@ check "missing source: rc" "3" "$rc"
 # --- caller <-> callee contract ---------------------------------------------
 # These four break in the ~25 CONSUMING repos, not here, so nothing in this
 # repo's normal feedback loop would ever show them.
-CALLEE="$HERE/../.github/workflows/auto-approve.yml"
+CALLEE="$HERE/../.github/workflows/auto-approve.yaml"
 
 # A caller may name a secret only if the callee declares it under
 # on.workflow_call.secrets. Naming an undeclared one makes GitHub reject the
@@ -146,7 +149,7 @@ check "contract: caller never uses secrets: inherit" "yes" \
 # consumers; a non-default branch means the fleet runs code that main's branch
 # protection never gated. Both fail silently — consumers keep running the old
 # workflow with nothing red anywhere — so assert the ref explicitly.
-caller_ref=$(grep -oE 'auto-approve\.yml@[A-Za-z0-9._/-]+' "$SOURCE" | head -1 | cut -d@ -f2)
+caller_ref=$(grep -oE 'auto-approve\.ya?ml@[A-Za-z0-9._/-]+' "$SOURCE" | head -1 | cut -d@ -f2)
 check "contract: caller tracks main" "main" "$caller_ref"
 
 # --- trigger anchoring -------------------------------------------------------

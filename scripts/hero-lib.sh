@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 A.I. Hero, Inc.
+# All Rights Reserved.
+
 # hero-lib.sh — shared helpers for hero-skills.
 #
 # Sourced by skills, not executed. Every function here exists because the same
