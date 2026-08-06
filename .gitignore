@@ -206,9 +206,12 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Narrow, deliberately. Ignoring all of .claude/ would also ignore
-# .claude/rules/ and .claude/skills/, which are checked in on purpose — the
-# rules are how agents working here learn the conventions. Only the per-machine
-# session scratch is ignored.
+# `.claude/*` and not `.claude/`: git never descends into an excluded
+# DIRECTORY, so the negations below would be unreachable and the checked-in
+# rules would be silently untracked. Ignoring the contents instead leaves the
+# directory itself visible, so re-including specific children works.
+.claude/*
+!.claude/skills/
+!.claude/rules/
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
