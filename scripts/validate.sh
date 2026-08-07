@@ -365,7 +365,7 @@ for absorbed in $ABSORBED_SKILLS; do
     continue
   fi
   HITS=$(grep -rn "$absorbed" --include='*.md' --include='*.sh' \
-    "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT/PIPELINES.md" "$PLUGIN_ROOT/scripts" 2>/dev/null \
+    "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT/docs/PIPELINES.md" "$PLUGIN_ROOT/scripts" 2>/dev/null \
     | grep -v "$(basename "$0")" \
     | grep -viE 'absorb' || true)
   if [[ -n "$HITS" ]]; then
@@ -392,14 +392,14 @@ echo "────────────────────────�
 # Lineage notes ("absorbed the former hero-skills:X") are exempt, same rule
 # as the absorbed guard.
 REF_NAMES=$(grep -rhoE 'hero-skills:[a-z][a-z0-9-]*' --include='*.md' \
-  "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT/PIPELINES.md" 2>/dev/null \
+  "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT/docs/PIPELINES.md" 2>/dev/null \
   | sort -u | cut -d: -f2)
 DANGLING_REFS=0
 for ref in $REF_NAMES; do
   [[ -f "$SKILLS_DIR/$ref/SKILL.md" ]] && continue
   # Trailing-boundary match so `one-shot` never swallows a hit on `one-shots`.
   HITS=$(grep -rnE "hero-skills:$ref([^a-z0-9-]|\$)" --include='*.md' \
-    "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT/PIPELINES.md" 2>/dev/null \
+    "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT/docs/PIPELINES.md" 2>/dev/null \
     | grep -viE 'absorb' || true)
   [[ -z "$HITS" ]] && continue # lineage-only references are fine
   DANGLING_REFS=1
