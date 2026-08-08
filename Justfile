@@ -48,3 +48,24 @@ test:
 # Plugin structure: skill frontmatter, cross-references, naming.
 validate:
     @bash scripts/validate.sh
+
+# Delegated to pre-commit for the same reason lint is: these hooks are pied
+# there, and a second copy of the same formatter can disagree with the one the
+# commit gate enforces.
+
+# Apply the formatting fixers.
+format:
+    @pre-commit run trailing-whitespace --all-files || true
+    @pre-commit run end-of-file-fixer --all-files || true
+    @pre-commit run mixed-line-ending --all-files || true
+    @pre-commit run pretty-format-yaml --all-files || true
+
+# The installers write <file>.new beside a file that differs rather than
+# overwriting it, so a repo that has run one carries leftovers. Everything else
+# here is a tool cache, not build output — this repo produces no artifacts.
+
+# Remove installer leftovers and tool caches.
+clean:
+    @find . -name '*.new' -not -path './.git/*' -print -delete
+    @rm -rf .ruff_cache .pytest_cache
+    @echo "clean"
