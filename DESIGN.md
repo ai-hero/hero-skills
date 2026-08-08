@@ -14,7 +14,6 @@ repos' configuration*.
 That inversion drives everything below — a change here is a change to ~25
 repos, so the interesting risks are distribution risks, not correctness risks.
 
-
 ## Tech stack
 
 Shell (bash) and Markdown. No compiled language, no package manifest, no build
