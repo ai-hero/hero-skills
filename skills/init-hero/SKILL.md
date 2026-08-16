@@ -937,7 +937,7 @@ After the user responds, merge confirmed findings + user answers and write `HERO
      Configuration section. Omit unless this repo tracks features against a
      claude.ai/design project. -->
 - source-repo: .
-- design-project: none # a claude.ai/design link or project UUID; `ask` prompts for the link each session; none disables the target substrate
+- design-project: none # a claude.ai/design link or project UUID; `ask` prompts for the link each session; none disables the target substrate (unless design-transport is manual)
 - design-transport: auto # auto | designsync | manual — manual = you carry exported design files into the local snapshot (two-account setups)
 - feedback-repo: none # OWNER/NAME GitHub repo where design-feedback issues are filed; none keeps feedback in local packets
 <!-- ux-flow: path of the UX prototype flow / guided tour in the design project, or
@@ -945,7 +945,7 @@ After the user responds, merge confirmed findings + user answers and write `HERO
      "nobody has looked yet", which is what wayfare needs in order to go looking.
      Writing `none` here would assert "looked, there isn't one" on your behalf and
      permanently suppress its no-ux-flow report. Uncomment and set a real path:
-       - ux-flow: design/flows/
+       - ux-flow: flows/
      NOTE the leading indent on that example — hero_field skips fenced blocks but
      NOT HTML comments, so a `- key:` at column 1 inside a comment is read as live
      config. Keep commented examples indented. -->

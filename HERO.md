@@ -47,7 +47,7 @@
 ## Wayfare
 
 - source-repo: .
-- design-project: none # set to a claude.ai/design link or project UUID to enable the target substrate; `ask` prompts for the link each session
+- design-project: none # set to a claude.ai/design link or project UUID to enable the target substrate; `ask` prompts for the link each session; under design-transport manual, none is allowed (the snapshot you fill is the target)
 - design-transport: auto # auto | designsync | manual — manual = you carry exported design files into the local snapshot (two-account setups)
 - feedback-repo: none # OWNER/NAME GitHub repo where design-feedback issues are filed; none keeps feedback in local packets
 

@@ -98,10 +98,11 @@ the same skill. Both edges require `architecture` to stay model-invocable
 **The design return channel.** Every other edge flows target → source. One
 flows back: one-shot logs a divergence it found while building into the
 feature's `## Design Feedback`, and `wayfare sync` delivers it. Two
-destinations, no third: a GitHub target gets an issue wayfare files itself
-(entries verbatim plus a manifest, destination confirmed in-session), and
-anything else gets a packet under `$STORE/.feedback/` that the user delivers
-by hand. `.plans/` is git-ignored and wayfare never writes the target, so
+destinations, no third: a configured `feedback-repo` gets an issue wayfare
+files itself (entries verbatim plus a manifest, destination confirmed
+in-session), and everything else — `feedback-repo: none`, a rejected value,
+or a repo with issues disabled — gets a packet under `$STORE/.feedback/`
+that the user delivers by hand. `.plans/` is git-ignored and wayfare never writes the target, so
 there is no other way out. Delivery deliberately does *not* route through
 `hero-skills:handoff`: that skill distills the *current* conversation, which
 would both narrate the wrong session and carry this repo's branches and PR
