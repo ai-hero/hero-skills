@@ -53,7 +53,7 @@ Each skill needs specific information to work well. This skill figures out what'
 | `hero-skills:review-pr` | Code Quality (pre-commit), Code Review Agent (bot username — to dedupe its comments) |
 | `hero-skills:harden` | Registry, language/framework, dependency files per project |
 | `hero-skills:architecture` | Repo type, project list, deployment platform |
-| `hero-skills:wayfare` | Wayfare (source-repo, target-repo, target-branch, target-path, ux-flow) |
+| `hero-skills:wayfare` | Wayfare (source-repo, design-project, design-transport, feedback-repo, ux-flow) |
 | `hero-skills:create-project` | Repo type, coding conventions, code quality tools, project scaffold patterns |
 | `hero-skills:setup-dev` | Required tools, recommended tools, MCP servers |
 | `hero-skills:respond-to-comments` | Code Review Agent (agent, trigger, poll-method, bot-username) |
@@ -935,12 +935,12 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 ## Wayfare
 <!-- Used by hero-skills:wayfare — key semantics documented in that skill's
      Configuration section. Omit unless this repo tracks features against a
-     target-design repo. -->
+     claude.ai/design project. -->
 - source-repo: .
-- target-repo: none # OWNER/NAME, a local path, or a git URL; none disables the target substrate
-- target-branch: main
-- target-path: none # optional subtree holding the target design
-<!-- ux-flow: path of the UX prototype flow / guided tour in the target repo, or
+- design-project: none # a claude.ai/design link or project UUID; `ask` prompts for the link each session; none disables the target substrate
+- design-transport: auto # auto | designsync | manual — manual = you carry exported design files into the local snapshot (two-account setups)
+- feedback-repo: none # OWNER/NAME GitHub repo where design-feedback issues are filed; none keeps feedback in local packets
+<!-- ux-flow: path of the UX prototype flow / guided tour in the design project, or
      `none` if the design genuinely has none. Left unset on purpose: unset means
      "nobody has looked yet", which is what wayfare needs in order to go looking.
      Writing `none` here would assert "looked, there isn't one" on your behalf and
