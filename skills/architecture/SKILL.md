@@ -56,7 +56,7 @@ What belongs — exactly what the code cannot say:
   where it drives voice and copy.
 - **Flows** — the paths a user takes through the system, one focused Mermaid
   flowchart each, with the route/handler path named in each node so a flow
-  stays checkable against the router. Where a target design repo is
+  stays checkable against the router. Where a target design project is
   configured, wayfare's `ux-flow` is authoritative for the _journey_ and this
   section records how that journey lands on this codebase's routes — the two
   are not rival copies, and a disagreement is a finding for `wayfare sync`,

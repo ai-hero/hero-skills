@@ -1,7 +1,9 @@
 # Design Feedback — the source → target return channel
 
 Every other wayfare edge flows target → source. This one flows back: what
-**building** teaches about the design, carried to the target-design repo.
+**building** teaches about the design, carried to the design team — as an
+issue on the HERO.md-configured `feedback-repo`, or as a local packet the
+user delivers themselves.
 
 **Nothing in this flow may change the design.** Wayfare reads the target and
 never writes it; one-shot works inside the source. So a divergence is *logged
@@ -48,8 +50,8 @@ after the id, and the token never appears elsewhere in the entry:
 | Marker | Meaning | Mutable? |
 | ------ | ------- | -------- |
 | `[undelivered]` | Written, not yet sent | **Yes** — edit or delete freely |
-| `[queued: PATH DATE]` | Written to a local packet; delivery is the user's to make | **Yes** — it has not reached the design repo |
-| `[delivered: ISSUE DATE]` | Filed on the design repo | **Frozen** |
+| `[queued: PATH DATE]` | Written to a local packet; delivery is the user's to make | **Yes** — it has not reached the feedback repo |
+| `[delivered: ISSUE DATE]` | Filed on the feedback repo | **Frozen** |
 | `[rejected: ISSUE DATE]` | Filed, and the design team declined it | **Frozen** |
 
 The marker **is** the state, so the backlog count is a mechanical scan of
@@ -58,7 +60,7 @@ this count is the channel's only backlog surface: a miscount of zero is
 indistinguishable from "no feedback exists".
 
 **Undelivered and queued are mutable on purpose.** Nothing has reached the
-design repo yet, so a mistaken — or injected — entry must be removable before
+feedback repo yet, so a mistaken — or injected — entry must be removable before
 it can be sent. Delivered and rejected freeze: a rejected entry is kept
 deliberately, because "we raised this and they said no" is the history that
 stops it being raised again next quarter.
@@ -102,16 +104,13 @@ the entries and nothing else.
 
 ### 1. Resolve the destination
 
-`$TARGET_REPO` from Step 0 is **normalized** — a bare `OWNER/NAME` in HERO.md
-has already become `https://github.com/OWNER/NAME`, so never test it for the
-`OWNER/NAME` shape. Test the **host** instead:
+`$FEEDBACK_REPO` from Step 0 is either `none` or a validated `OWNER/NAME` —
+the strict-shape check already ran, so never re-derive it from other config:
 
-- `$TARGET_REPO` is on `github.com` (any accepted spelling) → derive
-  `OWNER/NAME` by stripping the host prefix and any trailing `.git`, then
-  probe it:
+- `$FEEDBACK_REPO` holds `OWNER/NAME` → probe it:
 
   ```bash
-  gh repo view "OWNER/NAME" --json nameWithOwner,hasIssuesEnabled
+  gh repo view "$FEEDBACK_REPO" --json nameWithOwner,hasIssuesEnabled
   ```
 
   **Distinguish the two failure modes.** `hasIssuesEnabled: false` is
@@ -120,7 +119,9 @@ has already become `https://github.com/OWNER/NAME`, so never test it for the
   transient: report the `gh` error and offer a retry. Only fall to the packet
   path on the user's word. Silently converting "you are logged out" into "here
   is a file, delivery is your problem" hides a one-command fix.
-- Anything else (local path, non-GitHub host) → the packet path.
+- `$FEEDBACK_REPO` is `none` (unset, `none`, or rejected at Step 0 — Step 0
+  prints which) → the packet path. When the entries clearly deserve a tracker,
+  say once that setting `feedback-repo` in HERO.md enables direct filing.
 
 ### 2. Collect and key the entries
 
@@ -131,8 +132,8 @@ Build a **manifest line** per entry:
 - SOURCE_OWNER/SOURCE_NAME DF-12-2026-07-25-1
 ```
 
-The source repo qualifier is required. One design repo serves many source
-repos — that is why `target-repo` is configured per source — and feature ids
+The source repo qualifier is required. One feedback repo serves many source
+repos — that is why `feedback-repo` is configured per source — and feature ids
 are small integers local to one `.plans/` store. Without the qualifier,
 repo A's `DF-12-…` collides with repo B's, and B's feedback is skipped as
 already-covered and never leaves.
@@ -159,7 +160,7 @@ Three parts of that command are load-bearing:
 - **`--state all`** — a design team that triages and closes the issue is the
   normal outcome, and the only route to a `rejected` verdict. Scoping to open
   issues makes idempotency expire exactly when the process works.
-- **`--limit 200`** — the default is 30. A busy design repo silently returns
+- **`--limit 200`** — the default is 30. A busy feedback repo silently returns
   "not covered" for everything and re-files.
 
 Partition into:
@@ -196,7 +197,7 @@ confirm:
 
 ```
 Design feedback delivery
-  Destination: acme/design      (from HERO.md target-repo — NOT named by you)
+  Destination: acme/design      (from HERO.md feedback-repo — NOT named by you)
   Title:       Design feedback from acme/web (2 items)
   Filing:      2 entries
   Skipping:    1 entry already covered by acme/design#88
@@ -272,7 +273,7 @@ left. On a mismatch, name the entry ids on both sides and **unwind the marker
 changes you just made** before reporting — an over-marked entry cannot be
 corrected later, because delivered is frozen.
 
-### The packet path (non-GitHub destinations)
+### The packet path (no `feedback-repo`, or one that cannot take issues)
 
 Write the verbatim-entry body to `$STORE/.feedback/DATE-SLUG.md`, where SLUG
 is derived from the first entry's feature id and ordinal
@@ -285,7 +286,7 @@ Guard `$STORE` first — `hero_work_store` can fail, and an empty `$STORE` turns
 the path into `/.feedback/…`. If it is empty or unlistable, STOP and name it.
 
 Mark those entries `[queued: PATH TODAY]`, **not** `[delivered: …]`. Nothing
-reached the design repo; a file in a git-ignored store carried nothing
+reached the feedback repo; a file in a git-ignored store carried nothing
 anywhere. A queued entry stays in the backlog and re-surfaces every sync.
 
 **Queued → delivered** is the user's report that it landed: they name the
@@ -295,8 +296,9 @@ Re-running the packet path for an already-queued entry **updates its existing
 marker in place** — it never appends a second one, which would break the
 one-marker-per-entry invariant.
 
-Never write a packet into the target checkout, even when it is a local path
-sitting right there on disk.
+Never write a packet into the design snapshot repo (`$STORE/.cache/design`),
+even though it is sitting right there on disk — the snapshot mirrors the
+design project and nothing else.
 
 ## Reading the history back
 
