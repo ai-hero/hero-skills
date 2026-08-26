@@ -136,6 +136,10 @@ celerybeat.pid
 
 # Environments
 .env
+# Variants too: a bare `.env` rule leaves `.env.local`, `.env.production` and
+# friends committable, which is the same leak one filename away.
+.env.*
+!.env.example
 .envrc
 .venv
 env/
