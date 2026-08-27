@@ -107,7 +107,7 @@ there is no other way out. Delivery deliberately does *not* route through
 `hero-skills:handoff`: that skill distills the *current* conversation, which
 would both narrate the wrong session and carry this repo's branches and PR
 numbers into a third party's tracker. See
-`skills/wayfare/references/design-feedback.md`.
+`skills/wayfare/references/feedback-channels.md`.
 
 **one-shot authors only Step 2a items.** Step 2a pushes discovered or
 mis-scoped work out of the running item into its own `.plans/` item — a

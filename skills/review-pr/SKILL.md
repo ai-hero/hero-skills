@@ -118,9 +118,49 @@ git checkout "$PR_BRANCH"
 git pull origin "$PR_BRANCH"
 ```
 
-### Step 2: Run All Review Agents in Parallel
+### Step 2: Scale the Review to the Diff, Then Run Agents in Parallel
 
-Launch all six review agents simultaneously in a single message — the five pr-review-toolkit agents plus the security agent:
+**Measure the diff first, and pick a tier.** The full fan-out is six agents; a
+16-line config change does not need six agents, and spending them there is how
+a review that should take a minute takes ten and buries one real finding in
+five "no findings" reports.
+
+```bash
+CHANGED_FILES=$(git diff --name-only "origin/$BASE_BRANCH...HEAD" | wc -l | tr -d ' ')
+# insertions + deletions; `|| echo 0` so an empty diff yields 0, not an empty
+# string that every numeric compare below would choke on.
+CHANGED_LINES=$(git diff --numstat "origin/$BASE_BRANCH...HEAD" \
+  | awk '{ n += $1 + $2 } END { print n + 0 }' || echo 0)
+echo "review-pr: $CHANGED_FILES files, $CHANGED_LINES lines changed"
+```
+
+Pick the tier from `CHANGED_LINES` and `CHANGED_FILES` — they are the input,
+not a printout to read by eye:
+
+| Diff | Agents | Which |
+| --- | --- | --- |
+| **under ~50 lines** | review inline, **no agents** | Read it yourself. Say you did, and why the fan-out was skipped. |
+| **~50–300 lines** | 2 | `code-reviewer` + security |
+| **~300–1500 lines** | all 6 | the five pr-review-toolkit agents plus security |
+| **over 1500 lines or 50 files** | all 6, scoped | warn and ask to focus on specific paths first |
+
+Two rules keep the tiers honest:
+
+- **Security is never dropped.** It is in every tier that runs an agent at all,
+  and in the inline tier it is a pass you run yourself. A small diff is exactly
+  where a credential or an injection sneaks in unescorted.
+- **Content overrides size.** Anything touching auth, crypto, permissions, a
+  shared workflow, a migration, or a payment path takes the **full six**
+  regardless of line count. A 12-line change to `.github/workflows/` in this
+  repo reaches ~25 consumer repos on merge; a 12-line change to a README does
+  not. Judge by blast radius, not by `wc -l`.
+
+Say which tier you picked and why, in one line, before launching. A review that
+silently ran two agents reads identically to one that ran six and found
+nothing.
+
+Then launch the tier's agents simultaneously in a single message — for the full
+six, the five pr-review-toolkit agents plus the security agent:
 
 ```
 Agent(subagent_type="pr-review-toolkit:code-reviewer", ...)
@@ -162,7 +202,7 @@ EOF
 
 Omit empty sections.
 
-Two things about this comment are load-bearing, so do not "tidy" them:
+Two things about this comment matter, so do not "tidy" them:
 
 - **The hidden `<!-- ai-hero:self-review -->` marker is what unblocks shipping.**
   The shared auto-approve workflow's prior-review gate accepts it as proof that
@@ -350,11 +390,11 @@ gh pr view $PR_NUMBER --json commits --jq '.commits[].messageHeadline'
 
 Read the PR description carefully — it explains design decisions.
 
-If diff exceeds 1500 lines or 50 files, warn and ask to focus on specific paths.
+Apply the same tiering as self-review Step 2 — measure the diff, pick the tier, say which one and why. If the diff exceeds 1500 lines or 50 files, warn and ask to focus on specific paths.
 
 ### Step 2: Run All Review Agents in Parallel
 
-Same as self-review Step 2: launch all six review agents (the five pr-review-toolkit agents plus the security agent, same prompt spec) simultaneously and aggregate findings.
+Same as self-review Step 2: pick the tier from the diff size (with the security-always and content-overrides-size rules), launch that tier's agents simultaneously, and aggregate findings.
 
 ### Step 3: Post Inline Comments
 

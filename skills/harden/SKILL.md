@@ -214,6 +214,8 @@ Write each unit as a work-item in `.plans/` using think-it-through's format (id 
 ```markdown
 ---
 id: 12
+kind: feature # every item is a wayfare item; `architecture` when the fix is structural (a boundary, a trust decision) rather than a patch
+origin: harden
 title: Update lodash + minimist for critical CVEs
 status: planning # the user marks audit plans ready — audit output never goes straight to build
 depends_on: []
@@ -235,6 +237,14 @@ Exact commands and edits, in order, assuming zero context:
 1. `npm install lodash@4.17.21`
 2. ...
 N. After `hero-skills:ship-pr` merges this batch: `gh pr close 41 --comment "Superseded by #MERGED_PR_NUMBER, merged in MERGED_SHA."` for each Dependabot PR from A2 (#41 here). Do not rely on GitHub auto-closing them — it doesn't reliably fire for a batched fix (see A4 step 6).
+
+## Subtasks
+
+- [ ] 1. The execution recipe above, one line per step, for one-shot to tick.
+
+## Definition of Done
+
+- [ ] The verification below, as observable statements.
 
 ## Verification
 
