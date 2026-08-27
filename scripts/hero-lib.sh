@@ -429,7 +429,7 @@ hero_item_status() {
 hero_item_class() {
   case "$1" in
     ''|work-order|hardening)                                      printf plain ;;
-    feature|architecture)                                         printf build ;;
+    feature|architecture|polish)                                  printf build ;;
     goal)                                                         printf goal ;;
     design-feedback|architecture-feedback|design-system-feedback) printf feedback ;;
     *)

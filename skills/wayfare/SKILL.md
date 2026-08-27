@@ -27,24 +27,25 @@ features, and `hero-skills:think-it-through` does the planning when a feature
 moves into `planning`. The `.plans/` store (private, git-ignored, managed by
 `hero_work_store`) is the system of record, and **every item in it is a
 wayfare item**: think-it-through, one-shot, handoff and harden all write
-`kind: feature` (or `architecture`), whether or not the repo has a
+`kind: feature` (or `architecture`, or `polish`), whether or not the repo has a
 `## Wayfare` block or a design target. A feature with no target is still a
 feature — `target:` and `target_ref:` are absent, and nothing here treats that
 absence as a defect unless a design project is configured. Items without a
 `kind` are legacy; they still list, and nothing writes one now.
 
-## Three layers, six kinds
+## Three layers, seven kinds
 
 The source repo sits between two things it does not own — the **design
 system** it consumes upstream, and the **app design** it is built toward. A
 sync is one round of reconciliation across all three. Wayfare's items come in
-six kinds — `sync` writes the first five, and the `goal` verb writes the
-sixth:
+seven kinds — `sync` writes the first six, and the `goal` verb writes the
+seventh:
 
 | `kind` | What it is | Class | Ends at |
 | --- | --- | --- | --- |
 | `feature` | an SLC slice of the app design, built end to end | build | `done` |
 | `architecture` | a structural change the design implies that is not a user story — a boundary move, a dependency direction, an invariant | build | `done` |
+| `polish` | a measured visual divergence on a screen that already ships — spacing, alignment, overflow, a missing state, a broken breakpoint | build | `done` |
 | `design-feedback` | a screen/flow divergence to carry to the app design | feedback | `delivered` / `rejected` |
 | `architecture-feedback` | a boundary or invariant the design assumes and the code disproves | feedback | `delivered` / `rejected` |
 | `design-system-feedback` | a token, component API, or specimen divergence to carry to the design system | feedback | `delivered` / `rejected` |
@@ -127,6 +128,52 @@ the later one to mean anything. It never encodes "the data model should come
 first" — inside a slice, it already does. A roadmap where nearly every feature
 depends on the one before it has usually been cut horizontally; say so.
 
+## Polish — the fine-tuning pass
+
+Coverage and fidelity are different questions, and a sync that only asks the
+first one declares a screen `done` while it looks wrong. **Coverage asks
+whether the story ships; polish asks whether the shipped screen matches the
+design when you put the two side by side and look.** A feature can satisfy
+every line of its Definition of Done and still sit on 20px of padding where
+the design has 32, wrap a label the design keeps on one line, clip a card at
+the tablet breakpoint, and render no focus ring at all. None of that is
+visible in a diff, and none of it is what `uncovered` means.
+
+So `sync` runs a **visual pass** over the screens that already ship, and what
+it finds becomes `kind: polish` items. Polish is exempt from the SLC test for
+the opposite reason architecture is: it is not a story because the story
+already shipped — it is the refinement of a surface that exists. A polish
+item that could have been written as a user story is an `uncovered` feature
+that was mis-filed.
+
+**How to read a screen is `references/reconciliation.md`'s job** — its
+*Reading a screen visually* section owns the defect checklist and the three
+rules that keep the pass from becoming a taste argument: compare like for
+like, a gap is a value and not an adjective, and authority decides the
+direction before the row is written. Read it before the pass; what follows is
+only what the pass *writes*.
+
+**A visual divergence routes to one of three kinds, and choosing is the
+work:** `polish` when the code is wrong, `design-feedback` when the shipped
+surface is the better answer, `design-system-feedback` when the same wrong
+value comes out of an upstream token or component and every consumer
+therefore has it (fixing that one locally is the fork this skill forbids).
+Never let it default to the first — a round that files every pixel difference
+as our bug is reconciling against a design the product has legitimately
+overtaken.
+
+**One item per screen or region, never per pixel.** Fifty one-line items is a
+bug tracker, not a roadmap, and nobody will pick up the forty-ninth. Group the
+findings for a screen into one item whose Definition of Done is the list of
+measured assertions, ordered by how visible they are. Split only when two
+regions of the screen would be fixed by different people in different files.
+
+**Polish never gates coverage.** It runs after the coverage lanes and its
+items sort behind them: a screen that is half-built does not need its padding
+audited, and a roadmap that spends its next three PRs on 4px is one that has
+stopped shipping. When a screen's own feature is not `done`, the finding
+belongs in that feature's Definition of Done, not in a new polish item.
+
 ## Lifecycle
 
 `new → todo → planning → ready → implementing → reviewing → done` — with who
@@ -148,14 +195,17 @@ and `architecture` — and lists them as `backlog` / `plan` / `READY` /
 `active` / `review` / `done`. `ready` is the only READY-eligible build status,
 dep-gated like any other item.
 
-`architecture` runs this same lifecycle, for the same reason: it is planned by
-think-it-through, built by one-shot, and reviewed on a PR. It differs only in
-what makes it Complete — an architecture item's Definition of Done asserts a
-**structural** property (a dependency direction now holds, an invariant is
-enforced at the boundary), not a user story, so it is exempt from the SLC test
-above and from the horizontal-slices finding. That exemption is narrow: an
-architecture item that could have been written as a user story was written
-wrong.
+`architecture` and `polish` run this same lifecycle, for the same reason: both
+are planned by think-it-through, built by one-shot, and reviewed on a PR. They
+differ only in what makes them Complete — an architecture item's Definition of
+Done asserts a **structural** property (a dependency direction now holds, an
+invariant is enforced at the boundary) and a polish item's asserts a
+**measured visual** one, neither of which is a user story, so both are exempt
+from the SLC test above and from the horizontal-slices finding. Both
+exemptions are narrow: an item of either kind that could have been written as
+a user story was written wrong. Polish also rarely needs `planning` at all —
+the measurements *are* the plan, so it usually goes `todo → ready` with a
+one-line approach.
 
 The **feedback kinds** carry their own enum — `new → todo → queued →
 delivered` or `rejected` — and list as `feedback` while open, `done` when
@@ -803,8 +853,8 @@ Verify `source-repo` resolves (for `.`, that the working repo is readable;
 for anything else, one `git -C` probe).
 
 **Mode detection.** The roadmap exists iff `.plans/` holds at least one item
-whose **frontmatter** `kind` is one of wayfare's five — read it with
-`hero_item_field "$f" kind` per `"$STORE"/*.md`, never a raw grep (a body
+whose **frontmatter** `kind` is one of wayfare's six `sync`-written kinds —
+read it with `hero_item_field "$f" kind` per `"$STORE"/*.md`, never a raw grep (a body
 mentioning `kind: feature` would trip it). First confirm the store lists
 (`ls "$STORE"` succeeds): a clean pass with no feature item means bootstrap; a
 store that won't list is a failed check — STOP and name the path.
@@ -934,6 +984,16 @@ rules.** A finding whose evidence rule could not be satisfied is reported
   is a **proposal**, not uncovered ground: record it as such rather than
   proposing a feature to build an address the design invented. See *Route
   truth* in `references/reconciliation.md`.
+- **visual-drift** — a screen that already ships and does not *look* like the
+  target: spacing, alignment, type scale, colour, radius, a state the design
+  specifies and the code has no rule for, a breakpoint that breaks. This is
+  the only finding read off pixels rather than symbols, and it is the one the
+  other rows structurally cannot produce — a screen resolves to its route,
+  the route exists, and coverage reports `built` while the page looks wrong.
+  Run it per *Polish — the fine-tuning pass*: measured rows only, split
+  three ways (`polish` / `design-feedback` / `design-system-feedback`), one
+  item per screen, and only for screens whose feature is `done`. An
+  unmeasurable row is `unverified`, not a proposal.
 - **in-code-not-in-design** — shipped behaviour with no surface in the target,
   found by resolving source symbols the other way. Each row carries an opinion
   on what should happen to it, in a sentence or two; **a row without an opinion
@@ -1464,6 +1524,25 @@ direction that now holds, an invariant enforced at the boundary, a boundary
 crossing that no longer exists — verified by reading the code, not by
 rendering a page.
 
+**polish** likewise uses the feature frontmatter with `kind: polish`, a
+`title` naming the screen or region rather than a story, `discovered_from`
+pointing at the feature whose surface it refines, and a `## Definition of
+Done` that is the list of measured assertions the visual pass produced —
+verified by rendering the page at the named viewport and looking, never by
+re-reading the component. Record the viewports and states the pass walked in
+`## Context`; a polish item that does not say what it was compared at cannot
+be re-verified by whoever picks it up, and gets re-derived from scratch.
+
+```markdown
+## Definition of Done
+
+- [ ] Header block sits on `--space-8` (32px) below the nav, not 20px — at 1440 and 768
+- [ ] The "Continue" label stays on one line at 768; today it wraps
+- [ ] Card grid does not clip its right column at 768–1023
+- [ ] Every control on the screen renders a visible focus ring (design system's `--ring`)
+- [ ] Screenshots of design and app at 1440 and 768, attached to the PR, agree
+```
+
 ```markdown
 ---
 id: 12
@@ -1573,7 +1652,13 @@ Stamp `origin` with the producer that actually authored the item; never claim
 | Passing `none`/`ASK` to DesignSync | They are control values, not project ids — resolve them at the config gate. |
 | Reading the target, skipping the registry | A feature's `## Context` should name the registry components the target implies — leaving that to the per-file hook alone means it only fires once code is already being written. |
 | Editing another producer's items  | Sync notes overlaps in the feature; the other item keeps its lifecycle. |
-| Writing a plain item               | Every item is a wayfare item — `kind: feature` or `architecture`, with Subtasks, DoD, Comments. |
+| Writing a plain item               | Every item is a wayfare item — `kind: feature`, `architecture`, or `polish`, with Subtasks, DoD, Comments. |
+| Calling a screen done on coverage alone | Coverage says the story ships; only the rendered comparison says it matches. |
+| A polish row that reads "feels tight" | Unmeasurable rows never converge. A number and the token it should have been, or `unverified`. |
+| Filing every pixel difference as our bug | A shipped UI is authority on its own surface — some rows are design feedback, some are upstream. |
+| One polish item per pixel          | Fifty one-line items is a bug tracker. One item per screen, DoD-listed. |
+| Polishing a screen that isn't done | The finding belongs in that feature's DoD. Polish runs behind coverage, never ahead of it. |
+| Comparing at different viewports   | A frame at 1440 against a browser at whatever width is noise dressed as a finding. |
 | Rewriting `## Comments` history    | Comments are append-only — the discussion thread is the record.    |
 | Anchoring only `target_ref`        | Drift is commit-based at both ends; a design-triggered sync otherwise carries every source claim forward unread. |
 | Measuring age in rounds            | A round can be one-sided. Twenty commits can land under a document that is correct by its own process. |
