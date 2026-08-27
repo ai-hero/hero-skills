@@ -381,7 +381,7 @@ item 047-notdone.md 47 "Colon done status" "not:done" "[]"
 # one reading safe under both.
 item 048-badkind.md 48 "Typo kind" "todo" "[]" "features"
 # Backlog rows still run the dep check: unmet deps annotate the row
-# (`wayfare next` reads it) and a dangling ref warns — a bootstrap typo must
+# (`wayfare goal` reads it) and a dangling ref warns — a bootstrap typo must
 # not be invisible.
 fitem 049-fwait.md 49 "Backlog waiting on dep" "todo" "[30]"
 fitem 050-fdangle.md 50 "Backlog dangling dep" "todo" "[999]"
@@ -428,7 +428,7 @@ check "feature: unknown kind warns on stderr"     "0" "$?"
 printf '%s' "$ERRF" | grep -q "050-fdangle.md depends_on '999'"
 check "feature: backlog dangling dep warns on stderr" "0" "$?"
 
-# ---------- kind classes: architecture, and the three feedback channels ------
+# ---------- kind classes: architecture, feedback, goal, new -----------------
 #
 # `architecture` shares the build enum with `feature`; the feedback kinds carry
 # their own delivery enum and must NEVER be READY — nothing builds a feedback
@@ -492,14 +492,73 @@ item 062-waitrej.md 62 "Waits on rejected feedback" "todo" "[57]"
 # listing, yet silently unblocking its dependents.
 item 063-fakedeliv.md 63 "Unknown kind claiming delivered" "delivered" "[]" "vibes-feedback"
 item 064-waitfake.md 64 "Waits on the fake" "todo" "[63]"
+# The hole the old kind-invalidation existed to close: an unknown kind must
+# not reach READY through ANY status. `todo` → backlog is tested above; `ready`
+# is the arm a "simplification" of the class gate would most likely open.
+item 069-badkindready.md 69 "Typo kind claiming ready" "ready" "[]" "features"
+# `hardening` — the kind behind the nine-invisible-items incident — rides the
+# plain enum: todo is READY, ready is invalid (no skipping the ready-mark).
+item 075-hard.md 75 "Hardening task" "todo" "[]" "hardening"
+item 076-hardready.md 76 "Hardening claiming ready" "ready" "[]" "hardening"
+# Unknown kinds ride the FULL plain enum, and can complete: a done one must
+# unblock its dependents, or the fallback re-hides finished work.
+item 077-unkdone.md 77 "Unknown kind, done" "done" "[]" "features"
+item 078-waitunk.md 78 "Waits on unknown done" "todo" "[77]"
+item 079-unkprog.md 79 "Unknown kind, in flight" "in-progress" "[]" "features"
+# `queued` belongs to the feedback enum only; hoisting it to a wildcard arm
+# would let a feature marked queued fall off the roadmap count as `feedback`.
+item 080-plainq.md 80 "Plain claiming queued" "queued" "[]"
+item 081-featq.md 81 "Feature claiming queued" "queued" "[]" "feature"
+item 082-goalq.md 82 "Goal claiming queued" "queued" "[]" "goal"
+# Build-enum words on feedback and goal items must be INVALID, not aliased. A
+# feedback item at in-progress printing `active` is byte-identical to a
+# feature mid-build — the row has no kind — and tier 1 would build it.
+item 083-fbprog.md 83 "Feedback claiming in-progress" "in-progress" "[]" "design-feedback"
+item 084-fbplan.md 84 "Feedback claiming planning" "planning" "[]" "design-feedback"
+item 085-fbdone.md 85 "Feedback claiming done" "done" "[]" "design-feedback"
+item 086-waitfbdone.md 86 "Waits on feedback claiming done" "todo" "[85]"
+item 087-goalplan.md 87 "Goal claiming planning" "planning" "[]" "goal"
+# done_ids must apply the same alphabet gate as the listing: an item printed
+# `invalid` for a malformed kind must not unblock its dependents from the
+# shadows.
+item 088-donewskind.md 88 "Done with whitespace kind" "done" "[]" "foo bar"
+item 089-waitws.md 89 "Waits on the malformed one" "todo" "[88]"
+# id-less item claiming done: invalid, never `done` — a done row that is not
+# in done_ids is a split-brain (listed finished, dependents blocked forever).
+printf -- '---\ntitle: No id, claims done\nstatus: done\ndepends_on: []\n---\n' > "$W/090-noiddone.md"
+# A dependency that is merely queued is not done.
+item 091-waitq.md 91 "Waits on queued feedback" "todo" "[55]"
 OUTK2="$(hero_ready_items "$W" 2>/dev/null)"
+check "kind: unknown kind claiming ready is invalid" "invalid" "$(state_of 069-badkindready.md "$OUTK2")"
+check "kind: hardening todo is READY"             "READY"   "$(state_of 075-hard.md "$OUTK2")"
+check "kind: hardening claiming ready is invalid" "invalid" "$(state_of 076-hardready.md "$OUTK2")"
+check "kind: unknown kind done is done"           "done"    "$(state_of 077-unkdone.md "$OUTK2")"
+check "kind: dep on unknown done is READY"        "READY"   "$(state_of 078-waitunk.md "$OUTK2")"
+check "kind: unknown kind in-progress is active"  "active"  "$(state_of 079-unkprog.md "$OUTK2")"
+check "kind: plain claiming queued is invalid"    "invalid" "$(state_of 080-plainq.md "$OUTK2")"
+check "kind: feature claiming queued is invalid"  "invalid" "$(state_of 081-featq.md "$OUTK2")"
+check "kind: goal claiming queued is invalid"     "invalid" "$(state_of 082-goalq.md "$OUTK2")"
+check "kind: feedback in-progress is invalid"     "invalid" "$(state_of 083-fbprog.md "$OUTK2")"
+check "kind: feedback planning is invalid"        "invalid" "$(state_of 084-fbplan.md "$OUTK2")"
+check "kind: feedback done is invalid"            "invalid" "$(state_of 085-fbdone.md "$OUTK2")"
+check "kind: dep on feedback-done stays blocked"  "blocked" "$(state_of 086-waitfbdone.md "$OUTK2")"
+check "kind: goal planning is invalid"            "invalid" "$(state_of 087-goalplan.md "$OUTK2")"
+check "kind: done with malformed kind is invalid" "invalid" "$(state_of 088-donewskind.md "$OUTK2")"
+check "kind: dep on it stays blocked (done_ids gated)" "blocked" "$(state_of 089-waitws.md "$OUTK2")"
+check "kind: id-less done is invalid, not done"   "invalid" "$(state_of 090-noiddone.md "$OUTK2")"
+check "kind: dep on queued feedback stays blocked" "blocked" "$(state_of 091-waitq.md "$OUTK2")"
+ERRK2="$(hero_ready_items "$W" 2>&1 >/dev/null)"
+printf '%s' "$ERRK2" | grep -q "069-badkindready.md has unrecognized status 'ready'.*new/planning/todo/in-progress/done"
+check "kind: unknown+ready names the plain enum on stderr" "0" "$?"
+printf '%s' "$ERRK2" | grep -q "048-badkind.md has unrecognized kind 'features'.*never handed out READY"
+check "kind: fallback warning says never READY"   "0" "$?"
 check "kind: dep on delivered feedback is READY" "READY" "$(state_of 061-waitdf.md "$OUTK2")"
 check "kind: dep on rejected feedback is READY"  "READY" "$(state_of 062-waitrej.md "$OUTK2")"
 check "kind: unknown kind claiming delivered is invalid" "invalid" "$(state_of 063-fakedeliv.md "$OUTK2")"
 check "kind: dep on it stays blocked"            "blocked" "$(state_of 064-waitfake.md "$OUTK2")"
 
 # Clean up so later sections' listings aren't polluted by these fixtures.
-rm -f "$W"/03[0-9]-*.md "$W"/04[0-9]-*.md "$W"/05[0-9]-*.md "$W"/06[0-9]-*.md "$W"/07[0-9]-*.md
+rm -f "$W"/03[0-9]-*.md "$W"/04[0-9]-*.md "$W"/05[0-9]-*.md "$W"/06[0-9]-*.md "$W"/07[0-9]-*.md "$W"/08[0-9]-*.md "$W"/09[0-9]-*.md
 
 # ---------- hero_work_store migration ---------------------------------------
 #

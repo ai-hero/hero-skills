@@ -126,12 +126,16 @@ a review that should take a minute takes ten and buries one real finding in
 five "no findings" reports.
 
 ```bash
-git diff --stat "origin/$BASE_BRANCH...HEAD" | tail -1
-CHANGED_LINES=$(git diff --shortstat "origin/$BASE_BRANCH...HEAD" \
-  | grep -oE '[0-9]+ insertion|[0-9]+ deletion' | grep -oE '[0-9]+' \
-  | paste -sd+ - | bc)
-CHANGED_FILES=$(git diff --name-only "origin/$BASE_BRANCH...HEAD" | wc -l)
+CHANGED_FILES=$(git diff --name-only "origin/$BASE_BRANCH...HEAD" | wc -l | tr -d ' ')
+# insertions + deletions; `|| echo 0` so an empty diff yields 0, not an empty
+# string that every numeric compare below would choke on.
+CHANGED_LINES=$(git diff --numstat "origin/$BASE_BRANCH...HEAD" \
+  | awk '{ n += $1 + $2 } END { print n + 0 }' || echo 0)
+echo "review-pr: $CHANGED_FILES files, $CHANGED_LINES lines changed"
 ```
+
+Pick the tier from `CHANGED_LINES` and `CHANGED_FILES` — they are the input,
+not a printout to read by eye:
 
 | Diff | Agents | Which |
 | --- | --- | --- |

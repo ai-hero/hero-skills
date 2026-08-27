@@ -280,14 +280,20 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
   # Capture before filtering, and check gh's own status. `gh api | jq` would
   # swallow it — a 404 or a rate-limit would read as "no run yet" and poll to
   # the timeout with a misleading error.
-  if ! RAW=$(gh api "/repos/{owner}/{repo}/actions/workflows/$WF_ID/runs?event=issue_comment&per_page=10" 2>/tmp/ship_pr_runs_err.log); then
-    echo "WARN: could not read workflow runs:"; cat /tmp/ship_pr_runs_err.log
+  RUNS_ERR=$(mktemp)
+  if ! RAW=$(gh api "/repos/{owner}/{repo}/actions/workflows/$WF_ID/runs?event=issue_comment&per_page=10" 2>"$RUNS_ERR"); then
+    echo "WARN: could not read workflow runs:"; cat "$RUNS_ERR"; rm -f "$RUNS_ERR"
     sleep 5; continue
   fi
+  rm -f "$RUNS_ERR"
+  # jq is checked too: an unchecked parse failure reads as "no run yet" and
+  # burns all ten polls before printing a "Common causes" list that does not
+  # contain the cause.
   RUN_JSON=$(printf '%s' "$RAW" | tr -d '\000-\037' \
     | jq -c "[.workflow_runs[]
              | select(.created_at > \"$TRIGGERED_AT\")
-             | select(.conclusion != \"skipped\")] | .[0]")
+             | select(.conclusion != \"skipped\")] | .[0]") \
+    || { echo "jq could not parse the runs payload:"; printf '%s' "$RAW" | head -c 400; echo; exit 1; }
   if [ -n "$RUN_JSON" ] && [ "$RUN_JSON" != "null" ]; then
     RUN_ID=$(echo "$RUN_JSON" | jq -r '.id')
     break
@@ -415,10 +421,20 @@ whose base is this PR's head branch is a *dependent*, and merging this PR
 destroys it:
 
 ```bash
-PR_BRANCH=$(gh pr view $PR_NUMBER --json headRefName --jq '.headRefName')
-STACKED=$(gh pr list --state open --base "$PR_BRANCH" \
-  --json number,url,title,headRefName)
-STACKED_COUNT=$(printf '%s' "$STACKED" | jq 'length')
+# Every step here is checked, because the failure mode of an UNCHECKED gate
+# is the exact loss the gate exists to prevent: on a gh hiccup STACKED_COUNT
+# would be "", `[ "" -gt 0 ]` is false, and the merge proceeds. Likewise an
+# empty PR_BRANCH makes `--base ""` match EVERY open PR (verified), and `r`
+# would then retarget all of them.
+[ -n "$PR_BRANCH" ] && [ -n "$BASE_BRANCH" ] \
+  || { echo "PR_BRANCH/BASE_BRANCH not set from Step 1 — refusing to merge."; exit 1; }
+if ! STACKED=$(gh pr list --state open --base "$PR_BRANCH" --json number,url,title,headRefName); then
+  echo "Could not list PRs based on $PR_BRANCH — refusing to merge until the stacked-PR check can run."; exit 1
+fi
+STACKED_COUNT=$(printf '%s' "$STACKED" | jq 'length') || exit 1
+case "$STACKED_COUNT" in ''|*[!0-9]*)
+  echo "Unparsable stacked-PR count '$STACKED_COUNT' — refusing to merge."; exit 1 ;;
+esac
 ```
 
 `STACKED_COUNT > 0` is a **stop-and-ask**, not a warning to print past:
@@ -436,12 +452,19 @@ recreated from scratch under a new number, losing its review history.
   n -> stop here
 ```
 
-On `r`, retarget every dependent **before** merging:
+On `r`, retarget every dependent **before** merging, then re-check — a
+retarget that failed (permissions, a locked PR) followed by the merge is the
+unrecoverable loss this gate exists to prevent, and a flag set inside a
+`| while` loop is lost to the subshell, so the re-list is the only reliable
+check:
 
 ```bash
 printf '%s' "$STACKED" | jq -r '.[].number' | while read -r N; do
   gh pr edit "$N" --base "$BASE_BRANCH" || echo "WARN: could not retarget #$N"
 done
+REMAINING=$(gh pr list --state open --base "$PR_BRANCH" --json number --jq 'length') || exit 1
+[ "$REMAINING" = 0 ] \
+  || { echo "$REMAINING PR(s) still based on $PR_BRANCH — not merging. Retarget them by hand and re-run."; exit 1; }
 ```
 
 Three reasons the order matters:
@@ -618,8 +641,13 @@ if [ "$RESET_OK" = "true" ] && [ "$MERGED" = "true" ]; then
     # merge path; a ship-pr resumed against an ALREADY-merged PR reaches this
     # line having never checked, and deleting the ref here auto-closes every
     # dependent just as surely. Retarget first, then delete.
-    STILL_STACKED=$(gh pr list --state open --base "$PR_BRANCH" --json number --jq 'length')
-    if [ "${STILL_STACKED:-0}" -gt 0 ]; then
+    # A check that cannot run must NOT default to "zero stacked" — deleting on
+    # a gh failure auto-closes the dependents just as surely as deleting on a
+    # real zero would not.
+    if ! STILL_STACKED=$(gh pr list --state open --base "$PR_BRANCH" --json number --jq 'length') \
+       || ! printf '%s' "$STILL_STACKED" | grep -qE '^[0-9]+$'; then
+      echo "Could not verify stacked PRs on $PR_BRANCH — NOT deleting it. Delete by hand once verified."
+    elif [ "$STILL_STACKED" -gt 0 ]; then
       echo "NOT deleting $PR_BRANCH — $STILL_STACKED open PR(s) are still based on it."
       echo "Deleting it would auto-close them, and a closed PR whose base is gone"
       echo "cannot be reopened or retargeted. Retarget them first:"

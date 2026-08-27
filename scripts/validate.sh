@@ -297,13 +297,13 @@ fi
 
 # ── chained-skill invocability guard ───────────────────────────────
 # one-shot (skills/one-shot/SKILL.md) delegates its steps to child skills via
-# the Skill tool, and wayfare next chains into think-it-through and
+# the Skill tool, and wayfare goal chains into think-it-through and
 # one-shot the same way. A chained skill carrying
 # `disable-model-invocation: true` cannot be invoked by the model, so the
 # calling pipeline breaks at that step (there is no per-caller allowlist).
 # Keep this list in sync with one-shot's step→skill mapping AND
-# wayfare next's tiers — `one-shot` is here because re-adding its flag
-# would silently break `wayfare next`. `architecture` is chained three
+# wayfare goal's tiers — `one-shot` is here because re-adding its flag
+# would silently break `wayfare goal`. `architecture` is chained three
 # ways: wayfare sync runs its review/sync in both modes, and
 # think-it-through's `arch` dispatch
 # delegates to it. `handoff` is deliberately NOT here: wayfare's

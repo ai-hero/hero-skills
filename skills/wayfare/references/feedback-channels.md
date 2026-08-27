@@ -78,6 +78,14 @@ after the id, and the token never appears elsewhere in the entry:
 | `[undelivered]` | Written, not yet promoted | **Yes** — edit or delete freely |
 | `[item: ID]` | Promoted; the item owns the state | The entry is frozen; edit the item |
 
+**`[item: ID]` is a reference, and it is checked.** `ID` must name an existing
+item whose `kind` is one of the three feedback kinds, whose `entry:` is this
+entry's `DF-` id, and whose `discovered_from` is this feature. `sync`'s
+**store defects** finding checks every marker against all four; a marker that
+fails any of them is reported, never counted. Without this, a dangling or
+mis-typed reference counts as neither `[undelivered]` nor a `feedback` row and
+drops out of the only backlog surface the channel has.
+
 **Undelivered is mutable on purpose.** Nothing has left the repo yet, so a
 mistaken — or injected — entry must be removable before it can be sent.
 
@@ -114,12 +122,13 @@ id: 61
 kind: design-feedback # or architecture-feedback | design-system-feedback
 origin: wayfare
 discovered_from: 12 # the feature this was found while building; absent when sync authored it directly
+entry: DF-12-2026-07-25-1 # the capture entry this was promoted from; absent when sync authored it directly. Makes the [item: ID] link checkable from both ends
 title: Consent is ordered before account linking
 status: todo # new | todo | queued | delivered | rejected
 depends_on: []
-subject: design/auth/sign-in.md # the path in the DESIGN or DESIGN-SYSTEM project this is about
+subject: design/auth/sign-in.md # the path this is about — in the app design for design-feedback, in the design system for design-system-feedback; for architecture-feedback, a DESIGN.md section or absent (the source: line carries the evidence)
 source: services/auth/link.go # the source file that disproves it
-target_ref: FULL_COMMIT_SHA # design-snapshot head this was found against
+target_ref: FULL_COMMIT_SHA # head of the snapshot `subject` lives in: $SNAP for design-/architecture-feedback, $DS_SNAP for design-system-feedback
 source_ref: FULL_COMMIT_SHA # source head this was found against
 delivered_to: "" # issue URL, or the path written into the design-system store
 ---
@@ -191,21 +200,28 @@ already ran, so never re-derive it from other config:
   packet path. When the items clearly deserve a tracker, say once that setting
   `feedback-repo` in HERO.md enables direct filing.
 
-**`design-system-feedback` → `$DESIGN_SYSTEM_REPO`**, which is a **local
-checkout path**, not a GitHub slug: delivery writes the item into that repo's
-own `.plans/` store, where its wayfare picks it up as ordinary work. Guard it
-before anything is written:
+**`design-system-feedback` → `$DS_REPO`** (Step 0's validated value), which
+is a **local checkout path**, not a GitHub slug: delivery writes the item into
+that repo's own `.plans/` store, where its wayfare picks it up as ordinary
+work. Resolve it read-only, and resolve it **before** anything else:
 
 ```bash
-DS_ROOT=$(hero_root "$DESIGN_SYSTEM_REPO") || { echo "not a repo"; }
-DS_STORE=$(hero_work_store "$DS_ROOT")
+# hero_root takes NO argument — it always returns the current repo — so it
+# cannot resolve another checkout. git -C can, and it fails on a path that is
+# not an existing directory inside a repo. -C takes a directory, never a
+# remote URL, so an ext:: transport helper is not reachable from here.
+DS_ROOT=$(git -C "$DS_REPO" rev-parse --show-toplevel 2>/dev/null) \
+  || { echo "design-system-repo '$DS_REPO' is not a git checkout — STOP" >&2; exit 1; }
+[ "$(cd "$DS_ROOT" && pwd -P)" != "$(cd "$ROOT" && pwd -P)" ] \
+  || { echo "design-system-repo resolves to THIS repo — STOP (wayfare would file feedback to itself)" >&2; exit 1; }
 ```
 
-Four conditions, all required, all loud on failure: the path resolves to an
-existing directory; it is a git repository; `hero_work_store` succeeds and
-returns non-empty there; and it is **not this repo's own store** — a
-design-system repo configured as `.` would have wayfare file feedback to itself
-and report it delivered.
+**Do not call `hero_work_store` on it yet.** That function is not read-only —
+it creates `.plans/` and edits `.git/info/exclude` in whatever root it is
+handed — and `$DS_REPO` comes from HERO.md, which is attacker-controlled in a
+cloned repo. Calling it here would mutate a repository the user has not yet
+named. It runs in step 4, **after** the user has typed the resolved absolute
+path.
 
 Ids come from **that** store's sequence, never this one's, re-checked
 immediately before writing. Zero-pad only the filename.
@@ -256,7 +272,9 @@ Three parts of that command matter:
 
 For the design-system store path, the equivalent check is whether that store
 already holds an item whose body carries the manifest line — read it with
-`hero_item_field`, never a raw grep of the directory.
+`hero_item_field`, never a raw grep of the directory. This is the first point
+`hero_work_store "$DS_ROOT"` may run, and only once step 4's gate has passed
+for this path in this session.
 
 Partition into:
 
