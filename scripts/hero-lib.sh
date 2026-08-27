@@ -483,8 +483,9 @@ hero_norm_id() {
 #             LEGACY: every producer now writes a build kind. The arm stays so
 #             existing stores keep listing; dropping it would demote every
 #             pre-rule item to backlog with a stderr line as the only trace
-#   build     feature / architecture — new | todo | planning | ready | implementing |
-#             reviewing | done, mapped here as new | backlog | plan | READY-eligible |
+#   build     feature / architecture / polish — new | todo | planning | ready |
+#             implementing | reviewing | done, mapped here as
+#             new | backlog | plan | READY-eligible |
 #             active | review | done. For a build kind, `ready` (not `todo`) is
 #             the state eligible to become READY: `todo` means "identified,
 #             unplanned", and handing an unplanned one to one-shot would skip
