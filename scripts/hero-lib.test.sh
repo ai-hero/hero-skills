@@ -428,14 +428,18 @@ check "feature: unknown kind warns on stderr"     "0" "$?"
 printf '%s' "$ERRF" | grep -q "050-fdangle.md depends_on '999'"
 check "feature: backlog dangling dep warns on stderr" "0" "$?"
 
-# ---------- kind classes: architecture, feedback, goal, new -----------------
+# ---------- kind classes: architecture, polish, feedback, goal, new ---------
 #
-# `architecture` shares the build enum with `feature`; the feedback kinds carry
-# their own delivery enum and must NEVER be READY — nothing builds a feedback
-# item, it gets delivered, so handing one to one-shot is always wrong.
+# `architecture` and `polish` share the build enum with `feature`; the feedback
+# kinds carry their own delivery enum and must NEVER be READY — nothing builds
+# a feedback item, it gets delivered, so handing one to one-shot is always
+# wrong.
 item 051-arch.md 51 "Planned architecture change" "ready" "[]" "architecture"
 item 052-archtodo.md 52 "Unplanned architecture change" "todo" "[]" "architecture"
 item 053-archrev.md 53 "Architecture PR in review" "reviewing" "[]" "architecture"
+item 075-pol.md 75 "Dashboard header spacing" "ready" "[]" "polish"
+item 076-poltodo.md 76 "Card grid gutters" "todo" "[]" "polish"
+item 077-polrev.md 77 "Polish PR in review" "reviewing" "[]" "polish"
 item 054-df.md 54 "Surface divergence" "todo" "[]" "design-feedback"
 item 055-dfq.md 55 "Queued in a packet" "queued" "[]" "design-feedback"
 item 056-dfd.md 56 "Filed upstream" "delivered" "[]" "design-feedback"
@@ -470,6 +474,9 @@ check "status: dep on a new item stays blocked"  "blocked"  "$(state_of 068-wait
 check "kind: architecture ready is READY"        "READY"    "$(state_of 051-arch.md "$OUTK")"
 check "kind: architecture todo is backlog"       "backlog"  "$(state_of 052-archtodo.md "$OUTK")"
 check "kind: architecture reviewing is review"   "review"   "$(state_of 053-archrev.md "$OUTK")"
+check "kind: polish ready is READY"              "READY"    "$(state_of 075-pol.md "$OUTK")"
+check "kind: polish todo is backlog"             "backlog"  "$(state_of 076-poltodo.md "$OUTK")"
+check "kind: polish reviewing is review"         "review"   "$(state_of 077-polrev.md "$OUTK")"
 check "kind: design-feedback todo is feedback"   "feedback" "$(state_of 054-df.md "$OUTK")"
 check "kind: design-feedback queued is feedback" "feedback" "$(state_of 055-dfq.md "$OUTK")"
 check "kind: design-feedback delivered is done"  "done"     "$(state_of 056-dfd.md "$OUTK")"
