@@ -34,7 +34,7 @@ HERO_TIME=$(git -C "$ROOT" log -1 --format=%ct -- HERO.md 2>/dev/null | grep -E 
 # Default-substitute any empty value (corrupt repo, env hijack, no commits) to
 # 0. The `grep -E '^[0-9]+$'` already filters non-numeric output; this
 # default + the grep together ensure the `(( arithmetic ))` compare below
-# always sees a clean integer. Both are load-bearing — `set -u` would error
+# always sees a clean integer. Both are needed — `set -u` would error
 # on an empty value, and the arithmetic builtin would error on non-numerics.
 HERO_TIME=${HERO_TIME:-0}
 
@@ -72,7 +72,7 @@ PATTERNS=(
 
 # Find the most recent commit touching any of those paths.
 NEWEST=$(git -C "$ROOT" log -1 --format=%ct -- "${PATTERNS[@]}" 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
-# Same load-bearing default + numeric filter as HERO_TIME above.
+# Same default + numeric filter as HERO_TIME above.
 NEWEST=${NEWEST:-0}
 
 if (( NEWEST > HERO_TIME )); then

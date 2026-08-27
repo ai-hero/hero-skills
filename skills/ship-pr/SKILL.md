@@ -268,10 +268,26 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
   # reports WORKFLOW_FAILED for a run in which nothing executed.
   # A queued or in-progress run has conclusion null, so it survives this
   # filter; only genuinely skipped ones are dropped.
-  RUN_JSON=$(gh api "/repos/{owner}/{repo}/actions/workflows/$WF_ID/runs?event=issue_comment&per_page=10" \
-    --jq "[.workflow_runs[]
-           | select(.created_at > \"$TRIGGERED_AT\")
-           | select(.conclusion != \"skipped\")] | .[0]")
+  # Fetch RAW, then filter — never `gh api --jq` on this endpoint. An
+  # issue_comment run carries the comment body in `display_title`, so a PR
+  # comment containing a control character (U+0000–U+001F) puts one inside a
+  # JSON string, and the whole poll dies with
+  #   jq: parse error: Invalid string: control characters ... must be escaped
+  # for a run that is otherwise perfectly healthy. Stripping C0 is safe on
+  # both sides of the problem: between tokens they were only whitespace, and
+  # inside a string they were illegal anyway.
+  #
+  # Capture before filtering, and check gh's own status. `gh api | jq` would
+  # swallow it — a 404 or a rate-limit would read as "no run yet" and poll to
+  # the timeout with a misleading error.
+  if ! RAW=$(gh api "/repos/{owner}/{repo}/actions/workflows/$WF_ID/runs?event=issue_comment&per_page=10" 2>/tmp/ship_pr_runs_err.log); then
+    echo "WARN: could not read workflow runs:"; cat /tmp/ship_pr_runs_err.log
+    sleep 5; continue
+  fi
+  RUN_JSON=$(printf '%s' "$RAW" | tr -d '\000-\037' \
+    | jq -c "[.workflow_runs[]
+             | select(.created_at > \"$TRIGGERED_AT\")
+             | select(.conclusion != \"skipped\")] | .[0]")
   if [ -n "$RUN_JSON" ] && [ "$RUN_JSON" != "null" ]; then
     RUN_ID=$(echo "$RUN_JSON" | jq -r '.id')
     break
@@ -394,6 +410,55 @@ MERGE_FLAG="--$MERGE_METHOD"
 gh pr view $PR_NUMBER --json mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,headRefName
 ```
 
+**Then check for stacked PRs — before the merge, not after.** Any open PR
+whose base is this PR's head branch is a *dependent*, and merging this PR
+destroys it:
+
+```bash
+PR_BRANCH=$(gh pr view $PR_NUMBER --json headRefName --jq '.headRefName')
+STACKED=$(gh pr list --state open --base "$PR_BRANCH" \
+  --json number,url,title,headRefName)
+STACKED_COUNT=$(printf '%s' "$STACKED" | jq 'length')
+```
+
+`STACKED_COUNT > 0` is a **stop-and-ask**, not a warning to print past:
+
+```
+PR #104 has 1 open PR stacked on its branch:
+  #105  Add the retry path        (base: feat/parent, head: feat/child)
+
+Merging #104 deletes feat/parent, which AUTO-CLOSES #105. A closed PR whose
+base branch is gone cannot be reopened or retargeted — #105 would have to be
+recreated from scratch under a new number, losing its review history.
+
+  r -> retarget #105 onto main, then merge #104   (recommended)
+  m -> merge anyway and accept that #105 is lost
+  n -> stop here
+```
+
+On `r`, retarget every dependent **before** merging:
+
+```bash
+printf '%s' "$STACKED" | jq -r '.[].number' | while read -r N; do
+  gh pr edit "$N" --base "$BASE_BRANCH" || echo "WARN: could not retarget #$N"
+done
+```
+
+Three reasons the order matters:
+
+- **Retarget before the merge, not after.** With repo setting
+  `deleteBranchOnMerge=true` the branch is gone the instant the merge lands,
+  so there is no "after" — the dependents are already closed. Waiting until
+  Step 7b's cleanup is too late even when the repo does not auto-delete.
+- **The damage is not reversible.** GitHub refuses `Cannot change the base
+  branch of a closed pull request`, and reopening requires the base ref to
+  exist. Recreating the PR loses its review threads, its approvals, and its
+  number.
+- **Retargeting onto the base is correct, not a workaround.** Once the parent
+  merges, its commits are in `$BASE_BRANCH`, so the dependent's diff collapses
+  to exactly its own work. Do it before the merge and the diff is briefly
+  wrong; that resolves itself the moment the parent lands.
+
 Then ask:
 
 ```
@@ -433,6 +498,8 @@ fi
 ```
 
 **Never force-merge or override branch protection.** Never pass `--admin`. The fallback above is *only* for the specific "auto-merge not enabled on this repo" case; every other failure is surfaced and stops the skill.
+
+Worth telling the user when they are staring at a failed merge, because "don't use `--admin`" reads like a policy they could choose to break: **under `enforce_admins: true` it does not work at all.** Branch protection with admin enforcement on applies to admins too, so `gh pr merge --admin` returns an error rather than overriding anything. It is not a lever being withheld — there is no lever. The real options are to satisfy the failing requirement, or to have someone with repo-settings access change the protection rule.
 
 #### Step 7b: Reset to the Default Branch (the merged-branch counterpart to `hero-skills:abandon`)
 
@@ -547,6 +614,18 @@ if [ "$RESET_OK" = "true" ] && [ "$MERGED" = "true" ]; then
   elif [ "$HERO_AUTO_DELETE" != "true" ]; then
     echo "Skipping remote branch cleanup (HERO.md auto-delete-branches=$HERO_AUTO_DELETE)."
   else
+    # Backstop for the stacked-PR gate in Step 7a. That gate only runs on the
+    # merge path; a ship-pr resumed against an ALREADY-merged PR reaches this
+    # line having never checked, and deleting the ref here auto-closes every
+    # dependent just as surely. Retarget first, then delete.
+    STILL_STACKED=$(gh pr list --state open --base "$PR_BRANCH" --json number --jq 'length')
+    if [ "${STILL_STACKED:-0}" -gt 0 ]; then
+      echo "NOT deleting $PR_BRANCH — $STILL_STACKED open PR(s) are still based on it."
+      echo "Deleting it would auto-close them, and a closed PR whose base is gone"
+      echo "cannot be reopened or retargeted. Retarget them first:"
+      gh pr list --state open --base "$PR_BRANCH" --json number,title \
+        --jq '.[] | "  gh pr edit \(.number) --base '"$BASE_BRANCH"'   # \(.title)"'
+    else
     # Distinguish 404/422 ("already gone — fine") from 401/403 ("permission
     # denied — surface, do not silently mask").
     DELETE_STATUS=$(gh api -X DELETE "/repos/$OWNER/$REPO/git/refs/heads/$PR_BRANCH" \
@@ -557,6 +636,7 @@ if [ "$RESET_OK" = "true" ] && [ "$MERGED" = "true" ]; then
       401|403)        echo "WARN: cannot delete remote $PR_BRANCH — permission denied (HTTP $DELETE_STATUS). Delete it manually if needed." ;;
       *)              echo "WARN: remote delete returned HTTP ${DELETE_STATUS:-error}. Re-check $PR_URL and remove the branch manually if needed." ;;
     esac
+    fi
   fi
 
   # 4. Local head-branch cleanup. We're on BASE_BRANCH now. Check the actual
@@ -812,4 +892,5 @@ Skip `hero-skills:one-shot`; it's not the deterministic next action.
 - The workflow's gates (prior review present, all threads resolved) run **before** Claude is invoked. A failed gate is the cheap path; do not assume Claude is wrong if the verdict comes back fast.
 - Auto-approve is one signal among many. Branch protection, CODEOWNERS, and required status checks still apply — `gh pr merge` will fail loudly if any of those block the merge, and that is the correct behavior.
 - Re-running `@auto-approve` is safe. The workflow updates the same comment and submits a fresh review, so the PR history shows the latest verdict without duplicates.
-- Never use `--admin` to bypass branch protection during merge, even if the user asks. Stop and let them merge manually if protection blocks.
+- Never use `--admin` to bypass branch protection during merge, even if the user asks. Stop and let them merge manually if protection blocks. And say the useful half out loud: under `enforce_admins: true` the flag does not work anyway, so someone staring at a failed merge is not being denied a shortcut that exists.
+- Never merge a PR that has open PRs stacked on its branch without retargeting them first (Step 7a). The failure is silent at merge time and unrecoverable afterward.

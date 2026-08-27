@@ -406,10 +406,14 @@ hero_item_deps() {
 
 # Normalize a work-item status: lowercase, empty defaults to `todo`.
 # `Done` silently not matching `done` left every dependent blocked forever.
+# Default is `new`, not `todo`. An item with no status line was just created and
+# nobody has triaged it yet, which is not the same as "ready to pick up" — and
+# `todo` meant exactly that for a plain item. Defaulting to todo handed untriaged
+# items straight to one-shot.
 hero_item_status() {
   local s
   s=$(hero_item_field "$1" status | tr '[:upper:]' '[:lower:]')
-  printf '%s' "${s:-todo}"
+  printf '%s' "${s:-new}"
 }
 
 # Normalize a work-item id for comparison: all-digit ids (the standard form)
@@ -436,19 +440,41 @@ hero_norm_id() {
 #            (`ready` for a kind: feature item)
 #   active   status is in-progress — someone is already on it
 #   done     completed
-#   backlog  kind: feature only — status is todo: on the roadmap, not yet
-#            planned; annotated `[deps unmet]` when a dependency isn't done
-#   review   kind: feature only — status is reviewing: PR open, awaiting merge
+#   new      status is new (or absent): created, not yet triaged. Never READY —
+#            nobody has decided this should be worked on
+#   backlog  build kinds (and unrecognized ones) — status is todo: on the
+#            roadmap, not yet planned; annotated `[deps unmet]` when a
+#            dependency isn't done
+#   review   build kinds only — status is reviewing: PR open, awaiting merge
+#   feedback feedback kinds only — status is todo or queued: a divergence
+#            written but not yet landed upstream. Never READY: a feedback item
+#            is DELIVERED, never built, so handing one to one-shot is wrong
+#   goal     kind: goal only — status is todo: approved, waiting to run. Never
+#            READY: a goal is a container for features, and one-shot builds
+#            features. `wayfare goal` selects goals by kind instead
 #   invalid  no usable id, OR an unrecognized status — either way the item
 #            cannot participate in dependency order and is never handed out READY
 #
-# `kind: feature` items (wayfare's roadmap) carry an extended status enum —
-# todo | planning | ready | implementing | reviewing | done — mapped here as
-# backlog | plan | READY-eligible | active | review | done. For a feature,
-# `ready` (not `todo`) is the state eligible to become READY: a feature's
-# `todo` means "identified, unplanned", and handing an unplanned feature to
-# one-shot would skip planning entirely. Plain items keep the original enum;
-# `ready`/`implementing`/`reviewing` on a plain item stay invalid (loud).
+# Kind picks a CLASS, and the class picks the status enum:
+#
+#   plain     '' / work-order / hardening — new | planning | todo | in-progress | done
+#   build     feature / architecture — new | todo | planning | ready | implementing |
+#             reviewing | done, mapped here as backlog | plan | READY-eligible |
+#             active | review | done. For a build kind, `ready` (not `todo`) is
+#             the state eligible to become READY: `todo` means "identified,
+#             unplanned", and handing an unplanned one to one-shot would skip
+#             planning entirely
+#   feedback  design-feedback / architecture-feedback / design-system-feedback —
+#             new | todo | queued | delivered | rejected, mapped as new | feedback
+#             | feedback | done | done
+#   goal      goal — new | todo | active | done, mapped as new | goal | active |
+#             done. Spans several features via `covers:`; its own DoD is what
+#             the goal loop checks against
+#
+# Plain items keep the original enum; `ready`/`implementing`/`reviewing` on a
+# plain item stay invalid (loud). An unrecognized kind rides the plain enum with
+# READY downgraded to backlog — see the class gate for why that is the only
+# reading safe under both failure modes.
 #
 # `done` rows are PRINTED, not hidden. Callers need to see them: one-shot's
 # Step 1c resolves an argument against this listing to answer "has this already
@@ -474,7 +500,7 @@ hero_norm_id() {
 # Runs in a subshell: it cds, and leaking that into a sourced caller's shell
 # silently reroutes every later relative path.
 hero_ready_items() (
-  local store f d raw deps ready title id state kind enum row all_ids done_ids missing
+  local store f d raw deps ready title id state kind class enum row all_ids done_ids missing
   store="${1:-$(hero_work_store)}" || return 1
   cd "$store" 2>/dev/null || { echo "hero_ready_items: no store at ${store}" >&2; return 1; }
   # zsh errors out on an unmatched glob (bash leaves it literal for the
@@ -507,7 +533,18 @@ hero_ready_items() (
         echo "hero_ready_items: duplicate id $id — dependents may resolve against the wrong item" >&2 ;;
     esac
     all_ids="$all_ids$id "
-    [ "$(hero_item_status "$f")" = "done" ] && done_ids="$done_ids$id "
+    # TERMINAL, not literally `done`. A feedback item never reaches `done`: it
+    # ends at `delivered` or `rejected`, and both are frozen. Keying this on the
+    # word `done` alone left every dependent of an answered upstream question
+    # blocked forever, with nothing to ever unblock it.
+    case "$(hero_item_status "$f")" in
+      done) done_ids="$done_ids$id " ;;
+      delivered|rejected)
+        case "$(hero_item_field "$f" kind | tr '[:upper:]' '[:lower:]')" in
+          design-feedback|architecture-feedback|design-system-feedback)
+            done_ids="$done_ids$id " ;;
+        esac ;;
+    esac
   done
 
   for f in *.md; do
@@ -527,32 +564,71 @@ hero_ready_items() (
         echo "invalid $f — $title"
         continue ;;
     esac
-    # Kinds are a CLOSED set. An unknown kind must not silently demote to
-    # plain-item semantics: `todo` means opposite things in the two enums
-    # (feature = unplanned backlog, plain = READY-eligible), so a typo like
-    # `kind: features` would hand an unplanned feature straight to one-shot.
-    # `work-order` is the pre-simplification legacy kind — it deliberately
-    # rides the plain arms so old stores keep listing until sync migrates them.
+    # Kinds map to a CLASS, and the class picks the status enum. Three real
+    # classes plus a fallback:
+    #
+    #   plain     '' / work-order / hardening — planning/todo/in-progress/done
+    #   build     feature / architecture — wayfare's extended enum, where
+    #             `todo` means unplanned backlog and `ready` is READY-eligible
+    #   feedback  the three return channels — todo/queued/delivered/rejected.
+    #             NEVER READY: nothing builds a feedback item, it gets
+    #             delivered, so handing one to one-shot is always wrong.
+    #
+    # An unrecognized kind rides the PLAIN enum with READY downgraded to
+    # backlog. That is the whole point of the fallback and it is deliberate on
+    # both halves. Invalidating it (what this did before) made nine items —
+    # five of them security — vanish from every roadmap view while the only
+    # trace was a stderr line nobody reads; silent invisibility is the worst
+    # available outcome. But demoting it to full plain semantics reopens the
+    # hole the invalidation existed to close: `todo` means OPPOSITE things in
+    # the two enums, so a typo like `kind: features` would hand an unplanned
+    # feature straight to one-shot. Listed-but-never-READY is the only reading
+    # that is safe under both failure modes, and `backlog` already means
+    # exactly that — no new state word for consumers to learn.
     case "$kind" in
-      ''|feature|work-order) ;;
+      ''|work-order|hardening)                                  class=plain ;;
+      feature|architecture)                                     class=build ;;
+      goal)                                                     class=goal ;;
+      design-feedback|architecture-feedback|design-system-feedback) class=feedback ;;
       *)
-        echo "hero_ready_items: $f has unrecognized kind '$kind' — not one of feature/work-order; not eligible for READY" >&2
-        echo "invalid $f — $title"
-        continue ;;
+        echo "hero_ready_items: $f has unrecognized kind '$kind' — listed on the plain enum but never handed out READY; add it to hero_ready_items or fix the frontmatter" >&2
+        class=unknown ;;
     esac
-    # One kind-keyed table, not a case block per kind: shared states appear
-    # once, and only the genuinely divergent arms name `feature` (see the
-    # state list above for the mapping and the ready-vs-todo rationale).
-    # `feature:in-progress` aliases to active so features written before the
+    # An item with no usable id is broken whatever its status: nothing can
+    # depend on it and nothing can mark it done. Checked before the status
+    # table so there is one rule instead of one per status.
+    id=$(hero_norm_id "$(hero_item_field "$f" id)")
+    case "$id" in
+      ''|*[[:space:]]*) echo "invalid $f — $title"; continue ;;
+    esac
+    # One CLASS-keyed table, not a case block per kind: shared states appear
+    # once, and only the genuinely divergent arms name a class (see the state
+    # list above for the mapping and the ready-vs-todo rationale).
+    # `build:in-progress` aliases to active so features written before the
     # lifecycle rename still list, not invalidate.
     row=READY
-    case "$kind:$state" in
-      *:done)                             echo "done    $f — $title"; continue ;;
-      feature:implementing|*:in-progress) echo "active  $f — $title"; continue ;;
-      feature:reviewing)                  echo "review  $f — $title"; continue ;;
-      *:planning)                         echo "plan    $f — $title"; continue ;;
-      feature:todo)                       row=backlog ;; # never READY, but falls through to the dep check: dangling refs must still warn, and unmet deps must annotate the row (`wayfare next` reads them)
-      feature:ready|*:todo) ;;  # the only READY-eligible arms — dep check below
+    case "$class:$state" in
+      # `new` is valid in every enum and READY in none of them.
+      *:new)                            echo "new     $f — $title"; continue ;;
+      *:done)                           echo "done    $f — $title"; continue ;;
+      # Delivered and rejected are both TERMINAL and both frozen — a rejection
+      # is kept on purpose, because "we raised this and they said no" is the
+      # history that stops it being raised again next quarter.
+      feedback:delivered|feedback:rejected) echo "done    $f — $title"; continue ;;
+      # Open feedback: written, not yet landed upstream. Its own row word, so
+      # the backlog count is a scan rather than a judgment about prose — this
+      # is the return channel's only backlog surface, and a miscount of zero is
+      # indistinguishable from "no feedback exists".
+      feedback:todo|feedback:queued)    echo "feedback $f — $title"; continue ;;
+      # A goal is a container for features, not a unit of work. It is never
+      # READY, because READY means "hand this to one-shot" and one-shot builds
+      # features. `wayfare goal` finds goals by kind, not off the READY tier.
+      goal:todo)                        echo "goal    $f — $title"; continue ;;
+      goal:active|build:implementing|*:in-progress) echo "active  $f — $title"; continue ;;
+      build:reviewing)                  echo "review  $f — $title"; continue ;;
+      *:planning)                       echo "plan    $f — $title"; continue ;;
+      build:todo|unknown:todo)          row=backlog ;; # never READY, but falls through to the dep check: dangling refs must still warn, and unmet deps must annotate the row (`wayfare next` reads them)
+      build:ready|plain:todo) ;;  # the only READY-eligible arms — dep check below
       *)
         # An UNRECOGNIZED status must never fall through to the READY path. The
         # display label is `plan` while the keyword is `planning`, so `status:
@@ -560,21 +636,15 @@ hero_ready_items() (
         # would otherwise be handed straight to one-shot with no human
         # ready-mark, silently defeating the gate the planning state exists to
         # enforce. Treat it like a rejected id: name it loudly, never READY.
-        if [ "$kind" = feature ]; then
-          enum="todo/planning/ready/implementing/reviewing/done (kind: feature)"
-        else
-          enum="planning/todo/in-progress/done"
-        fi
+        case "$class" in
+          build)    enum="new/todo/planning/ready/implementing/reviewing/done (kind: $kind)" ;;
+          feedback) enum="new/todo/queued/delivered/rejected (kind: $kind)" ;;
+          goal)     enum="new/todo/active/done (kind: goal)" ;;
+          *)        enum="new/planning/todo/in-progress/done" ;;
+        esac
         echo "hero_ready_items: $f has unrecognized status '$state' — not one of $enum; not eligible for READY" >&2
         echo "invalid $f — $title"
         continue ;;
-    esac
-    # An item whose id was rejected above must not be handed out as READY —
-    # it cannot be depended on, and a consumer acting on the row would work
-    # an item the dependency order knows nothing about.
-    id=$(hero_norm_id "$(hero_item_field "$f" id)")
-    case "$id" in
-      ''|*[[:space:]]*) echo "invalid $f — $title"; continue ;;
     esac
     deps=$(hero_item_deps "$f")
     ready=1

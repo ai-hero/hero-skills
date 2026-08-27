@@ -245,8 +245,10 @@ depends_on: []
 Run until `status: done` appears in the log.
 EOF
 OUT5="$(hero_ready_items "$W" 2>/dev/null)"
-# Frontmatter only — a body line must not be read as the item's own field.
-check "field: body line is not frontmatter" "READY" "$(state_of 014-body.md "$OUT5")"
+# Frontmatter only — a body line must not be read as the item's own field. This
+# item has no status line of its own, so it defaults to `new`; if the body's
+# `status: done` were read it would show `done` instead.
+check "field: body line is not frontmatter" "new" "$(state_of 014-body.md "$OUT5")"
 
 hero_ready_items "$TMP/definitely-not-a-store" >/dev/null 2>&1
 check "ready: missing store returns non-zero" "1" "$?"
@@ -372,8 +374,11 @@ fitem 044-fcaps.md 44 "Capitalized ready" "Ready" "[]"
 item 045-colon.md 45 "Colon status" "x:todo" "[]"
 fitem 046-fcolon.md 46 "Colon feature status" "plan:todo" "[]"
 item 047-notdone.md 47 "Colon done status" "not:done" "[]"
-# An unknown kind must not silently demote to plain semantics — feature-todo
-# and plain-todo mean OPPOSITE things, so `kind: features` + todo was READY.
+# An unknown kind must stay VISIBLE (invalidating it hid nine items, five of
+# them security, behind a stderr line nobody reads) yet must never be handed
+# out READY — build-todo and plain-todo mean OPPOSITE things, so `kind:
+# features` + todo reaching READY would skip the ready-mark. `backlog` is the
+# one reading safe under both.
 item 048-badkind.md 48 "Typo kind" "todo" "[]" "features"
 # Backlog rows still run the dep check: unmet deps annotate the row
 # (`wayfare next` reads it) and a dangling ref warns — a bootstrap typo must
@@ -398,13 +403,15 @@ check "feature: plain item with ready is invalid" "invalid" "$(state_of 040-plai
 check "feature: dep on a done feature is READY"   "READY"   "$(state_of 041-fchain.md "$OUTF")"
 # Any known non-feature kind rides the plain arms — legacy work orders still list.
 check "feature: kind work-order behaves as plain" "READY"   "$(state_of 042-wo.md "$OUTF")"
-# Empty status defaults to todo, which for a feature means backlog — never READY.
-check "feature: empty status defaults to backlog" "backlog" "$(state_of 043-fnostatus.md "$OUTF")"
+# No status line means the item was just created and nobody has triaged it —
+# `new`, never READY. It used to default to `todo`, which for a plain item meant
+# READY-eligible: untriaged items went straight to one-shot.
+check "feature: empty status defaults to new" "new" "$(state_of 043-fnostatus.md "$OUTF")"
 check "feature: capitalized ready is READY"       "READY"   "$(state_of 044-fcaps.md "$OUTF")"
 check "feature: colon status is invalid (plain)"  "invalid" "$(state_of 045-colon.md "$OUTF")"
 check "feature: colon status is invalid (feature)" "invalid" "$(state_of 046-fcolon.md "$OUTF")"
 check "feature: colon-done is invalid, not done"  "invalid" "$(state_of 047-notdone.md "$OUTF")"
-check "feature: unknown kind is invalid"          "invalid" "$(state_of 048-badkind.md "$OUTF")"
+check "feature: unknown kind is backlog, not invalid" "backlog" "$(state_of 048-badkind.md "$OUTF")"
 # Backlog rows carry dep state without ever being READY.
 check "feature: backlog with unmet dep stays backlog" "backlog" "$(state_of 049-fwait.md "$OUTF")"
 printf '%s' "$OUTF" | grep -q '049-fwait.md.*\[deps unmet'
@@ -420,8 +427,79 @@ printf '%s' "$ERRF" | grep -q "048-badkind.md has unrecognized kind 'features'"
 check "feature: unknown kind warns on stderr"     "0" "$?"
 printf '%s' "$ERRF" | grep -q "050-fdangle.md depends_on '999'"
 check "feature: backlog dangling dep warns on stderr" "0" "$?"
+
+# ---------- kind classes: architecture, and the three feedback channels ------
+#
+# `architecture` shares the build enum with `feature`; the feedback kinds carry
+# their own delivery enum and must NEVER be READY — nothing builds a feedback
+# item, it gets delivered, so handing one to one-shot is always wrong.
+item 051-arch.md 51 "Planned architecture change" "ready" "[]" "architecture"
+item 052-archtodo.md 52 "Unplanned architecture change" "todo" "[]" "architecture"
+item 053-archrev.md 53 "Architecture PR in review" "reviewing" "[]" "architecture"
+item 054-df.md 54 "Surface divergence" "todo" "[]" "design-feedback"
+item 055-dfq.md 55 "Queued in a packet" "queued" "[]" "design-feedback"
+item 056-dfd.md 56 "Filed upstream" "delivered" "[]" "design-feedback"
+item 057-dfr.md 57 "Design said no" "rejected" "[]" "design-feedback"
+item 058-af.md 58 "Boundary divergence" "todo" "[]" "architecture-feedback"
+item 059-dsf.md 59 "Token divergence" "todo" "[]" "design-system-feedback"
+# A feedback item claiming a BUILD status must be loud, not quietly READY.
+item 060-dfbad.md 60 "Feedback claiming ready" "ready" "[]" "design-feedback"
+# `new` is valid in every enum and READY in none of them.
+item 065-newplain.md 65 "Fresh plain task" "new" "[]"
+item 066-newfeat.md 66 "Fresh feature" "new" "[]" "feature"
+item 067-newdf.md 67 "Fresh feedback" "new" "[]" "design-feedback"
+# A dependency that is merely `new` is not done, so dependents stay blocked.
+item 068-waitnew.md 68 "Waits on a new item" "todo" "[65]"
+# A goal spans features. It is never READY — one-shot builds features, and a
+# goal handed to it has nothing to build.
+item 070-goalnew.md 70 "Fresh goal" "new" "[]" "goal"
+item 071-goaltodo.md 71 "Approved goal" "todo" "[]" "goal"
+item 072-goalrun.md 72 "Goal being run" "active" "[]" "goal"
+item 073-goaldone.md 73 "Achieved goal" "done" "[]" "goal"
+item 074-goalbad.md 74 "Goal claiming ready" "ready" "[]" "goal"
+OUTK="$(hero_ready_items "$W" 2>/dev/null)"
+check "kind: goal new is new"                    "new"      "$(state_of 070-goalnew.md "$OUTK")"
+check "kind: goal todo is goal, never READY"     "goal"     "$(state_of 071-goaltodo.md "$OUTK")"
+check "kind: goal active is active"              "active"   "$(state_of 072-goalrun.md "$OUTK")"
+check "kind: goal done is done"                  "done"     "$(state_of 073-goaldone.md "$OUTK")"
+check "kind: goal claiming ready is invalid"     "invalid"  "$(state_of 074-goalbad.md "$OUTK")"
+check "status: new on a plain item"              "new"      "$(state_of 065-newplain.md "$OUTK")"
+check "status: new on a feature"                 "new"      "$(state_of 066-newfeat.md "$OUTK")"
+check "status: new on a feedback item"           "new"      "$(state_of 067-newdf.md "$OUTK")"
+check "status: dep on a new item stays blocked"  "blocked"  "$(state_of 068-waitnew.md "$OUTK")"
+check "kind: architecture ready is READY"        "READY"    "$(state_of 051-arch.md "$OUTK")"
+check "kind: architecture todo is backlog"       "backlog"  "$(state_of 052-archtodo.md "$OUTK")"
+check "kind: architecture reviewing is review"   "review"   "$(state_of 053-archrev.md "$OUTK")"
+check "kind: design-feedback todo is feedback"   "feedback" "$(state_of 054-df.md "$OUTK")"
+check "kind: design-feedback queued is feedback" "feedback" "$(state_of 055-dfq.md "$OUTK")"
+check "kind: design-feedback delivered is done"  "done"     "$(state_of 056-dfd.md "$OUTK")"
+check "kind: design-feedback rejected is done"   "done"     "$(state_of 057-dfr.md "$OUTK")"
+check "kind: architecture-feedback is feedback"  "feedback" "$(state_of 058-af.md "$OUTK")"
+check "kind: design-system-feedback is feedback" "feedback" "$(state_of 059-dsf.md "$OUTK")"
+check "kind: feedback claiming ready is invalid" "invalid"  "$(state_of 060-dfbad.md "$OUTK")"
+ERRK="$(hero_ready_items "$W" 2>&1 >/dev/null)"
+printf '%s' "$ERRK" | grep -q "unrecognized status 'ready'.*kind: goal"
+check "kind: goal bad status names the goal enum" "0" "$?"
+printf '%s' "$ERRK" | grep -q "unrecognized status 'ready'.*kind: design-feedback"
+check "kind: feedback bad status names its own enum" "0" "$?"
+# A delivered feedback item is TERMINAL, so dependents on it must unblock —
+# otherwise a feature waiting on an upstream answer blocks forever.
+item 061-waitdf.md 61 "Waits on delivered feedback" "todo" "[56]"
+item 062-waitrej.md 62 "Waits on rejected feedback" "todo" "[57]"
+# The terminal-state widening is scoped to the three real feedback kinds. An
+# UNKNOWN kind claiming `delivered` lists as invalid (plain enum has no such
+# status), so counting it terminal would be a split-brain: invisible on the
+# listing, yet silently unblocking its dependents.
+item 063-fakedeliv.md 63 "Unknown kind claiming delivered" "delivered" "[]" "vibes-feedback"
+item 064-waitfake.md 64 "Waits on the fake" "todo" "[63]"
+OUTK2="$(hero_ready_items "$W" 2>/dev/null)"
+check "kind: dep on delivered feedback is READY" "READY" "$(state_of 061-waitdf.md "$OUTK2")"
+check "kind: dep on rejected feedback is READY"  "READY" "$(state_of 062-waitrej.md "$OUTK2")"
+check "kind: unknown kind claiming delivered is invalid" "invalid" "$(state_of 063-fakedeliv.md "$OUTK2")"
+check "kind: dep on it stays blocked"            "blocked" "$(state_of 064-waitfake.md "$OUTK2")"
+
 # Clean up so later sections' listings aren't polluted by these fixtures.
-rm -f "$W"/03[0-9]-*.md "$W"/04[0-9]-*.md "$W"/050-*.md
+rm -f "$W"/03[0-9]-*.md "$W"/04[0-9]-*.md "$W"/05[0-9]-*.md "$W"/06[0-9]-*.md "$W"/07[0-9]-*.md
 
 # ---------- hero_work_store migration ---------------------------------------
 #
