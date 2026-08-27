@@ -63,8 +63,10 @@ One file at `.plans/NNN-slug.md`, id continuing from the highest existing id (th
 ```markdown
 ---
 id: 9
+kind: feature # every item is a wayfare item — feature, or architecture for a structural change
+origin: handoff
 title: Finish the payment-retry migration
-status: planning # planning | todo | in-progress | done  (flipped to todo by the user's ready-mark; readiness is derived from depends_on)
+status: planning # wayfare's build enum; flipped to ready by the user's ready-mark
 depends_on: []
 one_way_door: false
 success: "Retries drain the backlog in staging; alert AL-42 stays green for 24h"
@@ -90,9 +92,21 @@ The goal and its background — why this work exists.
 
 Hard-won session knowledge: failed approaches, environment quirks, gate/hook behavior.
 
+## Subtasks
+
+1. The remaining work above, as an ordered checklist one-shot can tick.
+
+## Definition of Done
+
+- [ ] The verification below, as observable statements.
+
 ## Verification
 
 How the downstream agent proves completion (commands, tests, observable behavior).
+
+## Comments
+
+- YYYY-MM-DD (author): append-only
 ```
 
 ### Step 4: Optionally File to the Tracker (`--issue`)
@@ -151,7 +165,7 @@ Downstream pickup (after the ready-mark):
 ```
 
 A handoff usually wants immediate pickup, so end by offering the flip:
-"Mark it ready for pickup now? [y/N]" — on yes, set `status: todo` and add
+"Mark it ready for pickup now? [y/N]" — on yes, set `status: ready` and add
 `ready_marked:` with the date.
 
 For a `--repo` handoff, report both sides so it's clear what left the building:

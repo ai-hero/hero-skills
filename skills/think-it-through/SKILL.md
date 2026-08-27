@@ -178,7 +178,13 @@ yes. Do not emit anything before it.
 
 Break the understood work into the smallest units that each deliver something
 testable and can be reviewed on their own. For each, write one file to
-`.plans/` (see the format below) with `status: planning`. Set `depends_on` to
+`.plans/` (see the format below) with `status: planning`. **Every item is a
+wayfare item** — `kind: feature`, or `kind: architecture` when the unit is a
+structural change rather than a story — with `origin: think-it-through`. There
+is no plain shape any more: one lifecycle, one set of sections, one thing for
+one-shot to build, whether or not the repo has a `## Wayfare` block or a
+design target. A feature with no target is still a feature; `target:` and
+`target_ref:` are simply absent. Set `depends_on` to
 encode the real order — this is the payoff over a flat TODO list. Flag any
 one-way-door item with `one_way_door: true`.
 
@@ -230,8 +236,8 @@ bootstrap it, carrying the decision as trailing context.
 
 Emitted items are `planning` — shaped, but not yet approved to implement. The
 ready-mark is the **user's act, never yours**: ask which items to mark ready,
-flip only the confirmed ones to `status: todo` (`ready` for a `kind: feature`
-item — Feature mode) and append `ready_marked:` with the date, leaving the
+flip only the confirmed ones to `status: ready` and append `ready_marked:`
+with the date, leaving the
 rest in `planning` for a later session. Never flip an
 item unprompted, and never batch beyond what the user named — an unmarked item
 is invisible to `hero-skills:one-shot` by design.
@@ -249,11 +255,16 @@ One markdown file per item at `.plans/NNN-slug.md`:
 ```markdown
 ---
 id: 7 # a plain integer; only the filename is zero-padded (007-slug.md) for sorting
-title: Add OAuth device-flow login
-status: planning # planning | todo | in-progress | done  (planning = awaiting the user's ready-mark; readiness is DERIVED, not stored)
+kind: feature # feature | architecture — every item is a wayfare item; see that skill's Item formats
+origin: think-it-through # the producer that wrote this item
+title: I can sign in with the device flow # a user story for a feature; the structural change for an architecture item
+status: planning # new | todo | planning | ready | implementing | reviewing | done  (planning = awaiting the user's ready-mark; readiness is DERIVED, not stored)
 depends_on: [3, 5] # ids that must be `done` before this can start — blockers only
 discovered_from: 4 # optional; the item this was found while working — provenance, never blocks
 one_way_door: false # true = expensive to reverse; got extra scrutiny
+source: services/auth/ # paths in the source repo this changes
+# target: auth/ — paths in the design project this satisfies; absent when the repo has no design target
+source_ref: FULL_COMMIT_SHA # source head planned against
 success: "User completes device-flow login in under 30s; e2e test green"
 ---
 
@@ -273,10 +284,27 @@ The chosen approach and why it won over the alternative(s) considered.
 
 How it can break and the blast radius of each.
 
+## Subtasks
+
+- [ ] 1. Ordered checklist — how it gets built, cutting down through the layers of this one slice; one-shot checks lines off as it goes
+
+## Definition of Done
+
+- [ ] What must be observably true when it ships — at least one line states the story working end to end
+
 ## Notes
 
 Second-order effects, ongoing cost, and any open question still worth flagging.
+
+## Comments
+
+- YYYY-MM-DD (author): dated, append-only entries
 ```
+
+`## Subtasks`, `## Definition of Done`, and `## Comments` come from wayfare's
+Item formats and are required on every item: one-shot works the first, gates
+close-out on the second, and records PR URLs in the third. An item without
+them is a legacy plain item, readable but not what any skill writes today.
 
 Keep the body proportional to the risk: a two-way-door chore might have a
 one-line Approach and empty Non-goals; a one-way-door schema change earns every
@@ -286,24 +314,24 @@ and `ready_marked:` — a `YYYY-MM-DD` date stamped by Step 5's flip — appears
 from the moment the user marks the item ready. This block is the canonical
 field definition: the status enum and `ready_marked:` semantics are defined
 here, and where other skills (wayfare, harden, handoff) show frontmatter of
-their own they follow these meanings rather than reinventing them (wayfare's
-`kind: feature` items extend the status enum — see that skill's Lifecycle
-section — but keep `ready_marked:` semantics). `kind` and
-`origin` are reserved extension fields defined by `hero-skills:wayfare`
-(`kind: feature` roadmap typing and producer provenance). Two skills write
-them — wayfare, and `hero-skills:one-shot` for a Step 2a carve-out
-(`origin: one-shot`); this skill, harden, and handoff never do. An item
-lacking `kind` is an ordinary task, and one lacking `origin` claims nothing
-about its author.
+their own they follow these meanings rather than reinventing them (the status enum
+is wayfare's build enum — see that skill's Lifecycle section — and
+`ready_marked:` keeps its meaning). `kind` and `origin` are defined by
+`hero-skills:wayfare`. **Every producer writes them**: wayfare (`sync`), this
+skill, `hero-skills:one-shot` (Step 2a carve-outs), `hero-skills:handoff`, and
+`hero-skills:harden`, each stamping its own name as `origin`. An item lacking
+`kind` is a legacy plain item from before this rule; it still lists (on the
+old plain enum) but nothing writes one now.
 
 ## "What's Ready" — the one query that matters
 
-`status` stores only what the author knows: `planning`, `todo`, `in-progress`,
-or `done`. It deliberately does NOT carry `ready` or `blocked` — those are
-_derived_ from `depends_on`, and storing them alongside the thing they are
-computed from means the two can disagree. (Wayfare's `kind: feature` items
-are the one exception — they carry that skill's extended lifecycle enum, see
-its Lifecycle section; the no-`ready` rule here governs plain items.)
+`status` stores only what the author knows — wayfare's build enum. It
+deliberately does NOT carry `blocked`: that is _derived_ from `depends_on`,
+and storing it alongside the thing it is computed from means the two can
+disagree. `ready` IS stored, because it records a human act (the ready-mark),
+not a computation — a `ready` item with an unmet dependency lists as
+`blocked`, and the two never conflict because they answer different
+questions.
 `planning` items are never ready no
 matter their dependencies — they list as `plan` rows and wait for the user's
 ready-mark (Step 5). An item is **ready** when its `status` is `todo` and

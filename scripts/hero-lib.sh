@@ -480,9 +480,9 @@ hero_norm_id() {
 # Kind picks a CLASS, and the class picks the status enum:
 #
 #   plain     '' / work-order / hardening — new | planning | todo | in-progress | done.
-#             `hardening` is what stores in the field carry from older harden
-#             runs; nothing in this repo writes it today, and dropping it
-#             would demote those items to backlog
+#             LEGACY: every producer now writes a build kind. The arm stays so
+#             existing stores keep listing; dropping it would demote every
+#             pre-rule item to backlog with a stderr line as the only trace
 #   build     feature / architecture — new | todo | planning | ready | implementing |
 #             reviewing | done, mapped here as new | backlog | plan | READY-eligible |
 #             active | review | done. For a build kind, `ready` (not `todo`) is
