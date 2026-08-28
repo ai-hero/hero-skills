@@ -29,13 +29,9 @@ not the logic and must stay small.
 
 ## Layout
 
-| Path | Purpose |
-| --- | --- |
-| `skills/` | One directory per skill, each a `SKILL.md`. The instructions agents actually follow. |
-| `scripts/` | Shell helpers plus their `*.test.sh` suites. `validate.sh` checks plugin structure. |
-| `assets/` | Files installed **into** other repos — the auto-approve caller, the design-system rule and hook. |
-| `.github/workflows/` | `auto-approve.yaml` (shared, fleet-wide) and `pr-check.yaml` (this repo's own gate). |
-| `docs/` | Everything that is not an entry document. |
+`ls` shows it. The two non-obvious facts: `assets/` is installed **into**
+other repos (the auto-approve caller, the design-system rule and hook), and
+`pr-check.yaml` is this repo's own gate while `auto-approve.yaml` is the fleet's.
 
 ## Conventions
 
