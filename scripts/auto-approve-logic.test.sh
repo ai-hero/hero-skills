@@ -172,19 +172,21 @@ ci() { # CHECKS_TSV HAS_WORKFLOWS -> "passed|first line of ci_status"
   printf '%b' "$1" > "$WORK/checks.tsv"
   : > "$WORK/out"
   ( cd "$WORK" && HEAD_SHA=abc123 HAS_WORKFLOWS="$2" GITHUB_OUTPUT="$WORK/out" bash -e "$WORK/ci-decision.sh" ) >/dev/null 2>&1
-  printf '%s|%s' "$(sed -n 's/^passed=//p' "$WORK/out")" "$(head -1 "$WORK/ci_status.txt" | cut -c1-30)"
+  # Whole line, not a cut -c prefix: GNU cut -c counts bytes, and the em dash
+  # in the status text is three of them.
+  printf '%s|%s' "$(sed -n 's/^passed=//p' "$WORK/out")" "$(head -1 "$WORK/ci_status.txt")"
 }
-check "ci: all success" "true|All 2 check(s) on abc123 passe" "$(ci 'Build\tcompleted\tsuccess\nlint\tcompleted\tsuccess\n' 1)"
-check "ci: skipped and neutral pass" "true|All 2 check(s) on abc123 passe" "$(ci 'Build\tcompleted\tskipped\nlint\tcompleted\tneutral\n' 1)"
-check "ci: one failure" "false|Failing checks on abc123 — fix" "$(ci 'Build\tcompleted\tsuccess\nTrivy\tcompleted\tfailure\n' 1)"
-check "ci: failure wins over pending" "false|Failing checks on abc123 — fix" "$(ci 'Deploy\tqueued\t\nTrivy\tcompleted\tfailure\n' 1)"
-check "ci: pending" "false|Checks still running on abc123" "$(ci 'Build\tin_progress\t\n' 1)"
-check "ci: stale is pending, not a pass" "false|Checks still running on abc123" "$(ci 'Build\tcompleted\tstale\n' 1)"
-check "ci: legacy status error fails" "false|Failing checks on abc123 — fix" "$(ci 'scout\tcompleted\terror\n' 1)"
-check "ci: legacy status pending" "false|Checks still running on abc123" "$(ci 'scout\tin_progress\tpending\n' 1)"
-check "ci: no checks but repo has workflows -> pending" "false|No checks registered on abc123" "$(ci '' 1)"
-check "ci: no checks and no workflows -> skip" "true|No CI in this repo (no workflo" "$(ci '' 0)"
-check "ci: check name with spaces round-trips" "false|Failing checks on abc123 — fix" "$(ci 'Auto Approve / build image\tcompleted\ttimed_out\n' 1)"
+check "ci: all success" "true|All 2 check(s) on abc123 passed." "$(ci 'Build\tcompleted\tsuccess\nlint\tcompleted\tsuccess\n' 1)"
+check "ci: skipped and neutral pass" "true|All 2 check(s) on abc123 passed." "$(ci 'Build\tcompleted\tskipped\nlint\tcompleted\tneutral\n' 1)"
+check "ci: one failure" "false|Failing checks on abc123 — fix them before requesting auto-approve." "$(ci 'Build\tcompleted\tsuccess\nTrivy\tcompleted\tfailure\n' 1)"
+check "ci: failure wins over pending" "false|Failing checks on abc123 — fix them before requesting auto-approve." "$(ci 'Deploy\tqueued\t\nTrivy\tcompleted\tfailure\n' 1)"
+check "ci: pending" "false|Checks still running on abc123 — wait for them to finish, then re-run \`@auto-approve\`." "$(ci 'Build\tin_progress\t\n' 1)"
+check "ci: stale is pending, not a pass" "false|Checks still running on abc123 — wait for them to finish, then re-run \`@auto-approve\`." "$(ci 'Build\tcompleted\tstale\n' 1)"
+check "ci: legacy status error fails" "false|Failing checks on abc123 — fix them before requesting auto-approve." "$(ci 'scout\tcompleted\terror\n' 1)"
+check "ci: legacy status pending" "false|Checks still running on abc123 — wait for them to finish, then re-run \`@auto-approve\`." "$(ci 'scout\tin_progress\tpending\n' 1)"
+check "ci: no checks but repo has workflows -> pending" "false|No checks registered on abc123 yet, but the repo has workflows — wait for CI to start, then re-run \`@auto-approve\`." "$(ci '' 1)"
+check "ci: no checks and no workflows -> skip" "true|No CI in this repo (no workflows, no checks on abc123)." "$(ci '' 0)"
+check "ci: check name with spaces round-trips" "false|Failing checks on abc123 — fix them before requesting auto-approve." "$(ci 'Auto Approve / build image\tcompleted\ttimed_out\n' 1)"
 
 # --- verdict-parse ----------------------------------------------------------
 # The block assigns VERDICT_TOKEN; source it in a subshell to read it.
