@@ -391,8 +391,10 @@ echo "────────────────────────�
 # generic half: every referenced name must resolve to skills/NAME/SKILL.md.
 # Lineage notes ("absorbed the former hero-skills:X") are exempt, same rule
 # as the absorbed guard.
+# docs/ is globbed, not enumerated: naming PIPELINES.md alone left every later
+# doc's references unguarded.
 REF_NAMES=$(grep -rhoE 'hero-skills:[a-z][a-z0-9-]*' --include='*.md' \
-  "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT/docs/PIPELINES.md" 2>/dev/null \
+  "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT"/docs/*.md 2>/dev/null \
   | sort -u | cut -d: -f2)
 DANGLING_REFS=0
 for ref in $REF_NAMES; do
