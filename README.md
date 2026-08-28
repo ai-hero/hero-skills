@@ -258,7 +258,7 @@ an arbitrary commit, turned out to be a way around the very branch protection
 the design depended on. A branch ref cannot be aimed anywhere; there is nothing
 to aim.
 
-`assets/auto-approve/caller.yml` is what gets installed into consumers. It is
+`assets/auto-approve/caller.yaml` is what gets installed into consumers. It is
 not the logic and should stay small; `scripts/install-auto-approve.test.sh`
 asserts it stays a caller and that its secrets and permissions still line up
 with what `auto-approve.yaml` declares.

@@ -191,6 +191,44 @@ UNANSWERED_QUESTIONS=$(gh api "/repos/$OWNER/$REPO/issues/$PR_NUMBER/comments" \
     | select((.user.type != \"Bot\") and ((.user.login | test(\"(coderabbit|greptile|copilot|sonarcloud|codeball|github-actions)\"; \"i\")) | not))
     | select(.id > ${LAST_AUTHOR_COMMENT_ID:-0})
   ] | length")
+
+# 3e — CI green on the head commit. The workflow's own CI gate fails CLOSED
+# on a pending check rather than polling (polling would burn the runner
+# minutes the gate exists to save), so wait here, locally and for free.
+# Buckets: pass / fail / pending / skipping / cancel. The name filter mirrors
+# the workflow's: a consumer that also calls auto-approve from a
+# pull_request trigger would have its own check on the head.
+#
+# `gh pr checks` exits 1 with EMPTY stdout when the head has no checks yet,
+# and 8 while any check is pending. Left unhandled, the empty case made both
+# counts empty strings, `[ "" -gt 0 ]` errored instead of breaking, and the
+# loop spun the full 30 minutes. Empty stdout is "no checks registered yet":
+# keep polling for two minutes (registration lag after a push), then treat
+# as no CI. Any other gh failure is a hard stop, not a pass.
+CI_DEADLINE=$(( $(date +%s) + 1800 ))
+CI_EMPTY_UNTIL=$(( $(date +%s) + 120 ))
+CI_FAILED=0; CI_PENDING=0
+while :; do
+  CI_ERR=""
+  CI_JSON=$(gh pr checks "$PR_NUMBER" --json name,bucket \
+    --jq '[.[] | select(.name | test("(^| / )claude-approve$") | not)]' 2>/tmp/ci_err) || CI_ERR=$(cat /tmp/ci_err)
+  if [ -z "$CI_JSON" ]; then
+    if grep -qi "no checks reported" <<<"$CI_ERR"; then
+      [ "$(date +%s)" -ge "$CI_EMPTY_UNTIL" ] && { CI_FAILED=0; CI_PENDING=0; break; }
+      echo "CI: no checks registered on the head yet — waiting…"; sleep 15; continue
+    fi
+    echo "gh pr checks failed: $CI_ERR" >&2
+    CI_FAILED=1; CI_PENDING=0; break
+  fi
+  CI_FAILED=$(jq -r '[.[] | select(.bucket == "fail" or .bucket == "cancel")] | length' <<<"$CI_JSON")
+  CI_PENDING=$(jq -r '[.[] | select(.bucket == "pending")] | length' <<<"$CI_JSON")
+  case "$CI_FAILED$CI_PENDING" in *[!0-9]*) echo "unexpected gh pr checks output" >&2; CI_FAILED=1; CI_PENDING=0; break ;; esac
+  [ "$CI_FAILED" -gt 0 ] && break
+  [ "$CI_PENDING" -eq 0 ] && break
+  [ "$(date +%s)" -ge "$CI_DEADLINE" ] && break
+  echo "CI: $CI_PENDING check(s) still running — waiting…"
+  sleep 30
+done
 ```
 
 Show the user the gate result:
@@ -201,6 +239,7 @@ Pre-flight gates for PR #PR_NUMBER:
   Unresolved threads:         UNRESOLVED   (must be 0)
   Active CHANGES_REQUESTED:   ACTIVE_CHANGES (must be 0 — re-request review or push fixes)
   Unanswered reviewer Qs:     UNANSWERED_QUESTIONS (must be 0 — reply to each)
+  CI on head commit:          CI_FAILED failed, CI_PENDING pending (both must be 0)
 ```
 
 **This is a hard gate, not a warning.** Stop and refuse to post `@auto-approve` if any of the following:
@@ -209,6 +248,8 @@ Pre-flight gates for PR #PR_NUMBER:
 - `UNRESOLVED > 0` — inline review threads still open. Run `hero-skills:respond-to-comments` to address them and resolve the threads.
 - `ACTIVE_CHANGES > 0` — a reviewer's latest review still says CHANGES_REQUESTED. Address the change request, push fixes, then ask the reviewer to dismiss it or submit a fresh review (a subsequent APPROVED review supersedes it in `latestReviews`).
 - `UNANSWERED_QUESTIONS > 0` — top-level questions from human reviewers with no author reply. List each one (`gh api .../issues/$PR_NUMBER/comments --jq '.[] | select(.id > LAST_AUTHOR_COMMENT_ID) | {user: .user.login, body: .body[0:200], url: .html_url}'`) and tell the user to reply to each before re-running.
+- `CI_FAILED > 0` — a check on the head commit failed. List them (`gh pr checks $PR_NUMBER`), fix, push, and re-run. The workflow's CI gate would REQUEST_CHANGES on this anyway; failing here saves the run.
+- `CI_PENDING > 0` after the 30-minute wait — a check is hung or queued behind a full runner pool. Report it; do not post `@auto-approve` into a pending build.
 
 Show the offending items inline so the user can act:
 
@@ -230,7 +271,7 @@ Recommended next step: hero-skills:respond-to-comments
 
 Do not proceed. Do not post `@auto-approve`.
 
-Only when **all four gates pass** continue to Step 4.
+Only when **all five gates pass** continue to Step 4.
 
 ### Step 4: Post the @auto-approve Trigger Comment
 

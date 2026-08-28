@@ -22,12 +22,18 @@ jobs:
     # step — if that is what you are staring at, check visibility first.
     if: github.event.repository.private
     # This block is the ceiling on the callee's token; the callee cannot
-    # exceed it. Trimming a scope here surfaces as a 403 inside the shared
-    # workflow, in this repo's run, not as an error in this file.
+    # exceed it. A scope the shared workflow declares but this block lacks
+    # is a startup validation error in this repo's run ("The workflow is
+    # requesting 'checks: read', but is only allowed 'checks: none'") — no
+    # step runs and no verdict is posted, so ship-pr sees a failed run with
+    # no failing step. Keep this a superset of what the shared workflow
+    # declares; `checks`/`statuses` feed its CI gate.
     permissions:
       pull-requests: write
       issues: write
       contents: read
+      checks: read
+      statuses: read
     # @main, deliberately: the fleet runs what is on hero-skills' main and
     # nothing else. main there is PR-protected — approval required, stale
     # approvals dismissed on push, last-push approval required — so that
