@@ -195,14 +195,34 @@ UNANSWERED_QUESTIONS=$(gh api "/repos/$OWNER/$REPO/issues/$PR_NUMBER/comments" \
 # 3e — CI green on the head commit. The workflow's own CI gate fails CLOSED
 # on a pending check rather than polling (polling would burn the runner
 # minutes the gate exists to save), so wait here, locally and for free.
-# Buckets: pass / fail / pending / skipping / cancel. The workflow excludes
-# its own past runs by name, so do the same.
+# Buckets: pass / fail / pending / skipping / cancel. The name filter mirrors
+# the workflow's: a consumer that also calls auto-approve from a
+# pull_request trigger would have its own check on the head.
+#
+# `gh pr checks` exits 1 with EMPTY stdout when the head has no checks yet,
+# and 8 while any check is pending. Left unhandled, the empty case made both
+# counts empty strings, `[ "" -gt 0 ]` errored instead of breaking, and the
+# loop spun the full 30 minutes. Empty stdout is "no checks registered yet":
+# keep polling for two minutes (registration lag after a push), then treat
+# as no CI. Any other gh failure is a hard stop, not a pass.
 CI_DEADLINE=$(( $(date +%s) + 1800 ))
+CI_EMPTY_UNTIL=$(( $(date +%s) + 120 ))
+CI_FAILED=0; CI_PENDING=0
 while :; do
+  CI_ERR=""
   CI_JSON=$(gh pr checks "$PR_NUMBER" --json name,bucket \
-    --jq '[.[] | select(.name | test("claude-approve") | not)]')
+    --jq '[.[] | select(.name | test("(^| / )claude-approve$") | not)]' 2>/tmp/ci_err) || CI_ERR=$(cat /tmp/ci_err)
+  if [ -z "$CI_JSON" ]; then
+    if grep -qi "no checks reported" <<<"$CI_ERR"; then
+      [ "$(date +%s)" -ge "$CI_EMPTY_UNTIL" ] && { CI_FAILED=0; CI_PENDING=0; break; }
+      echo "CI: no checks registered on the head yet — waiting…"; sleep 15; continue
+    fi
+    echo "gh pr checks failed: $CI_ERR" >&2
+    CI_FAILED=1; CI_PENDING=0; break
+  fi
   CI_FAILED=$(jq -r '[.[] | select(.bucket == "fail" or .bucket == "cancel")] | length' <<<"$CI_JSON")
   CI_PENDING=$(jq -r '[.[] | select(.bucket == "pending")] | length' <<<"$CI_JSON")
+  case "$CI_FAILED$CI_PENDING" in *[!0-9]*) echo "unexpected gh pr checks output" >&2; CI_FAILED=1; CI_PENDING=0; break ;; esac
   [ "$CI_FAILED" -gt 0 ] && break
   [ "$CI_PENDING" -eq 0 ] && break
   [ "$(date +%s)" -ge "$CI_DEADLINE" ] && break
