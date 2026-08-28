@@ -29,9 +29,24 @@ permissions:
   # /issues/$N/comments, /issues/comments/$ID/reactions). With explicit
   # permissions set, any unspecified scope is `none`, so without this
   # the Acknowledge / Post result / React steps would 403.
+  # `checks: read` and `statuses: read` are what the CI gate reads.
+  # Adding a scope here is a fleet-wide sequencing event, not a local edit:
+  # a called workflow may not request more than its caller grants, and the
+  # mismatch is a startup validation error ("The workflow is requesting
+  # 'checks: read', but is only allowed 'checks: none'") — no step runs, no
+  # verdict is posted. Every consumer must vendor the matching
+  # assets/auto-approve/caller.yaml BEFORE the scope lands on main here.
   pull-requests: write
   issues: write
   contents: read
+  checks: read
+  statuses: read
+
+env:
+  # Single source for the model: the request payload and the footer on the
+  # posted verdict both read this. They drifted apart once when the two
+  # literals were bumped separately.
+  CLAUDE_MODEL: claude-sonnet-4-6
 
 jobs:
   claude-approve:
@@ -76,6 +91,17 @@ jobs:
           HEAD_SHA=$(jq -r '.head.sha' pr.json)
           echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
 
+          # Dependency bots get the scripted gates and CI, not the model. Every
+          # model finding on a bot PR in the run history was the bot's own
+          # description being pedantic about transitive bumps ("says 3 updates,
+          # diff has 4"), each one a REQUEST_CHANGES and a re-run — and bot PRs
+          # were 29% of all runs.
+          if jq -e '.user.login | test("^(dependabot|renovate)(\\[bot\\])?$")' pr.json > /dev/null; then
+            echo "deps_bot=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deps_bot=false" >> "$GITHUB_OUTPUT"
+          fi
+
           # The unified diff is best-effort: GitHub's diff media type 406s on
           # PRs over 300 changed files. Under `bash -e` a hard failure here
           # kills the whole job before the verifier ever runs — even though the
@@ -90,22 +116,14 @@ jobs:
               "$(tr '\n' ' ' < diff_err.log)" > pr.diff
           fi
 
-          # Soft cap on the diff. Sonnet 4.6 takes 200K tokens — leaving
-          # headroom for the file tree and full-file bundle below.
-          if [ "$(wc -c < pr.diff)" -gt 200000 ]; then
-            head -c 200000 pr.diff > pr_truncated.diff
-            printf '\n\n[... diff truncated at 200KB ...]\n' >> pr_truncated.diff
-          else
-            cp pr.diff pr_truncated.diff
-          fi
-
           # --paginate so the file list is complete on large PRs (the API
           # pages at 30/100 per request); without it the verifier would only
           # see the first page of changed files.
           # per_page in the URL (not `-f`, which would flip gh to POST → 404)
           # keeps this a GET while --paginate walks every page.
           gh api --paginate "/repos/${{ github.repository }}/pulls/$PR_NUMBER/files?per_page=100" \
-            --jq '.[].filename' > changed_files.txt
+            --jq '.[] | [.filename, .status, .additions, .deletions] | @tsv' > files.tsv
+          cut -f1 files.tsv > changed_files.txt
 
           # Recursive repo file tree at HEAD — lets the verifier confirm
           # claims about files that exist outside the diff (tests,
@@ -114,29 +132,67 @@ jobs:
             --jq '.tree[] | select(.type == "blob") | .path' \
             > repo_tree.txt
 
-          # Full post-merge content of every changed file at HEAD. The
-          # diff hides surrounding code; verification needs the whole
-          # file to judge correctness, dead code, and missing handling.
-          # Bundled into a single file with markers so the prompt can
-          # ingest it without juggling many --rawfile args.
-          : > full_files.txt
-          while IFS= read -r f; do
-            [ -z "$f" ] && continue
-            printf '\n===== FILE: %s =====\n' "$f" >> full_files.txt
-            # Never send the contents of a file whose path typically holds
-            # credentials or keys to the model — even if one slipped past
-            # local secret scanning. Record it as omitted and skip the fetch.
-            case "$f" in
+          # Which changed files the model actually reads. Across the fleet,
+          # lockfiles were 46% of every byte sent to the model, generated code
+          # and binaries another 11%, and no verdict ever depended on any of
+          # it — the only lockfile findings were noise. A raw PNG or a 500KB
+          # package-lock.json also pushes real code past the 200KB diff cap,
+          # which is where every "diff truncated mid-function" false positive
+          # came from. Non-source files are summarised as one +/- line instead.
+          classify() {
+            case "$1" in
+              # Never send the contents of a file whose path typically holds
+              # credentials or keys to the model — even if one slipped past
+              # local secret scanning.
               .env|.env.*|*/.env|*/.env.*| \
               *.pem|*.key|*.p12|*.pfx|*.jks| \
               id_rsa*|id_ed25519*|id_ecdsa*|*/id_rsa*|*/id_ed25519*|*/id_ecdsa*| \
               *kubeconfig*|*.kubeconfig| \
               *credentials*| \
               .npmrc|*/.npmrc|.pypirc|*/.pypirc|.netrc|*/.netrc)
-                printf '(content omitted — path matches the secret-bearing-file blocklist)\n' >> full_files.txt
-                continue
-                ;;
+                echo secret ;;
+              package-lock.json|*/package-lock.json|npm-shrinkwrap.json|*/npm-shrinkwrap.json| \
+              go.sum|*/go.sum|pnpm-lock.yaml|*/pnpm-lock.yaml|yarn.lock|*/yarn.lock| \
+              bun.lock|*/bun.lock|bun.lockb|*/bun.lockb|Cargo.lock|*/Cargo.lock| \
+              poetry.lock|*/poetry.lock|uv.lock|*/uv.lock|Gemfile.lock|*/Gemfile.lock| \
+              composer.lock|*/composer.lock|flake.lock|*/flake.lock)
+                echo lockfile ;;
+              *.pb.go|*_pb.ts|*_pb.js|*_pb.d.ts|*.connect.go|*_connect.ts|*_connect.js| \
+              */gen/*|*/generated/*|*.gen.ts|*.gen.go|*.generated.*|*/__generated__/*)
+                echo generated ;;
+              *.png|*.jpg|*.jpeg|*.gif|*.webp|*.avif|*.ico|*.bmp|*.tiff| \
+              *.woff|*.woff2|*.ttf|*.otf|*.eot| \
+              *.mp4|*.webm|*.mov|*.mp3|*.wav|*.ogg| \
+              *.pdf|*.zip|*.gz|*.tgz|*.tar|*.jar|*.wasm|*.bin|*.so|*.dylib|*.dll|*.exe)
+                echo binary ;;
+              *.snap|*-snapshots/*|*/__snapshots__/*|*.baseline|*.min.js|*.min.css|*.map)
+                echo snapshot ;;
+              *) echo source ;;
             esac
+          }
+
+          # Full post-merge content of every changed source file at HEAD. The
+          # diff hides surrounding code; verification needs the whole
+          # file to judge correctness, dead code, and missing handling.
+          # Bundled into a single file with markers so the prompt can
+          # ingest it without juggling many --rawfile args.
+          : > full_files.txt
+          : > omitted_files.txt
+          : > omitted_paths.txt
+          while IFS=$'\t' read -r f status adds dels; do
+            [ -z "$f" ] && continue
+            printf '\n===== FILE: %s =====\n' "$f" >> full_files.txt
+            CLASS=$(classify "$f")
+            if [ "$CLASS" != "source" ]; then
+              printf '(content omitted — %s; %s, +%s/-%s lines)\n' "$CLASS" "$status" "$adds" "$dels" >> full_files.txt
+              printf '%s  [%s, %s, +%s/-%s]\n' "$f" "$CLASS" "$status" "$adds" "$dels" >> omitted_files.txt
+              printf '%s\n' "$f" >> omitted_paths.txt
+              continue
+            fi
+            if [ "$status" = "removed" ]; then
+              printf '(file deleted in this PR)\n' >> full_files.txt
+              continue
+            fi
             # Capture status separately so 404 (deleted) is reported as
             # such, while other failures (rate limit, auth, 5xx) are
             # surfaced rather than masquerading as "deleted".
@@ -165,7 +221,26 @@ jobs:
             # Space out the up-to-two API calls per file to stay clear of
             # secondary rate limits on PRs that touch many files.
             sleep 0.5
-          done < changed_files.txt
+          done < files.tsv
+
+          # Drop the omitted files' hunks from the diff the model sees. The
+          # unfiltered pr.diff is kept for the grounding search below — a
+          # description that mentions `nanoid` is grounded by the lockfile
+          # hunk even though the model never reads it.
+          awk -v omit=omitted_paths.txt '
+            BEGIN { while ((getline l < omit) > 0) o[l] = 1 }
+            /^diff --git / { p = $0; sub(/^diff --git a\//, "", p); sub(/ b\/.*$/, "", p); skip = (p in o) }
+            !skip
+          ' pr.diff > pr_filtered.diff
+
+          # Soft cap on the diff. Sonnet takes 200K tokens — leaving
+          # headroom for the file tree and full-file bundle.
+          if [ "$(wc -c < pr_filtered.diff)" -gt 200000 ]; then
+            head -c 200000 pr_filtered.diff > pr_truncated.diff
+            printf '\n\n[... diff truncated at 200KB ...]\n' >> pr_truncated.diff
+          else
+            cp pr_filtered.diff pr_truncated.diff
+          fi
 
           # Soft cap on the bundle to keep the request inside the model
           # context. 800KB ≈ ~200K tokens of source.
@@ -174,6 +249,39 @@ jobs:
             printf '\n\n[... full_files truncated at 800KB; remaining changed files omitted from full content ...]\n' >> full_files.trunc
             mv full_files.trunc full_files.txt
           fi
+
+          # Go packages whose non-test files changed with no _test.go change
+          # in the same package. Advisory input for the model's test check —
+          # it must still confirm in the tree, since the package may already
+          # be covered by tests that did not need to change.
+          awk -F'\t' '
+            $1 ~ /\.go$/ {
+              d = $1; sub(/\/[^\/]*$/, "", d); if (d == $1) d = ".";
+              if ($1 ~ /_test\.go$/) t[d] = 1; else s[d] = 1
+            }
+            END { for (d in s) if (!(d in t)) print d }
+          ' files.tsv | sort > go_pkgs_without_tests.txt
+
+          # Grounding: every backticked identifier in the description that a
+          # literal search cannot find in the diff, the changed files, or the
+          # repo tree. This mechanically catches the drift the model was
+          # catching by luck — a description naming APP_SENTRY_DSN when the
+          # diff renamed to SENTRY_DSN, a claimed TestConnectPing with no test
+          # file, an "updated AGENTS.md" that the diff never touches. Handed to
+          # the model as a list to adjudicate, not a hard fail: an env var set
+          # in the deploy or a CLI name legitimately appears nowhere in-repo.
+          grep -o '`[^`]*`' pr_body.txt \
+            | tr -d '`' \
+            | awk 'length >= 3 && length <= 120 && !/[[:space:]]/' \
+            | sort -u | head -200 > claims.txt
+          : > unverified_claims.txt
+          while IFS= read -r c; do
+            [ -z "$c" ] && continue
+            grep -qF -- "$c" pr.diff repo_tree.txt full_files.txt pr_title.txt 2>/dev/null \
+              || printf '%s\n' "$c" >> unverified_claims.txt
+          done < claims.txt
+
+          echo "changed=$(wc -l < changed_files.txt) omitted=$(wc -l < omitted_paths.txt) diff_bytes=$(wc -c < pr_truncated.diff) bundle_bytes=$(wc -c < full_files.txt) unverified_claims=$(wc -l < unverified_claims.txt)"
 
       - name: Acknowledge
         env:
@@ -329,31 +437,116 @@ jobs:
             } > threads.md
           fi
 
+      - name: Gate — CI green
+        id: ci
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+        run: |
+          # CI already answers "do the tests pass"; the model was being asked
+          # to guess it from the diff and never once said no. Read the
+          # check-runs and legacy commit statuses on the head SHA instead.
+          #
+          # This workflow's own job is excluded by name — its check-run is
+          # in_progress right now, so counting it would make the gate fail on
+          # itself every time. Reusable-workflow jobs are named
+          # "caller-job / callee-job", hence the substring match.
+          gh api --paginate "/repos/${{ github.repository }}/commits/$HEAD_SHA/check-runs?per_page=100" \
+            --jq '.check_runs[] | select(.name | test("claude-approve") | not) | [.name, .status, (.conclusion // "")] | @tsv' \
+            > checks.tsv
+          gh api "/repos/${{ github.repository }}/commits/$HEAD_SHA/status" \
+            --jq '.statuses[] | [.context, (if .state == "pending" then "in_progress" else "completed" end), .state] | @tsv' \
+            >> checks.tsv
+
+          FAILED=$(awk -F'\t' '$2 == "completed" && $3 ~ /^(failure|timed_out|cancelled|action_required|startup_failure|error)$/' checks.tsv)
+          PENDING=$(awk -F'\t' '$2 != "completed"' checks.tsv)
+          TOTAL=$(wc -l < checks.tsv | tr -d ' ')
+
+          echo "checks=$TOTAL failed=$(printf '%s' "$FAILED" | grep -c . || true) pending=$(printf '%s' "$PENDING" | grep -c . || true)"
+
+          # Pending fails closed rather than waiting: polling here would burn
+          # the runner minutes this gate exists to save. ship-pr waits for the
+          # checks locally before it posts @auto-approve.
+          if [ -n "$FAILED" ]; then
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## CI: ❌"
+              echo "Failing checks on $HEAD_SHA — fix them before requesting auto-approve."
+              echo ""
+              printf '%s\n' "$FAILED" | awk -F'\t' '{print "- " $1 " (" $3 ")"}'
+            } > ci.md
+          elif [ -n "$PENDING" ]; then
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## CI: ❌"
+              echo "Checks still running on $HEAD_SHA — wait for them to finish, then re-run \`@auto-approve\`."
+              echo ""
+              printf '%s\n' "$PENDING" | awk -F'\t' '{print "- " $1 " (" $2 ")"}'
+            } > ci.md
+          elif [ "$TOTAL" -eq 0 ]; then
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "## CI: ⏭️"
+              echo "No CI checks reported on $HEAD_SHA."
+            } > ci.md
+          else
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "## CI: ✅"
+              echo "All $TOTAL check(s) on $HEAD_SHA passed."
+            } > ci.md
+          fi
+
       - name: Short-circuit on gate failure
         id: gates
         if: |
           steps.prior_review.outputs.passed != 'true' ||
-          steps.threads.outputs.passed != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          steps.threads.outputs.passed != 'true' ||
+          steps.ci.outputs.passed != 'true'
         run: |
           {
             cat prior_review.md
             echo ""
             cat threads.md
             echo ""
+            cat ci.md
+            echo ""
             echo "## Verdict"
             echo "REQUEST_CHANGES"
             echo "Auto-approve gates failed — fix the items above and re-run \`@auto-approve\`."
           } > review.md
           echo "verdict=request_changes" >> "$GITHUB_OUTPUT"
-          echo "skipped_claude=true" >> "$GITHUB_OUTPUT"
+
+      - name: Dependency-bot lane
+        id: deps_bot
+        if: |
+          steps.prior_review.outputs.passed == 'true' &&
+          steps.threads.outputs.passed == 'true' &&
+          steps.ci.outputs.passed == 'true' &&
+          steps.pr.outputs.deps_bot == 'true'
+        run: |
+          {
+            cat prior_review.md
+            echo ""
+            cat threads.md
+            echo ""
+            cat ci.md
+            echo ""
+            echo "## Verification: ⏭️"
+            echo "Dependency-bot PR — scripted gates only; model verification skipped."
+            echo ""
+            echo "## Verdict"
+            echo "APPROVE"
+            echo "Prior review present, all threads resolved, CI green."
+          } > review.md
+          echo "verdict=approve" >> "$GITHUB_OUTPUT"
 
       - name: Claude verification
         if: |
           steps.prior_review.outputs.passed == 'true' &&
-          steps.threads.outputs.passed == 'true'
+          steps.threads.outputs.passed == 'true' &&
+          steps.ci.outputs.passed == 'true' &&
+          steps.pr.outputs.deps_bot != 'true'
         id: verify
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -361,6 +554,10 @@ jobs:
           PR_TITLE=$(cat pr_title.txt)
           PR_BODY=$(cat pr_body.txt | head -c 4000)
           CHANGED_FILES=$(cat changed_files.txt)
+          CI_STATUS=$(sed -n '2p' ci.md)
+          OMITTED_FILES=$(cat omitted_files.txt)
+          UNVERIFIED_CLAIMS=$(cat unverified_claims.txt)
+          GO_PKGS_WITHOUT_TESTS=$(cat go_pkgs_without_tests.txt)
 
           # Fail closed early if the key is missing: skip the wasted API call
           # and give a precise reason. (A missing key would otherwise surface
@@ -374,6 +571,8 @@ jobs:
               echo ""
               cat threads.md
               echo ""
+              cat ci.md
+              echo ""
               echo "$REVIEW"
             } > review.md
             echo "verdict=request_changes" >> "$GITHUB_OUTPUT"
@@ -383,10 +582,14 @@ jobs:
           # Build the prompt with --rawfile so the diff, repo tree, and
           # full file bundle can be larger than argv would normally allow.
           jq -n \
-            --arg model "claude-sonnet-4-6" \
+            --arg model "$CLAUDE_MODEL" \
             --arg pr_title "$PR_TITLE" \
             --arg pr_body "$PR_BODY" \
             --arg changed_files "$CHANGED_FILES" \
+            --arg ci_status "$CI_STATUS" \
+            --arg omitted_files "${OMITTED_FILES:-(none)}" \
+            --arg unverified_claims "${UNVERIFIED_CLAIMS:-(none)}" \
+            --arg go_pkgs_without_tests "${GO_PKGS_WITHOUT_TESTS:-(none)}" \
             --rawfile diff pr_truncated.diff \
             --rawfile repo_tree repo_tree.txt \
             --rawfile full_files full_files.txt \
@@ -396,59 +599,79 @@ jobs:
               messages: [{
                 role: "user",
                 content: (
-                  "You are a gatekeeper deciding whether to APPROVE a pull request. A human developer has already reviewed the code. Your job is strictly to verify the PR metadata is honest and complete. Be concise.\n\n" +
-                  "You have access to (1) the diff, (2) the full post-merge content of every changed file, and (3) a recursive listing of every file in the repository at the PR head. Before flagging missing tests, missing migrations, missing validation, or missing files: SEARCH the repo tree and read the full file contents. Only flag something as missing after you have confirmed it is not present anywhere in the repo — not just in the diff. Reviewing only the diff causes false positives; do not do that.\n\n" +
+                  "You are a gatekeeper deciding whether to APPROVE a pull request. A reviewer has already read the code and CI has already run — its status is given below. Your job is strictly to verify that the PR description is honest and the change is complete. Be concise.\n\n" +
+                  "You are given: (1) the CI status; (2) files the workflow deliberately omitted — lockfiles, generated code, binaries, snapshots — each summarised as one +/- line, which IS the whole change for that file: never report an omitted file as missing, truncated, or unreviewable; (3) identifiers from the description that a literal search could not find in the diff, the changed files, or the repo tree; (4) Go packages changed with no test change in the same package; (5) the diff; (6) the full post-merge content of every changed source file; (7) a recursive listing of every file in the repository at the PR head.\n\n" +
+                  "Before flagging anything as missing — a test, a migration, a validation, a file — SEARCH the repo tree and read the full file contents. Only flag it after confirming it is not present anywhere in the repo. Reviewing only the diff causes false positives; do not do that.\n\n" +
                   "CHECK 1 — PR DESCRIPTION INTEGRITY\n" +
-                  "- Does the description accurately reflect what the diff does?\n" +
-                  "- Are there claims NOT backed by the diff? (e.g. says \"Added error handling\" but diff has none)\n" +
-                  "- Are there significant diff changes the description fails to mention?\n\n" +
-                  "CHECK 2 — TEST VERIFICATION\n" +
-                  "- If the description claims tests were added/updated, do test files appear in the diff OR already exist in the repo tree covering the changed code paths?\n" +
-                  "- If critical logic is touched (auth, payments, data mutations, APIs) and NO tests cover it (in diff OR in tree), flag it. Use the repo tree to find existing tests before claiming none exist.\n" +
-                  "- Skip this for trivial changes (docs, config, formatting).\n\n" +
+                  "- Does the description accurately reflect what the diff does? Are there claims NOT backed by the diff? Significant changes the description fails to mention?\n" +
+                  "- Work through the UNVERIFIED IDENTIFIERS list first. For each, decide: external to this repo (a package, a CLI, a service, an env var set at deploy time) → ignore; a claim about this repo that the diff contradicts (a name the diff spells differently, a file the diff never touches, a test that does not exist) → ❌ and name it.\n" +
+                  "- Dependency changes carried only by a lockfile, transitive version bumps, and update counts are never a description defect.\n\n" +
+                  "CHECK 2 — TEST CLAIMS\n" +
+                  "- CI status already says whether tests pass; do not re-judge that.\n" +
+                  "- Flag only: tests the description claims were added or updated that exist in neither the diff nor the repo tree; or critical logic (auth, payments, data mutation, API handlers) changed with no covering test anywhere in the tree. Start from GO PACKAGES WITHOUT TEST CHANGES, then confirm in the tree — an unchanged existing test that covers the package is fine.\n" +
+                  "- ⏭️ for docs, config, formatting, and dependency-only changes.\n\n" +
                   "CHECK 3 — COMPLETENESS\n" +
-                  "- New API route but no validation? (Check the full file content, not just the diff hunks.)\n" +
-                  "- New DB column / collection / domain type but no migration or index? (Look for migrate.go, migrations/, init scripts in the repo tree before claiming none exist.)\n" +
-                  "- TODO/FIXME added without a tracking issue?\n" +
-                  "- Hardcoded secrets or values that should be config?\n\n" +
+                  "- Leftover scaffolding or placeholders shipped as real code (a route rendering a hello-world stub, a handler returning not-implemented, a TODO in place of the logic the description claims).\n" +
+                  "- New API route with no validation? (Check the full file content, not just the diff hunks.)\n" +
+                  "- New persisted field, collection, or domain type without the store/index/migration change this repo'"'"'s pattern requires? (Look for migrate.go, migrations/, store/, init scripts in the repo tree before claiming none exist.)\n" +
+                  "- TODO/FIXME added without a tracking reference? Hardcoded secrets, keys, or values that belong in config? Third-party GitHub Actions on a floating ref (@main/@master)?\n\n" +
                   "---\n\n" +
                   "PR Title: " + $pr_title + "\n\n" +
                   "PR Description:\n" + $pr_body + "\n\n" +
+                  "CI Status: " + $ci_status + "\n\n" +
                   "Changed Files:\n" + $changed_files + "\n\n" +
+                  "Omitted Files (summarised, never missing):\n" + $omitted_files + "\n\n" +
+                  "UNVERIFIED IDENTIFIERS (named in the description, found nowhere in diff/files/tree):\n" + $unverified_claims + "\n\n" +
+                  "GO PACKAGES WITHOUT TEST CHANGES:\n" + $go_pkgs_without_tests + "\n\n" +
                   "Repo File Tree (at PR head — search this before flagging missing files):\n" + $repo_tree + "\n\n" +
-                  "Full Content of Changed Files (post-merge, at PR head):\n" + $full_files + "\n\n" +
-                  "Diff:\n" + $diff + "\n\n" +
+                  "Full Content of Changed Source Files (post-merge, at PR head):\n" + $full_files + "\n\n" +
+                  "Diff (omitted files removed):\n" + $diff + "\n\n" +
                   "---\n\n" +
-                  "Respond in this exact format:\n\n" +
+                  "Respond in this exact format. Every explanation line must be your own words about this PR — never echo the format text itself.\n\n" +
                   "## PR Description: ✅ or ❌\n" +
-                  "One line explanation.\n\n" +
-                  "## Tests: ✅ or ❌ or ⏭️ (skipped if trivial)\n" +
-                  "One line explanation. If you mark ❌, name the specific file or path you checked.\n\n" +
+                  "ONE_LINE_EXPLANATION\n\n" +
+                  "## Tests: ✅ or ❌ or ⏭️\n" +
+                  "ONE_LINE_EXPLANATION — on ❌ name the specific file or path you checked.\n\n" +
                   "## Completeness: ✅ or ❌\n" +
-                  "One line explanation. If you mark ❌, name the specific file or path you checked.\n\n" +
+                  "ONE_LINE_EXPLANATION — on ❌ name the specific file or path you checked.\n\n" +
                   "## Verdict\n" +
                   "APPROVE or REQUEST_CHANGES\n" +
-                  "One sentence reason."
+                  "ONE_SENTENCE_REASON"
                 )
               }]
             }' > payload.json
 
+          echo "payload_bytes=$(wc -c < payload.json)"
+
           # Use -fS so curl exits non-zero on HTTP >=400 and prints
           # error to stderr; capture both body and exit code so we can
           # fail closed when the call did not return a usable response.
-          RESPONSE=$(curl -fsS https://api.anthropic.com/v1/messages \
-            -H "Content-Type: application/json" \
-            -H "x-api-key: $ANTHROPIC_API_KEY" \
-            -H "anthropic-version: 2023-06-01" \
-            -d @payload.json) || CURL_FAILED=1
+          # One retry after a pause: the four fail-closed verdicts in the run
+          # history were all transient API errors that a re-run then passed.
+          CURL_FAILED=""
+          RESPONSE=""
+          for attempt in 1 2; do
+            if RESPONSE=$(curl -fsS --max-time 300 https://api.anthropic.com/v1/messages \
+                 -H "Content-Type: application/json" \
+                 -H "x-api-key: $ANTHROPIC_API_KEY" \
+                 -H "anthropic-version: 2023-06-01" \
+                 -d @payload.json); then
+              CURL_FAILED=""
+              break
+            fi
+            CURL_FAILED=1
+            echo "attempt $attempt failed" >&2
+            [ "$attempt" -eq 1 ] && sleep 20
+          done
 
           # Treat any of the following as a hard failure that must NOT
           # parse as APPROVE:
-          #   - curl exited non-zero (network, 4xx, 5xx)
+          #   - curl exited non-zero on both attempts (network, 4xx, 5xx)
           #   - response body has no .content[0].text (malformed / API error envelope)
           REVIEW=""
           if [ -z "${CURL_FAILED:-}" ]; then
             REVIEW=$(echo "$RESPONSE" | jq -r '.content[0].text // empty')
+            echo "$RESPONSE" | jq -c '.usage // {}' || true
           fi
 
           if [ -z "$REVIEW" ]; then
@@ -462,6 +685,8 @@ jobs:
             cat prior_review.md
             echo ""
             cat threads.md
+            echo ""
+            cat ci.md
             echo ""
             echo "$REVIEW"
           } > review.md
@@ -483,9 +708,12 @@ jobs:
       - name: Resolve final verdict
         id: final
         run: |
-          # Gates short-circuited → use their verdict; otherwise use Claude's.
+          # Gates short-circuited → their verdict; bot lane → approve;
+          # otherwise Claude's.
           if [ "${{ steps.gates.outputs.verdict }}" = "request_changes" ]; then
             echo "verdict=request_changes" >> "$GITHUB_OUTPUT"
+          elif [ "${{ steps.deps_bot.outputs.verdict }}" = "approve" ]; then
+            echo "verdict=approve" >> "$GITHUB_OUTPUT"
           else
             echo "verdict=${{ steps.verify.outputs.verdict }}" >> "$GITHUB_OUTPUT"
           fi
@@ -504,7 +732,7 @@ jobs:
           $REVIEW_BODY
 
           ---
-          *Verified using hero-skills (claude-sonnet-4-6) • $TIMESTAMP*"
+          *Verified using hero-skills ($CLAUDE_MODEL) • $TIMESTAMP*"
 
           # Update existing or create new
           EXISTING=$(gh api \
@@ -527,13 +755,20 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
         run: |
+          # The full verdict goes in the review body too. The comment above is
+          # PATCHed in place on every re-run, so it only ever shows the last
+          # result; reviews are append-only, so this is the one place the
+          # history of what failed and why survives.
           if [ "${{ steps.final.outputs.verdict }}" = "approve" ]; then
             VERDICT="APPROVE"
-            BODY="✅ Approved — prior review present, all comments resolved, PR metadata verified."
+            HEADLINE="✅ Approved — prior review present, all comments resolved, CI green, PR metadata verified."
           else
             VERDICT="REQUEST_CHANGES"
-            BODY="❌ Changes requested — see Claude's verification comment above."
+            HEADLINE="❌ Changes requested — see the verification comment above."
           fi
+          BODY="$HEADLINE
+
+          $(cat review.md)"
           gh api --method POST \
             /repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews \
             -f event="$VERDICT" \

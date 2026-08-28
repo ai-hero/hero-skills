@@ -126,9 +126,12 @@ print(','.join(sorted(((wc or {}).get('secrets') or {}).keys())))
 check "contract: caller secrets declared by callee" "$caller_secrets" \
   "$(comm -12 <(tr ',' '\n' <<<"$caller_secrets" | sort) <(tr ',' '\n' <<<"$callee_secrets" | sort) | paste -sd, -)"
 
-# The caller's job permissions are the ceiling on the callee's token. If the
-# callee ever needs a scope the caller doesn't grant, every consumer 403s
-# mid-run with no change on their side.
+# The caller's job permissions are the ceiling on the callee's token. A scope
+# the callee declares but the caller lacks is a startup validation error in
+# every consumer ("The workflow is requesting 'checks: read', but is only
+# allowed 'checks: none'") — no step runs, no verdict posts — with no change
+# on their side. Passing here is necessary, not sufficient: consumers must
+# also have VENDORED the new caller before the callee change merges.
 missing_perms=$(python3 -c "
 import yaml
 c=yaml.safe_load(open('$SOURCE')); e=yaml.safe_load(open('$CALLEE'))
