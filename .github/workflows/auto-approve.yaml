@@ -427,7 +427,7 @@ jobs:
             echo "passed=false" >> "$GITHUB_OUTPUT"
             {
               echo "## Prior Review: ❌"
-              echo "No prior review found. Run \`/hero-self-review\` or wait for a code review agent (Copilot/CodeRabbit/Greptile) before requesting auto-approve."
+              echo "No prior review found. Run \`hero-skills:review-pr\` or wait for a code review agent (Copilot/CodeRabbit/Greptile) before requesting auto-approve."
             } > prior_review.md
           fi
 

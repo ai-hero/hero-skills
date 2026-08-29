@@ -138,8 +138,7 @@ REPO=$(echo "$OWNER_REPO" | awk '{print $2}')
 PR_AUTHOR=$(gh api "/repos/$OWNER/$REPO/pulls/$PR_NUMBER" --jq '.user.login')
 
 # 3a — Prior review present (self-review OR reviewer review OR bot inline)
-SELF_REVIEW=$(gh api "/repos/$OWNER/$REPO/issues/$PR_NUMBER/comments" \
-  --jq '[.[] | select(.body | test("ai-hero:self-review"))] | length')
+SELF_REVIEW=$(hero_self_review_count "$PR_NUMBER")
 
 OTHER_REVIEWS=$(gh api "/repos/$OWNER/$REPO/pulls/$PR_NUMBER/reviews" \
   --jq "[.[] | select(.user.login != \"$PR_AUTHOR\") | select(.state != \"PENDING\")] | length")
@@ -860,8 +859,28 @@ This check is **advisory only**. It surfaces a DEGRADED or unreachable deploymen
 if [ "$MERGED" != "true" ]; then
   DEPLOY_STATUS="skipped"
 else
-  DEPLOY_PLATFORM=$(hero_field platform 2>/dev/null | tr '[:upper:]' '[:lower:]')
+  # BLOCK-scoped: `platform` repeats under CI/CD (see hero_field's note).
+  DEPLOY_PLATFORM=$(hero_md_field "$ROOT/HERO.md" platform '## Deployment' 2>/dev/null | tr '[:upper:]' '[:lower:]')
   DEPLOY_PLATFORM=${DEPLOY_PLATFORM:-none}
+
+  # A probe taken while the merge commit's own workflow runs are still going
+  # measures the PREVIOUS deploy — healthy, and not the one this PR produced.
+  # Wait for them (10-minute cap, like Step 5), then probe.
+  MERGE_COMMIT=$(gh pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid // empty' 2>/dev/null)
+  if [ -n "$MERGE_COMMIT" ] && [ "$DEPLOY_PLATFORM" != "none" ]; then
+    WAITED=0
+    while [ "$WAITED" -lt 600 ]; do
+      IN_FLIGHT=$(gh run list --commit "$MERGE_COMMIT" --json status \
+        --jq '[.[] | select(.status != "completed")] | length' 2>/dev/null) || IN_FLIGHT=unknown
+      [ "$IN_FLIGHT" = "0" ] && break
+      # Advisory step: a gh that cannot list runs will not start listing them
+      # in ten minutes — probe now rather than sleep out the cap.
+      [ "$IN_FLIGHT" = "unknown" ] && { echo "deploy: could not read runs on $MERGE_COMMIT — probing now"; break; }
+      echo "deploy: $IN_FLIGHT run(s) still in flight on $MERGE_COMMIT — waiting…"
+      sleep 30; WAITED=$((WAITED + 30))
+    done
+    [ "$WAITED" -ge 600 ] && echo "deploy: runs on $MERGE_COMMIT still in flight after 10 minutes — probing anyway; treat a HEALTHY result as the previous deploy's"
+  fi
 fi
 ```
 

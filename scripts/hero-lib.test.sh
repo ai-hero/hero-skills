@@ -599,6 +599,12 @@ item 053-archrev.md 53 "Architecture PR in review" "reviewing" "[]" "architectur
 item 075-pol.md 75 "Dashboard header spacing" "ready" "[]" "polish"
 item 076-poltodo.md 76 "Card grid gutters" "todo" "[]" "polish"
 item 077-polrev.md 77 "Polish PR in review" "reviewing" "[]" "polish"
+# `security` (a bot's bump PR taken to deployment by `wayfare deps`, or a
+# harden fix) rides the build enum too; left off the class table it would list as backlog and
+# never be handed out.
+item 078-dep.md 78 "Bump lodash to 4.17.21" "ready" "[]" "security"
+item 079-deptodo.md 79 "Bump minimist" "todo" "[]" "security"
+item 080-deprev.md 80 "Bump in review" "reviewing" "[]" "security"
 item 054-df.md 54 "Surface divergence" "todo" "[]" "design-feedback"
 item 055-dfq.md 55 "Queued in a packet" "queued" "[]" "design-feedback"
 item 056-dfd.md 56 "Filed upstream" "delivered" "[]" "design-feedback"
@@ -636,6 +642,9 @@ check "kind: architecture reviewing is review"   "review"   "$(state_of 053-arch
 check "kind: polish ready is READY"              "READY"    "$(state_of 075-pol.md "$OUTK")"
 check "kind: polish todo is backlog"             "backlog"  "$(state_of 076-poltodo.md "$OUTK")"
 check "kind: polish reviewing is review"         "review"   "$(state_of 077-polrev.md "$OUTK")"
+check "kind: security ready is READY"            "READY"    "$(state_of 078-dep.md "$OUTK")"
+check "kind: security todo is backlog"           "backlog"  "$(state_of 079-deptodo.md "$OUTK")"
+check "kind: security reviewing is review"       "review"   "$(state_of 080-deprev.md "$OUTK")"
 check "kind: design-feedback todo is feedback"   "feedback" "$(state_of 054-df.md "$OUTK")"
 check "kind: design-feedback queued is feedback" "feedback" "$(state_of 055-dfq.md "$OUTK")"
 check "kind: design-feedback delivered is done"  "done"     "$(state_of 056-dfd.md "$OUTK")"
@@ -867,8 +876,9 @@ fi
 # refactor that silently stops executing 25 cases still reports 0 failures and
 # exits 0. The whole reason these cases exist is that each one could be wrong
 # SILENTLY; the suite must not be able to go quiet the same way.
-if [ "$PASS" -lt 96 ]; then
-  echo "hero-lib: only $PASS cases ran, expected >= 96 — a block stopped executing" >&2
+MIN_CASES=99
+if [ "$PASS" -lt "$MIN_CASES" ]; then
+  echo "hero-lib: only $PASS cases ran, expected >= $MIN_CASES — a block stopped executing" >&2
   exit 1
 fi
 echo "hero-lib: $PASS passed"
