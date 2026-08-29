@@ -75,6 +75,98 @@ check "field: rejects leading-dash value (option injection)" "2" "$?"
 check "field: rejected value falls back to main" \
   "main" "$(hero_default_branch "$TMP/cfg" 2>/dev/null)"
 
+# ---------- fleet ----------------------------------------------------------
+#
+# FLEET.md rows feed `cd` in subagents, so a wrong row silently runs a skill
+# in the wrong repo. Every case here is a listing that could come back
+# plausible-but-wrong: the first repo's field for the second repo, an example
+# from a code fence, a heading outside ## Repos.
+
+mkdir -p "$TMP/fleet" "$TMP/nofleet/repo"
+# hero_fleet_root prints a physical path; macOS mktemp hands back the /var
+# symlink, so resolve the fixture the same way or every path check fails.
+F="$(cd "$TMP/fleet" && pwd -P)"
+mkdir -p "$F/auth" "$F/web/deep"
+cat > "$F/FLEET.md" <<'EOF'
+# Fleet
+
+## Fleet
+
+- name: acme
+- port-range: 33000-33099
+- port: 1 # a fleet-level key that must not leak into repo reads
+
+## Repos
+
+### auth
+
+- group: apps
+- port: 33000
+
+### web
+
+- path: ./sites/web
+- group: apps
+- port: 33001
+
+### notes
+
+- group: none
+
+### bad path
+
+- path: ./x
+
+### dashed
+
+- path: --upload-pack=evil
+
+## Conventions
+
+### example
+
+- port: 99999
+
+```
+### fenced
+- port: 11111
+```
+EOF
+
+check "fleet-root: found from a nested dir" \
+  "$F" "$(hero_fleet_root "$F/web/deep")"
+check "fleet-root: the fleet folder itself" \
+  "$F" "$(hero_fleet_root "$F")"
+hero_fleet_root "$TMP/nofleet/repo" >/dev/null 2>&1; rc=$?
+# TMP lives under a system temp dir that carries no FLEET.md, so the walk
+# must reach / and fail rather than find a stray file on the way up.
+check "fleet-root: absent returns 1" "1" "$rc"
+
+hero_at_fleet_root "$F"; check "at-fleet-root: FLEET.md and no HERO.md" "0" "$?"
+hero_at_fleet_root "$F/auth"; check "at-fleet-root: a repo dir is not" "1" "$?"
+touch "$F/HERO.md"
+hero_at_fleet_root "$F"; check "at-fleet-root: HERO.md beside FLEET.md means repo" "1" "$?"
+rm "$F/HERO.md"
+
+check "fleet-field: reads the ## Fleet section" \
+  "acme" "$(hero_fleet_field name "$F")"
+check "fleet-field: port-range is not port" \
+  "1" "$(hero_fleet_field port "$F")"
+check "repo-field: second repo gets its own value, not the first's" \
+  "33001" "$(hero_fleet_repo_field web port "$F")"
+check "repo-field: fleet-level port does not leak into a repo block" \
+  "33000" "$(hero_fleet_repo_field auth port "$F")"
+hero_fleet_repo_field notes port "$F" >/dev/null 2>&1
+check "repo-field: absent in the block returns 1" "1" "$?"
+hero_fleet_repo_field example port "$F" >/dev/null 2>&1
+check "repo-field: an H3 outside ## Repos still reads (scoping is by heading)" "0" "$?"
+
+check "repos: TSV with defaults, resolved paths, ports, and no fenced/foreign rows" \
+  "$(printf 'auth\t%s/auth\tapps\t33000\nweb\t%s/sites/web\tapps\t33001\nnotes\t%s/notes\tnone\t\n' "$F" "$F" "$F")" \
+  "$(hero_fleet_repos "$F" 2>/dev/null)"
+check "repos: a space in a name and a rejected path are both skipped, on stderr" \
+  "2" "$(hero_fleet_repos "$F" 2>&1 >/dev/null | grep -c skipping)"
+
 # ---------- hero_normalize_repo_ref ----------------------------------------
 #
 # target-repo flows from HERO.md into `git ls-remote`/`git clone` as a URL.

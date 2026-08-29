@@ -41,7 +41,10 @@ This skill drives the **scaffold** step and then invokes `hero-skills:setup-dev`
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
+[ -f "$ROOT/FLEET.md" ] && [ ! -f "$ROOT/HERO.md" ] && echo "FLEET_ROOT"
 ```
+
+If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
 
 Read `HERO.md` for repo type (single vs monorepo), code quality tools, and coding conventions. If missing, suggest `hero-skills:init-hero` and proceed with defaults.
 

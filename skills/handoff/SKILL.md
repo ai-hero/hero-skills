@@ -30,10 +30,13 @@ HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-
 
 ROOT=$(hero_root)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
+hero_at_fleet_root && echo "FLEET_ROOT"
 
 # Same git-ignored store think-it-through and harden use.
 hero_ready_items "$(hero_work_store)"
 ```
+
+If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
 
 Read existing items — the handoff may depend on one, supersede one, or already exist in stale form (update it rather than duplicating).
 

@@ -486,6 +486,20 @@ if [[ $ERRORS -eq 0 ]]; then
   pass "no file touches shared state without hero-lib.sh"
 fi
 
+# ── fleet root: a skill that reads HERO.md in Step 0 must detect the fleet folder ──
+# At a fleet root there is no HERO.md, so a repo skill would treat the folder
+# as a project. AGENTS.md promises every repo skill tests for it; this is what
+# keeps that true for the next skill added. audit-plugin audits this plugin
+# only and never runs elsewhere.
+for f in "$SKILLS_DIR"/*/SKILL.md; do
+  case "$f" in */audit-plugin/SKILL.md) continue ;; esac
+  grep -qE 'NO_HERO_CONFIG|cat "\$ROOT/HERO.md"' "$f" || continue
+  grep -q 'FLEET_ROOT' "$f" && continue
+  error "reads HERO.md in Step 0 but never tests for the fleet root" \
+    "${f#"$PLUGIN_ROOT/"}" "" \
+    "Add the FLEET_ROOT line from scripts/new-skill.sh's Step 0 and the pointer to docs/FLEET-MD.md"
+done
+
 # ── work-item store: producers must have a consumer ────────────────
 # think-it-through, handoff, and harden all WRITE work-items into .plans/
 # (and read the plate back to build on it). one-shot is the only skill that

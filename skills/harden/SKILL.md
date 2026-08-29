@@ -42,11 +42,14 @@ HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-
 
 ROOT=$(hero_root)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
+hero_at_fleet_root && echo "FLEET_ROOT"
 
 # Same store think-it-through and handoff emit into — one plate per repo,
 # git-ignored via .git/info/exclude so no tracked file is ever dirtied.
 hero_ready_items "$(hero_work_store)"
 ```
+
+If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
 
 Read `HERO.md` for **Deployment** (registry for Docker Scout), **Projects** (languages/frameworks → which dependency files and which code-audit angles apply), and **Code Quality** (existing tooling so plans don't re-propose what a linter already enforces). Read existing .plans items so new plans reference or supersede rather than duplicate.
 

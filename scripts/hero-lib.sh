@@ -34,9 +34,15 @@ hero_root() {
   git rev-parse --show-toplevel 2>/dev/null || pwd
 }
 
-# Read a single `- key: value` field from HERO.md.
-#   hero_field default-branch
-#   hero_field bot-username
+# Read a single `- key: value` field from a hero-style markdown file. HERO.md
+# and FLEET.md share the grammar, so they share the reader. With BLOCK (a full
+# heading line, `## Fleet` or `### auth`), only that section is searched:
+# FLEET.md keeps one `### NAME` block per repo, so an unscoped read of `path`
+# would return whichever repo happens to come first.
+#
+#   hero_md_field "$root/HERO.md" default-branch
+#   hero_md_field "$fleet/FLEET.md" port "### auth"
+#
 # Prints the value (trimmed, comments stripped) on stdout.
 #
 # Returns: 0 found, 1 absent or present-but-empty, 2 rejected as unsafe.
@@ -48,39 +54,57 @@ hero_root() {
 # arbitrary command execution from nothing but a checked-in config file.
 # Rejecting here covers every call site at once, which is the whole point of
 # having one reader.
-hero_field() {
-  local key root value
-  key="$1"
-  root="${2:-$(hero_root)}"
-  [ -r "$root/HERO.md" ] || return 1
-  # Skip fenced code blocks (HERO.md documents its own syntax in examples) and
-  # keep scanning past a key whose value is empty, so a real setting later in
-  # the file is not masked by a placeholder earlier in it.
-  value=$(awk -v k="- $key" '
+hero_md_field() {
+  local file key block value
+  file="$1"
+  key="$2"
+  block="${3:-}"
+  [ -r "$file" ] || return 1
+  # Skip fenced code blocks (both files document their own syntax in examples)
+  # and keep scanning past a key whose value is empty, so a real setting later
+  # in the file is not masked by a placeholder earlier in it.
+  value=$(awk -v k="- $key" -v b="$block" '
     /^```/ { fence = !fence; next }
     fence  { next }
-    index($0, k ":") == 1 {
+    /^##+ / {
+      h = $0; sub(/[[:space:]]+$/, "", h)
+      # An H2 starts a new section; an H3 only matters when the caller asked
+      # for an H3, so a `### x` under `## Fleet` does not end the Fleet section.
+      if (h ~ /^## /)       inblk = (h == b)
+      else if (b ~ /^### /) inblk = (h == b)
+      next
+    }
+    (b == "" || inblk) && index($0, k ":") == 1 {
       v = $0; sub(/^[^:]*: */, "", v); sub(/ *#.*/, "", v)
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
       if (v != "") { print v; exit }
     }
-  ' "$root/HERO.md")
-  # Strip surrounding whitespace and any stray quotes.
-  value=$(printf '%s' "$value" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//')
+  ' "$file")
+  # Strip a stray surrounding quote pair (awk already trimmed whitespace).
+  value=${value#[\"\']}; value=${value%[\"\']}
   [ -n "$value" ] || return 1
   case "$value" in
     -*)
-      echo "hero_field: refusing '$key' — value starts with '-' and would be read as a command-line option: $value" >&2
+      echo "hero_md_field: refusing '$key' in ${file##*/} — value starts with '-' and would be read as a command-line option: $value" >&2
       return 2 ;;
   esac
   # Control characters (newline, NUL-ish, escape) have no legitimate place in a
-  # HERO.md scalar and break line-oriented consumers.
+  # config scalar and break line-oriented consumers.
   case "$value" in
     *[[:cntrl:]]*)
-      echo "hero_field: refusing '$key' — value contains control characters" >&2
+      echo "hero_md_field: refusing '$key' in ${file##*/} — value contains control characters" >&2
       return 2 ;;
   esac
   printf '%s' "$value"
+}
+
+# Read a single `- key: value` field from HERO.md.
+#   hero_field default-branch
+#   hero_field bot-username
+hero_field() {
+  local root
+  root="${2:-$(hero_root)}"
+  hero_md_field "$root/HERO.md" "$1"
 }
 
 # Is this a shape git will accept as a branch name? Used to gate values that
@@ -222,6 +246,117 @@ hero_check_staleness() {
     echo "note: HERO.md may be out of date — run hero-skills:init-hero --update to refresh." >&2
   fi
   return 0
+}
+
+# ---------- fleet ----------------------------------------------------------
+#
+# A fleet is a folder of sibling checkouts with a FLEET.md at its top — the
+# operator's local map of the repos they work across. It is unversioned and
+# never inside a repo; docs/FLEET-MD.md is the standard.
+
+# Nearest ancestor (inclusive) of START holding FLEET.md, or return 1. START
+# defaults to hero_root, so from inside a repo this finds the fleet the checkout
+# lives in, and from the fleet folder itself it returns that folder.
+# shellcheck disable=SC2120  # START is passed by fleet-scan.sh and the tests
+hero_fleet_root() {
+  local d
+  d=$(cd "${1:-$(hero_root)}" 2>/dev/null && pwd -P) || return 1
+  while :; do
+    [ -f "$d/FLEET.md" ] && { printf '%s' "$d"; return 0; }
+    [ "$d" = "/" ] && return 1
+    d=$(dirname "$d")
+  done
+}
+
+# True when DIR (default hero_root) is a fleet folder rather than a repo: it
+# holds FLEET.md and no HERO.md. Skills test this in Step 0 and hand off to
+# "At the fleet root" in docs/FLEET-MD.md instead of treating the folder as a
+# project.
+hero_at_fleet_root() {
+  local d
+  d="${1:-$(hero_root)}"
+  [ -f "$d/FLEET.md" ] && [ ! -f "$d/HERO.md" ]
+}
+
+# A fleet-level `- key: value` from the `## Fleet` section.
+#   hero_fleet_field name
+hero_fleet_field() { # KEY [FLEET_ROOT]
+  local root
+  root="${2:-$(hero_fleet_root)}" || return 1
+  hero_md_field "$root/FLEET.md" "$1" "## Fleet"
+}
+
+# One `- key: value` from a repo's `### NAME` block.
+#   hero_fleet_repo_field auth port
+hero_fleet_repo_field() { # NAME KEY [FLEET_ROOT]
+  local root
+  root="${3:-$(hero_fleet_root)}" || return 1
+  hero_md_field "$root/FLEET.md" "$2" "### $1"
+}
+
+# Every repo listed under `## Repos`, one per line:
+# NAME<TAB>PATH<TAB>GROUP<TAB>PORT. One awk pass reads the whole file — a
+# per-field read of FLEET.md for every row was three full parses per repo.
+# PATH is absolute (a relative `path:` resolves against the fleet root and
+# defaults to ./NAME); GROUP defaults to `none`, which means "lives here, not
+# fleet"; PORT is empty when unclaimed. A row carrying a value hero_md_field
+# would refuse (leading `-`, control character) is skipped with a note on
+# stderr — silently substituting a default path would point the caller at a
+# different directory than the one the row names.
+hero_fleet_repos() { # [FLEET_ROOT]
+  local root name path group port v bad
+  root="${1:-$(hero_fleet_root)}" || return 1
+  awk '
+    # \034 (unit separator), not a tab: `read` with a whitespace IFS collapses
+    # consecutive tabs, so an empty path would shift group into its column.
+    function flush() { if (name != "") printf "%s\034%s\034%s\034%s\n", name, path, group, port; name = "" }
+    /^```/ { fence = !fence; next }
+    fence  { next }
+    /^## /  { flush(); sec = $0; sub(/[[:space:]]+$/, "", sec); next }
+    sec == "## Repos" && /^### / {
+      flush(); name = $0; sub(/^### +/, "", name); sub(/[[:space:]]+$/, "", name)
+      path = ""; group = ""; port = ""; next
+    }
+    name != "" && /^- (path|group|port):/ {
+      k = $0; sub(/^- /, "", k); sub(/:.*/, "", k)
+      v = $0; sub(/^[^:]*: */, "", v); sub(/ *#.*/, "", v); gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+      if (k == "path") path = v; else if (k == "group") group = v; else port = v
+    }
+    END { flush() }
+  ' "$root/FLEET.md" | while IFS=$'\034' read -r name path group port; do
+    case "$name" in
+      ''|*[![:alnum:]._-]*)
+        echo "hero_fleet_repos: skipping '### $name' — a repo name is [A-Za-z0-9._-] only" >&2
+        continue ;;
+    esac
+    path=${path#[\"\']}; path=${path%[\"\']}
+    group=${group#[\"\']}; group=${group%[\"\']}
+    bad=""
+    for v in "$path" "$group" "$port"; do
+      case "$v" in -*|*[[:cntrl:]]*) bad=1 ;; esac
+    done
+    [ -z "$bad" ] || { echo "hero_fleet_repos: skipping '$name' — a value starts with '-' or holds a control character" >&2; continue; }
+    [ -n "$path" ] || path="./$name"
+    [ -n "$group" ] || group="none"
+    case "$path" in /*) ;; *) path="$root/${path#./}" ;; esac
+    printf '%s\t%s\t%s\t%s\n' "$name" "$path" "$group" "$port"
+  done
+}
+
+# Host port a checkout's dev compose file publishes, or `-`. Reads BOTH
+# spellings and falls back to a literal `HOST:CONTAINER` mapping: an earlier
+# fleet reconcile grepped only `HOST_PORT` in `.yaml` and silently reported
+# two live repos as claiming no port at all.
+hero_compose_port() { # DIR
+  local f p
+  for f in docker-compose.dev.yaml docker-compose.dev.yml docker-compose.yaml docker-compose.yml compose.yaml compose.yml; do
+    [ -r "$1/$f" ] || continue
+    p=$(sed -nE 's/.*HOST_PORT:-([0-9]+).*/\1/p' "$1/$f" | head -1)
+    [ -n "$p" ] || p=$(sed -nE 's/^[[:space:]]*-[[:space:]]*"?([0-9]{2,5}):[0-9]{2,5}"?.*/\1/p' "$1/$f" | head -1)
+    printf '%s' "${p:--}"
+    return 0
+  done
+  printf -- '-'
 }
 
 # ---------- repo-local ignore ----------------------------------------------

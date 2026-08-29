@@ -31,7 +31,10 @@ No HERO.md found. Run hero-skills:init-hero first to configure the project.
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 cat "$ROOT/HERO.md"
+[ -f "$ROOT/FLEET.md" ] && [ ! -f "$ROOT/HERO.md" ] && echo "FLEET_ROOT"
 ```
+
+If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
 
 Parse the `## Developer Setup` section for required tools, recommended tools, and MCP servers. Also read other sections for implicit requirements (e.g., CI platform → `gh`, deployment platform → `kubectl`).
 
