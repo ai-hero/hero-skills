@@ -269,7 +269,7 @@ git push origin $(git branch --show-current)
 
 ### Step 9: Reply to and Resolve Comments
 
-For each addressed comment, reply with what was done and resolve the thread:
+Draft every reply first, humanize them in one `hero-skills:my-humanizer inline` call, then for each addressed comment post its reply and resolve the thread:
 
 ```bash
 # Reply to the comment explaining the fix

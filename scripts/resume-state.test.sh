@@ -163,6 +163,76 @@ case "$(val STATE_ERRORS)" in
   *) PASS=$((PASS + 1)) ;;
 esac
 
+# ---------- work-item checklist state --------------------------------------
+
+# The in-flight item's checklists are what a resume reads to land at the
+# first unchecked subtask; `.plans/` is git-ignored so nothing else records it.
+printf '# H\n\n- default-branch: main\n- bot-username: reviewbot\n' > "$REPO/HERO.md"
+make_gh '[]' '[]'
+OUT="$(run)"
+check "no store: no in-flight item"     "0" "$(val ITEM_INFLIGHT)"
+check "no store: counts are empty, not 0" "" "$(val SUBTASKS_OPEN)"
+
+mkdir -p "$REPO/.plans"
+cat > "$REPO/.plans/003-foo.md" <<'ITEM'
+---
+id: 3
+kind: feature
+status: implementing
+---
+## Subtasks
+- [x] 1. done
+- [ ] 2. next
+3. [ ] numbered form
+## Definition of Done
+- [ ] a
+- [X] b
+## Comments
+- [ ] a tick outside the two sections is not a checklist line
+ITEM
+cat > "$REPO/.plans/004-bar.md" <<'ITEM'
+---
+id: 4
+kind: feature
+status: todo
+---
+## Subtasks
+- [ ] not in flight, must not be picked
+ITEM
+OUT="$(run)"
+check "one in-flight item is found"      "1" "$(val ITEM_INFLIGHT)"
+# basename: hero_root resolves symlinks (/private/var vs /var on macOS).
+check "in-flight item path is emitted"   ".plans/003-foo.md" "$(val ITEM_FILE | sed 's|.*/\(\.plans/\)|\1|')"
+check "subtasks: open count"             "2" "$(val SUBTASKS_OPEN)"
+check "subtasks: total count"            "3" "$(val SUBTASKS_TOTAL)"
+check "dod: open count"                  "1" "$(val DOD_OPEN)"
+check "dod: total count"                 "2" "$(val DOD_TOTAL)"
+
+# Plain items carry `in-progress`; a section that is absent is 0 0, which
+# TOTAL tells apart from an all-ticked one.
+cat > "$REPO/.plans/003-foo.md" <<'ITEM'
+---
+id: 3
+status: in-progress
+---
+## Subtasks
+- [x] all done
+ITEM
+OUT="$(run)"
+check "plain in-progress item is found"  "1" "$(val ITEM_INFLIGHT)"
+check "all-ticked subtasks: open is 0"   "0" "$(val SUBTASKS_OPEN)"
+check "all-ticked subtasks: total kept"  "1" "$(val SUBTASKS_TOTAL)"
+check "absent DoD section: total is 0"   "0" "$(val DOD_TOTAL)"
+
+# Two in-flight items: the script must not pick one. Routing on the wrong
+# item's checklist resumes the wrong work.
+sed 's/status: todo/status: implementing/' "$REPO/.plans/004-bar.md" > "$REPO/.plans/004-bar.tmp" \
+  && mv "$REPO/.plans/004-bar.tmp" "$REPO/.plans/004-bar.md"
+OUT="$(run)"
+check "two in-flight items: count is 2"  "2" "$(val ITEM_INFLIGHT)"
+check "two in-flight items: no file"     ""  "$(val ITEM_FILE)"
+rm -rf "$REPO/.plans"
+
 # ---------- the eval contract ----------------------------------------------
 
 # Output is consumed via `eval`, so a hostile branch name or config value must
@@ -179,7 +249,8 @@ check "eval executed nothing" "no" "$([ -e "$TMP/eval_marker" ] && echo yes || e
 # Every run must emit the full key set, so a consumer never reads an unset var.
 for key in DEFAULT_BRANCH CURRENT_BRANCH UNCOMMITTED AHEAD UNPUSHED PR_EXISTS \
            PR_NUMBER PR_STATE PR_IS_DRAFT PR_REVIEW SELF_REVIEW_DONE \
-           BOT_REPLIED STATE_OK STATE_ERRORS; do
+           BOT_REPLIED ITEM_INFLIGHT ITEM_FILE SUBTASKS_OPEN SUBTASKS_TOTAL \
+           DOD_OPEN DOD_TOTAL STATE_OK STATE_ERRORS; do
   if printf '%s\n' "$OUT" | grep -q "^$key="; then
     PASS=$((PASS + 1))
   else
@@ -197,8 +268,9 @@ fi
 # refactor that silently stops executing 25 cases still reports 0 failures and
 # exits 0. The whole reason these cases exist is that each one could be wrong
 # SILENTLY; the suite must not be able to go quiet the same way.
-if [ "$PASS" -lt 33 ]; then
-  echo "resume-state: only $PASS cases ran, expected >= 33 — a block stopped executing" >&2
+MIN_CASES=53
+if [ "$PASS" -lt "$MIN_CASES" ]; then
+  echo "resume-state: only $PASS cases ran, expected >= $MIN_CASES — a block stopped executing" >&2
   exit 1
 fi
 echo "resume-state: $PASS passed"

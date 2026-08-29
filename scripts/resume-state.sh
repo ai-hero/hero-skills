@@ -19,6 +19,9 @@
 #   UNPUSHED                         commits past the branch's own upstream
 #   PR_EXISTS PR_NUMBER PR_STATE PR_IS_DRAFT PR_REVIEW
 #   SELF_REVIEW_DONE BOT_REPLIED
+#   ITEM_INFLIGHT ITEM_FILE          in-flight .plans items; the file when exactly one
+#   SUBTASKS_OPEN SUBTASKS_TOTAL     unchecked / all lines in that item's ## Subtasks
+#   DOD_OPEN DOD_TOTAL               same for its ## Definition of Done
 #   STATE_OK STATE_ERRORS            aggregate health + which sources failed
 #
 # THE UNKNOWN/ZERO RULE
@@ -183,7 +186,7 @@ if [ "$PR_EXISTS" = "false" ]; then
 elif [ "$PR_EXISTS" = "true" ]; then
   if COMMENTS=$(gh api "/repos/{owner}/{repo}/issues/$PR_NUMBER/comments" 2>/dev/null); then
     SELF_REVIEW_DONE=$(printf '%s' "$COMMENTS" \
-      | jq '[.[] | select(.body | test("ai-hero:self-review"))] | length' 2>/dev/null) \
+      | jq --arg m "$HERO_SELF_REVIEW_MARKER" '[.[] | select(.body | test($m))] | length' 2>/dev/null) \
       || { SELF_REVIEW_DONE=unknown; fail_source "self-review-count"; }
 
     # BOT_REPLIED is only meaningful if we know who the bot is. Without
@@ -215,6 +218,51 @@ elif [ "$PR_EXISTS" = "true" ]; then
   fi
 fi
 
+# ---------- work-item state ------------------------------------------------
+
+# The in-flight item's checklists are the only record of where Step 2 stopped:
+# `.plans/` is git-ignored, so the diff says what changed but not which subtask
+# was mid-way. hero_store_path, not hero_work_store: this script is read-only.
+ITEM_INFLIGHT=0
+ITEM_FILE=""
+SUBTASKS_OPEN=""; SUBTASKS_TOTAL=""; DOD_OPEN=""; DOD_TOTAL=""
+
+STORE=$(hero_store_path 2>/dev/null)
+if [ -n "$STORE" ] && [ -d "$STORE" ]; then
+  # hero_ready_items owns the status enum; `active` is its word for
+  # in-progress/implementing across every build class. A goal at `active`
+  # is a set of features, not the item on this branch, so it is skipped.
+  for f in $(hero_ready_items "$STORE" 2>/dev/null | awk '$1 == "active" { print $2 }'); do
+    [ "$(hero_item_class "$(hero_item_field "$STORE/$f" kind)" "$f" 2>/dev/null)" = goal ] && continue
+    ITEM_INFLIGHT=$((ITEM_INFLIGHT + 1)); ITEM_FILE="$STORE/$f"
+  done
+  # Two in-flight items is a claim conflict, not a choice this script makes:
+  # emit the count and no file, so the table cannot route on the wrong one.
+  [ "$ITEM_INFLIGHT" -eq 1 ] || ITEM_FILE=""
+fi
+
+# Counts within one `## ` section: unchecked and all checklist lines, as
+# `OPEN TOTAL`. A missing section is 0 0 — distinguishable from an all-ticked
+# one only by TOTAL, which is why both are emitted.
+checklist_counts() { # FILE SECTION
+  awk -v sec="## $2" '
+    /^## / { in_s = ($0 == sec); next }
+    in_s && /^[ \t]*([-*]|[0-9]+\.)[ \t]+\[[ xX]\]/ {
+      total++
+      if ($0 ~ /\[ \]/) open++
+    }
+    END { printf "%d %d", open + 0, total + 0 }
+  ' "$1"
+}
+if [ -n "$ITEM_FILE" ]; then
+  read -r SUBTASKS_OPEN SUBTASKS_TOTAL <<EOF
+$(checklist_counts "$ITEM_FILE" "Subtasks")
+EOF
+  read -r DOD_OPEN DOD_TOTAL <<EOF
+$(checklist_counts "$ITEM_FILE" "Definition of Done")
+EOF
+fi
+
 STATE_OK=true
 [ -n "$STATE_ERRORS" ] && STATE_OK=false
 
@@ -230,5 +278,11 @@ emit PR_IS_DRAFT      "$PR_IS_DRAFT"
 emit PR_REVIEW        "$PR_REVIEW"
 emit SELF_REVIEW_DONE "$SELF_REVIEW_DONE"
 emit BOT_REPLIED      "$BOT_REPLIED"
+emit ITEM_INFLIGHT    "$ITEM_INFLIGHT"
+emit ITEM_FILE        "$ITEM_FILE"
+emit SUBTASKS_OPEN    "$SUBTASKS_OPEN"
+emit SUBTASKS_TOTAL   "$SUBTASKS_TOTAL"
+emit DOD_OPEN         "$DOD_OPEN"
+emit DOD_TOTAL        "$DOD_TOTAL"
 emit STATE_OK         "$STATE_OK"
 emit STATE_ERRORS     "$STATE_ERRORS"

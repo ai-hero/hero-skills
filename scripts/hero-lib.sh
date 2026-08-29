@@ -114,6 +114,10 @@ hero_md_field() {
 # Read a single `- key: value` field from HERO.md.
 #   hero_field default-branch
 #   hero_field bot-username
+# First match wins across sections. Keys known to repeat — `platform` (CI/CD
+# and Deployment), `health-endpoint` (several per Deployment) — must be read
+# with hero_md_field and a BLOCK, or the CI/CD value answers a Deployment
+# question.
 hero_field() {
   local root
   root="${2:-$(hero_root)}"
@@ -537,6 +541,21 @@ hero_exclude_add() {
   return "$rc"
 }
 
+# ---------- PR review markers ----------------------------------------------
+
+# review-pr stamps this into its self-review comment; one-shot Step 5, ship-pr
+# Step 3a, resume-state, and auto-approve.yaml's prior-review gate all look
+# for it. Change it here and in the workflow together, or the gate stops
+# recognizing every self-review.
+HERO_SELF_REVIEW_MARKER='ai-hero:self-review'
+
+# Count of self-review comments on a PR. Prints nothing and returns 1 when
+# the API call fails — an empty count must never read as zero.
+hero_self_review_count() { # PR_NUMBER
+  gh api "/repos/{owner}/{repo}/issues/$1/comments" \
+    --jq "[.[] | select(.body | test(\"$HERO_SELF_REVIEW_MARKER\"))] | length" 2>/dev/null
+}
+
 # ---------- the .plans store ------------------------------------------------
 
 # Absolute path to the work-item store, created and git-ignored on first use.
@@ -546,20 +565,28 @@ hero_exclude_add() {
 # One-time migration: the store was formerly `my-work/`, and before that
 # `plan-work/`. Move a legacy store rather than orphaning its items behind
 # the new name.
-# shellcheck disable=SC2120  # optional arg; callers usually rely on the default
-hero_work_store() {
-  local root store legacy gitdir
+# Where the store IS, without creating it: read-only callers (resume-state)
+# need the path and must not mkdir or touch .git/info/exclude.
+# A worktree shares the repo's items: resolve the store under the primary
+# checkout, or a worktree gets an empty private store and a build launched
+# there plans from nothing. Read the worktree's `.git` FILE rather than
+# asking git: a caller with GIT_DIR exported (pre-commit hooks do) would get
+# the answer for a different repo.
+hero_store_path() { # [ROOT]
+  local root gitdir
   root="${1:-$(hero_root)}"
-  # A worktree shares the repo's items: resolve the store under the primary
-  # checkout, or a worktree gets an empty private store and a build launched
-  # there plans from nothing. Read the worktree's `.git` FILE rather than
-  # asking git: a caller with GIT_DIR exported (pre-commit hooks do) would get
-  # the answer for a different repo.
   if [ -f "$root/.git" ]; then
     gitdir=$(sed -n 's/^gitdir: //p' "$root/.git")
     case "$gitdir" in */.git/worktrees/*) root=${gitdir%/.git/worktrees/*} ;; esac
   fi
-  store="$root/.plans"
+  printf '%s' "$root/.plans"
+}
+
+# shellcheck disable=SC2120  # optional arg; callers usually rely on the default
+hero_work_store() {
+  local root store legacy
+  store=$(hero_store_path "${1:-}")
+  root=${store%/.plans}
 
   # Establish we can actually ignore the store BEFORE creating or migrating
   # anything. Doing it after meant a non-git directory got a store created and
@@ -707,7 +734,7 @@ hero_item_status() {
 hero_item_class() {
   case "$1" in
     ''|work-order|hardening)                                      printf plain ;;
-    feature|architecture|polish)                                  printf build ;;
+    feature|architecture|polish|security)                         printf build ;;
     goal)                                                         printf goal ;;
     design-feedback|architecture-feedback|design-system-feedback) printf feedback ;;
     *)
@@ -761,7 +788,7 @@ hero_norm_id() {
 #             LEGACY: every producer now writes a build kind. The arm stays so
 #             existing stores keep listing; dropping it would demote every
 #             pre-rule item to backlog with a stderr line as the only trace
-#   build     feature / architecture / polish — new | todo | planning | ready |
+#   build     feature / architecture / polish / security — new | todo | planning | ready |
 #             implementing | reviewing | done, mapped here as
 #             new | backlog | plan | READY-eligible |
 #             active | review | done. For a build kind, `ready` (not `todo`) is
