@@ -76,7 +76,7 @@ TODO: Brief description of what this skill does.
 \`\`\`bash
 ROOT=\$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 cat "\$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
-[ -f "\$ROOT/FLEET.md" ] && [ ! -f "\$ROOT/HERO.md" ] && echo "FLEET_ROOT"
+[ -f "\$PWD/FLEET.md" ] && [ ! -f "\$PWD/HERO.md" ] && echo "FLEET_ROOT" || true
 \`\`\`
 
 If \`FLEET_ROOT\` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in \`docs/FLEET-MD.md\`.

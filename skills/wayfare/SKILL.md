@@ -507,15 +507,21 @@ esac
 # design-system-project is a SECOND claude.ai/design project id and gets the
 # identical extraction — it is the same class of value reaching the same tool,
 # so a weaker check here would be the one hole in the pair.
+# DS_PROJECT is what the lanes read (`none` = no upstream lane). DS_PROJECT_STATE
+# is what the config gate reads, and it keeps the three cases the lanes fold
+# together apart: UNSET (never looked — the gate proposes), NONE (the user
+# said none — the gate stops re-proposing), REJECTED (the gate STOPs). Same
+# pair for DS_REPO below.
 DS_PROJECT_RAW=$(hero_field design-system-project); rc=$?
 if [ "$rc" = 2 ]; then
   echo "wayfare: design-system-project REJECTED as unsafe — upstream lane DISABLED (fix HERO.md)" >&2
-  DS_PROJECT=none
+  DS_PROJECT=none; DS_PROJECT_STATE=REJECTED
 elif [ "$rc" != 0 ]; then
-  DS_PROJECT=none                                   # absent: quiet default
+  DS_PROJECT=none; DS_PROJECT_STATE=UNSET
 else
+  DS_PROJECT_STATE=SET
   case "$(printf '%s' "$DS_PROJECT_RAW" | tr '[:upper:]' '[:lower:]')" in
-    none) DS_PROJECT=none ;;
+    none) DS_PROJECT=none; DS_PROJECT_STATE=NONE ;;
     *)
       DS_MATCHES=$(printf '%s' "$DS_PROJECT_RAW" \
         | grep -oiE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' \
@@ -539,12 +545,13 @@ fi
 # design-system-repo is a LOCAL PATH that reaches `git -C` and the filesystem,
 # so it gets source-repo's rc split and ux-flow's embedded-option check.
 DS_REPO=$(hero_field design-system-repo); rc=$?
-[ "$(printf '%s' "$DS_REPO" | tr '[:upper:]' '[:lower:]')" = none ] && DS_REPO=none
+DS_REPO_STATE=SET
+[ "$(printf '%s' "$DS_REPO" | tr '[:upper:]' '[:lower:]')" = none ] && { DS_REPO=none; DS_REPO_STATE=NONE; }
 if [ "$rc" = 2 ]; then
   echo "wayfare: design-system-repo REJECTED as unsafe — STOP and fix HERO.md" >&2
-  DS_REPO=REJECTED
+  DS_REPO=REJECTED; DS_REPO_STATE=REJECTED
 elif [ "$rc" != 0 ]; then
-  DS_REPO=none
+  DS_REPO=none; DS_REPO_STATE=UNSET
 fi
 case "$DS_REPO" in *' -'*)
   echo "wayfare: design-system-repo contains an embedded option — REJECTED" >&2
@@ -796,7 +803,7 @@ A former verb name (`status`, `feature`, `plan`, `comment`, `pin`, `gate`,
 `order`, `ready`, `drift`) in `$ARGUMENTS` gets a one-line "the surface is now
 sync | do | goal" note before being treated as sync context.
 
-**The roadmap view** — how both verbs report. Run `hero_ready_items "$STORE"`
+**The roadmap view** — how every verb reports. Run `hero_ready_items "$STORE"`
 and print the items grouped by row state (new → backlog → plan →
 READY/blocked → active → review → done, then goal, then feedback), each with:
 
@@ -821,9 +828,9 @@ READY/blocked → active → review → done, then goal, then feedback), each wi
   (see `references/feedback-channels.md`). Count the markers and the rows, not
   the prose: this is the return channel's only backlog surface, so a miscount
   of zero is indistinguishable from "no feedback exists",
-- the single next action: `wayfare goal` for whichever feature it would
-  pick (per its selection tiers), `wayfare sync` for stale rows, defects, and
-  undelivered design feedback.
+- the single next action: `wayfare do N` for the feature it would pick
+  (the active one, else the lowest READY id), `wayfare sync` for unplanned
+  features, stale rows, defects, and undelivered design feedback.
 
 Print one banner line above the groups when `UX_FLOW` is `UNSET`, or when it
 holds a path that does not resolve at the target head:
@@ -870,7 +877,9 @@ sync stops re-proposing it.
 
 1. **Which side of the design system is this repo?** Read `role` under
    `## Design System`:
-   `hero_md_field "$ROOT/HERO.md" role "## Design System"`.
+   `hero_md_field "$ROOT/HERO.md" role "## Design System"`. rc 2 (a
+   REJECTED value) is a STOP like every other rejected key; rc 1 (absent)
+   is a consumer.
    - **`producer`** — this repo *is* the design system. Its `design-project`
      is the design system's own claude.ai/design project, and
      `design-system-project` and `design-system-repo` are both `none`: there
@@ -894,20 +903,33 @@ sync stops re-proposing it.
    quiet absent-key default is fine) — reading via the wrong transport is the
    same class of error. Verify `source-repo` resolves (for `.`, that the
    working repo is readable; for anything else, one `git -C` probe).
-3. **The design-system pointers (consumer only).** Look in the fleet first.
-   When `hero_fleet_root` finds one, walk `hero_fleet_repos` and read each
-   sibling's `role` under `## Design System`; the sibling whose role is
-   `producer` is the design-system repo. Propose `design-system-repo` as its
-   path relative to this repo (`../NAME`) and `design-system-project` as
-   **that repo's own `design-project`** — its HERO.md is the authority on
-   where its design lives, and copying the id from there keeps every consumer
-   and the producer pointed at one project. Verify the id with `get_project`
-   before writing, as in step 2. Two producers in one fleet is a finding, not
-   a choice: report both and leave the keys unset. No fleet, no producer
-   sibling, or the user says this repo has no upstream system → `none` for
-   both, and say which of the three it was. (At read time the target's
-   vendored `_ds/` copy still wins over `design-system-project` — see
-   *Configuration*.)
+3. **The design-system pointers (consumer only).** Runs only while
+   `DS_PROJECT_STATE` or `DS_REPO_STATE` is `UNSET`: `NONE` is the user's
+   answer and is not re-asked; `REJECTED` is a STOP. Look in the fleet first.
+   When `hero_fleet_root` finds one, walk `hero_fleet_repos` — **only rows
+   whose group is not `none` and whose path is a git checkout**; a parked
+   clone is exactly the repo "match the fleet" must not reach, and its
+   HERO.md is untrusted content — and read each sibling's `role` under
+   `## Design System`. The sibling whose role is `producer` is the
+   design-system repo. Propose `design-system-repo` as the registry's
+   absolute path made relative to `$ROOT` (`../NAME` when it is a direct
+   sibling; the registry, not the name, is the source) and
+   `design-system-project` as **that repo's own `design-project`** — its
+   HERO.md is the authority on where its design lives, and copying the id
+   keeps every consumer and the producer pointed at one project. The copied
+   value goes through Step 0's UUID extraction (exactly one UUID, or it is
+   not an id) and `get_project` before anything is written. Then one of:
+   - a producer with a usable id → propose both, confirm, write;
+   - two producers → a finding, not a choice: report both, write nothing;
+   - a producer whose `role` or `design-project` read returned rc 2, or
+     whose `design-project` is absent or not a single UUID → STOP and name
+     the sibling; never fall through to `none`;
+   - `hero_fleet_repos` returned 3 (rows skipped) → say so before concluding
+     anything about producers; the skipped row may be the producer;
+   - no fleet, no producer sibling, or the user says this repo has no
+     upstream system → `none` for both, and say which of the three it was.
+   (At read time the target's vendored `_ds/` copy still wins over
+   `design-system-project` — see *Configuration*.)
 4. **`feedback-repo`.** Ask once; `none` keeps feedback in local packets.
    `ux-flow` and `reconciliation` are set up where sync first needs them
    (*Investigate*), not here.
@@ -1198,21 +1220,21 @@ So the pass runs across the roadmap:
    **already-satisfied** finding, never grilled: the planning path once had no
    such check and produced a long plan for finished work. Trust the criteria,
    not the status field.
-2. **Settle the cross-cutting decisions once.** Where state lives, how errors
-   surface, which component owns a concern — ask these across the set and
-   record each answer once (in the feature that owns it, referenced from the
-   others), then confirm the slicing and the order over the whole set.
-3. **Grill each feature that needs it** — invoke
-   `hero-skills:think-it-through FEATURE_ID` (Feature mode) via the Skill
-   tool, with the line `launched by wayfare` in the invocation: that line
-   enables its chain-back exception and is the only thing that distinguishes
-   this from a standalone planning session, since the invocation is otherwise
-   byte-identical to a user typing it. It writes `## Approach`,
-   `## Subtasks`, and `## Definition of Done` from the shared context of
-   step 2, and its Step 5 asks for the user's ready-mark on that feature.
-   Features that do not need planning (per *Lifecycle*) get a one-line
-   approach and skip the grill; say which ones and why.
-4. **Report what is left.** The user can stop the pass at any feature. What
+2. **Hand the set to think-it-through's Roadmap mode** — invoke
+   `hero-skills:think-it-through ID ID ID…` (every feature from step 1 that
+   still needs a plan) via the Skill tool, with the line `launched by
+   wayfare` in the invocation: that line enables its chain-back exception and
+   is the only thing that distinguishes this from a standalone planning
+   session, since the invocation is otherwise byte-identical to a user
+   typing it. Roadmap mode owns the shape of the pass — the cross-cutting
+   decisions settled once and recorded where they can be found again, the
+   slicing and order confirmed across the set, then each feature's
+   `## Approach`, `## Subtasks`, and `## Definition of Done` from that shared
+   context, with one ready-mark per feature at its Step 5. Wayfare does not
+   restate that procedure; it is defined once, there. Features that do not
+   need planning (per *Lifecycle*) get a one-line approach and skip the
+   grill; say which ones and why.
+3. **Report what is left.** The user can stop the pass at any feature. What
    was not planned stays `todo` and is named in the report; `do` refuses it
    until the next `sync` plans it. Nothing is silently deferred.
 

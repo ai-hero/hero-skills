@@ -139,7 +139,7 @@ See [HERO.md](./HERO.md) for coding conventions detected from the codebase.
 
 ```bash
 ls "$ROOT/HERO.md" 2>/dev/null && echo "EXISTS" || echo "NEW"
-[ -f "$ROOT/FLEET.md" ] && [ ! -f "$ROOT/HERO.md" ] && echo "FLEET_ROOT"
+[ -f "$PWD/FLEET.md" ] && [ ! -f "$PWD/HERO.md" ] && echo "FLEET_ROOT" || true
 ```
 
 If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
@@ -480,7 +480,7 @@ ls .editorconfig 2>/dev/null
 # Root project files (dependency files)
 ls pyproject.toml package.json go.mod Cargo.toml build.gradle pom.xml requirements.txt 2>/dev/null
 
-# Monorepo indicators (package-manager workspaces — a folder of sibling repos is a fleet, not a monorepo; see docs/FLEET-MD.md)
+# Monorepo indicators
 ls pnpm-workspace.yaml lerna.json nx.json turbo.json 2>/dev/null
 grep -l "workspaces" package.json 2>/dev/null
 

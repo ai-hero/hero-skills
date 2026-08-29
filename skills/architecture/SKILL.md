@@ -146,7 +146,7 @@ if [ "$rc" = 0 ]; then ROOT=$GIT_OUT
 elif printf '%s' "$GIT_OUT" | grep -qi 'not a git repository'; then ROOT=$(pwd)
 else echo "STOP: git failed, not a missing repo: $GIT_OUT"; ROOT=GIT_ERROR
 fi
-[ -f "$ROOT/FLEET.md" ] && [ ! -f "$ROOT/HERO.md" ] && echo "FLEET_ROOT"
+[ -f "$PWD/FLEET.md" ] && [ ! -f "$PWD/HERO.md" ] && echo "FLEET_ROOT" || true
 
 # NO_GIT covers both "not a repo" and "empty repo, no commits yet" — the
 # write gates below must distinguish and say which; the sentinel itself must

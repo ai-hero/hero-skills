@@ -26,19 +26,21 @@ two stacks never fight over one port. The standard is
 ### Step 0: Load
 
 ```bash
+# No `git rev-parse` fallback here: this is the one skill built to run outside
+# a repo, where that fallback resolves to /scripts/hero-lib.sh and a failed
+# source would print a plausible NO_FLEET.
 HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
-[ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel)/scripts/hero-lib.sh"
 # shellcheck source=/dev/null
-. "$HERO_LIB"
+. "$HERO_LIB" || { echo "fleet: cannot load $HERO_LIB — STOP (reinstall the plugin)"; exit 1; }
 SCAN="$(dirname "$HERO_LIB")/fleet-scan.sh"
 
 if FLEET_ROOT=$(hero_fleet_root); then
   echo "FLEET_ROOT=$FLEET_ROOT"
   hero_fleet_repos "$FLEET_ROOT"
 else
-  # No FLEET.md above us. The candidate is the nearest folder that is not a
-  # repo and holds checkouts: this folder if we are not in git, else the
-  # repo's parent.
+  # No FLEET.md above us. The candidate is this folder when not in git, else
+  # the repo's parent — never a repo root: bootstrap would write FLEET.md
+  # into the checkout, the standard's first anti-pattern.
   CAND=$(git rev-parse --show-toplevel 2>/dev/null); CAND="${CAND:+$(dirname "$CAND")}"; CAND="${CAND:-$PWD}"
   echo "NO_FLEET candidate=$CAND"
   "$SCAN" "$CAND" --list
@@ -87,10 +89,13 @@ the skill that owns it.
 
    | Finding | Proposal |
    | --- | --- |
+   | `BAD_ROW` | the row could not be trusted (the detail says why: a bad name, a dashed or non-numeric value, a duplicate, a path outside the fleet) — fix or drop it; never guess a replacement |
    | `UNLISTED` | add a row; ask the group (default `none`); port from the compose file |
    | `MISSING` | drop the row, or fix `path` if the folder moved — ask |
    | `NOT_GIT` | same as `MISSING`; a folder that stopped being a checkout is not a repo |
    | `PORT_MISMATCH` | the row is the assignment, the compose default is the implementation. Ask which is right. If the repo must change, hand it to `hero-skills:one-shot` in that repo — the standard's last anti-pattern names every place the port appears — never edit the repo from here |
+   | `PORT_UNIMPLEMENTED` | the claim is made, the repo has no compose file yet — nothing to fix here; it clears when the dev stack lands |
+   | `PORT_UNPARSED` | a compose file the scanner cannot read a host port from — look at it; either it publishes no port (drop the row's port) or uses a syntax to add to `hero_compose_port` |
    | `PORT_COLLISION` | pick the next free port in `port-range` for the newer row, propose it; same routing as a mismatch for the repo side |
    | `NO_HERO` | offer `hero-skills:init-hero` in that repo (a subagent, per the standard's fan-out) |
    | `NO_AGENTS` | same, via init-hero's Step 1 |

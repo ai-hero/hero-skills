@@ -64,8 +64,10 @@ Three things it is for:
 Rules:
 
 1. **`## Fleet`** — `name` is required. `org` lets `sync` list what you have
-   *not* cloned; `template`, `port-range`, `template-port` let `review` name a
-   clone still parked on the template's port.
+   *not* cloned; `port-range` is where `sync` picks the next free port for a
+   collision and what lets the scanner pick the app's port over a database's
+   in a multi-service compose file. `template` and `template-port` are
+   recorded for the operator; nothing reads them yet.
 2. **`## Groups`** — names are yours, one line each saying what membership
    means. `none` is reserved and always means not-fleet.
 3. **`## Repos`** — one `### NAME` block per checkout. `NAME` is the folder
@@ -85,18 +87,21 @@ Rules:
 
 | Function (`scripts/hero-lib.sh`) | Returns |
 | --- | --- |
-| `hero_fleet_root [START]` | nearest ancestor holding `FLEET.md`, from the repo root by default |
-| `hero_at_fleet_root [DIR]` | true when `DIR` has `FLEET.md` and no `HERO.md` — a fleet folder, not a repo |
-| `hero_fleet_field KEY` | a `## Fleet` value |
-| `hero_fleet_repo_field NAME KEY` | a value from `### NAME` |
-| `hero_fleet_repos` | `NAME<TAB>ABSOLUTE_PATH<TAB>GROUP<TAB>PORT` per row, one parse |
-| `hero_compose_port DIR` | the host port `DIR`'s dev compose file publishes, or `-` |
+| `hero_fleet_root [START]` | nearest ancestor of `START` (default `$PWD`) holding `FLEET.md` without `HERO.md` beside it — a committed FLEET.md is passed over |
+| `hero_at_fleet_root [DIR]` | true when `DIR` (default `$PWD`) has `FLEET.md` and no `HERO.md` — a fleet folder, not a repo |
+| `hero_fleet_field KEY [FLEET_ROOT]` | a `## Fleet` value |
+| `hero_fleet_repo_field NAME KEY [FLEET_ROOT]` | a value from `### NAME` under `## Repos` |
+| `hero_fleet_repos [FLEET_ROOT]` | `NAME<TAB>ABSOLUTE_PATH<TAB>GROUP<TAB>PORT` per trusted row, one parse; untrusted rows go to stderr and the function returns 3 |
+| `hero_compose_port DIR [RANGE]` | the host port `DIR`'s dev compose file publishes; `-` no compose file, `?` none readable |
+
+`FLEET_ROOT` defaults to `hero_fleet_root`, so from inside a repo every read
+targets the fleet that checkout lives in.
 
 `scripts/fleet-scan.sh FLEET_ROOT --list` enumerates the checkouts on disk
 with their compose port; `--review` diffs disk against the rows and prints
-`CODE<TAB>NAME<TAB>DETAIL` (`UNLISTED`, `MISSING`, `NOT_GIT`,
-`PORT_MISMATCH`, `PORT_COLLISION`, `NO_HERO`, `NO_AGENTS`,
-`NOT_FLEET_AWARE`), exit 1 when there is anything to fix. Disk is always scanned — a registry that only re-reads
+`CODE<TAB>NAME<TAB>DETAIL` — the codes and their meanings are the script's
+`--help` — exit 1 when there is anything to fix, exit 2 for a folder that is
+not a fleet (no `FLEET.md`, or a `HERO.md` beside it). Disk is always scanned — a registry that only re-reads
 itself reports a fleet that no longer exists.
 
 ## Fleet-aware repos
@@ -152,13 +157,17 @@ whose subject is the folder.
 ## Anti-patterns
 
 - **Committing it.** A `FLEET.md` inside a repo is one person's checkout
-  layout imposed on everyone who clones. `hero_at_fleet_root` treats a folder
-  with both files as a repo, so a committed one is also inert.
+  layout imposed on everyone who clones — and, in a cloned repo, attacker
+  content. Every reader treats a folder holding both files as a repo:
+  `hero_fleet_root` passes it over and keeps walking, `review` exits 2, so a
+  committed one is inert.
 - **Reading it as the org inventory.** `gh repo list ORG` is what exists;
   `FLEET.md` is what you have. `sync` may print the difference; it never adds
   a row for a repo that is not on disk.
-- **A row with a port and no compose file.** The row is an assignment; the
-  compose default is the implementation. `review` reports the two disagreeing,
-  and the fix is changing every place the port appears in that repo — compose
-  dev, compose prod, and whatever `just health` curls — because missing one
-  brings the stack up on the new port while the health check reports the old.
+- **A compose default that disagrees with the row.** The row is the
+  assignment; the compose default is the implementation. `review` reports the
+  two disagreeing (`PORT_MISMATCH`; a claim with no compose file yet is
+  `PORT_UNIMPLEMENTED`, a claim awaiting its dev stack), and the fix is
+  changing every place the port appears in that repo — compose dev, compose
+  prod, and whatever `just health` curls — because missing one brings the
+  stack up on the new port while the health check reports the old.

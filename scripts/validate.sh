@@ -486,19 +486,24 @@ if [[ $ERRORS -eq 0 ]]; then
   pass "no file touches shared state without hero-lib.sh"
 fi
 
-# ── fleet root: a skill that reads HERO.md in Step 0 must detect the fleet folder ──
+# ── fleet root: a skill that reads HERO.md must detect the fleet folder ──
 # At a fleet root there is no HERO.md, so a repo skill would treat the folder
-# as a project. AGENTS.md promises every repo skill tests for it; this is what
-# keeps that true for the next skill added. audit-plugin audits this plugin
-# only and never runs elsewhere.
+# as a project. AGENTS.md promises every repo skill tests for it; this holds
+# that for any skill that reads HERO.md by any spelling. The check must be
+# the executable test, not the word FLEET_ROOT in prose.
+# audit-plugin reads HERO.md to audit this plugin's own field coverage, not
+# as a project's config, and never runs in another repo.
+FLEET_GATE_ERRORS=0
 for f in "$SKILLS_DIR"/*/SKILL.md; do
   case "$f" in */audit-plugin/SKILL.md) continue ;; esac
-  grep -qE 'NO_HERO_CONFIG|cat "\$ROOT/HERO.md"' "$f" || continue
-  grep -q 'FLEET_ROOT' "$f" && continue
-  error "reads HERO.md in Step 0 but never tests for the fleet root" \
+  grep -qE 'HERO\.md|hero_field|hero_md_field' "$f" || continue
+  grep -qE 'hero_at_fleet_root|hero_fleet_root|-f "\$(PWD|ROOT)/FLEET\.md" \]' "$f" && continue
+  FLEET_GATE_ERRORS=$((FLEET_GATE_ERRORS + 1))
+  error "reads HERO.md but never tests for the fleet root" \
     "${f#"$PLUGIN_ROOT/"}" "" \
     "Add the FLEET_ROOT line from scripts/new-skill.sh's Step 0 and the pointer to docs/FLEET-MD.md"
 done
+[[ $FLEET_GATE_ERRORS -eq 0 ]] && pass "every skill that reads HERO.md tests for the fleet root"
 
 # ── work-item store: producers must have a consumer ────────────────
 # think-it-through, handoff, and harden all WRITE work-items into .plans/

@@ -55,7 +55,7 @@ own output.
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 # Reads a whole SECTION, not a scalar field — hero_field cannot express this.
 sed -n '/## Design System/,/^## /p' "$ROOT/HERO.md" 2>/dev/null `# hero-lint: allow-inline` || echo "NO_DESIGN_SYSTEM_CONFIG"
-[ -f "$ROOT/FLEET.md" ] && [ ! -f "$ROOT/HERO.md" ] && echo "FLEET_ROOT"
+[ -f "$PWD/FLEET.md" ] && [ ! -f "$PWD/HERO.md" ] && echo "FLEET_ROOT" || true
 ```
 
 If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
