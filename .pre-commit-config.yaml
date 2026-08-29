@@ -128,6 +128,7 @@ repos:
         args:
           - --config=auto
           - --error
+          - --skip-unknown-extensions
 
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v4.4.0
