@@ -104,6 +104,29 @@ git checkout $PR_BRANCH
 git pull origin $PR_BRANCH
 ```
 
+**Rebase onto the base before judging anything.** Work is concurrent — other
+branches merge while this PR waits — so the head on the branch is routinely
+behind the base, and a review of a stale head reviews code that is not what
+will merge.
+
+```bash
+HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+[ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel)/scripts/hero-lib.sh"
+# shellcheck source=/dev/null
+. "$HERO_LIB"
+BASE_BRANCH=${BASE_BRANCH:-$(hero_default_branch)}
+hero_rebase_on_base "$BASE_BRANCH"; echo "REBASE_RC=$?"
+```
+
+`REBASE_RC=0` continues (up to date, or rebased and pushed — say which).
+`1` is a conflict: the rebase was aborted and the branch is unchanged; STOP,
+list the conflicting files it printed, and hand back to the user — never
+resolve a conflict on someone's behalf. `2` cannot proceed (dirty tree,
+detached HEAD, fetch or lease failure): STOP with its message.
+
+A rebase moves the lines review comments were anchored to; GitHub keeps the
+threads, so fetch them after the rebase, not before.
+
 ### Step 3: Fetch All Review Comments
 
 ```bash

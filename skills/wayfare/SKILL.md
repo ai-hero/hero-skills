@@ -1283,7 +1283,9 @@ another turn if not. Wayfare does not implement a loop of its own.
 Three facts about `/goal` shape everything below:
 
 - **It evaluates between turns.** So the turn boundary decides how often
-  anything gets checked. One turn = one feature, build through merge.
+  anything gets checked. One turn = up to `concurrency` features launched
+  together, each built through merge in its own worktree; with
+  `concurrency: 1`, one feature, in this checkout.
 - **The evaluator only reads the transcript.** It runs no commands and opens
   no files. Evidence has to be *stated*, and a claim is believed.
 - **It keeps nothing but the condition.** Turn count, budget and merge
@@ -1309,6 +1311,8 @@ Three facts about `/goal` shape everything below:
                 without asking again
      Method:    squash (HERO.md merge-method)
      Budget:    4 PRs
+     Concurrency: 3 at once — dep-free features build in parallel, each in
+                its own git worktree under .worktrees/ (1 = sequential)
      Stops on:  the goal item's ## Stop conditions
 
    Type the goal id to authorize, or anything else to cancel:
@@ -1369,13 +1373,49 @@ memory between turns:
      and check its `## Approach` and `## Subtasks` still hold — they were
      written before the previous feature landed. Refresh `source_ref`.
    Any hit → report it and end the turn. Do not start work past a stop.
-4. **Advance one feature** — *Advancing one item* below, with both gates
-   pre-authorized. one-shot's own resume detection makes this safe to re-enter:
-   a turn that died mid-feature is picked up where it stopped, not restarted.
-   A wait (CI, a review bot) is a legitimate way for a turn to end — say what
-   is being waited on; the next turn resumes. Launching the wait as a
-   background task makes `/goal` defer its evaluation until it finishes, which
-   is cheaper than a turn that polls.
+4. **Launch up to `concurrency` features, each in its own worktree.** From
+   `covers`, in order, take the features that are READY or mid-flight
+   (`active`, `review`) and whose `depends_on` are all `done` — never one
+   whose dependency is merely in flight — up to
+   `min(concurrency, budget − merged)`, counting what is already in flight
+   against that number. `concurrency: 1` (or a single candidate) is the
+   sequential turn: *Advancing one item* below, in this checkout, no
+   worktree. Otherwise, for each feature:
+   - **A worktree of its own.** New: `git worktree add
+     "$ROOT/.worktrees/feature-N" -b FEATURE_BRANCH "origin/$BASE"`
+     (`hero_branch_policy` names the branch). Resuming: `git worktree add
+     "$ROOT/.worktrees/feature-N" FEATURE_BRANCH` on the branch recorded in
+     its `## Comments`, unless the worktree already exists. Exclude the
+     folder once: `hero_exclude_add .worktrees/`. The store stays in this
+     checkout — `hero_work_store` resolves a worktree to its primary — so
+     every subagent reads and writes the same items.
+   - **One subagent per feature**, all in one message so they run
+     concurrently (Agent tool, `general-purpose`), with this prompt shape:
+
+     ```
+     cd WORKTREE_PATH — a linked git worktree of REPO_PATH on branch
+     FEATURE_BRANCH, for feature N of goal G. Every command runs here; do
+     not touch the primary checkout or any other worktree. Invoke
+     hero-skills:one-shot N with the exact line
+     `gates pre-authorized in-session for goal G`. Report: merged SHA and
+     PR URL, or the STOP reason and PR URL.
+     ```
+
+     The authorization literal travels in the invocation, as always — the
+     subagent cannot ask, and the goal's approval (step 2 of *Starting a
+     goal*) is what makes that acceptable.
+   - **Wait for every subagent**, then remove each worktree whose PR merged
+     (`git worktree remove "$ROOT/.worktrees/feature-N"` and
+     `git branch -d FEATURE_BRANCH`; ship-pr leaves the branch checked out
+     there on purpose) and keep the rest for the next turn's resume.
+
+   one-shot's own resume detection makes every launch safe to re-enter: a
+   feature that died mid-build is picked up where it stopped, not restarted.
+   A wait (CI, a review bot) is a legitimate way for a feature to end its
+   turn — say what is being waited on; the next turn resumes it. One
+   feature's failure stops the *goal* — no new launches — but the features
+   already running finish and report; the stop line names the one that
+   failed.
 5. **When every feature is done, verify the goal's DoD directly, and only
    then write `status: done`.** Not by
    inference from the features — that is the same error as ticking a DoD by
@@ -1389,9 +1429,11 @@ memory between turns:
    ```
    wayfare turn — goal 7
      did:       feature 13 → done (PR #204 merged, squash)
-     verified:  tests green (npm test exit 0); UI smoke 3/3 routes; auto-approve PASS
+                feature 15 → reviewing (PR #207 open, awaiting checks)
+     verified:  13: tests green (npm test exit 0); UI smoke 3/3 routes; auto-approve PASS
+                15: tests green; auto-approve pending
      merged:    12, 13   (2/4 budget)
-     in flight: none
+     in flight: 15 (#207, .worktrees/feature-15)
      remaining: 15, 18
      dod:       not checked — features remain
      stop:      none
@@ -1580,6 +1622,7 @@ title: A user can sign in with Google and land on their dashboard
 status: todo # new | todo | active | done
 depends_on: []
 covers: [12, 13, 15, 18] # the features this goal is made of, in build order
+concurrency: 3 # features building at once, each in its own worktree; 1 = sequential in this checkout. Starting a goal fills it with 3 unless told otherwise
 budget: 4 # PRs; positive integer, REQUIRED. Absent, zero, or non-numeric is a store defect and the turn stops — an unbounded pre-authorized merge loop is the wrong default. Starting a goal fills it with len(covers) unless told otherwise
 source_ref: FULL_COMMIT_SHA
 target_ref: FULL_COMMIT_SHA
@@ -1615,7 +1658,8 @@ Re-read every turn. The defaults are always on; add to them per goal.
 - 2026-08-27 (rahul): dated, append-only entries — never rewrite or delete one
 ```
 
-`covers` is the build order and the loop walks it in sequence. It does not
+`covers` is the build order; a turn launches from its head as far as
+`concurrency` and the dependency gate allow. It does not
 replace the features' own `depends_on`, which still gates them individually; a
 `covers` order that contradicts `depends_on` is a defect for `sync` to report.
 `## Turn log` is the durable record — the transcript is what the evaluator

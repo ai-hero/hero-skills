@@ -767,6 +767,55 @@ R5="$TMP/wt-main"; git init -q "$R5"; git -C "$R5" -c user.email=t@t -c user.nam
 check "store: a worktree resolves to the primary checkout's .plans" \
   "$(cd "$R5" && pwd -P)/.plans" "$(hero_work_store "$TMP/wt-side" 2>/dev/null)"
 
+# ---------- hero_rebase_on_base ---------------------------------------------
+#
+# Mutating (rebase + force-with-lease push), so every branch of it is pinned
+# against a real origin: up to date, behind-and-clean, conflict (must abort
+# and leave the branch as it was), dirty tree, and the worktree predicate.
+
+(
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+  export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+  O="$TMP/origin.git"; git init -q --bare "$O"
+  A="$TMP/cloneA"; git clone -q "$O" "$A" 2>/dev/null
+  cd "$A" && git checkout -q -b main && echo base > f && git add f && git commit -q -m base && git push -q -u origin main 2>/dev/null
+  git checkout -q -b feat && echo feat > g && git add g && git commit -q -m feat && git push -q -u origin feat 2>/dev/null
+  hero_rebase_on_base main 2>/dev/null; echo "current=$?"
+  # main moves underneath (another clone), no overlap → rebase + push.
+  B="$TMP/cloneB"; git clone -q "$O" "$B" 2>/dev/null
+  (cd "$B" && git checkout -q main && echo more > h && git add h && git commit -q -m more && git push -q origin main 2>/dev/null)
+  hero_rebase_on_base main 2>/dev/null; echo "rebased=$?"
+  echo "hasbase=$(git merge-base --is-ancestor origin/main HEAD && echo yes)"
+  echo "pushed=$(git rev-parse HEAD)=$(git rev-parse origin/feat)"
+  # Conflict: both sides edit f. Must abort, branch unchanged.
+  (cd "$B" && echo theirs > f && git commit -q -am theirs && git push -q origin main 2>/dev/null)
+  echo mine > f && git commit -q -am mine; BEFORE=$(git rev-parse HEAD)
+  hero_rebase_on_base main 2>"$TMP/conflict.err"; echo "conflict=$?"
+  echo "unchanged=$([ "$(git rev-parse HEAD)" = "$BEFORE" ] && echo yes)"
+  echo "norebase=$([ ! -d .git/rebase-merge ] && [ ! -d .git/rebase-apply ] && echo yes)"
+  echo "named=$(grep -c '^  f$' "$TMP/conflict.err")"
+  echo dirty > g
+  hero_rebase_on_base main 2>/dev/null; echo "dirty=$?"
+  git checkout -q -- g
+  hero_rebase_on_base 'bad name' 2>/dev/null; echo "badbase=$?"
+  git worktree add -q "$TMP/wt-rb" -b wt-rb 2>/dev/null
+  hero_in_worktree "$TMP/wt-rb"; echo "wt=$?"
+  hero_in_worktree "$A"; echo "primary=$?"
+) > "$TMP/rebase.out" 2>/dev/null
+r() { sed -n "s/^$1=//p" "$TMP/rebase.out"; }
+check "rebase: up to date returns 0"                     "0"   "$(r current)"
+check "rebase: behind and clean rebases, returns 0"      "0"   "$(r rebased)"
+check "rebase: base is now an ancestor"                  "yes" "$(r hasbase)"
+check "rebase: pushed with lease (origin matches HEAD)"  "yes" "$([ "$(r pushed | cut -d= -f1)" = "$(r pushed | cut -d= -f2)" ] && echo yes)"
+check "rebase: conflict returns 1"                       "1"   "$(r conflict)"
+check "rebase: conflict leaves the branch unchanged"     "yes" "$(r unchanged)"
+check "rebase: conflict leaves no rebase in progress"    "yes" "$(r norebase)"
+check "rebase: conflict names the file"                  "1"   "$(r named)"
+check "rebase: dirty tree returns 2"                     "2"   "$(r dirty)"
+check "rebase: invalid base returns 2"                   "2"   "$(r badbase)"
+check "worktree: a linked worktree is detected"          "0"   "$(r wt)"
+check "worktree: the primary checkout is not"            "1"   "$(r primary)"
+
 # ---------- hero_compose_port ------------------------------------------------
 C="$TMP/compose"; mkdir -p "$C/a" "$C/b" "$C/c" "$C/d"
 printf 'ports:\n  - "2222:3000"\n' > "$C/a/docker-compose.dev.yaml"

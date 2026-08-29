@@ -430,6 +430,69 @@ hero_compose_port() { # DIR [RANGE]
   printf -- '-'
 }
 
+# ---------- concurrent work --------------------------------------------------
+#
+# Several features build at once — worktree subagents here, other people
+# elsewhere — so a PR's head is routinely behind the default branch by the time
+# it is reviewed, approved, or merged. A gate that judged a stale head judged
+# code that is not what will merge. Every skill that reviews, approves, or
+# merges rebases first, through this one function.
+
+# Rebase the current branch onto a freshly fetched origin/BASE and push it
+# with --force-with-lease. Prints one line on stderr saying what happened.
+#
+# Returns: 0 already up to date, or rebased and pushed;
+#          1 the rebase conflicts — it is ABORTED, the branch is unchanged, and
+#            the conflicting files are listed on stderr for the caller to STOP on;
+#          2 cannot proceed: dirty tree, detached HEAD, on the base itself, a
+#            fetch failure, or a push the lease refused (someone else pushed —
+#            fetch and re-run; never retry without the lease).
+#
+# Branch protection dismisses approvals on push, so a caller that has already
+# collected an approval must re-trigger it after a rebase — rebase BEFORE the
+# approval, and only re-check (not re-rebase) between approval and merge.
+hero_rebase_on_base() { # BASE
+  local base branch behind conflicts
+  base="$1"
+  hero_is_valid_branch "$base" || { echo "hero_rebase_on_base: not a branch name: '$base'" >&2; return 2; }
+  branch=$(git branch --show-current)
+  [ -n "$branch" ] || { echo "hero_rebase_on_base: detached HEAD — check out the PR branch first" >&2; return 2; }
+  [ "$branch" != "$base" ] || { echo "hero_rebase_on_base: on $base itself — nothing to rebase" >&2; return 2; }
+  if [ -n "$(git status --porcelain)" ]; then
+    echo "hero_rebase_on_base: working tree is dirty — commit or discard first:" >&2
+    git status --short >&2
+    return 2
+  fi
+  git fetch -q origin "$base" || { echo "hero_rebase_on_base: git fetch origin $base failed" >&2; return 2; }
+  behind=$(git rev-list --count "HEAD..origin/$base")
+  if [ "$behind" -eq 0 ]; then
+    echo "hero_rebase_on_base: $branch is up to date with origin/$base" >&2
+    return 0
+  fi
+  if ! git rebase -q "origin/$base" >/dev/null 2>&1; then
+    conflicts=$(git diff --name-only --diff-filter=U)
+    git rebase --abort
+    echo "hero_rebase_on_base: rebasing $branch onto origin/$base conflicts — aborted, branch unchanged. Conflicting files:" >&2
+    printf '  %s\n' $conflicts >&2
+    return 1
+  fi
+  git push -q --force-with-lease origin "$branch" 2>/dev/null || {
+    echo "hero_rebase_on_base: push refused by the lease — origin/$branch moved; fetch, inspect, re-run" >&2
+    return 2
+  }
+  echo "hero_rebase_on_base: rebased $branch onto origin/$base ($behind commits behind) and pushed" >&2
+}
+
+# True when DIR (default $PWD) is a linked git worktree: its `.git` is a file
+# pointing into the primary checkout. ship-pr uses this to skip the
+# default-branch reset — the default branch is checked out in the primary, so
+# `git checkout main` here fails, and the worktree is the caller's to remove.
+hero_in_worktree() { # [DIR]
+  local d
+  d="${1:-$PWD}"
+  [ -f "$d/.git" ] && grep -q '/worktrees/' "$d/.git" 2>/dev/null
+}
+
 # ---------- repo-local ignore ----------------------------------------------
 
 # Path to .git/info/exclude, resolved through git so worktrees, bare repos,
