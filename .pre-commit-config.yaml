@@ -147,8 +147,8 @@ repos:
         pass_filenames: false
         always_run: true
 
-      # Only fires when the library or its tests change — the suites are fast,
-      # but there is no reason to run them on a docs-only commit.
+      # Fires on the library, its tests, and the one doc a suite reads as its
+      # spec — the suites are fast, but not free on every commit.
       # Glob, don't enumerate. Naming each suite meant a newly added
       # scripts/*.test.sh ran nowhere — it matched neither the entry nor the
       # trigger below — so the suite silently guaranteed nothing.
@@ -157,7 +157,22 @@ repos:
         entry: bash -c 'for t in scripts/*.test.sh; do echo "-- $t"; bash "$t" || exit 1; done'
         language: system
         pass_filenames: false
-        files: ^scripts/.*\.sh$
+        # docs/AGENTS-MD.md is the spec check-agents-md.test.sh reads its R5/R6
+        # lists from, so an edit there must re-run the suite.
+        files: ^(scripts/.*\.sh|docs/AGENTS-MD\.md)$
+
+      - id: agents-md
+        name: "AGENTS.md meets docs/AGENTS-MD.md"
+        entry: ./scripts/check-agents-md.sh
+        language: script
+        pass_filenames: false
+        files: ^(AGENTS\.md|CLAUDE\.md|\.claude/rules/.*\.md|scripts/check-agents-md\.sh)$
+
+      - id: agents-md-commit-msg
+        name: "Commit message: no banned phrases"
+        entry: ./scripts/check-agents-md.sh --commit-msg
+        language: script
+        stages: [commit-msg]
 
       - id: audit
         name: "Audit: check plugin quality"
