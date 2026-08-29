@@ -220,14 +220,7 @@ cat > "$F/FLEET.md" <<'EOM'
 ### multi
 
 - group: none
-
-### web2
-
-- path: /nonexistent-but-fleet-relative
-- group: none
 EOM
-# an absolute path is honored (row present, dir missing → MISSING, so drop it)
-sed -i '' '/^### web2/,$d' "$F/FLEET.md"
 OUT=$("$SCAN" "$F" --review); RC=$?
 check "review: clean fleet exits 0 with no output" "0|" "$RC|$OUT"
 
