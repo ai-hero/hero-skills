@@ -1,0 +1,15 @@
+{
+  "recommendations": [
+    "johnpapa.vscode-cloak",
+    "redhat.vscode-yaml",
+    "github.vscode-github-actions",
+    "timonwong.shellcheck",
+    "davidanson.vscode-markdownlint",
+    "streetsidesoftware.code-spell-checker",
+    "skellock.just",
+    "anthropic.claude-code"
+  ],
+  "unwantedRecommendations": [
+    "esbenp.prettier-vscode"
+  ]
+}
