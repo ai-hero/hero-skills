@@ -36,6 +36,8 @@ other repos (the auto-approve caller, the design-system rule and hook), and
 ## Conventions
 
 - **Read before edit.** Match the surrounding style; don't introduce new patterns.
+- **This file follows [docs/AGENTS-MD.md](./docs/AGENTS-MD.md)**, and
+  `scripts/check-agents-md.sh` gates it on commit.
 - **Comments: see [.claude/rules/comments.md](./.claude/rules/comments.md).**
   Claude Code loads it automatically; other agents must read it first. The
   one-line test, so it survives a skimmed read:

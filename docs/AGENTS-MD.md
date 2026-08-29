@@ -2,8 +2,7 @@
 
 What a repo's agent-instructions file must be, why, and how it is checked.
 `scripts/check-agents-md.sh` enforces R1–R6 mechanically; R7–R10 need
-judgment and are applied in a rewrite pass (a `tune-agents-md` skill is the
-next slice).
+judgment and are applied in a rewrite pass.
 
 ## The principle
 
@@ -31,8 +30,8 @@ lives. Everything else has a better home:
 
 Mechanical — `check-agents-md.sh` fails the commit:
 
-1. **R1 — one file.** `AGENTS.md` is the file; `CLAUDE.md` is a symlink to it. Two regular files diverge silently. A `CLAUDE.md`-only repo warns.
-2. **R2 — ≤ 200 lines,** warning at 150. Block HTML comments are stripped before load and do not count, so maintainer notes are free.
+1. **R1 — one file.** `AGENTS.md` is the file; `CLAUDE.md` is a symlink to it. Two regular files diverge silently. A repo with only one of the two warns.
+2. **R2 — ≤ 200 lines,** warning above 150. Block HTML comments are stripped before load and do not count, so maintainer notes are free.
 3. **R3 — rules over 60 lines carry `paths:`.** An unscoped rule loads in every session; a scoped one only when a matching file is read.
 4. **R4 — one line of emphasis.** More than one `IMPORTANT`/`NEVER`/`ALWAYS`/`MUST`/`CRITICAL` line warns; more than five fails. When many lines shout, none stands out.
 5. **R5 — no derivable sections.** A heading that is exactly one of `Layout`, `Tech Stack`, `Technology Stack`, `Directory Structure`, `Directory Layout`, `Project Structure`, `Folder Structure`, `Data Model`, `Architecture Overview`, `Dependencies`, `File-by-file` (a trailing colon, dash, or parenthetical is allowed) may hold at most five lines — a pointer, not the content.
@@ -64,9 +63,14 @@ bash scripts/check-agents-md.sh /path/to/repo --warn-only   # report, exit 0
 bash scripts/check-agents-md.sh --commit-msg .git/COMMIT_EDITMSG
 ```
 
-In this repo it runs from pre-commit on `AGENTS.md`, `.claude/rules/`, and
-the checker itself, and as a `commit-msg` hook. In any other repo, run it
-against the repo path from the installed plugin.
+Exit codes: `0` no rule errors (or `--warn-only`); `1` a rule error; `2` a
+usage error or no instructions file; `3` the checker could not run (a tool
+missing, a file unreadable). `--warn-only` downgrades only rule errors, and
+`--commit-msg` takes no other options.
+
+In this repo it runs from pre-commit on `AGENTS.md`, `CLAUDE.md`,
+`.claude/rules/`, and the checker itself, and as a `commit-msg` hook. In any
+other repo, run it against the repo path from the installed plugin.
 
 ## Sources
 

@@ -147,8 +147,8 @@ repos:
         pass_filenames: false
         always_run: true
 
-      # Only fires when the library or its tests change — the suites are fast,
-      # but there is no reason to run them on a docs-only commit.
+      # Fires on the library, its tests, and the one doc a suite reads as its
+      # spec — the suites are fast, but not free on every commit.
       # Glob, don't enumerate. Naming each suite meant a newly added
       # scripts/*.test.sh ran nowhere — it matched neither the entry nor the
       # trigger below — so the suite silently guaranteed nothing.
