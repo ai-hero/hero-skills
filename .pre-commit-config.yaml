@@ -62,14 +62,7 @@ repos:
     rev: v0.48.0
     hooks:
       - id: markdownlint
-        args:
-          - --fix
-          - --disable=MD013  # line length — impractical for skill docs
-          - --disable=MD024  # duplicate headings — skills reuse step headers
-          - --disable=MD033  # inline HTML — needed for comments in HERO.md
-          - --disable=MD036  # emphasis as heading
-          - --disable=MD040  # fenced code block language — not all blocks need it
-          - --disable=MD041  # first line heading — frontmatter comes first
+        args: [--fix]
 
   # ===========================================================================
   # Typo detection
