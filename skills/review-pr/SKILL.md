@@ -44,7 +44,10 @@ ARGS_FILTERED=$(printf '%s' "$ARGS_FILTERED" | sed 's/^ //')
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
+[ -f "$PWD/FLEET.md" ] && [ ! -f "$PWD/HERO.md" ] && echo "FLEET_ROOT" || true
 ```
+
+If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
 
 Read `HERO.md` for:
 
@@ -80,6 +83,7 @@ IS_DRAFT=$(echo "$PR_JSON" | jq -r '.isDraft')
 PR_BRANCH=$(echo "$PR_JSON" | jq -r '.headRefName')
 PR_URL=$(echo "$PR_JSON" | jq -r '.url')
 PR_STATE=$(echo "$PR_JSON" | jq -r '.state')
+BASE_BRANCH=$(echo "$PR_JSON" | jq -r '.baseRefName')
 ```
 
 **Mode selection:**
@@ -117,6 +121,26 @@ git fetch origin "$PR_BRANCH"
 git checkout "$PR_BRANCH"
 git pull origin "$PR_BRANCH"
 ```
+
+**Rebase onto the base before judging anything.** Work is concurrent — other
+branches merge while this PR waits — so the head on the branch is routinely
+behind the base, and a review of a stale head reviews code that is not what
+will merge.
+
+```bash
+HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+[ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel)/scripts/hero-lib.sh"
+# shellcheck source=/dev/null
+. "$HERO_LIB"
+BASE_BRANCH=${BASE_BRANCH:-$(hero_default_branch)}
+hero_rebase_on_base "$BASE_BRANCH"; echo "REBASE_RC=$?"
+```
+
+`REBASE_RC=0` continues (up to date, or rebased and pushed — say which).
+`1` is a conflict: the rebase was aborted and the branch is unchanged; STOP,
+list the conflicting files it printed, and hand back to the user — never
+resolve a conflict on someone's behalf. `2` cannot proceed (dirty tree,
+detached HEAD, fetch or lease failure): STOP with its message.
 
 ### Step 2: Scale the Review to the Diff, Then Run Agents in Parallel
 

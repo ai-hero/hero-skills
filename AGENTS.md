@@ -30,7 +30,8 @@ not the logic and must stay small.
 ## Layout
 
 `ls` shows it. The two non-obvious facts: `assets/` is installed **into**
-other repos (the auto-approve caller, the design-system rule and hook), and
+other repos (the auto-approve caller, the design-system rule and hook, the
+`## Fleet` section for AGENTS.md), and
 `pr-check.yaml` is this repo's own gate while `auto-approve.yaml` is the fleet's.
 
 ## Conventions
@@ -49,6 +50,18 @@ other repos (the auto-approve caller, the design-system rule and hook), and
   The installer defaults fresh installs to `.yaml` but still adopts an existing
   `.yml` — writing the second spelling beside the first would leave two live
   `issue_comment` workflows, and every trigger would run twice.
+- **A folder of sibling checkouts is a fleet, not a project.** `FLEET.md` at
+  its top maps it ([docs/FLEET-MD.md](./docs/FLEET-MD.md)); every repo skill
+  tests for it in Step 0 and fans out instead of running against the folder.
+  New skills get the check from `scripts/new-skill.sh`.
+- **Work is concurrent, so rebase before you judge.** Several features
+  build at once (wayfare's goal turns run one worktree subagent per
+  feature), and other people merge underneath every PR. Before a review, an
+  approval, or a merge, rebase the PR onto the current default branch with
+  `hero_rebase_on_base` and confirm it went through — no conflict, checks
+  green on the rebased head. A verdict on a stale head is a verdict on code
+  that will not merge. Rebase *before* `@auto-approve`, never between the
+  verdict and the merge: branch protection dismisses approvals on push.
 - **Assets are vendored downstream, not authored there.** Fix a bug here, then
   re-vendor. A consuming repo's copy is output.
 - **Tests are `scripts/*.test.sh` and both runners glob.** Add a suite and it

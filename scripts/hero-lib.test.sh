@@ -75,6 +75,165 @@ check "field: rejects leading-dash value (option injection)" "2" "$?"
 check "field: rejected value falls back to main" \
   "main" "$(hero_default_branch "$TMP/cfg" 2>/dev/null)"
 
+# ---------- fleet ----------------------------------------------------------
+#
+# FLEET.md rows feed `cd` in subagents, so a wrong row silently runs a skill
+# in the wrong repo. Every case here is a listing that could come back
+# plausible-but-wrong: the first repo's field for the second repo, an example
+# from a code fence, a heading outside ## Repos.
+
+mkdir -p "$TMP/fleet" "$TMP/nofleet/repo"
+# hero_fleet_root prints a physical path; macOS mktemp hands back the /var
+# symlink, so resolve the fixture the same way or every path check fails.
+F="$(cd "$TMP/fleet" && pwd -P)"
+mkdir -p "$F/auth" "$F/web/deep"
+cat > "$F/FLEET.md" <<'EOF'
+# Fleet
+
+## Fleet
+
+- name: acme
+- port-range: 33000-33099
+- port: 1 # a fleet-level key that must not leak into repo reads
+
+### sub
+
+- after-h3: still-fleet
+
+## Repos
+
+### auth
+
+- group: Apps
+- port: "33000" # claimed
+
+#### deeper
+
+- deep: h4-does-not-end-the-block
+
+### web
+
+- path: "./sites/web/"
+- group: apps
+- port: 33001
+
+### absent
+
+- path: /opt/absent
+
+### auth
+
+- group: apps
+
+### ctl
+
+- port: 1	2
+
+### alpha
+
+- port: abc
+
+### outside
+
+- path: ../
+
+### notes
+
+- group: none
+
+### bad path
+
+- path: ./x
+
+### dashed
+
+- path: --upload-pack=evil
+
+## Conventions
+
+### example
+
+- port: 99999
+
+```
+### fenced
+- port: 11111
+```
+EOF
+
+# The heading's trailing spaces cannot live in this file — the
+# trailing-whitespace hook strips them — so they are added after the heredoc.
+awk '!done && /^### auth$/ { print "### auth   "; done = 1; next } { print }' "$F/FLEET.md" > "$F/FLEET.md.tmp" && mv "$F/FLEET.md.tmp" "$F/FLEET.md"
+
+check "fleet-root: found from a nested dir" \
+  "$F" "$(hero_fleet_root "$F/web/deep")"
+check "fleet-root: the fleet folder itself" \
+  "$F" "$(hero_fleet_root "$F")"
+hero_fleet_root "$TMP/nofleet/repo" >/dev/null 2>&1; rc=$?
+# TMP lives under a system temp dir that carries no FLEET.md, so the walk
+# must reach / and fail rather than find a stray file on the way up.
+check "fleet-root: absent returns 1" "1" "$rc"
+
+hero_at_fleet_root "$F"; check "at-fleet-root: FLEET.md and no HERO.md" "0" "$?"
+hero_at_fleet_root "$F/auth"; check "at-fleet-root: a repo dir is not" "1" "$?"
+touch "$F/HERO.md"
+hero_at_fleet_root "$F"; check "at-fleet-root: HERO.md beside FLEET.md means repo" "1" "$?"
+rm "$F/HERO.md"
+
+check "fleet-field: reads the ## Fleet section" \
+  "acme" "$(hero_fleet_field name "$F")"
+check "fleet-field: an H3 inside ## Fleet does not end the section" \
+  "still-fleet" "$(hero_fleet_field after-h3 "$F")"
+check "repo-field: a trailing-whitespace heading still matches" \
+  "33000" "$(hero_fleet_repo_field auth port "$F")"
+check "repo-field: an H4 does not end an H3 block" \
+  "h4-does-not-end-the-block" "$(hero_fleet_repo_field auth deep "$F")"
+hero_fleet_repo_field ctl port "$F" >/dev/null 2>&1
+check "repo-field: a control character is refused (rc 2)" "2" "$?"
+check "fleet-field: port-range is not port" \
+  "1" "$(hero_fleet_field port "$F")"
+check "repo-field: second repo gets its own value, not the first's" \
+  "33001" "$(hero_fleet_repo_field web port "$F")"
+check "repo-field: fleet-level port does not leak into a repo block" \
+  "33000" "$(hero_fleet_repo_field auth port "$F")"
+hero_fleet_repo_field notes port "$F" >/dev/null 2>&1
+check "repo-field: absent in the block returns 1" "1" "$?"
+hero_fleet_repo_field example port "$F" >/dev/null 2>&1
+check "repo-field: an H3 outside ## Repos does not answer for a repo row" "1" "$?"
+hero_fleet_repo_field fenced port "$F" >/dev/null 2>&1
+check "repo-field: a fenced example row is skipped" "1" "$?"
+hero_md_field "$F/FLEET.md" port auth >/dev/null 2>&1
+check "md-field: a bare BLOCK name is rejected, not read as absent" "2" "$?"
+
+check "repos: TSV — group lowercased, port de-quoted, comment stripped, trailing slash dropped, absolute kept, fenced/foreign rows absent" \
+  "$(printf 'auth\t%s/auth\tapps\t33000\nweb\t%s/sites/web\tapps\t33001\nabsent\t/opt/absent\tnone\t\nnotes\t%s/notes\tnone\t\n' "$F" "$F" "$F")" \
+  "$(hero_fleet_repos "$F" 2>/dev/null)"
+check "repos: duplicate, ctrl-char, non-numeric port, outside path, space name, dashed path are each skipped" \
+  "6" "$(hero_fleet_repos "$F" 2>&1 >/dev/null | grep -c skipping)"
+hero_fleet_repos "$F" >/dev/null 2>&1
+check "repos: skipped rows return 3, never a clean 0" "3" "$?"
+check "repos: the outside-the-fleet reason names the resolved path" \
+  "1" "$(hero_fleet_repos "$F" 2>&1 >/dev/null | grep -c "outside the fleet")"
+
+# zsh ties `path` to PATH: a `local path` in the lib empties it for the
+# function and awk vanishes — an empty registry with rc 0. Sourcing from
+# zsh is how every SKILL.md bash block runs on macOS.
+if command -v zsh >/dev/null 2>&1; then
+  check "repos: sourced from zsh, still lists" \
+    "auth" "$(zsh -c ". '$LIB'; hero_fleet_repos '$F' 2>/dev/null | head -1 | cut -f1")"
+fi
+
+# A committed FLEET.md (HERO.md beside it) is repo content, never the fleet.
+mkdir -p "$F/auth/deep"; printf '## Repos\n' > "$F/auth/FLEET.md"; touch "$F/auth/HERO.md"
+check "fleet-root: passes over a FLEET.md inside a repo and keeps walking" \
+  "$F" "$(hero_fleet_root "$F/auth/deep" 2>/dev/null)"
+rm "$F/auth/FLEET.md" "$F/auth/HERO.md"
+check "fleet-root: prints the physical path from a symlinked start" \
+  "$F" "$(hero_fleet_root "$TMP/fleet/web/deep")"
+check "fleet-root: defaults to PWD, not the git toplevel" \
+  "$F" "$(cd "$F" && git init -q . 2>/dev/null; cd "$F/web" && hero_fleet_root)"
+rm -rf "$F/.git"
+
 # ---------- hero_normalize_repo_ref ----------------------------------------
 #
 # target-repo flows from HERO.md into `git ls-remote`/`git clone` as a URL.
@@ -599,6 +758,74 @@ ERR3="$(hero_work_store "$R3" 2>&1 >/dev/null)"
 check "store: my-work wins over plan-work" "yes" "$([ -e "$R3/.plans/a.md" ] && echo yes)"
 printf '%s' "$ERR3" | grep -q "both plan-work/ and .plans/ exist"
 check "store: shadowed plan-work warned loudly" "0" "$?"
+
+# A worktree shares the primary checkout's store.
+# pre-commit exports GIT_DIR for the outer repo; `git worktree add` must not
+# see it or the worktree is created against hero-skills itself.
+R5="$TMP/wt-main"; git init -q "$R5"; git -C "$R5" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
+(unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE; git -C "$R5" worktree add -q "$TMP/wt-side" -b side 2>/dev/null)
+check "store: a worktree resolves to the primary checkout's .plans" \
+  "$(cd "$R5" && pwd -P)/.plans" "$(hero_work_store "$TMP/wt-side" 2>/dev/null)"
+
+# ---------- hero_rebase_on_base ---------------------------------------------
+#
+# Mutating (rebase + force-with-lease push), so every branch of it is pinned
+# against a real origin: up to date, behind-and-clean, conflict (must abort
+# and leave the branch as it was), dirty tree, and the worktree predicate.
+
+(
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+  export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+  O="$TMP/origin.git"; git init -q --bare "$O"
+  A="$TMP/cloneA"; git clone -q "$O" "$A" 2>/dev/null
+  cd "$A" && git checkout -q -b main && echo base > f && git add f && git commit -q -m base && git push -q -u origin main 2>/dev/null
+  git checkout -q -b feat && echo feat > g && git add g && git commit -q -m feat && git push -q -u origin feat 2>/dev/null
+  hero_rebase_on_base main 2>/dev/null; echo "current=$?"
+  # main moves underneath (another clone), no overlap → rebase + push.
+  B="$TMP/cloneB"; git clone -q "$O" "$B" 2>/dev/null
+  (cd "$B" && git checkout -q main && echo more > h && git add h && git commit -q -m more && git push -q origin main 2>/dev/null)
+  hero_rebase_on_base main 2>/dev/null; echo "rebased=$?"
+  echo "hasbase=$(git merge-base --is-ancestor origin/main HEAD && echo yes)"
+  echo "pushed=$(git rev-parse HEAD)=$(git rev-parse origin/feat)"
+  # Conflict: both sides edit f. Must abort, branch unchanged.
+  (cd "$B" && echo theirs > f && git commit -q -am theirs && git push -q origin main 2>/dev/null)
+  echo mine > f && git commit -q -am mine; BEFORE=$(git rev-parse HEAD)
+  hero_rebase_on_base main 2>"$TMP/conflict.err"; echo "conflict=$?"
+  echo "unchanged=$([ "$(git rev-parse HEAD)" = "$BEFORE" ] && echo yes)"
+  echo "norebase=$([ ! -d .git/rebase-merge ] && [ ! -d .git/rebase-apply ] && echo yes)"
+  echo "named=$(grep -c '^  f$' "$TMP/conflict.err")"
+  echo dirty > g
+  hero_rebase_on_base main 2>/dev/null; echo "dirty=$?"
+  git checkout -q -- g
+  hero_rebase_on_base 'bad name' 2>/dev/null; echo "badbase=$?"
+  git worktree add -q "$TMP/wt-rb" -b wt-rb 2>/dev/null
+  hero_in_worktree "$TMP/wt-rb"; echo "wt=$?"
+  hero_in_worktree "$A"; echo "primary=$?"
+) > "$TMP/rebase.out" 2>/dev/null
+r() { sed -n "s/^$1=//p" "$TMP/rebase.out"; }
+check "rebase: up to date returns 0"                     "0"   "$(r current)"
+check "rebase: behind and clean rebases, returns 0"      "0"   "$(r rebased)"
+check "rebase: base is now an ancestor"                  "yes" "$(r hasbase)"
+check "rebase: pushed with lease (origin matches HEAD)"  "yes" "$([ "$(r pushed | cut -d= -f1)" = "$(r pushed | cut -d= -f2)" ] && echo yes)"
+check "rebase: conflict returns 1"                       "1"   "$(r conflict)"
+check "rebase: conflict leaves the branch unchanged"     "yes" "$(r unchanged)"
+check "rebase: conflict leaves no rebase in progress"    "yes" "$(r norebase)"
+check "rebase: conflict names the file"                  "1"   "$(r named)"
+check "rebase: dirty tree returns 2"                     "2"   "$(r dirty)"
+check "rebase: invalid base returns 2"                   "2"   "$(r badbase)"
+check "worktree: a linked worktree is detected"          "0"   "$(r wt)"
+check "worktree: the primary checkout is not"            "1"   "$(r primary)"
+
+# ---------- hero_compose_port ------------------------------------------------
+C="$TMP/compose"; mkdir -p "$C/a" "$C/b" "$C/c" "$C/d"
+printf 'ports:\n  - "2222:3000"\n' > "$C/a/docker-compose.dev.yaml"
+printf 'ports:\n  - ${HOST_PORT:-1111}:3000\n' > "$C/a/docker-compose.dev.yml"
+check "compose: .yaml is read before .yml" "2222" "$(hero_compose_port "$C/a")"
+printf 'ports:\n  - "4444:3000"\n  - ${HOST_PORT:-3333}:3000\n' > "$C/b/compose.yaml"
+check "compose: HOST_PORT default beats an earlier literal" "3333" "$(hero_compose_port "$C/b")"
+printf 'ports:\n  # - ${HOST_PORT:-6666}:3000\n  - target: 3000\n    published: 7777\n' > "$C/c/docker-compose.yaml"
+check "compose: commented-out HOST_PORT ignored, long-syntax published read" "7777" "$(hero_compose_port "$C/c")"
+check "compose: no compose file is -" "-" "$(hero_compose_port "$C/d")"
 
 # Explicit-root safety: run from a NON-repo cwd, the store must land in (and
 # only mutate) the target repo — previously the exclude writes hit the cwd.

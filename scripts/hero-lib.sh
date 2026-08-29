@@ -34,12 +34,23 @@ hero_root() {
   git rev-parse --show-toplevel 2>/dev/null || pwd
 }
 
-# Read a single `- key: value` field from HERO.md.
-#   hero_field default-branch
-#   hero_field bot-username
+# Read a single `- key: value` field from a hero-style markdown file. HERO.md
+# and FLEET.md share the grammar, so they share the reader. With BLOCK (a full
+# heading line, `## Fleet` or `### auth`), only that section is searched:
+# FLEET.md keeps one `### NAME` block per repo, so an unscoped read of `path`
+# would return whichever repo happens to come first. PARENT (an H2 line)
+# further requires an H3 block to sit under that H2 — the standard invites
+# prose after `## Repos`, and a `### auth` under `## Known issues` must not
+# answer for the repo row.
+#
+#   hero_md_field "$root/HERO.md" default-branch
+#   hero_md_field "$fleet/FLEET.md" port "### auth" "## Repos"
+#
 # Prints the value (trimmed, comments stripped) on stdout.
 #
-# Returns: 0 found, 1 absent or present-but-empty, 2 rejected as unsafe.
+# Returns: 0 found, 1 absent or present-but-empty, 2 rejected as unsafe (or a
+# BLOCK that is not a heading line — a bare name would silently read as
+# "absent").
 #
 # HERO.md is repo content, so in a cloned repo it is attacker-controlled. Its
 # values flow into git and gh command lines across the skills. A value starting
@@ -48,39 +59,65 @@ hero_root() {
 # arbitrary command execution from nothing but a checked-in config file.
 # Rejecting here covers every call site at once, which is the whole point of
 # having one reader.
-hero_field() {
-  local key root value
-  key="$1"
-  root="${2:-$(hero_root)}"
-  [ -r "$root/HERO.md" ] || return 1
-  # Skip fenced code blocks (HERO.md documents its own syntax in examples) and
-  # keep scanning past a key whose value is empty, so a real setting later in
-  # the file is not masked by a placeholder earlier in it.
-  value=$(awk -v k="- $key" '
+hero_md_field() {
+  local file key block parent value
+  file="$1"
+  key="$2"
+  block="${3:-}"
+  parent="${4:-}"
+  [ -r "$file" ] || return 1
+  block=${block%"${block##*[![:space:]]}"}
+  parent=${parent%"${parent##*[![:space:]]}"}
+  case "$block" in ''|'## '*|'### '*) ;; *)
+    echo "hero_md_field: BLOCK must be a full '## X' or '### X' heading line, got: $block" >&2
+    return 2 ;;
+  esac
+  # Skip fenced code blocks (both files document their own syntax in examples)
+  # and keep scanning past a key whose value is empty, so a real setting later
+  # in the file is not masked by a placeholder earlier in it.
+  value=$(awk -v k="- $key" -v b="$block" -v p="$parent" '
     /^```/ { fence = !fence; next }
     fence  { next }
-    index($0, k ":") == 1 {
+    /^##+ / {
+      h = $0; sub(/[[:space:]]+$/, "", h)
+      # An H2 starts a new section. An H3 only matters when the caller asked
+      # for an H3 — so a `### x` under `## Fleet` does not end the Fleet
+      # section — and an H4 or deeper never opens or closes a block.
+      if (h ~ /^## /)                        { sec = h; inblk = (h == b) }
+      else if (h ~ /^### / && b ~ /^### /)   inblk = (h == b && (p == "" || sec == p))
+      next
+    }
+    (b == "" || inblk) && index($0, k ":") == 1 {
       v = $0; sub(/^[^:]*: */, "", v); sub(/ *#.*/, "", v)
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
       if (v != "") { print v; exit }
     }
-  ' "$root/HERO.md")
-  # Strip surrounding whitespace and any stray quotes.
-  value=$(printf '%s' "$value" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//')
+  ' "$file")
+  # Strip a stray surrounding quote pair (awk already trimmed whitespace).
+  value=${value#[\"\']}; value=${value%[\"\']}
   [ -n "$value" ] || return 1
   case "$value" in
     -*)
-      echo "hero_field: refusing '$key' — value starts with '-' and would be read as a command-line option: $value" >&2
+      echo "hero_md_field: refusing '$key' in ${file##*/} — value starts with '-' and would be read as a command-line option: $value" >&2
       return 2 ;;
   esac
   # Control characters (newline, NUL-ish, escape) have no legitimate place in a
-  # HERO.md scalar and break line-oriented consumers.
+  # config scalar and break line-oriented consumers.
   case "$value" in
     *[[:cntrl:]]*)
-      echo "hero_field: refusing '$key' — value contains control characters" >&2
+      echo "hero_md_field: refusing '$key' in ${file##*/} — value contains control characters" >&2
       return 2 ;;
   esac
   printf '%s' "$value"
+}
+
+# Read a single `- key: value` field from HERO.md.
+#   hero_field default-branch
+#   hero_field bot-username
+hero_field() {
+  local root
+  root="${2:-$(hero_root)}"
+  hero_md_field "$root/HERO.md" "$1"
 }
 
 # Is this a shape git will accept as a branch name? Used to gate values that
@@ -224,6 +261,238 @@ hero_check_staleness() {
   return 0
 }
 
+# ---------- fleet ----------------------------------------------------------
+#
+# A fleet is a folder of sibling checkouts with a FLEET.md at its top — the
+# operator's local map of the repos they work across. It is unversioned and
+# never inside a repo; docs/FLEET-MD.md is the standard.
+#
+# Every function here defaults to $PWD, not hero_root: a fleet folder is by
+# definition not a repo root, and under a dotfiles-managed $HOME hero_root is
+# $HOME, which would hide every fleet beneath it.
+
+# Nearest ancestor (inclusive) of START holding FLEET.md, or return 1. A
+# directory holding HERO.md beside it is a repo that committed a FLEET.md —
+# repo content, not the operator's map — so it is passed over (stderr note)
+# and the walk continues upward.
+# shellcheck disable=SC2120  # in-file callers take the default; the tests pass START
+hero_fleet_root() { # [START]
+  local d
+  d=$(cd "${1:-$PWD}" && pwd -P) || return 1
+  # Parameter expansion, not $(dirname): a subshell per level, and a dirname
+  # that returns empty (stripped PATH) would leave `d` unchanged and spin.
+  while [ -n "$d" ]; do
+    if [ -f "$d/FLEET.md" ]; then
+      if [ -f "$d/HERO.md" ]; then
+        echo "hero_fleet_root: passing over $d — FLEET.md beside HERO.md is a repo, not a fleet" >&2
+      else
+        printf '%s' "$d"; return 0
+      fi
+    fi
+    [ "$d" = "/" ] && return 1
+    d=${d%/*}; d=${d:-/}
+  done
+  return 1
+}
+
+# True when DIR (default $PWD) is a fleet folder rather than a repo: it holds
+# FLEET.md and no HERO.md. Skills test this in Step 0 and hand off to "At the
+# fleet root" in docs/FLEET-MD.md instead of treating the folder as a project.
+hero_at_fleet_root() { # [DIR]
+  local d
+  d="${1:-$PWD}"
+  [ -f "$d/FLEET.md" ] && [ ! -f "$d/HERO.md" ]
+}
+
+# A fleet-level `- key: value` from the `## Fleet` section.
+#   hero_fleet_field name
+hero_fleet_field() { # KEY [FLEET_ROOT]
+  local root
+  root="${2:-$(hero_fleet_root)}" || return 1
+  hero_md_field "$root/FLEET.md" "$1" "## Fleet"
+}
+
+# One `- key: value` from a repo's `### NAME` block under `## Repos`.
+#   hero_fleet_repo_field auth port
+hero_fleet_repo_field() { # NAME KEY [FLEET_ROOT]
+  local root
+  root="${3:-$(hero_fleet_root)}" || return 1
+  hero_md_field "$root/FLEET.md" "$2" "### $1" "## Repos"
+}
+
+# Every repo listed under `## Repos`, one per line:
+# NAME<TAB>PATH<TAB>GROUP<TAB>PORT. One awk pass, not a loop over
+# hero_fleet_repo_field: that re-parses FLEET.md three times per row.
+# PATH is absolute and physical when the directory exists (a relative `path:`
+# resolves against the fleet root and defaults to ./NAME); GROUP is lowercased
+# and defaults to `none`, which means "lives here, not fleet"; PORT is digits
+# or empty when unclaimed. Columns 2 and 3 are never empty, so a caller's
+# `IFS=$'\t' read` is safe — do not add an optional column before PORT.
+#
+# A row that cannot be trusted is SKIPPED, not defaulted: a leading `-` or a
+# control character in a value, a non-numeric port, a name that is not
+# [A-Za-z0-9._-] or is `.`/`..`, a path resolving outside the fleet, or a
+# duplicate name. Substituting a default path would point the caller's `cd` at
+# a different directory than the one the row names. Each skip is one stderr
+# line `hero_fleet_repos: skipping 'NAME' — REASON` (fleet-scan.sh reads
+# them back as BAD_ROW), and the function returns 3 when any row was skipped.
+#
+# Locals are rpath/rgroup/rport, never `path`: sourced from zsh, `local path`
+# empties the PATH-tied array and awk becomes "command not found" — an empty
+# registry with rc 0.
+hero_fleet_repos() { # [FLEET_ROOT]
+  local root
+  root="${1:-$(hero_fleet_root)}" || return 1
+  [ -r "$root/FLEET.md" ] || { echo "hero_fleet_repos: cannot read $root/FLEET.md" >&2; return 1; }
+  awk '
+    # \034 (file separator), not a tab: `read` with a whitespace IFS collapses
+    # consecutive tabs, so an empty path would shift group into its column.
+    function flush() { if (name != "") printf "%s\034%s\034%s\034%s\n", name, rpath, rgroup, rport; name = "" }
+    /^```/ { fence = !fence; next }
+    fence  { next }
+    /^## /  { flush(); sec = $0; sub(/[[:space:]]+$/, "", sec); next }
+    sec == "## Repos" && /^### / {
+      flush(); name = $0; sub(/^### +/, "", name); sub(/[[:space:]]+$/, "", name)
+      rpath = ""; rgroup = ""; rport = ""; next
+    }
+    name != "" && /^- (path|group|port):/ {
+      k = $0; sub(/^- /, "", k); sub(/:.*/, "", k)
+      v = $0; sub(/^[^:]*: */, "", v); sub(/ *#.*/, "", v); gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+      if (k == "path") rpath = v; else if (k == "group") rgroup = v; else rport = v
+    }
+    END { flush() }
+  ' "$root/FLEET.md" | {
+    local name rpath rgroup rport v reason seen nbad real
+    seen=" "; nbad=0
+    while IFS=$'\034' read -r name rpath rgroup rport; do
+      reason=""
+      case "$name" in
+        .|..|''|*[!A-Za-z0-9._-]*) reason="a repo name is [A-Za-z0-9._-] only, not '$name'" ;;
+      esac
+      [ -n "$reason" ] || case "$seen" in *" $name "*) reason="duplicate row" ;; esac
+      rpath=${rpath#[\"\']}; rpath=${rpath%[\"\']}
+      rgroup=${rgroup#[\"\']}; rgroup=${rgroup%[\"\']}
+      rport=${rport#[\"\']}; rport=${rport%[\"\']}
+      for v in "$rpath" "$rgroup" "$rport"; do
+        [ -n "$reason" ] || case "$v" in -*|*[[:cntrl:]]*) reason="a value starts with '-' or holds a control character" ;; esac
+      done
+      [ -n "$reason" ] || case "$rport" in *[!0-9]*) reason="port is not a number: $rport" ;; esac
+      if [ -n "$reason" ]; then
+        echo "hero_fleet_repos: skipping '$name' — $reason" >&2
+        nbad=$((nbad + 1)); continue
+      fi
+      seen="$seen$name "
+      rgroup=$(printf '%s' "${rgroup:-none}" | tr '[:upper:]' '[:lower:]')
+      [ -n "$rpath" ] || rpath="./$name"
+      rpath=${rpath%/}
+      case "$rpath" in /*) ;; *) rpath="$root/${rpath#./}" ;; esac
+      if [ -d "$rpath" ]; then
+        real=$(cd "$rpath" && pwd -P)
+        case "$real" in "$root"/*) rpath=$real ;; *)
+          echo "hero_fleet_repos: skipping '$name' — path resolves outside the fleet: $real" >&2
+          nbad=$((nbad + 1)); continue ;;
+        esac
+      fi
+      printf '%s\t%s\t%s\t%s\n' "$name" "$rpath" "$rgroup" "$rport"
+    done
+    [ "$nbad" -eq 0 ] || return 3
+  }
+}
+
+# Host port a checkout's dev compose file publishes: digits, `-` when there is
+# no compose file, `?` when there is one but no host port could be read (the
+# two are different findings — "not implemented" vs "unreadable"). Reads BOTH
+# spellings, skips commented-out lines, and reads `HOST_PORT:-N`, a literal
+# `[HOST:]PUBLISHED:CONTAINER` mapping, or long-syntax `published:` — an
+# earlier fleet reconcile grepped only `HOST_PORT` in `.yaml` and silently
+# reported two live repos as claiming no port at all. A multi-service file
+# publishes several ports (the database's first, typically); with RANGE
+# (`33000-33099`) the one inside it wins, else the first literal.
+hero_compose_port() { # DIR [RANGE]
+  local f ports lo hi p
+  for f in docker-compose.dev.yaml docker-compose.dev.yml docker-compose.yaml docker-compose.yml compose.yaml compose.yml; do
+    [ -r "$1/$f" ] || continue
+    ports=$(sed -nE '/^[[:space:]]*#/d; s/.*HOST_PORT:-([0-9]+).*/\1/p' "$1/$f" | head -1)
+    [ -n "$ports" ] || ports=$(sed -nE '/^[[:space:]]*#/d
+      s/^[[:space:]]*-[[:space:]]*"?(([0-9.]+|\[[0-9a-fA-F:]+\]):)?([0-9]{2,5}):[0-9]{2,5}"?.*/\3/p
+      s/^[[:space:]]*published:[[:space:]]*"?([0-9]{2,5})"?.*/\1/p' "$1/$f")
+    [ -n "$ports" ] || { printf '?'; return 0; }
+    if [ -n "${2:-}" ]; then
+      lo=${2%-*}; hi=${2#*-}
+      for p in $ports; do
+        [ "$p" -ge "$lo" ] 2>/dev/null && [ "$p" -le "$hi" ] 2>/dev/null && { printf '%s' "$p"; return 0; }
+      done
+    fi
+    printf '%s' "${ports%%
+*}"
+    return 0
+  done
+  printf -- '-'
+}
+
+# ---------- concurrent work --------------------------------------------------
+#
+# Several features build at once — worktree subagents here, other people
+# elsewhere — so a PR's head is routinely behind the default branch by the time
+# it is reviewed, approved, or merged. A gate that judged a stale head judged
+# code that is not what will merge. Every skill that reviews, approves, or
+# merges rebases first, through this one function.
+
+# Rebase the current branch onto a freshly fetched origin/BASE and push it
+# with --force-with-lease. Prints one line on stderr saying what happened.
+#
+# Returns: 0 already up to date, or rebased and pushed;
+#          1 the rebase conflicts — it is ABORTED, the branch is unchanged, and
+#            the conflicting files are listed on stderr for the caller to STOP on;
+#          2 cannot proceed: dirty tree, detached HEAD, on the base itself, a
+#            fetch failure, or a push the lease refused (someone else pushed —
+#            fetch and re-run; never retry without the lease).
+#
+# Branch protection dismisses approvals on push, so a caller that has already
+# collected an approval must re-trigger it after a rebase — rebase BEFORE the
+# approval, and only re-check (not re-rebase) between approval and merge.
+hero_rebase_on_base() { # BASE
+  local base branch behind conflicts
+  base="$1"
+  hero_is_valid_branch "$base" || { echo "hero_rebase_on_base: not a branch name: '$base'" >&2; return 2; }
+  branch=$(git branch --show-current)
+  [ -n "$branch" ] || { echo "hero_rebase_on_base: detached HEAD — check out the PR branch first" >&2; return 2; }
+  [ "$branch" != "$base" ] || { echo "hero_rebase_on_base: on $base itself — nothing to rebase" >&2; return 2; }
+  if [ -n "$(git status --porcelain)" ]; then
+    echo "hero_rebase_on_base: working tree is dirty — commit or discard first:" >&2
+    git status --short >&2
+    return 2
+  fi
+  git fetch -q origin "$base" || { echo "hero_rebase_on_base: git fetch origin $base failed" >&2; return 2; }
+  behind=$(git rev-list --count "HEAD..origin/$base")
+  if [ "$behind" -eq 0 ]; then
+    echo "hero_rebase_on_base: $branch is up to date with origin/$base" >&2
+    return 0
+  fi
+  if ! git rebase -q "origin/$base" >/dev/null 2>&1; then
+    conflicts=$(git diff --name-only --diff-filter=U)
+    git rebase --abort
+    echo "hero_rebase_on_base: rebasing $branch onto origin/$base conflicts — aborted, branch unchanged. Conflicting files:" >&2
+    printf '  %s\n' $conflicts >&2
+    return 1
+  fi
+  git push -q --force-with-lease origin "$branch" 2>/dev/null || {
+    echo "hero_rebase_on_base: push refused by the lease — origin/$branch moved; fetch, inspect, re-run" >&2
+    return 2
+  }
+  echo "hero_rebase_on_base: rebased $branch onto origin/$base ($behind commits behind) and pushed" >&2
+}
+
+# True when DIR (default $PWD) is a linked git worktree: its `.git` is a file
+# pointing into the primary checkout. ship-pr uses this to skip the
+# default-branch reset — the default branch is checked out in the primary, so
+# `git checkout main` here fails, and the worktree is the caller's to remove.
+hero_in_worktree() { # [DIR]
+  local d
+  d="${1:-$PWD}"
+  [ -f "$d/.git" ] && grep -q '/worktrees/' "$d/.git" 2>/dev/null
+}
+
 # ---------- repo-local ignore ----------------------------------------------
 
 # Path to .git/info/exclude, resolved through git so worktrees, bare repos,
@@ -279,8 +548,17 @@ hero_exclude_add() {
 # the new name.
 # shellcheck disable=SC2120  # optional arg; callers usually rely on the default
 hero_work_store() {
-  local root store legacy
+  local root store legacy gitdir
   root="${1:-$(hero_root)}"
+  # A worktree shares the repo's items: resolve the store under the primary
+  # checkout, or a worktree gets an empty private store and a build launched
+  # there plans from nothing. Read the worktree's `.git` FILE rather than
+  # asking git: a caller with GIT_DIR exported (pre-commit hooks do) would get
+  # the answer for a different repo.
+  if [ -f "$root/.git" ]; then
+    gitdir=$(sed -n 's/^gitdir: //p' "$root/.git")
+    case "$gitdir" in */.git/worktrees/*) root=${gitdir%/.git/worktrees/*} ;; esac
+  fi
   store="$root/.plans"
 
   # Establish we can actually ignore the store BEFORE creating or migrating

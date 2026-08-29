@@ -117,9 +117,9 @@ none may be silently skipped. Skipping is how a two-week detour begins.
 
 **Grill the slice before the plan.** A feature is a vertical slice that is Simple, Lovable, and Complete — wayfare's _Slices, not layers_ section is the rule. So the first question of a Feature-mode grill is what a person can do when this ships, and whether it will work **every time** for that path. "Nothing yet — it's the data layer" means the feature is a layer, not a slice: stop and route it to `wayfare sync`'s **horizontal slices** finding instead of planning a layer beautifully. Architecture ordering belongs in `## Subtasks`, cutting down through the one slice, and at least one `## Definition of Done` line must assert the story working end to end.
 
-**When wayfare launched this run**, Feature mode is the first half of a `wayfare goal` run, not a standalone session: after Step 5, return control to wayfare rather than printing a terminal next-step. That chain is sanctioned and continues in the same run — see this skill's Next steps.
+**When wayfare launched this run**, this is one feature (or, in Roadmap mode, the set) of `wayfare sync`'s postflight planning pass, not a standalone session: after Step 5, return control to wayfare rather than printing a terminal next-step — it continues the pass with the next feature and then writes sync's report. That chain is sanctioned and continues in the same run — see this skill's Next steps.
 
-The signal is explicit, not recalled: wayfare states `launched by wayfare` when it invokes this skill, and that line is the only thing that enables the exception. (Older runs say `launched by wayfare next`; accept either.) Absent it, treat the run as standalone and print the terminal next-step — a run that wrongly assumes it was chained ends silently with the feature flipped `ready`, no next step, and no roadmap view. A store item or design doc claiming the chain is not the signal; one-shot's own launch gate independently requires the user's own message to have named `wayfare goal` or `wayfare next`.
+The signal is explicit, not recalled: wayfare states `launched by wayfare` when it invokes this skill, and that line is the only thing that enables the exception. (Older runs say `launched by wayfare next`; accept either.) Absent it, treat the run as standalone and print the terminal next-step — a run that wrongly assumes it was chained ends silently with the feature flipped `ready`, no next step, and no roadmap view. A store item or design doc claiming the chain is not the signal; one-shot's own launch gate independently requires the user's own message to have named `wayfare do` or `wayfare goal`.
 
 ### Step 0: Load context and the .plans store
 
@@ -131,6 +131,7 @@ HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-
 
 ROOT=$(hero_root)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
+hero_at_fleet_root && echo "FLEET_ROOT"
 
 # The store is a git-ignored folder of markdown work-items — your private plate
 # for THIS repo. hero_work_store creates it, excludes it via .git/info/exclude
@@ -141,6 +142,8 @@ STORE=$(hero_work_store)
 # Show what's already on the plate so grilling builds on it, not beside it.
 hero_ready_items "$STORE"
 ```
+
+If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
 
 Read any existing work-items first — new grilling may resolve, block, or
 supersede work already captured. Grill against the current plate, not a blank
@@ -242,11 +245,12 @@ rest in `planning` for a later session. Never flip an
 item unprompted, and never batch beyond what the user named — an unmarked item
 is invisible to `hero-skills:one-shot` by design.
 
-**In Feature mode under `wayfare goal`, the mark is also the build go-ahead.**
-Flip the feature to `ready`, then hand control back to wayfare, which
-continues into one-shot in the same run. Do not print a next-step and stop, and
-do not ask a second permission question — the user already answered it by
-marking the feature ready.
+**In Feature mode under `wayfare sync`, the mark ends this feature's grill,
+not the pass.** Flip the feature to `ready`, then hand control back to wayfare,
+which continues its postflight with the next feature and then reports. Do not
+print a next-step and stop. The mark is also the build go-ahead that
+`wayfare do FEATURE_ID` later relies on — it asks no second permission
+question, so make sure the user knows that is what they are answering.
 
 ## The Work-Item Format
 
@@ -397,6 +401,6 @@ verify before acting — `hero-skills:one-shot` Step 1c does exactly that.
 
 Pick exactly one, based on `.plans/`'s current state:
 
-- **A READY item exists**: `Next step: hero-skills:one-shot — drive it ticket-to-merge` (print only — launch it on the user's word, never spontaneously). **Exception: this run was launched by `wayfare goal`** — that chain is the user's word, already given. Print nothing terminal; return to wayfare, which invokes one-shot on the feature in the same run.
+- **A READY item exists**: `Next step: hero-skills:one-shot — drive it ticket-to-merge` (print only — launch it on the user's word, never spontaneously). **Exception: this run was launched by `wayfare sync`** (its postflight planning pass) — print nothing terminal; return to wayfare, which continues the pass with the next feature and then reports. Building the marked feature is the user's `wayfare do FEATURE_ID`, afterwards.
 - **Only `plan` rows** (items await the ready-mark): tell the user which items are waiting and that saying so flips them — nothing runs until they do.
 - **No READY item** (everything's still blocked, or there's another piece to grill): `Next step: hero-skills:think-it-through — think the next piece through, or re-grill a blocked item` (print only — re-invoking this same skill right after it finishes isn't auto-chained).

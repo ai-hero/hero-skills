@@ -48,7 +48,10 @@ The workflow lives at `.github/workflows/auto-approve.yaml` (or `.yml` — both 
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
+[ -f "$PWD/FLEET.md" ] && [ ! -f "$PWD/HERO.md" ] && echo "FLEET_ROOT" || true
 ```
+
+If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
 
 Read `HERO.md` if it exists. This skill uses:
 
@@ -273,6 +276,35 @@ Do not proceed. Do not post `@auto-approve`.
 
 Only when **all five gates pass** continue to Step 4.
 
+### Step 3b: Rebase onto the Base — Before the Trigger, Never After the Verdict
+
+**Rebase onto the base before judging anything.** Work is concurrent — other
+branches merge while this PR waits — so the head on the branch is routinely
+behind the base, and a review of a stale head reviews code that is not what
+will merge.
+
+```bash
+HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+[ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel)/scripts/hero-lib.sh"
+# shellcheck source=/dev/null
+. "$HERO_LIB"
+BASE_BRANCH=${BASE_BRANCH:-$(hero_default_branch)}
+hero_rebase_on_base "$BASE_BRANCH"; echo "REBASE_RC=$?"
+```
+
+`REBASE_RC=0` continues (up to date, or rebased and pushed — say which).
+`1` is a conflict: the rebase was aborted and the branch is unchanged; STOP,
+list the conflicting files it printed, and hand back to the user — never
+resolve a conflict on someone's behalf. `2` cannot proceed (dirty tree,
+detached HEAD, fetch or lease failure): STOP with its message.
+
+This runs **before** `@auto-approve`, not after: branch protection dismisses
+approvals on push, so a rebase after the verdict would throw the verdict
+away. Between the verdict and the merge, Step 7 only *re-reads*
+`mergeStateStatus`; if the base moved again (`BEHIND`) or the merge became
+`DIRTY`, come back here once — rebase, re-trigger, re-wait — and if it is
+still not clean after that, STOP and say what keeps moving underneath it.
+
 ### Step 4: Post the @auto-approve Trigger Comment
 
 Record the timestamp first so we can find the workflow run we just triggered without confusing it with prior runs.
@@ -455,6 +487,8 @@ esac
 MERGE_FLAG="--$MERGE_METHOD"
 
 gh pr view $PR_NUMBER --json mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,headRefName
+# mergeStateStatus BEHIND or DIRTY here → Step 3b once (rebase, re-trigger,
+# re-wait), then STOP. Never merge a head that is behind the base.
 ```
 
 **Then check for stacked PRs — before the merge, not after.** Any open PR
@@ -608,8 +642,16 @@ RESET_OK=true   # cleared if any sync step (checkout/pull/fetch) fails. Gates
                 # the cleanup steps below — never delete branches based on a
                 # stale local view of $BASE_BRANCH.
 
+# shellcheck source=/dev/null
+. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
 if [ "$MERGED" != "true" ]; then
   echo "Merge not yet recorded — skipping branch reset."
+elif hero_in_worktree; then
+  # A linked worktree cannot check out the default branch — it is checked out
+  # in the primary — and its branch is deleted by whoever removes the worktree
+  # (wayfare's goal turn, or the user with `git worktree remove`).
+  RESET_OK=true
+  echo "Linked worktree: merge landed; leaving $PR_BRANCH checked out here. Remove the worktree to finish: git worktree remove $(pwd)"
 else
   # 1. Switch to BASE_BRANCH first if we are still on the merged head.
   #    Hard-failing checkout post-merge would leave the user stuck on the

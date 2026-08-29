@@ -139,7 +139,10 @@ See [HERO.md](./HERO.md) for coding conventions detected from the codebase.
 
 ```bash
 ls "$ROOT/HERO.md" 2>/dev/null && echo "EXISTS" || echo "NEW"
+[ -f "$PWD/FLEET.md" ] && [ ! -f "$PWD/HERO.md" ] && echo "FLEET_ROOT" || true
 ```
+
+If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
 
 If `HERO.md` exists and `--update` was not passed, show current config and ask if user wants to update it. If `--update`, read the existing file to compare against new findings.
 
@@ -524,7 +527,7 @@ grep -E "port\|PORT\|:3000\|:8000\|:8080\|:5173\|:4000" pyproject.toml package.j
 **What to look for:**
 
 - Language and framework from dependency files
-- Monorepo structure (workspaces, nx, turborepo, multiple pyproject.toml)
+- Monorepo structure (nx, turborepo, `workspaces` in `package.json`, multiple `pyproject.toml`) — one repo with many packages. A folder of sibling checkouts is a **fleet**, mapped by `FLEET.md` (`hero-skills:fleet`), and is not a monorepo
 - **Dependency file** per project (pyproject.toml, package.json, go.mod, etc.) — needed by `hero-skills:harden` and `hero-skills:push-pr`'s test phase
 - **Lock file** → identifies the package manager (pnpm-lock.yaml → pnpm, yarn.lock → yarn, etc.)
 - **Install command** (e.g., `uv sync`, `pnpm install`) — needed by `hero-skills:push-pr`'s test phase before running

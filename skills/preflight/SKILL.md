@@ -44,7 +44,10 @@ Exit code is `1` if any `BLOCKER` fired, `0` otherwise. Warnings never block.
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
+[ -f "$PWD/FLEET.md" ] && [ ! -f "$PWD/HERO.md" ] && echo "FLEET_ROOT" || true
 ```
+
+If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
 
 If `HERO.md` is missing, mention it but still run `scripts/preflight.sh` — the script itself reports the missing-HERO blocker with a useful next step (`hero-skills:init-hero`).
 

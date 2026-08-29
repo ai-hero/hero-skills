@@ -146,6 +146,7 @@ if [ "$rc" = 0 ]; then ROOT=$GIT_OUT
 elif printf '%s' "$GIT_OUT" | grep -qi 'not a git repository'; then ROOT=$(pwd)
 else echo "STOP: git failed, not a missing repo: $GIT_OUT"; ROOT=GIT_ERROR
 fi
+[ -f "$PWD/FLEET.md" ] && [ ! -f "$PWD/HERO.md" ] && echo "FLEET_ROOT" || true
 
 # NO_GIT covers both "not a repo" and "empty repo, no commits yet" — the
 # write gates below must distinguish and say which; the sentinel itself must
@@ -182,6 +183,8 @@ SOURCE_REF=$(sed -n '3s/^> Last updated: .* · Source ref: \([0-9a-f]\{40\}\)$/\
 HERO_SECTIONS=$(awk '/^## (Repository|Projects|Deployment)[[:space:]]*$/{f=1;print;next} /^## /{f=0} f' "$ROOT/HERO.md" 2>/dev/null) # hero-lint: allow-inline — display only; whole sections read into context, no values parsed
 [ -n "$HERO_SECTIONS" ] && printf '%s\n' "$HERO_SECTIONS" || echo "NO_HERO_SECTIONS"
 ```
+
+If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
 
 **If any line above printed STOP, stop** — `ROOT=GIT_ERROR` is a sentinel
 that must never reach a read or write below; an unreadable DESIGN.md
