@@ -1561,10 +1561,13 @@ finding for the review and the user's call.
    already knows:
 
    ```bash
+   # A failed listing is not "no bot PRs": this call decides whether the verb
+   # does anything at all.
    gh pr list --state open --author app/dependabot \
-     --json number,title,headRefName,url,createdAt,mergeStateStatus,statusCheckRollup
-   # harden A1's call and sentinel, verbatim: a failed call is not zero alerts —
-   # print `severity: unknown` on every row rather than `none`.
+     --json number,title,headRefName,url,createdAt,mergeStateStatus,statusCheckRollup \
+     || echo "DEPENDABOT_PRS_UNAVAILABLE — gh failed; this is not zero PRs. STOP."
+   # harden A1's sentinel: a failed call is not zero alerts — print
+   # `severity: unknown` on every row rather than `none`.
    gh api repos/{owner}/{repo}/dependabot/alerts \
      --jq '.[] | select(.state == "open") | {number, severity: .security_advisory.severity, package: .dependency.package.name, summary: .security_advisory.summary}' \
      || echo "DEPENDABOT_ALERTS_UNAVAILABLE — check that alerts are enabled for this repo and the token has the security_events/repo scope"
@@ -1597,7 +1600,12 @@ finding for the review and the user's call.
    that never moves is a STOP ("Dependabot did not respond — is it enabled
    for this repo?"), never a local rebase. Flip the item to `implementing`
    here — this is the first act on the PR.
-5. **Review.** The generic review agents have nothing to find in a lockfile
+5. **Test.** `gh pr checkout N`, then `hero-skills:push-pr test` — the test
+   phase alone: lint, typecheck, unit, UI smoke, no commit, no push. This
+   runs before the review because `gh pr review` cannot be amended: an
+   APPROVE posted before the tests would stand on an untested bump if the
+   run died in between, and both gates would accept it.
+6. **Review.** The generic review agents have nothing to find in a lockfile
    and a bot description to be pedantic about — the same reason the workflow
    keeps the model off these PRs — so the review is a dependency judgment,
    made here and posted from this account:
@@ -1612,14 +1620,12 @@ finding for the review and the user's call.
 
    Humanize it (`hero-skills:my-humanizer inline`), then post **one** review:
    `gh pr review N --approve --body …` when the class is patch/minor, or a
-   major whose call sites are clean, and CI is green; otherwise
-   `--request-changes` naming what fails, and STOP — the fix is a person's
+   major whose call sites are clean, CI is green, and Step 5 was green;
+   otherwise `--request-changes` naming what fails (the local test failure
+   included), and STOP — the fix is a person's
    change, not this verb's. Either state satisfies the "prior review" gate
    that ship-pr and `auto-approve.yaml` both check (a non-author review that
    is not `PENDING`); a `--comment` review would too, but says nothing.
-6. **Test.** `gh pr checkout N`, then `hero-skills:push-pr test` — the test
-   phase alone: lint, typecheck, unit, UI smoke, no commit, no push. Red →
-   amend the review to `--request-changes` with the failure and STOP.
 7. **Ship.** Flip the item to `reviewing`, append the PR URL to
    `## Comments`, and invoke `hero-skills:ship-pr N`: gates, `@auto-approve`,
    verdict, the user's merge confirmation, merge, reset, verify-deploy. Its
@@ -1800,14 +1806,14 @@ id: 31
 kind: security
 origin: wayfare
 title: Bump lodash from 4.17.20 to 4.17.21
-status: todo # new | todo | ready | implementing | reviewing | done — no planning: the bot's PR is the plan
+status: todo # new | todo | ready | implementing | reviewing | done
 depends_on: []
-bot: dependabot # set only on a bot's PR — this is what routes the item to `deps`; `pr:` alone is just a record
+bot: dependabot # the only value `deps` handles today. Set only on a bot's PR — this is what routes the item to `deps`; `pr:` alone is just a record
 pr: https://github.com/OWNER/REPO/pull/41 # the bot's PR — the one that merges; never a copy of its diff
 severity: high # from the Dependabot alert; `none` = version-only bump, `unknown` = alerts unreadable this run
 source: package.json, package-lock.json
 source_ref: FULL_COMMIT_SHA
-success: "#41 merged, the lodash alert closed, deployment HEALTHY (or no platform configured)"
+success: "PR 41 merged, the lodash alert closed, deployment HEALTHY (or no platform configured)" # never start this value with #: hero_item_field strips ` #…` as a comment
 ---
 
 ## Context
@@ -1817,8 +1823,8 @@ Bump class, the alert it closes and whether the vulnerable path is reachable her
 ## Subtasks
 
 - [ ] 1. PR current with DEFAULT_BRANCH (bot-rebased, never ours)
-- [ ] 2. Review posted from this account — class, release notes read, call sites checked
-- [ ] 3. Local test phase green on the checked-out branch (`push-pr test`)
+- [ ] 2. Local test phase green on the checked-out branch (`push-pr test`)
+- [ ] 3. Review posted from this account — class, release notes read, call sites checked
 - [ ] 4. `ship-pr`: `@auto-approve` APPROVE, merged
 - [ ] 5. Deployment verified after the merge's own runs finished
 

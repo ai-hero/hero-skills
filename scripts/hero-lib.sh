@@ -114,10 +114,10 @@ hero_md_field() {
 # Read a single `- key: value` field from HERO.md.
 #   hero_field default-branch
 #   hero_field bot-username
-# First match wins across sections. Keys known to repeat — `platform` (CI/CD
-# and Deployment), `health-endpoint` (several per Deployment) — must be read
-# with hero_md_field and a BLOCK, or the CI/CD value answers a Deployment
-# question.
+# First match wins, across sections and within one. `platform` repeats across
+# sections (CI/CD and Deployment): read it with hero_md_field and a BLOCK, or
+# the CI/CD value answers a Deployment question. `health-endpoint` repeats
+# within a section and needs its own scan (see ship-pr).
 hero_field() {
   local root
   root="${2:-$(hero_root)}"
@@ -543,30 +543,29 @@ hero_exclude_add() {
 
 # ---------- PR review markers ----------------------------------------------
 
-# review-pr stamps this into its self-review comment; one-shot Step 5, ship-pr
-# Step 3a, resume-state, and auto-approve.yaml's prior-review gate all look
-# for it. Change it here and in the workflow together, or the gate stops
-# recognizing every self-review.
+# The literal lives in three places that cannot share a variable: review-pr
+# (which stamps it into the comment), auto-approve.yaml (the fleet's
+# prior-review gate, two sites), and here (ship-pr, one-shot, resume-state).
+# Change all three together or the gate stops recognizing every self-review.
 HERO_SELF_REVIEW_MARKER='ai-hero:self-review'
 
-# Count of self-review comments on a PR. Prints nothing and returns 1 when
-# the API call fails — an empty count must never read as zero.
+# Count of self-review comments on a PR, posted by the authenticated account.
+# The author filter is the whole point: the marker is a plain string anyone
+# can post, and without the filter a stranger's comment on a public repo lets
+# an unattended goal turn resume past self-review. Prints nothing and returns
+# non-zero when either API call fails — callers must branch on the rc, since
+# an empty count read as a number is zero, the value that means "no review".
 hero_self_review_count() { # PR_NUMBER
+  local me
+  me=$(gh api user --jq .login) || return 1
   gh api "/repos/{owner}/{repo}/issues/$1/comments" \
-    --jq "[.[] | select(.body | test(\"$HERO_SELF_REVIEW_MARKER\"))] | length" 2>/dev/null
+    --jq "[.[] | select(.user.login == \"$me\") | select(.body | test(\"$HERO_SELF_REVIEW_MARKER\"))] | length"
 }
 
 # ---------- the .plans store ------------------------------------------------
 
-# Absolute path to the work-item store, created and git-ignored on first use.
-# A dot-directory: tool-private state, like `.beads/` — it keeps the repo root
-# clean and is far less likely to collide with a real project directory.
-#
-# One-time migration: the store was formerly `my-work/`, and before that
-# `plan-work/`. Move a legacy store rather than orphaning its items behind
-# the new name.
-# Where the store IS, without creating it: read-only callers (resume-state)
-# need the path and must not mkdir or touch .git/info/exclude.
+# Path of the store without creating it: read-only callers must not mkdir or
+# touch .git/info/exclude.
 # A worktree shares the repo's items: resolve the store under the primary
 # checkout, or a worktree gets an empty private store and a build launched
 # there plans from nothing. Read the worktree's `.git` FILE rather than
@@ -582,6 +581,13 @@ hero_store_path() { # [ROOT]
   printf '%s' "$root/.plans"
 }
 
+# Absolute path to the work-item store, created and git-ignored on first use.
+# A dot-directory: tool-private state, like `.beads/` — it keeps the repo root
+# clean and is far less likely to collide with a real project directory.
+#
+# One-time migration: the store was formerly `my-work/`, and before that
+# `plan-work/`. Move a legacy store rather than orphaning its items behind
+# the new name.
 # shellcheck disable=SC2120  # optional arg; callers usually rely on the default
 hero_work_store() {
   local root store legacy

@@ -600,8 +600,8 @@ item 075-pol.md 75 "Dashboard header spacing" "ready" "[]" "polish"
 item 076-poltodo.md 76 "Card grid gutters" "todo" "[]" "polish"
 item 077-polrev.md 77 "Polish PR in review" "reviewing" "[]" "polish"
 # `security` (a bot's bump PR taken to deployment by `wayfare deps`, or a
-# harden fix) rides the build enum too; left off the class table it would list as backlog and
-# never be handed out.
+# harden fix) rides the build enum. Left off the class table it rides the
+# unknown enum instead: ready lists as invalid, todo as backlog — never READY.
 item 078-dep.md 78 "Bump lodash to 4.17.21" "ready" "[]" "security"
 item 079-deptodo.md 79 "Bump minimist" "todo" "[]" "security"
 item 080-deprev.md 80 "Bump in review" "reviewing" "[]" "security"
@@ -773,6 +773,12 @@ check "store: shadowed plan-work warned loudly" "0" "$?"
 # see it or the worktree is created against hero-skills itself.
 R5="$TMP/wt-main"; git init -q "$R5"; git -C "$R5" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
 (unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE; git -C "$R5" worktree add -q "$TMP/wt-side" -b side 2>/dev/null)
+# hero_store_path is the read-only half: it must answer without creating the
+# store or touching the exclude file, or resume-state becomes a writer.
+R6="$TMP/r6"; git init -q "$R6"
+check "store_path: prints the store path"             "$R6/.plans" "$(hero_store_path "$R6")"
+check "store_path: does not create the store"         "no" "$([ -e "$R6/.plans" ] && echo yes || echo no)"
+check "store_path: exclude untouched"                 "no" "$(grep -qs "\.plans" "$R6/.git/info/exclude" && echo yes || echo no)"
 check "store: a worktree resolves to the primary checkout's .plans" \
   "$(cd "$R5" && pwd -P)/.plans" "$(hero_work_store "$TMP/wt-side" 2>/dev/null)"
 
@@ -866,6 +872,31 @@ branch_case "release/2.0"          "release/2.0"
 
 # ---------- report ---------------------------------------------------------
 
+# ---------- hero_self_review_count -----------------------------------------
+#
+# The stub honors --jq: a stub that cats raw JSON makes the function print an
+# array, which compares equal to nothing and passes an assertion by accident.
+mkdir -p "$TMP/ghbin"
+cat > "$TMP/ghbin/gh" <<'GH'
+#!/bin/sh
+[ -n "${GH_FAIL:-}" ] && exit 1
+Q=""
+while [ $# -gt 0 ]; do [ "$1" = --jq ] && { shift; Q=$1; }; shift; done
+if [ "$Q" = ".login" ]; then echo me; else jq "$Q" "$(dirname "$0")/comments.json"; fi
+GH
+chmod +x "$TMP/ghbin/gh"
+cat > "$TMP/ghbin/comments.json" <<'JSON'
+[{"body":"lgtm","user":{"login":"me"}},
+ {"body":"<!-- ai-hero:self-review -->","user":{"login":"stranger"}},
+ {"body":"<!-- ai-hero:self-review -->","user":{"login":"me"}}]
+JSON
+check "self-review count: only own marker comments"  "1" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_count 7)"
+check "self-review count: gh failure prints nothing" ""  "$(GH_FAIL=1 PATH="$TMP/ghbin:$PATH" hero_self_review_count 7 2>/dev/null)"
+GH_FAIL=1 PATH="$TMP/ghbin:$PATH" hero_self_review_count 7 >/dev/null 2>&1
+check "self-review count: gh failure returns non-zero" "no" "$([ $? -eq 0 ] && echo yes || echo no)"
+# The workflow carries its own copy of the marker; the two must agree.
+check "self-review marker matches the workflow's" "yes" "$(grep -q "$HERO_SELF_REVIEW_MARKER" "$(dirname "$0")/../.github/workflows/auto-approve.yaml" && echo yes || echo no)"
+
 if [ "$FAIL" -gt 0 ]; then
   echo "hero-lib: $PASS passed, $FAIL FAILED"
   exit 1
@@ -876,7 +907,7 @@ fi
 # refactor that silently stops executing 25 cases still reports 0 failures and
 # exits 0. The whole reason these cases exist is that each one could be wrong
 # SILENTLY; the suite must not be able to go quiet the same way.
-MIN_CASES=99
+MIN_CASES=106
 if [ "$PASS" -lt "$MIN_CASES" ]; then
   echo "hero-lib: only $PASS cases ran, expected >= $MIN_CASES — a block stopped executing" >&2
   exit 1
