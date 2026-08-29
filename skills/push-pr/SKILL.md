@@ -574,6 +574,8 @@ If the `simplify` skill is unavailable in this environment, report `NO_SIMPLIFY_
 - [ ] No over-engineering
 - [ ] Could this be simpler?
 
+Then the **humanizer pass**: `hero-skills:my-humanizer inline` over the prose this diff adds or rewrites — code comments, docstrings, README/docs/CHANGELOG text, error and log messages a person reads. The same pass covers every prose this skill emits: the commit body (3f) and the PR body (A3), drafted first, humanized once.
+
 #### 3d: Ruthless Code Review
 
 Additional checks beyond simplify:
@@ -639,6 +641,8 @@ EOF
 ```
 
 **Types:** feat, fix, refactor, docs, style, test, chore, perf
+
+A commit body, when written, is humanized (3c) before the commit.
 
 **If issue ID in branch name:** Add `Fixes: PROJ-123` or `Relates to: PROJ-123`.
 
@@ -746,7 +750,7 @@ fi
 PR_TITLE="$(git log origin/$DEFAULT_BRANCH..HEAD --pretty=%s | head -1)"
 ```
 
-**Generate PR content by listing each commit as a changeset with its files and description.** Keep the title unbranded (no "Hero"/"hero-skills"). End the body with exactly one attribution line, `_Generated using hero-skills._`:
+**Generate PR content by listing each commit as a changeset with its files and description.** Keep the title unbranded (no "Hero"/"hero-skills"). Humanize the drafted body (3c) before creating. End the body with exactly one attribution line, `_Generated using hero-skills._`:
 
 ```bash
 gh pr create $DRAFT_FLAG --base "$DEFAULT_BRANCH" --title "$PR_TITLE" --body "$(cat <<'EOF'

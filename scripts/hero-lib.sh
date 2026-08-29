@@ -114,6 +114,10 @@ hero_md_field() {
 # Read a single `- key: value` field from HERO.md.
 #   hero_field default-branch
 #   hero_field bot-username
+# First match wins, across sections and within one. `platform` repeats across
+# sections (CI/CD and Deployment): read it with hero_md_field and a BLOCK, or
+# the CI/CD value answers a Deployment question. `health-endpoint` repeats
+# within a section and needs its own scan (see ship-pr).
 hero_field() {
   local root
   root="${2:-$(hero_root)}"
@@ -537,7 +541,45 @@ hero_exclude_add() {
   return "$rc"
 }
 
+# ---------- PR review markers ----------------------------------------------
+
+# The literal lives in three places that cannot share a variable: review-pr
+# (which stamps it into the comment), auto-approve.yaml (the fleet's
+# prior-review gate, two sites), and here (ship-pr, one-shot, resume-state).
+# Change all three together or the gate stops recognizing every self-review.
+HERO_SELF_REVIEW_MARKER='ai-hero:self-review'
+
+# Count of self-review comments on a PR, posted by the authenticated account.
+# The author filter is the whole point: the marker is a plain string anyone
+# can post, and without the filter a stranger's comment on a public repo lets
+# an unattended goal turn resume past self-review. Prints nothing and returns
+# non-zero when either API call fails — callers must branch on the rc, since
+# an empty count read as a number is zero, the value that means "no review".
+hero_self_review_count() { # PR_NUMBER
+  local me
+  me=$(gh api user --jq .login) || return 1
+  gh api "/repos/{owner}/{repo}/issues/$1/comments" \
+    --jq "[.[] | select(.user.login == \"$me\") | select(.body | test(\"$HERO_SELF_REVIEW_MARKER\"))] | length"
+}
+
 # ---------- the .plans store ------------------------------------------------
+
+# Path of the store without creating it: read-only callers must not mkdir or
+# touch .git/info/exclude.
+# A worktree shares the repo's items: resolve the store under the primary
+# checkout, or a worktree gets an empty private store and a build launched
+# there plans from nothing. Read the worktree's `.git` FILE rather than
+# asking git: a caller with GIT_DIR exported (pre-commit hooks do) would get
+# the answer for a different repo.
+hero_store_path() { # [ROOT]
+  local root gitdir
+  root="${1:-$(hero_root)}"
+  if [ -f "$root/.git" ]; then
+    gitdir=$(sed -n 's/^gitdir: //p' "$root/.git")
+    case "$gitdir" in */.git/worktrees/*) root=${gitdir%/.git/worktrees/*} ;; esac
+  fi
+  printf '%s' "$root/.plans"
+}
 
 # Absolute path to the work-item store, created and git-ignored on first use.
 # A dot-directory: tool-private state, like `.beads/` — it keeps the repo root
@@ -548,18 +590,9 @@ hero_exclude_add() {
 # the new name.
 # shellcheck disable=SC2120  # optional arg; callers usually rely on the default
 hero_work_store() {
-  local root store legacy gitdir
-  root="${1:-$(hero_root)}"
-  # A worktree shares the repo's items: resolve the store under the primary
-  # checkout, or a worktree gets an empty private store and a build launched
-  # there plans from nothing. Read the worktree's `.git` FILE rather than
-  # asking git: a caller with GIT_DIR exported (pre-commit hooks do) would get
-  # the answer for a different repo.
-  if [ -f "$root/.git" ]; then
-    gitdir=$(sed -n 's/^gitdir: //p' "$root/.git")
-    case "$gitdir" in */.git/worktrees/*) root=${gitdir%/.git/worktrees/*} ;; esac
-  fi
-  store="$root/.plans"
+  local root store legacy
+  store=$(hero_store_path "${1:-}")
+  root=${store%/.plans}
 
   # Establish we can actually ignore the store BEFORE creating or migrating
   # anything. Doing it after meant a non-git directory got a store created and
@@ -707,7 +740,7 @@ hero_item_status() {
 hero_item_class() {
   case "$1" in
     ''|work-order|hardening)                                      printf plain ;;
-    feature|architecture|polish)                                  printf build ;;
+    feature|architecture|polish|security)                         printf build ;;
     goal)                                                         printf goal ;;
     design-feedback|architecture-feedback|design-system-feedback) printf feedback ;;
     *)
@@ -761,7 +794,7 @@ hero_norm_id() {
 #             LEGACY: every producer now writes a build kind. The arm stays so
 #             existing stores keep listing; dropping it would demote every
 #             pre-rule item to backlog with a stderr line as the only trace
-#   build     feature / architecture / polish — new | todo | planning | ready |
+#   build     feature / architecture / polish / security — new | todo | planning | ready |
 #             implementing | reviewing | done, mapped here as
 #             new | backlog | plan | READY-eligible |
 #             active | review | done. For a build kind, `ready` (not `todo`) is

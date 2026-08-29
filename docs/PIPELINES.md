@@ -58,7 +58,7 @@ present from commit one onward.
 plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship
 ```
 
-Owner: `hero-skills:one-shot`. Invoked with an issue ID or description it starts at `plan`; invoked with no arguments it resumes the current goal (in-progress branch/diff/PR on the current branch) from the detected step and drives it — through the usual user gates — to merged + a reset checkout. Nine steps — each maps to a single skill (or `inline` when one-shot drives it directly without delegating):
+Owner: `hero-skills:one-shot`. Invoked with an issue ID or description it starts at `plan`; invoked with no arguments it resumes the current goal (in-progress branch/diff/PR on the current branch, plus the in-flight item's `## Subtasks` checklist — the plan file is the state file, so a run that died mid-implement resumes at its first unchecked line) from the detected step and drives it — through the usual user gates — to merged + a reset checkout. Nine steps — each maps to a single skill (or `inline` when one-shot drives it directly without delegating):
 
 | # | Step | Skill to run standalone | Notes |
 |---|------|-------------------------|-------|
@@ -140,3 +140,15 @@ Owner: `hero-skills:init-hero`. Four steps:
 
 Run by itself (`hero-skills:init-hero` or `hero-skills:init-hero --update`) or
 as the third step of Pipeline 1.
+
+### Pipeline 4: wayfare deps — one Dependabot PR to merged and deployed
+
+```
+gather → select → ready-mark → current → review → test → ship → close-out
+```
+
+Owner: `hero-skills:wayfare deps [PR_NUMBER]` — see its `deps` verb for the
+steps. The bot already implemented the bump, so there is no `implement` and
+no PR of ours; `test` and `ship` delegate to `hero-skills:push-pr test` and
+`hero-skills:ship-pr`, and the item is `done` only once the deployment
+verifies.

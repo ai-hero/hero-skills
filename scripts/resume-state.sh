@@ -19,6 +19,13 @@
 #   UNPUSHED                         commits past the branch's own upstream
 #   PR_EXISTS PR_NUMBER PR_STATE PR_IS_DRAFT PR_REVIEW
 #   SELF_REVIEW_DONE BOT_REPLIED
+#   ITEM_INFLIGHT ITEM_FILE          active .plans items (goals and bot PRs excluded);
+#                                    the file bound to this branch, or the single
+#                                    unbranched one. `unknown` when the store failed
+#   SUBTASKS_OPEN SUBTASKS_TOTAL     unchecked / all lines in that item's ## Subtasks
+#   DOD_OPEN DOD_TOTAL               same for its ## Definition of Done. EMPTY, not 0,
+#                                    when ITEM_FILE is empty — 0 would claim a
+#                                    checklist that was never read
 #   STATE_OK STATE_ERRORS            aggregate health + which sources failed
 #
 # THE UNKNOWN/ZERO RULE
@@ -181,9 +188,12 @@ if [ "$PR_EXISTS" = "false" ]; then
   SELF_REVIEW_DONE=0
   BOT_REPLIED=false
 elif [ "$PR_EXISTS" = "true" ]; then
+  # The self-review count is author-filtered (see hero_self_review_count);
+  # an unknown login must not silently count zero self-reviews.
+  ME=$(gh api user --jq .login 2>/dev/null) || { ME=""; fail_source "gh-user"; }
   if COMMENTS=$(gh api "/repos/{owner}/{repo}/issues/$PR_NUMBER/comments" 2>/dev/null); then
     SELF_REVIEW_DONE=$(printf '%s' "$COMMENTS" \
-      | jq '[.[] | select(.body | test("ai-hero:self-review"))] | length' 2>/dev/null) \
+      | jq --arg m "$HERO_SELF_REVIEW_MARKER" --arg me "$ME" '[.[] | select(.user.login == $me) | select(.body | test($m))] | length' 2>/dev/null) \
       || { SELF_REVIEW_DONE=unknown; fail_source "self-review-count"; }
 
     # BOT_REPLIED is only meaningful if we know who the bot is. Without
@@ -215,6 +225,104 @@ elif [ "$PR_EXISTS" = "true" ]; then
   fi
 fi
 
+# ---------- work-item state ------------------------------------------------
+
+# The in-flight item's checklists are the only record of where one-shot's
+# Step 2 stopped: `.plans/` is git-ignored, so the diff says what changed but
+# not which subtask was mid-way. hero_store_path, not hero_work_store: this
+# script is read-only.
+#
+# Which active item is THIS branch's: the one whose `branch:` matches (one-shot
+# Step 2 writes it at the first edit). Under `wayfare goal` every worktree's
+# feature is `implementing` in the shared store, so "the single active item"
+# is not a rule that holds there. Items without `branch:` predate the field;
+# for those, a single one is taken and two is a claim conflict.
+ITEM_INFLIGHT=0
+ITEM_FILE=""
+SUBTASKS_OPEN=""; SUBTASKS_TOTAL=""; DOD_OPEN=""; DOD_TOTAL=""
+
+STORE=$(hero_store_path 2>/dev/null)
+if [ -n "$STORE" ] && [ -d "$STORE" ]; then
+  # stderr stays visible: it carries hero_ready_items' reason for each invalid
+  # row, and the caller's eval consumes stdout only.
+  if ROWS=$(hero_ready_items "$STORE"); then
+    # An invalid row may be the item being built (`status: in_progress`);
+    # dropping it would read as "nothing in flight" and route past its
+    # unchecked subtasks.
+    case "$ROWS" in invalid*|*"
+invalid"*) fail_source "store-invalid-item" ;; esac
+    MATCHED=""; LEGACY=""; LEGACY_N=0
+    while read -r state f _; do
+      [ "$state" = active ] || continue
+      # hero_ready_items owns the status enum; `active` is its word for
+      # in-progress (plain) and implementing (build). A goal at active is a
+      # set of features, not the item on this branch; a `bot:` item is a
+      # dependency bot's PR that wayfare deps carries, never one-shot's.
+      kind=$(hero_item_field "$STORE/$f" kind | tr '[:upper:]' '[:lower:]')
+      [ "$(hero_item_class "$kind" "$f" 2>/dev/null)" = goal ] && continue
+      [ -n "$(hero_item_field "$STORE/$f" bot)" ] && continue
+      ITEM_INFLIGHT=$((ITEM_INFLIGHT + 1))
+      branch=$(hero_item_field "$STORE/$f" branch)
+      if [ -n "$branch" ]; then
+        [ "$branch" = "$CURRENT_BRANCH" ] && MATCHED="$MATCHED$f "
+      else
+        LEGACY="$f"; LEGACY_N=$((LEGACY_N + 1))
+      fi
+    done <<EOF
+$ROWS
+EOF
+    set -- $MATCHED
+    if [ $# -eq 1 ]; then
+      ITEM_FILE="$STORE/$1"
+    elif [ $# -gt 1 ]; then
+      fail_source "item-claim-conflict"
+    elif [ "$LEGACY_N" -eq 1 ]; then
+      ITEM_FILE="$STORE/$LEGACY"
+    elif [ "$LEGACY_N" -gt 1 ]; then
+      # Two unbranched claims on the store is not a choice this script makes.
+      fail_source "item-claim-conflict"
+    fi
+  else
+    ITEM_INFLIGHT=unknown
+    fail_source "work-store"
+  fi
+fi
+
+# Counts within one `## ` section: unchecked and all checklist lines, as
+# `OPEN TOTAL`. A missing section is 0 0 — distinguishable from an all-ticked
+# one only by TOTAL, which is why both are emitted. The heading compare trims
+# trailing whitespace like hero_md_field does; `## Subtasks ` from a hand edit
+# must not read as "no section".
+checklist_counts() { # FILE SECTION
+  awk -v sec="## $2" '
+    /^## / { h = $0; sub(/[ \t]+$/, "", h); in_s = (h == sec); next }
+    in_s && /^[ \t]*([-*]|[0-9]+\.)[ \t]+\[[ xX]\]/ {
+      total++
+      if ($0 ~ /^[ \t]*([-*]|[0-9]+\.)[ \t]+\[ \]/) open++
+    }
+    END { printf "%d %d", open + 0, total + 0 }
+  ' "$1"
+}
+# BSD awk prints nothing on an unopenable file; gawk still runs END and prints
+# `0 0`. Neither is a count, so validate the shape rather than the rc alone.
+if [ -n "$ITEM_FILE" ]; then
+  for SECTION in "Subtasks" "Definition of Done"; do
+    COUNTS=$(checklist_counts "$ITEM_FILE" "$SECTION" 2>/dev/null) && [ -r "$ITEM_FILE" ] \
+      && printf '%s' "$COUNTS" | grep -Eq '^[0-9]+ [0-9]+$' \
+      || { COUNTS="unknown unknown"; fail_source "item-checklist"; }
+    case "$SECTION" in
+      Subtasks) read -r SUBTASKS_OPEN SUBTASKS_TOTAL <<EOF
+$COUNTS
+EOF
+      ;;
+      *) read -r DOD_OPEN DOD_TOTAL <<EOF
+$COUNTS
+EOF
+      ;;
+    esac
+  done
+fi
+
 STATE_OK=true
 [ -n "$STATE_ERRORS" ] && STATE_OK=false
 
@@ -230,5 +338,11 @@ emit PR_IS_DRAFT      "$PR_IS_DRAFT"
 emit PR_REVIEW        "$PR_REVIEW"
 emit SELF_REVIEW_DONE "$SELF_REVIEW_DONE"
 emit BOT_REPLIED      "$BOT_REPLIED"
+emit ITEM_INFLIGHT    "$ITEM_INFLIGHT"
+emit ITEM_FILE        "$ITEM_FILE"
+emit SUBTASKS_OPEN    "$SUBTASKS_OPEN"
+emit SUBTASKS_TOTAL   "$SUBTASKS_TOTAL"
+emit DOD_OPEN         "$DOD_OPEN"
+emit DOD_TOTAL        "$DOD_TOTAL"
 emit STATE_OK         "$STATE_OK"
 emit STATE_ERRORS     "$STATE_ERRORS"

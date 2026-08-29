@@ -88,6 +88,8 @@ gh pr list --author "app/dependabot" --state open --json number,title,headRefNam
 
 For each PR, view the diff and extract: package name, version change, file affected. An open Dependabot PR is *evidence for the plan* — note whether the plan item should say "merge Dependabot PR #N" or "apply the update manually" (e.g., when the PR is stale or conflicts).
 
+A bot PR that can merge as it stands is not harden's to re-implement: `hero-skills:wayfare deps N` takes that one PR — review, tests, `@auto-approve`, merge, deployment check — without a copy of its diff. Harden's batch (A4) exists for the alerts no PR covers, and for bumps that must be tested together.
+
 ### A3: Judge Each Alert
 
 For each open alert, read enough of the codebase to judge (this is the expensive-model work):
@@ -217,7 +219,7 @@ Write each unit as a work-item in `.plans/` using think-it-through's format (id 
 ```markdown
 ---
 id: 12
-kind: feature # every item is a wayfare item; `architecture` when the fix is structural (a boundary, a trust decision) rather than a patch
+kind: security # every item is a wayfare item; `security` for a CVE fix, a bump batch, an image bump; `architecture` when the fix is structural (a boundary, a trust decision) rather than a patch
 origin: harden
 title: Update lodash + minimist for critical CVEs
 status: planning # the user marks audit plans ready — audit output never goes straight to build

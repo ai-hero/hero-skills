@@ -61,6 +61,7 @@ case "\$*" in
 $1
 PRJSON
   ;;
+  *"api user"*) echo me ;;
   *"api"*) cat <<'CJSON'
 $2
 CJSON
@@ -94,6 +95,19 @@ check "non-draft PR: review decision passes through" "APPROVED" "$(val PR_REVIEW
 make_gh '[{"number":42,"url":"u","isDraft":true,"reviewDecision":null,"state":"OPEN"}]' '[]'
 OUT="$(run)"
 check "draft PR emits the string true" "true" "$(val PR_IS_DRAFT)"
+
+# The marker is a plain string anyone can post. Only the authenticated
+# account's comment counts, and a plain comment counts for nobody — an empty
+# marker would make jq's test("") match every comment and route straight to
+# mark-ready.
+make_gh '[{"number":42,"url":"u","isDraft":true,"reviewDecision":null,"state":"OPEN"}]' \
+        '[{"body":"lgtm","user":{"login":"reviewbot"}},{"body":"<!-- ai-hero:self-review -->","user":{"login":"stranger"}}]'
+OUT="$(run)"
+check "self-review: a stranger's marker comment counts 0" "0" "$(val SELF_REVIEW_DONE)"
+make_gh '[{"number":42,"url":"u","isDraft":true,"reviewDecision":null,"state":"OPEN"}]' \
+        '[{"body":"lgtm","user":{"login":"me"}},{"body":"<!-- ai-hero:self-review -->","user":{"login":"me"}}]'
+OUT="$(run)"
+check "self-review: own marker comment counts 1"         "1" "$(val SELF_REVIEW_DONE)"
 
 # `gh pr list` defaults to --state open, so a merged PR returned [] and read as
 # "no PR at all" — killing the rows that stop a merged branch being re-pushed.
@@ -163,6 +177,127 @@ case "$(val STATE_ERRORS)" in
   *) PASS=$((PASS + 1)) ;;
 esac
 
+# ---------- work-item checklist state --------------------------------------
+
+# Guards: no store → 0 and empty counts; one active item → its file and both
+# section counts; a goal or bot item never becomes ITEM_FILE; the branch field
+# picks between active items; an invalid row or two unbranched claims flip
+# STATE_OK; a failed count is `unknown`, never a number.
+printf '# H\n\n- default-branch: main\n- bot-username: reviewbot\n' > "$REPO/HERO.md"
+make_gh '[]' '[]'
+OUT="$(run)"
+check "no store: no in-flight item"     "0" "$(val ITEM_INFLIGHT)"
+check "no store: counts are empty, not 0" "" "$(val SUBTASKS_OPEN)"
+
+mkdir -p "$REPO/.plans"
+cat > "$REPO/.plans/003-foo.md" <<'ITEM'
+---
+id: 3
+kind: feature
+status: implementing
+---
+## Subtasks
+- [x] 1. done
+- [ ] 2. next
+3. [ ] numbered form
+## Definition of Done
+- [ ] a
+- [X] b
+## Comments
+- [ ] a tick outside the two sections is not a checklist line
+ITEM
+cat > "$REPO/.plans/004-bar.md" <<'ITEM'
+---
+id: 4
+kind: feature
+status: todo
+---
+## Subtasks
+- [ ] not in flight, must not be picked
+ITEM
+OUT="$(run)"
+check "one in-flight item is found"      "1" "$(val ITEM_INFLIGHT)"
+# basename: hero_root resolves symlinks (/private/var vs /var on macOS).
+check "in-flight item path is emitted"   ".plans/003-foo.md" "$(val ITEM_FILE | sed 's|.*/\(\.plans/\)|\1|')"
+check "subtasks: open count"             "2" "$(val SUBTASKS_OPEN)"
+check "subtasks: total count"            "3" "$(val SUBTASKS_TOTAL)"
+check "dod: open count"                  "1" "$(val DOD_OPEN)"
+check "dod: total count"                 "2" "$(val DOD_TOTAL)"
+
+# Plain items carry `in-progress`; a section that is absent is 0 0, which
+# TOTAL tells apart from an all-ticked one.
+cat > "$REPO/.plans/003-foo.md" <<'ITEM'
+---
+id: 3
+status: in-progress
+---
+## Subtasks
+- [x] all done
+ITEM
+OUT="$(run)"
+check "plain in-progress item is found"  "1" "$(val ITEM_INFLIGHT)"
+check "all-ticked subtasks: open is 0"   "0" "$(val SUBTASKS_OPEN)"
+check "all-ticked subtasks: total kept"  "1" "$(val SUBTASKS_TOTAL)"
+check "absent DoD section: total is 0"   "0" "$(val DOD_TOTAL)"
+
+# `## Subtasks ` with a trailing space is still the section; an all-ticked DoD
+# is `0 N`, the shape the close-out gate reads as "verified".
+# printf, not a heredoc: the trailing space after `Subtasks` is the point of
+# the case, and the whitespace hook strips it from a literal.
+printf -- '---\nid: 3\nstatus: in-progress\n---\n## Subtasks \n- [ ] a\n- [x] has a [ ] later in the text\n## Definition of Done\n- [x] a\n' > "$REPO/.plans/003-foo.md"
+OUT="$(run)"
+check "heading with trailing space still counts" "2" "$(val SUBTASKS_TOTAL)"
+check "a [ ] later in a ticked line is not open"  "1" "$(val SUBTASKS_OPEN)"
+check "all-ticked DoD: open 0"                    "0" "$(val DOD_OPEN)"
+check "all-ticked DoD: total kept"                "1" "$(val DOD_TOTAL)"
+
+# A goal at `active` and a bot PR item are never this branch's item.
+printf -- '---\nid: 9\nkind: goal\nstatus: active\n---\n## Subtasks\n- [ ] not a branch item\n' > "$REPO/.plans/009-goal.md"
+printf -- '---\nid: 10\nkind: security\nbot: dependabot\nstatus: implementing\n---\n## Subtasks\n- [ ] bot\n' > "$REPO/.plans/010-bot.md"
+OUT="$(run)"
+check "active goal and bot item are not counted" "1" "$(val ITEM_INFLIGHT)"
+check "active goal never becomes ITEM_FILE"      ".plans/003-foo.md" "$(val ITEM_FILE | sed 's|.*/\(\.plans/\)|\1|')"
+rm -f "$REPO/.plans/009-goal.md" "$REPO/.plans/010-bot.md"
+
+# Two unbranched in-flight items: the script must not pick one, and the
+# conflict must reach STATE_OK so the table's guard row catches it.
+sed 's/status: todo/status: implementing/' "$REPO/.plans/004-bar.md" > "$REPO/.plans/004-bar.tmp" \
+  && mv "$REPO/.plans/004-bar.tmp" "$REPO/.plans/004-bar.md"
+OUT="$(run)"
+check "two in-flight items: count is 2"  "2" "$(val ITEM_INFLIGHT)"
+check "two in-flight items: no file"     ""  "$(val ITEM_FILE)"
+check "two in-flight items: STATE_OK false" "false" "$(val STATE_OK)"
+case "$(val STATE_ERRORS)" in
+  *item-claim-conflict*) PASS=$((PASS + 1)) ;;
+  *) FAIL=$((FAIL + 1)); echo "FAIL  claim conflict is named in STATE_ERRORS (got: $(val STATE_ERRORS))" ;;
+esac
+
+# `branch:` binds an item to its branch: under a goal, several features are
+# implementing at once and the one for this branch is the resume point.
+printf -- '---\nid: 4\nkind: feature\nstatus: implementing\nbranch: other-branch\n---\n## Subtasks\n- [ ] b\n' > "$REPO/.plans/004-bar.md"
+printf -- '---\nid: 3\nkind: feature\nstatus: implementing\nbranch: %s\n---\n## Subtasks\n- [ ] a\n' "$(git -C "$REPO" branch --show-current)" > "$REPO/.plans/003-foo.md"
+OUT="$(run)"
+check "branch-bound: this branch's item is picked" ".plans/003-foo.md" "$(val ITEM_FILE | sed 's|.*/\(\.plans/\)|\1|')"
+check "branch-bound: both still count as in flight" "2" "$(val ITEM_INFLIGHT)"
+# The scratch repo has no remote, so STATE_OK is false for fetch reasons;
+# assert the conflict source specifically.
+case "$(val STATE_ERRORS)" in
+  *item-claim-conflict*) FAIL=$((FAIL + 1)); echo "FAIL  branch-bound must not flag a claim conflict (got: $(val STATE_ERRORS))" ;;
+  *) PASS=$((PASS + 1)) ;;
+esac
+
+# An invalid row may be the item being built; dropping it would read as
+# "nothing in flight" and route past its unchecked subtasks.
+printf -- '---\nid: 3\nkind: feature\nstatus: in_progress\n---\n## Subtasks\n- [ ] a\n' > "$REPO/.plans/003-foo.md"
+rm -f "$REPO/.plans/004-bar.md"
+OUT="$(run)"
+check "invalid row: STATE_OK false" "false" "$(val STATE_OK)"
+case "$(val STATE_ERRORS)" in
+  *store-invalid-item*) PASS=$((PASS + 1)) ;;
+  *) FAIL=$((FAIL + 1)); echo "FAIL  invalid item is named in STATE_ERRORS (got: $(val STATE_ERRORS))" ;;
+esac
+rm -rf "$REPO/.plans"
+
 # ---------- the eval contract ----------------------------------------------
 
 # Output is consumed via `eval`, so a hostile branch name or config value must
@@ -179,7 +314,8 @@ check "eval executed nothing" "no" "$([ -e "$TMP/eval_marker" ] && echo yes || e
 # Every run must emit the full key set, so a consumer never reads an unset var.
 for key in DEFAULT_BRANCH CURRENT_BRANCH UNCOMMITTED AHEAD UNPUSHED PR_EXISTS \
            PR_NUMBER PR_STATE PR_IS_DRAFT PR_REVIEW SELF_REVIEW_DONE \
-           BOT_REPLIED STATE_OK STATE_ERRORS; do
+           BOT_REPLIED ITEM_INFLIGHT ITEM_FILE SUBTASKS_OPEN SUBTASKS_TOTAL \
+           DOD_OPEN DOD_TOTAL STATE_OK STATE_ERRORS; do
   if printf '%s\n' "$OUT" | grep -q "^$key="; then
     PASS=$((PASS + 1))
   else
@@ -197,8 +333,9 @@ fi
 # refactor that silently stops executing 25 cases still reports 0 failures and
 # exits 0. The whole reason these cases exist is that each one could be wrong
 # SILENTLY; the suite must not be able to go quiet the same way.
-if [ "$PASS" -lt 33 ]; then
-  echo "resume-state: only $PASS cases ran, expected >= 33 — a block stopped executing" >&2
+MIN_CASES=68
+if [ "$PASS" -lt "$MIN_CASES" ]; then
+  echo "resume-state: only $PASS cases ran, expected >= $MIN_CASES — a block stopped executing" >&2
   exit 1
 fi
 echo "resume-state: $PASS passed"

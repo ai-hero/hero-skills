@@ -201,6 +201,8 @@ Wait for all agents to complete, then aggregate findings into: **Critical** (bug
 
 ### Step 3: Post Review Comment
 
+Render the template with real findings, humanize it (`hero-skills:my-humanizer inline`; keep headings and counts), then post:
+
 ```bash
 gh pr comment $PR_NUMBER --body "$(cat <<'EOF'
 ## Self-Review
@@ -297,7 +299,7 @@ Commit logically distinct fixes separately if they touch unrelated areas.
 
 **Always post this, even when no fixes were applied.** This is the durable record that the review ran.
 
-Render the template with real values — never post literal placeholders. Omit sections whose count is zero.
+Render the template with real values — never post literal placeholders. Omit sections whose count is zero. Draft this and Step 8's description together, humanize both in one `inline` call, then post.
 
 ```bash
 gh pr comment $PR_NUMBER --body "$(cat <<'EOF'
@@ -340,7 +342,7 @@ Leave unchanged for: style/typo/comment fixes only. Default to update when uncer
 gh pr view $PR_NUMBER --json title,body --jq '{title, body}'
 ```
 
-Draft the full new body preserving structure (Summary, Changesets, Test Plan) and ending with `_Generated using hero-skills._` as the final line, then apply:
+Draft the full new body preserving structure (Summary, Changesets, Test Plan) and ending with `_Generated using hero-skills._` as the final line (humanized with Step 7's summary), then apply:
 
 ```bash
 gh pr edit $PR_NUMBER --title "NEW_TITLE_UNDER_70_CHARS" --body "$(cat <<'EOF'

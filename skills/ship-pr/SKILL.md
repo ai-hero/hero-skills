@@ -132,14 +132,19 @@ Do not proceed.
 Do not even post `@auto-approve` until every reviewer signal has been addressed. The local checks here mirror the workflow's gates so the user gets an immediate, actionable answer instead of waiting on a CI run that will fail anyway.
 
 ```bash
+HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+[ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel)/scripts/hero-lib.sh"
+# shellcheck source=/dev/null
+. "$HERO_LIB" || { echo "ERROR: cannot source hero-lib.sh — reinstall the plugin."; exit 1; }
 OWNER_REPO=$(gh repo view --json owner,name --jq '"\(.owner.login) \(.name)"')
 OWNER=$(echo "$OWNER_REPO" | awk '{print $1}')
 REPO=$(echo "$OWNER_REPO" | awk '{print $2}')
 PR_AUTHOR=$(gh api "/repos/$OWNER/$REPO/pulls/$PR_NUMBER" --jq '.user.login')
 
 # 3a — Prior review present (self-review OR reviewer review OR bot inline)
-SELF_REVIEW=$(gh api "/repos/$OWNER/$REPO/issues/$PR_NUMBER/comments" \
-  --jq '[.[] | select(.body | test("ai-hero:self-review"))] | length')
+# Branch on the rc: an empty count summed below reads as 0, "no review".
+SELF_REVIEW=$(hero_self_review_count "$PR_NUMBER") \
+  || { echo "ship-pr: cannot read PR comments — the prior-review gate cannot be evaluated"; exit 1; }
 
 OTHER_REVIEWS=$(gh api "/repos/$OWNER/$REPO/pulls/$PR_NUMBER/reviews" \
   --jq "[.[] | select(.user.login != \"$PR_AUTHOR\") | select(.state != \"PENDING\")] | length")
@@ -857,13 +862,58 @@ Runs only on the APPROVE + merged path, gated on `MERGED == "true"` from Step 7b
 This check is **advisory only**. It surfaces a DEGRADED or unreachable deployment loudly so the user can act, but it never un-merges, reverts, or blocks anything that already landed in Step 7a.
 
 ```bash
+HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+[ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel)/scripts/hero-lib.sh"
+# shellcheck source=/dev/null
+. "$HERO_LIB" || { echo "ERROR: cannot source hero-lib.sh — reinstall the plugin."; exit 1; }
+DEPLOY_CAVEAT=""
 if [ "$MERGED" != "true" ]; then
   DEPLOY_STATUS="skipped"
 else
-  DEPLOY_PLATFORM=$(hero_field platform 2>/dev/null | tr '[:upper:]' '[:lower:]')
+  # BLOCK-scoped: an unscoped read returns CI/CD's platform. rc 2 is a value
+  # the security gate rejected, not an absent key — say so instead of `none`.
+  DEPLOY_PLATFORM=$(hero_md_field "$ROOT/HERO.md" platform '## Deployment' | tr '[:upper:]' '[:lower:]'); HF_RC=$?
+  [ "$HF_RC" -eq 2 ] && { DEPLOY_PLATFORM=none; DEPLOY_CAVEAT="Deployment platform value rejected as unsafe — treat the result as UNKNOWN"; }
   DEPLOY_PLATFORM=${DEPLOY_PLATFORM:-none}
+
+  # A probe taken while the merge commit's own workflow runs are still going
+  # measures the PREVIOUS deploy — healthy, and not the one this PR produced.
+  # Wait for them (ten-minute cap), then probe. Only Actions-driven deploys
+  # are visible here: a platform that deploys off its own git hook or a
+  # polling CD (ArgoCD) has no run to wait on, and the probe can still read
+  # the previous deploy.
+  if [ "$DEPLOY_PLATFORM" != "none" ]; then
+    MERGE_COMMIT=$(gh pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid // empty') \
+      || { MERGE_COMMIT=""; DEPLOY_CAVEAT="could not read the merge commit — the health result may be the previous deploy's"; }
+  fi
+  if [ -n "${MERGE_COMMIT:-}" ]; then
+    # Runs take seconds to register after a merge, so an empty list is "not
+    # yet", not "all finished" — same grace as Step 3e's CI wait.
+    WAITED=0; RUNS_EMPTY_UNTIL=120
+    while [ "$WAITED" -lt 600 ]; do
+      if ! RUNS=$(gh run list --commit "$MERGE_COMMIT" --json status 2>&1); then
+        # Advisory step: a gh that cannot list runs will not start listing
+        # them in ten minutes — probe now rather than sleep out the cap.
+        echo "deploy: could not read runs on $MERGE_COMMIT ($RUNS) — probing now"
+        DEPLOY_CAVEAT="workflow runs unreadable — the health result may be the previous deploy's"
+        break
+      fi
+      TOTAL=$(printf '%s' "$RUNS" | jq 'length')
+      IN_FLIGHT=$(printf '%s' "$RUNS" | jq '[.[] | select(.status != "completed")] | length')
+      if [ "$TOTAL" -eq 0 ]; then
+        [ "$WAITED" -ge "$RUNS_EMPTY_UNTIL" ] && { echo "deploy: no workflow runs on $MERGE_COMMIT after ${RUNS_EMPTY_UNTIL}s — probing; a HEALTHY result may be the previous deploy's"; break; }
+      elif [ "$IN_FLIGHT" -eq 0 ]; then
+        break
+      fi
+      echo "deploy: ${IN_FLIGHT:-0}/${TOTAL} run(s) still in flight on $MERGE_COMMIT — waiting…"
+      sleep 30; WAITED=$((WAITED + 30))
+    done
+    [ "$WAITED" -ge 600 ] && echo "deploy: runs on $MERGE_COMMIT still in flight after 10 minutes — probing anyway; treat a HEALTHY result as the previous deploy's"
+  fi
 fi
 ```
+
+A non-empty `DEPLOY_CAVEAT` downgrades a `HEALTHY` result to `UNKNOWN` in the report below, with the caveat as the reason: the probe ran, but not against a deploy this merge is known to have produced.
 
 Dispatch on `$DEPLOY_PLATFORM`:
 
@@ -874,7 +924,7 @@ kubectl config current-context
 kubectl cluster-info --request-timeout=5s
 ```
 
-If the connection fails, report `Deployment: skipped (kubectl unreachable)` and stop here — an unreachable cluster is not the same as a DEGRADED one.
+If the connection fails, report `Deployment: UNKNOWN (kubectl unreachable)` and stop here — an unreachable cluster is not DEGRADED, and it is not `skipped` either: `skipped` means nothing was configured to check, and wayfare's security items accept that as done.
 
 ```bash
 # A failed query must never be mistaken for "all healthy": empty output means
@@ -930,8 +980,10 @@ HEALTH_ENDPOINTS=$(awk -F': ' '/^- health-endpoint:/ {print $2}' "$ROOT/HERO.md"
   | tr -d '"' | tr -d "'")
 
 if [ -z "$HEALTH_ENDPOINTS" ]; then
-  echo "No health endpoint configured for $DEPLOY_PLATFORM — skipping."
-  DEPLOY_STATUS="skipped"
+  # A platform declared with nothing to probe is a config gap, not a
+  # no-platform repo: report UNKNOWN so it cannot tick a "deployed" DoD line.
+  echo "No health endpoint configured for $DEPLOY_PLATFORM — cannot verify."
+  DEPLOY_STATUS="UNKNOWN"
 else
   DEPLOY_STATUS="HEALTHY"
   # Here-string (not `... | while`): a pipeline runs the loop in a subshell,
@@ -950,7 +1002,7 @@ else
 fi
 ```
 
-Treat a missing endpoint list as skipped, not DEGRADED — there is nothing configured to check. Otherwise the loop above sets `HEALTHY` (every endpoint returns 2xx) vs `DEGRADED` (any non-2xx response or timeout).
+A platform with no endpoint list is UNKNOWN, not DEGRADED and not skipped — the platform is declared, so something should have been checkable. Otherwise the loop above sets `HEALTHY` (every endpoint returns 2xx) vs `DEGRADED` (any non-2xx response or timeout).
 
 **`none` or missing** — skip silently; render `(–)` for this phase in the DAG and Summary.
 
