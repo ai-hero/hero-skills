@@ -131,7 +131,7 @@ Mode selection from `$ARGUMENTS` (after the leading `test`, when present): `veri
 Use HERO.md's **Projects** section when present. Otherwise scan the current directory (and immediate subdirectories) for indicators:
 
 | Indicator | Type | Default Port |
-|-----------|------|-------------|
+| --- | --- | --- |
 | `pyproject.toml` + `fastmcp`/`mcp` dep | MCP Server | 8000 |
 | `pyproject.toml` + FastAPI/Flask import in `app/` | Backend API | 8000 |
 | `pyproject.toml` + `[project.scripts]` or `__main__.py` | CLI/Library | - |
@@ -677,7 +677,7 @@ Proceed to Step 4.
 ### Step 4: Determine Workflow
 
 | Argument | Workflow |
-|----------|----------|
+| --- | --- |
 | (none, default) | Push + **Draft** PR |
 | `test` | Already stopped after Step 2 (test-only) |
 | `ready` | Push + non-draft PR |
@@ -697,7 +697,7 @@ git push -u origin $(git branch --show-current)
 **Handle push failures:**
 
 | Error | Action |
-|-------|--------|
+| --- | --- |
 | `rejected` (non-fast-forward) | Suggest `git pull --rebase` |
 | `permission denied` | Suggest `gh auth login` |
 | `remote not found` | Check remote configuration |

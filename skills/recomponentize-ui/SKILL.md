@@ -70,7 +70,7 @@ trust the signals, stop, and tell the user `HERO.md` looks wrong.
 Resolve in this order and **state which one you picked** before proceeding:
 
 | Condition | Source |
-|-----------|--------|
+| --- | --- |
 | `HERO.md` `## Design System` present with `namespace` | That registry |
 | No config, but the user wants one | Offer `@aihero` / `https://design.aihero.studio` — needs a token (Step 1) |
 | No registry, `components.json` exists | Stock shadcn — `npx shadcn@latest add ITEM` |
@@ -100,7 +100,7 @@ atomic refactor is valuable on its own and carries no new dependency.
 and may pick a conflicting style.
 
 | Check | Requirement |
-|-------|-------------|
+| --- | --- |
 | `components.json` | Has a `registries` block for the namespace; `"ui": "@/components/ui"` |
 | Token expansion | Header is `Bearer ${REGISTRY_TOKEN}` — the plain form ONLY |
 | `.env` | Holds the token; `.gitignore` covers `.env` BEFORE the token is written |
@@ -124,7 +124,7 @@ value, and gitignore the real one. Never commit a token.
 empirically against shadcn 4.13:
 
 | `.env` location | cwd | Result |
-|---|---|---|
+| --- | --- | --- |
 | repo root | repo root, `-c ui` | **fails** |
 | repo root | `ui/` | fails |
 | `ui/` | repo root, `-c ui` | works |
@@ -305,7 +305,7 @@ Migrate call sites as you move files; never leave a re-export shim behind as
 ## Step 7: Codemod off-token styling (`codemod`)
 
 | Found | Replace with |
-|-------|--------------|
+| --- | --- |
 | Raw palette (`bg-zinc-100`, `text-gray-500`) | Semantic token (`bg-muted`, `text-muted-foreground`) |
 | Hex / `oklch()` literal in TSX | A token in the `@theme` layer |
 | `dark:` **color** override | Delete it — a `dark:` color means the wrong token was used |

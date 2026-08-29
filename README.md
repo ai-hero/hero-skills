@@ -133,7 +133,7 @@ Now running: self-review
 Each step maps to a skill you can run on its own when you don't want the whole pipeline:
 
 | # | Step | Skill to run standalone |
-|---|------|-------------------------|
+| --- | --- | --- |
 | 1 | `plan` | `hero-skills:think-it-through` (only when nothing resolves from `.plans/` or the tracker) |
 | 2 | `implement` | inline (executes the resolved work-item) |
 | 3 | `simplify` | `/simplify` (external skill) |
@@ -153,7 +153,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 ### Setup
 
 | Command | What it does |
-|---------|-------------|
+| --- | --- |
 | `hero-skills:init-hero` | Investigate your repo, auto-detect stack, create `HERO.md` config |
 | `hero-skills:preflight` | Catch missing tooling, stale `HERO.md`, env mismatches, and busy ports before a pipeline step does destructive work |
 | `hero-skills:setup-dev` | Set up a developer's local environment (tools, auth, dependencies) |
@@ -163,13 +163,13 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 ### Development Cycle
 
 | Command | What it does |
-|---------|-------------|
+| --- | --- |
 | `hero-skills:push-pr` | Test (lint, typecheck, unit tests + smoke incl. UI via Playwright MCP), commit + push + draft PR + CI status — or `test` for a test-only run, or a target branch to merge into |
 
 ### Code Review
 
 | Command | What it does |
-|---------|-------------|
+| --- | --- |
 | `hero-skills:review-pr` | Review a PR with the review agents plus a security pass: your draft → applies fixes, asks before marking ready. Others' PR → inline comments only. |
 | `hero-skills:respond-to-comments` | Fix PR review comments, resolve threads, optionally loop with external review agent |
 | `hero-skills:ship-pr` | Trigger gated `@auto-approve`, wait for the verdict, merge if it passes, reset to the default branch, and run a post-merge deploy-health check |
@@ -177,14 +177,14 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 ### Pipelines (orchestrators)
 
 | Command | What it does |
-|---------|-------------|
+| --- | --- |
 | `hero-skills:one-shot` | Drives a small task end-to-end: plan → implement → simplify → push (tests included) → self-review → mark-ready → await-review → respond → ship. Detects a resume point on re-invocation; with no arguments, drives the current goal to merged + reset branch. Explicit user gates at each destructive step. |
 | `hero-skills:create-project` | Scaffolds a new project, then chains into setup-dev → init-hero → first-commit. |
 
 ### Operations
 
 | Command | What it does |
-|---------|-------------|
+| --- | --- |
 | `hero-skills:harden` | Audit read-only for hardening — dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness — and emit execution-ready plans as `.plans/` items |
 | `hero-skills:think-it-through` | Brainstorm + grill an idea one question at a time into shared understanding and dependency-aware work-items |
 | `hero-skills:my-humanizer` | Strip AI-writing patterns from prose (Wikipedia's "Signs of AI writing"). Runs inline inside the pipeline on everything a person reads: code comments, docs, commit bodies, and the PR body in `push-pr`, review comments in `review-pr`, thread replies in `respond-to-comments`; standalone on any text |
@@ -196,7 +196,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 ### Utilities
 
 | Command | What it does |
-|---------|-------------|
+| --- | --- |
 | `hero-skills:abandon` | Abandon or pause an unmerged branch — stash uncommitted work, switch to default, clear context |
 | `hero-skills:audit-plugin` | Audit the hero-skills plugin itself for quality and consistency |
 

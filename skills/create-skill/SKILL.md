@@ -21,7 +21,7 @@ Create skills and other components that extend Claude's capabilities.
 **Match Freedom to Fragility:**
 
 | Freedom Level | When to Use | Example |
-|---------------|-------------|---------|
+| --- | --- | --- |
 | High (prose) | Multiple valid approaches | "Review code for security issues" |
 | Medium (pseudocode) | Preferred pattern, some variation OK | "Run pre-commit, then commit" |
 | Low (exact scripts) | Fragile ops, consistency critical | "Execute this exact migration" |
@@ -29,7 +29,7 @@ Create skills and other components that extend Claude's capabilities.
 ## Component Types
 
 | Type | Location | Use When |
-|------|----------|----------|
+| --- | --- | --- |
 | **Skill** | `.claude/skills/[name]/SKILL.md` | Workflows, guidelines |
 | **Subagent** | `.claude/agents/[name].md` | Isolated execution |
 | **Rule** | `.claude/rules/[name].md` | Always-on constraints |
@@ -60,7 +60,7 @@ disable-model-invocation: true
 ## Anti-patterns
 
 | Don't | Do Instead |
-|-------|------------|
+| --- | --- |
 | "When to Use" section in body | Put triggers in frontmatter description |
 | 1000-line SKILL.md | Split into supplementary reference files |
 | Duplicate info across files | Single source of truth |

@@ -89,7 +89,7 @@ BASE_BRANCH=$(echo "$PR_JSON" | jq -r '.baseRefName')
 **Mode selection:**
 
 | Condition | Mode |
-|-----------|------|
+| --- | --- |
 | No PR found | STOP — "No PR for '$BRANCH'. Run `hero-skills:push-pr` first." |
 | Closed/merged | STOP — Report status. |
 | PR author is you AND draft | Self-review mode |
@@ -427,7 +427,7 @@ Same as self-review Step 2: pick the tier from the diff size (with the security-
 Map severity to prefix:
 
 | Category | Prefix |
-|----------|--------|
+| --- | --- |
 | Critical | `🔴` |
 | Important | `🟡` |
 | Suggestion | `🔵 nit:` |
@@ -454,7 +454,7 @@ For multi-line: also pass `-F start_line=$START_LINE -f start_side="RIGHT"`.
 ### Step 4: Submit Overall Review
 
 | Has criticals? | Has importants? | Decision |
-|----------------|-----------------|----------|
+| --- | --- | --- |
 | Yes | — | `--request-changes` |
 | No | Yes | `--comment` |
 | No | No | `--approve` (unless questions remain) |

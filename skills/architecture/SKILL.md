@@ -321,14 +321,14 @@ modes).
 
 ## Anti-Patterns
 
-| Smell                                | Why it's wrong                                                        |
-| ------------------------------------ | --------------------------------------------------------------------- |
-| Route tables, schemas, signatures    | Restated code goes false silently — the Hard Rule exists for this.    |
-| Writing without confirmation         | Both verbs propose first; writes happen only on confirmation.         |
+| Smell | Why it's wrong |
+| --- | --- |
+| Route tables, schemas, signatures | Restated code goes false silently — the Hard Rule exists for this. |
+| Writing without confirmation | Both verbs propose first; writes happen only on confirmation. |
 | Editing or deleting a Decision entry | Append-only — supersede with a new dated entry; the trail is the value. |
-| A diagram where prose would do       | One Boundaries graph and one flowchart per flow earn their place; nothing else does. |
-| `review` that edits the file         | Review reports; sync writes.                                          |
-| Re-growing a specs/ tree             | One file is the design; splitting it re-invites restated code detail. |
+| A diagram where prose would do | One Boundaries graph and one flowchart per flow earn their place; nothing else does. |
+| `review` that edits the file | Review reports; sync writes. |
+| Re-growing a specs/ tree | One file is the design; splitting it re-invites restated code detail. |
 
 ## Next steps
 

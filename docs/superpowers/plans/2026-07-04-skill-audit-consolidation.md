@@ -357,7 +357,7 @@ Update all `[N/12]` markers to `[N/10]` and re-number.
 - [ ] **Step 2: Rewrite the step→skill mapping table**
 
 | # | Step | Skill |
-|---|------|-------|
+| --- | --- | --- |
 | 1 | plan | inline (Plan Mode) |
 | 2 | implement | inline |
 | 3 | test | `hero-skills:test-changes` (includes UI smoke) |

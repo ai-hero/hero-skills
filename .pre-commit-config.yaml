@@ -23,7 +23,7 @@ repos:
   # General safety checks
   # ===========================================================================
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: check-added-large-files
         args: [--maxkb=500]
@@ -59,7 +59,7 @@ repos:
   # Markdown linting
   # ===========================================================================
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.44.0
+    rev: v0.48.0
     hooks:
       - id: markdownlint
         args:
@@ -75,7 +75,7 @@ repos:
   # Typo detection
   # ===========================================================================
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
+    rev: v2.4.2
     hooks:
       - id: codespell
         args: [--skip, '*.lock']
@@ -130,7 +130,7 @@ repos:
           - --error
 
   - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v4.0.0
+    rev: v4.4.0
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]

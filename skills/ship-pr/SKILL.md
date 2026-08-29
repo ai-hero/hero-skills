@@ -82,7 +82,7 @@ Record `PR_NUMBER`, `PR_URL`, `PR_BRANCH`, `BASE_BRANCH`, `IS_DRAFT`.
 **Decide what to do based on PR state:**
 
 | State | Action |
-|-------|--------|
+| --- | --- |
 | No PR found | STOP. Tell the user to run `hero-skills:push-pr` first. |
 | Draft PR | STOP. Auto-approve only runs on ready PRs — tell the user to run `hero-skills:review-pr` to mark ready. |
 | `.state=="MERGED"`, `PR_BRANCH` still local | Skip to Step 7b to retry (re-derives `MERGED`, independent of Steps 2-6 — see its `$OWNER`/`$REPO` note). |
