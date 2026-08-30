@@ -2,7 +2,7 @@
 name: create-project
 # prettier-ignore
 description: Scaffold a new project. Supports standalone repos or monorepo subprojects. Creates Python (FastAPI/CLI/library), full-stack (FastAPI + Next.js/Vite), or Node.js projects with AGENTS.md.
-argument-hint: PROJECT_NAME [description]
+argument-hint: "PROJECT_NAME [description] | recalibrate"
 disable-model-invocation: true
 ---
 
@@ -32,7 +32,26 @@ This skill drives the **scaffold** step and then invokes `hero-skills:setup-dev`
 
 ## Arguments
 
+- `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before the project name.
 - `$ARGUMENTS` — Project name (required) and optional description
+
+## `recalibrate`
+
+`hero-skills:create-project recalibrate` tunes the config that drives this skill, and
+stops. It does not then run the skill — the point is to see which field was
+wrong, not to spend a run finding out. Dispatch on it before anything else in
+Step 0: when the first token of `$ARGUMENTS` is exactly `recalibrate`,
+announce `create-project: running recalibrate`, then follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
+— using this table as the report, and stop.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" create-project
+```
+
+Ask only about the rows the table marks `unset`, `refused`, or `no-file`, plus
+any row whose value the user says is wrong. A row that already holds the right
+value is not a question.
 
 ## Instructions
 

@@ -125,7 +125,7 @@ The user must explicitly approve at each gate that involves a destructive or
 shared-state change: marking the PR ready, posting `@auto-approve`, and
 merging. The skill does not skip those confirmations.
 
-### Pipeline 3: hero init/update — generate or refresh HERO.md
+### Pipeline 3: hero init/recalibrate — generate or refresh HERO.md
 
 ```
 investigate → confirm → write → commit
@@ -138,8 +138,14 @@ Owner: `hero-skills:init-hero`. Four steps:
 3. `write` — write HERO.md, update AGENTS.md summary sections (CLAUDE.md is a symlink to it), and (if the user opted in during `confirm`) install `.github/workflows/auto-approve.yaml` via Step 6a and the design-system enforcement layer via Step 6b
 4. `commit` — stage and commit HERO.md + AGENTS.md + the CLAUDE.md symlink (and the auto-approve workflow / design-system rule + hook if installed this run)
 
-Run by itself (`hero-skills:init-hero` or `hero-skills:init-hero --update`) or
+Run by itself (`hero-skills:init-hero` or `hero-skills:init-hero recalibrate`) or
 as the third step of Pipeline 1.
+
+Every other skill that reads HERO.md carries a scoped slice of this pipeline
+as its own `recalibrate` verb: the same four steps, over only the fields that
+skill reads, ending at `commit` without going on to do the skill's work. The
+field map is `scripts/hero-fields.sh`; the contract is
+[RECALIBRATE.md](./RECALIBRATE.md).
 
 ### Pipeline 4: wayfare deps — one Dependabot PR to merged and deployed
 

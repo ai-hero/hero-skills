@@ -340,7 +340,7 @@ check_repo() {
   if [ -z "$hero_time" ] && [ -z "$config_time" ]; then
     emit SKIP "repo: cannot read git history (empty repo?) — staleness unknown"
   elif [ "${config_time:-0}" -gt "${hero_time:-0}" ]; then
-    emit WARN "repo: HERO.md may be stale — run hero-skills:init-hero --update"
+    emit WARN "repo: HERO.md may be stale — run hero-skills:init-hero recalibrate"
   else
     emit OK "repo: HERO.md fresh"
   fi
@@ -364,7 +364,7 @@ check_repo() {
     if [ -n "$AA_ON_DEFAULT" ]; then
       emit OK "repo: $AA_ON_DEFAULT present on $DEFAULT_BRANCH"
     else
-      emit BLOCKER "repo: no .github/workflows/auto-approve.yaml (or .yml) on $DEFAULT_BRANCH — Step 12 (ship) will be a no-op. Run hero-skills:init-hero --update, then merge the workflow file to $DEFAULT_BRANCH."
+      emit BLOCKER "repo: no .github/workflows/auto-approve.yaml (or .yml) on $DEFAULT_BRANCH — Step 12 (ship) will be a no-op. Run hero-skills:init-hero recalibrate, then merge the workflow file to $DEFAULT_BRANCH."
     fi
   else
     emit SKIP "repo: gh unavailable — cannot check the auto-approve workflow remotely"

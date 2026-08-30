@@ -2,7 +2,7 @@
 name: recomponentize-ui
 # prettier-ignore
 description: Refactor a project's UI into atomic components (atoms/molecules/organisms/templates), sourcing primitives from a design-system registry when one is configured (default @aihero) or stock shadcn otherwise, and codemod off-token styling. Use when asked to recomponentize, refactor UI, adopt a design system, or clean up component structure.
-argument-hint: [--audit-only] [REGISTRY_NAMESPACE]
+argument-hint: "[--audit-only] [REGISTRY_NAMESPACE] | recalibrate"
 ---
 
 # Recomponentize UI — Atomic Components, Design-System Sourced
@@ -37,9 +37,28 @@ shadcn or the project's existing UI library instead of a private registry.
 ## Arguments
 
 - `$ARGUMENTS`:
+  - `recalibrate` — tune the `HERO.md` fields this skill reads, then stop (see below). Matched before every other form.
   - (none) — full pass using the component source resolved in Step 0
   - `--audit-only` — run `preflight`, `inventory`, `map`; report the plan, change nothing. Skips `enforce` too: installing the rule and hook writes files, which `--audit-only` promises not to do.
   - `REGISTRY_NAMESPACE` — override the registry (e.g. `@acme`)
+
+## `recalibrate`
+
+`hero-skills:recomponentize-ui recalibrate` tunes the config that drives this skill, and
+stops. It does not then run the skill — the point is to see which field was
+wrong, not to spend a run finding out. Dispatch on it before anything else in
+Step 0: when the first token of `$ARGUMENTS` is exactly `recalibrate`,
+announce `recomponentize-ui: running recalibrate`, then follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
+— using this table as the report, and stop.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" recomponentize-ui
+```
+
+Ask only about the rows the table marks `unset`, `refused`, or `no-file`, plus
+any row whose value the user says is wrong. A row that already holds the right
+value is not a question.
 
 ## Step 0: Resolve the component source
 

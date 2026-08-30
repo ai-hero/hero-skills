@@ -2,7 +2,7 @@
 name: one-shot
 # prettier-ignore
 description: Drive a small task end-to-end — plan, implement, simplify, push (tests included), self-review, mark ready, await review, respond, ship. No args: resume the current goal (gated). Small, low-risk PRs only.
-argument-hint: "[ISSUE_ID [additional-context] | DESCRIPTION]"
+argument-hint: "[ISSUE_ID [additional-context] | DESCRIPTION | recalibrate]"
 ---
 
 # One-Shot — Ticket to Merged PR in a Single Pipeline
@@ -49,6 +49,7 @@ Each DAG node delegates to a single skill (or runs inline when the work is just 
 
 ## Arguments
 
+- `recalibrate` — Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before every other form.
 - `$ARGUMENTS` — Optional. An issue ID (e.g., `PROJ-123`), fetched via the Linear MCP, or a plain-text description of the task, plus optional additional context.
   - **With arguments** — start work on that ticket/description; on a feature branch with work in flight, arguments are additional context (see Step 0.5's "Default for non-default branches").
   - **Without arguments** — finish the **current goal**: Step 0.5 detects the in-progress state and resumes the pipeline from the inferred step, through `ship`'s merge and reset to the default branch. Step 0.5's decision table is the single source of truth for that routing — states with nothing left to resume exit with a hint or diagnostic per the table, and a truly fresh start on the default branch reaches Step 1, which asks what to plan.
@@ -57,7 +58,7 @@ Each DAG node delegates to a single skill (or runs inline when the work is just 
 
 - **GitHub CLI (`gh`) installed and authenticated with the `repo` scope**. Steps 4 (push), 5 (self-review), 8 (respond), and 9 (ship) all fail without it. Install via `brew install gh` (macOS), `sudo apt install gh` (Debian/Ubuntu), or <https://cli.github.com/>. Authenticate with `gh auth login -s repo`.
 - `HERO.md` exists (run `hero-skills:init-hero` first if not)
-- `.github/workflows/auto-approve.yaml` (or `.yml`) is on the default branch (Step 9 needs it). If missing, run `hero-skills:init-hero --update` to install it (Step 6a of init-hero handles this), then merge that workflow file to the default branch before running one-shot.
+- `.github/workflows/auto-approve.yaml` (or `.yml`) is on the default branch (Step 9 needs it). If missing, run `hero-skills:init-hero recalibrate` to install it (Step 6a of init-hero handles this), then merge that workflow file to the default branch before running one-shot.
 - **`pr-review-toolkit` plugin installed** so Step 5 (`self-review`) gets all six review agents — five from the plugin plus the security pass, which needs no extra install. From inside Claude Code: `/plugin install pr-review-toolkit`. From a shell: `claude plugins add pr-review-toolkit@claude-plugins-official`. Without it, `hero-skills:review-pr` runs with a thinner review.
 - **Playwright MCP server registered** so Step 4 (`push`)'s test phase can drive the dev server for UI smoke. Requires Node.js 18+. Run `claude mcp add playwright npx @playwright/mcp@latest` (add `--scope user` to share across projects, `--scope project` to commit it). Backend-only PRs skip the UI-smoke portion of the test phase with `(–)` even without this.
 - The task is small — see scope guard above
@@ -94,6 +95,24 @@ session. Before deciding to advance to the next step, you MUST:
    later, in a goal turn nobody is watching.
 
 Apply this contract at every Step 1–9 transition below (or every transition from `RESUME_STEP` onward when resuming).
+
+## `recalibrate`
+
+`hero-skills:one-shot recalibrate` tunes the config that drives this skill, and
+stops. It does not then run the skill — the point is to see which field was
+wrong, not to spend a run finding out. Dispatch on it before anything else in
+Step 0: when the first token of `$ARGUMENTS` is exactly `recalibrate`,
+announce `one-shot: running recalibrate`, then follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
+— using this table as the report, and stop.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" one-shot
+```
+
+Ask only about the rows the table marks `unset`, `refused`, or `no-file`, plus
+any row whose value the user says is wrong. A row that already holds the right
+value is not a question.
 
 ## Instructions
 

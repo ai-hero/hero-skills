@@ -260,7 +260,7 @@ hero_check_staleness() {
     .github/workflows .pre-commit-config.yaml \
     CLAUDE.md Makefile justfile Taskfile.yml 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
   if [ "${config_time:-0}" -gt "${hero_time:-0}" ]; then
-    echo "note: HERO.md may be out of date — run hero-skills:init-hero --update to refresh." >&2
+    echo "note: HERO.md may be out of date — run hero-skills:init-hero recalibrate to refresh." >&2
   fi
   return 0
 }

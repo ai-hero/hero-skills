@@ -2,6 +2,7 @@
 name: abandon
 # prettier-ignore
 description: Abandon or pause work on a branch that hasn't merged — stash uncommitted changes, switch to the default branch, and clear conversation context.
+argument-hint: "[recalibrate]"
 disable-model-invocation: true
 ---
 
@@ -10,6 +11,24 @@ disable-model-invocation: true
 Abandon or pause work on a branch that never merged: stash any uncommitted changes, switch back to the default branch, pull latest, and clear conversation context.
 
 > **Note:** Merged branches are already cleaned up by `hero-skills:ship-pr`'s final step (switch to default, pull, delete merged head, offer cleanup) — this skill is for the opposite case, when you're stepping away from a branch that did **not** go through `ship-pr`.
+
+## `recalibrate`
+
+`hero-skills:abandon recalibrate` tunes the config that drives this skill, and
+stops. It does not then run the skill — the point is to see which field was
+wrong, not to spend a run finding out. Dispatch on it before anything else in
+Step 0: when the first token of `$ARGUMENTS` is exactly `recalibrate`,
+announce `abandon: running recalibrate`, then follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
+— using this table as the report, and stop.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" abandon
+```
+
+Ask only about the rows the table marks `unset`, `refused`, or `no-file`, plus
+any row whose value the user says is wrong. A row that already holds the right
+value is not a question.
 
 ## Instructions
 

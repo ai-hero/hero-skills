@@ -2,7 +2,7 @@
 name: handoff
 # prettier-ignore
 description: Distill the current conversation into one self-contained work-item — context, decisions, remaining work, acceptance criteria — for a downstream agent with zero context from this session.
-argument-hint: "[TITLE_OR_FOCUS] [--issue] [--repo OWNER/NAME]"
+argument-hint: "[TITLE_OR_FOCUS] [--issue] [--repo OWNER/NAME] | recalibrate"
 ---
 
 # Handoff — Package This Conversation for a Downstream Agent
@@ -13,10 +13,29 @@ The receiving agent has zero context from this session. That is the quality bar:
 
 ## Arguments
 
+- `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before the title.
 - `$ARGUMENTS` — Optional:
   - `TITLE_OR_FOCUS` — what to hand off, when the conversation covered several threads (e.g., `handoff the migration follow-ups`). Default: the conversation's current primary goal.
   - `--issue` — also file the work-item to the tracker configured in HERO.md (`github-issues` via `gh issue create`, or Linear via its MCP tools) and cross-link the two.
   - `--repo OWNER/NAME` — hand the work to a **different repository**: file the item to that repo's tracker and keep a cross-linked stub locally. Implies `--issue`.
+
+## `recalibrate`
+
+`hero-skills:handoff recalibrate` tunes the config that drives this skill, and
+stops. It does not then run the skill — the point is to see which field was
+wrong, not to spend a run finding out. Dispatch on it before anything else in
+Step 0: when the first token of `$ARGUMENTS` is exactly `recalibrate`,
+announce `handoff: running recalibrate`, then follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
+— using this table as the report, and stop.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" handoff
+```
+
+Ask only about the rows the table marks `unset`, `refused`, or `no-file`, plus
+any row whose value the user says is wrong. A row that already holds the right
+value is not a question.
 
 ## Instructions
 

@@ -2,7 +2,7 @@
 name: wayfare
 # prettier-ignore
 description: Reconcile the source repo against its app design and design system into SLC feature slices, architecture work, visual polish, goals under /goal, and feedback; deps ships one Dependabot PR.
-argument-hint: "[sync | do FEATURE_ID | goal [GOAL] | deps [PR_NUMBER]]"
+argument-hint: "[sync | do FEATURE_ID | goal [GOAL] | deps [PR_NUMBER] | recalibrate]"
 ---
 
 # Wayfare — The Route from Source to Target
@@ -387,6 +387,24 @@ link and nothing is written to HERO.md.
 `feedback-repo` is the design-feedback delivery destination
 (`references/feedback-channels.md`); it reaches `gh --repo`, so it is held to
 the strict `OWNER/NAME` shape.
+
+## `recalibrate`
+
+`hero-skills:wayfare recalibrate` tunes the config that drives this skill, and
+stops. It does not then run the skill — the point is to see which field was
+wrong, not to spend a run finding out. Dispatch on it before anything else in
+Step 0: when the first token of `$ARGUMENTS` is exactly `recalibrate`,
+announce `wayfare: running recalibrate`, then follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
+— using this table as the report, and stop.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" wayfare
+```
+
+Ask only about the rows the table marks `unset`, `refused`, or `no-file`, plus
+any row whose value the user says is wrong. A row that already holds the right
+value is not a question.
 
 ## Instructions
 
@@ -844,8 +862,12 @@ never reach a `DesignSync` call as a project id. Only a value that passes its
 own test is a path (or a project id), and only then may it reach git (or the
 tool).
 
-Then dispatch. Four verbs: **`sync`**, **`do`**, **`goal`**, and **`deps`**.
+Then dispatch. Five verbs: **`sync`**, **`do`**, **`goal`**, **`deps`**, and
+**`recalibrate`**.
 
+- `recalibrate` tunes the `## Wayfare` block and stops — it is matched before
+  everything else, because the catch-all below would otherwise read it as sync
+  context. See the `recalibrate` section above.
 - `do FEATURE_ID` builds that one planned feature and stops. This is the
   single-step mode. `do` without an id prints the roadmap view and asks which.
 - `goal` followed by text runs the loop: the text is a goal id, or a goal to

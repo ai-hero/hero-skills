@@ -2,7 +2,7 @@
 name: review-pr
 # prettier-ignore
 description: Review a PR with the pr-review-toolkit agents plus a security pass. No argument reviews your own draft PR and applies fixes. A PR number reviews the author's code via inline comments, no edits.
-argument-hint: [#PR] [--no-mark-ready]
+argument-hint: "[#PR] [--no-mark-ready] | recalibrate"
 ---
 
 # Review — PR Review
@@ -12,6 +12,7 @@ Context-aware PR review. Auto-detects whether you're reviewing your own draft or
 ## Arguments
 
 - `$ARGUMENTS` — Optional PR number or URL, plus optional flags
+  - `recalibrate` — Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before every other form.
   - (none) — Auto-detect from current branch → your draft PR → self-review mode
   - `#123` or URL — Your PR: self-review mode. Someone else's PR: review mode (no edits).
   - `--no-mark-ready` — Self-review mode only: run Steps 1–8 (post review, apply fixes, push, post improvements summary, update PR description) but skip Step 9 (the mark-ready prompt + `gh pr ready`). Used by `hero-skills:one-shot` so its DAG can render `self-review` (Step 5) and `mark-ready` (Step 6) as distinct nodes without double-prompting. Combine with a PR number/URL as needed (`#42 --no-mark-ready`).
@@ -36,6 +37,24 @@ ARGS_FILTERED=$(printf '%s' "$ARGS_FILTERED" | sed 's/^ //')
 
 - `gh` CLI installed and authenticated
 - The `pr-review-toolkit` plugin available
+
+## `recalibrate`
+
+`hero-skills:review-pr recalibrate` tunes the config that drives this skill, and
+stops. It does not then run the skill — the point is to see which field was
+wrong, not to spend a run finding out. Dispatch on it before anything else in
+Step 0: when the first token of `$ARGUMENTS` is exactly `recalibrate`,
+announce `review-pr: running recalibrate`, then follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
+— using this table as the report, and stop.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" review-pr
+```
+
+Ask only about the rows the table marks `unset`, `refused`, or `no-file`, plus
+any row whose value the user says is wrong. A row that already holds the right
+value is not a question.
 
 ## Instructions
 
