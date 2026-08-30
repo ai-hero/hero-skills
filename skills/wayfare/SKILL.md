@@ -548,25 +548,45 @@ esac
 # the same tool, and a weaker check here would be the one hole in the pair.
 # `none` here is not fatal: the lane prefers the target's vendored `_ds/` copy
 # and only falls back to $DS_SNAP, so the gate on the lane is BOTH sources.
-DS_PROJECT=none
+# DS_PROJECT_STATE keeps apart the two things `none` folds together, exactly as
+# DP_SHOW does for design-project: NONE (that repo declares it has no project —
+# a real answer, and the `_ds/` lane still works) and UNRESOLVED (we went
+# looking and could not read one — a fix someone has to make). Collapsing them
+# would let a broken sibling read as a settled one on the summary line.
+DS_PROJECT=none; DS_PROJECT_STATE=NONE
 if [ "$DS_REPO" != none ] && [ "$DS_REPO" != REJECTED ]; then
+  # Resolve `../NAME` against $ROOT, not cwd. hero_field builds "$root/HERO.md",
+  # and Step 0 runs from the worktree during a goal turn — where `../NAME` points
+  # inside .worktrees/ and reads nothing.
+  case "$DS_REPO" in /*) DS_REPO_ABS=$DS_REPO ;; *) DS_REPO_ABS="$ROOT/$DS_REPO" ;; esac
   # rc 2 and rc 1 must not look alike here either: rc 2 means that repo's
   # HERO.md holds a value someone WROTE and this sanitizer refused, which is a
   # fix in the design system's repo, not an absence to shrug at.
-  DS_PROJECT_RAW=$(hero_field design-project "$DS_REPO"); rc=$?
+  DS_PROJECT_RAW=$(hero_field design-project "$DS_REPO_ABS"); rc=$?
   if [ "$rc" = 2 ]; then
     echo "wayfare: design-system-repo '$DS_REPO' has a design-project REJECTED as unsafe — upstream design project UNRESOLVED (fix that repo's HERO.md)" >&2
+    DS_PROJECT_STATE=UNRESOLVED
   elif [ "$rc" != 0 ]; then
     echo "wayfare: design-system-repo '$DS_REPO' has no readable design-project in its HERO.md — upstream design project UNRESOLVED" >&2
+    DS_PROJECT_STATE=UNRESOLVED
   else
-    DS_MATCHES=$(printf '%s' "$DS_PROJECT_RAW" \
-      | grep -oiE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' \
-      | tr '[:upper:]' '[:lower:]' | sort -u)
-    if [ -z "$DS_MATCHES" ] || [ "$(printf '%s\n' "$DS_MATCHES" | wc -l)" -gt 1 ]; then
-      echo "wayfare: design-system-repo's design-project holds no single project UUID — upstream design project UNRESOLVED" >&2
-    else
-      DS_PROJECT=$DS_MATCHES
-    fi
+    # `none`/`ask` are DECLARED answers and must be tested before extraction:
+    # sent through the UUID grep they come back as "holds no single project
+    # UUID", which reports a deliberate setting as a malformed one and makes
+    # the config gate refuse a design system that simply has no project.
+    case "$(printf '%s' "$DS_PROJECT_RAW" | tr '[:upper:]' '[:lower:]')" in
+      none|ask) ;;
+      *)
+        DS_MATCHES=$(printf '%s' "$DS_PROJECT_RAW" \
+          | grep -oiE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' \
+          | tr '[:upper:]' '[:lower:]' | sort -u)
+        if [ -z "$DS_MATCHES" ] || [ "$(printf '%s\n' "$DS_MATCHES" | wc -l)" -gt 1 ]; then
+          echo "wayfare: design-system-repo's design-project holds no single project UUID — upstream design project UNRESOLVED" >&2
+          DS_PROJECT_STATE=UNRESOLVED
+        else
+          DS_PROJECT=$DS_MATCHES; DS_PROJECT_STATE=SET
+        fi ;;
+    esac
   fi
 fi
 # The same id at both ends means design-system-repo resolves back to this repo's
@@ -607,7 +627,10 @@ SOURCE_HEAD=$(git -C "$SOURCE_REPO" rev-parse --verify HEAD 2>/dev/null) && [ -n
 # `none` produces. Keep the summary line — the thing the model reads last —
 # from making the two look alike.
 [ "$rc_design" = 2 ] && DP_SHOW="none(REJECTED)" || DP_SHOW=$DESIGN_PROJECT
-echo "wayfare: source=$SOURCE_REPO@${SOURCE_HEAD} design-project=$DP_SHOW transport=$DESIGN_TRANSPORT feedback-repo=$FEEDBACK_REPO ux-flow=$UX_FLOW ds-project=$DS_PROJECT ds-repo=$DS_REPO reconciliation=$RECON"
+# Same reason, one key over: a `none` we were HANDED and a `none` we failed to
+# resolve must not print alike.
+[ "$DS_PROJECT_STATE" = UNRESOLVED ] && DS_SHOW="none(UNRESOLVED)" || DS_SHOW=$DS_PROJECT
+echo "wayfare: source=$SOURCE_REPO@${SOURCE_HEAD} design-project=$DP_SHOW transport=$DESIGN_TRANSPORT feedback-repo=$FEEDBACK_REPO ux-flow=$UX_FLOW ds-project=$DS_SHOW ds-repo=$DS_REPO reconciliation=$RECON"
 ```
 
 If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
@@ -623,9 +646,8 @@ other verbs may proceed in the degraded state the message names.
 `DESIGN_PROJECT` is now `none`, `ASK`, or a bare lowercase project UUID, and
 `DS_PROJECT` is `none` or a bare lowercase UUID — use those (never the raw
 HERO.md values, and never `design-system-repo`'s HERO.md directly) everywhere
-below. It never
-reaches git or `gh` argv, where a crafted value could parse as a URL or
-option — `DesignSync` takes it as a tool parameter, and the sanitizer's own
+below. Neither id ever reaches git or `gh` argv, where a crafted value could
+parse as a URL or option — `DesignSync` takes it as a tool parameter, and the sanitizer's own
 quoted `printf`/`echo` lines are its only shell contact.
 
 **Reading the target — the design snapshot.** The design lives in a
@@ -715,11 +737,11 @@ may run against it, flagged once as "snapshot as of DATE — remote not
 checked", which is a caveat on freshness, never a substitute for sync's
 config gate.
 
-**The upstream snapshot is the same mechanism, one directory over.** It is
-only needed when the target snapshot has no vendored `_ds/` copy; where there
-is one, that is the better read. When `$DS_PROJECT` is a project id — derived in
-Step 0 from `design-system-repo`'s HERO.md — refresh `$DS_SNAP` by the
-identical route —
+**The upstream snapshot is the same mechanism, one directory over.** One
+trigger, stated once: refresh `$DS_SNAP` when the target snapshot has no
+vendored `_ds/` copy **and** `$DS_PROJECT` is a project id (derived in Step 0
+from `design-system-repo`'s HERO.md). Where there is a `_ds/`, that is the
+better read and this refresh is skipped. Refresh by the identical route —
 `get_project` / `list_files` / `get_file` / harvest / commit — with its own
 meta, its own head, and its own `updatedAt` predicate. It is read for the
 upstream lane only (tokens, component surfaces, guidance, and the design
@@ -727,6 +749,16 @@ system's own reconciliation document when it keeps one); it never supplies
 `target_ref`, which always anchors to `$SNAP`. `$DS_PROJECT` = `none` skips
 the refresh; whether the *lane* runs is a separate question, answered by
 `_ds/` and `$DS_SNAP` together — see the upstream lane below.
+
+**A `$DS_SNAP` directory on disk is not a usable snapshot.** The path is set
+unconditionally in Step 0, so its existence proves nothing: a run whose
+`$DS_PROJECT` is `none` can still find a tree left by an earlier run, from
+before the design system moved projects or before `design-system-repo` was
+corrected. Usable means **refreshed this run**, or its meta `project id`
+equal to the `$DS_PROJECT` derived this run. Anything else is an abandoned
+copy, and reading it reports findings against a design system nobody is
+shipping — the same stale-copy failure removing the duplicated project id was
+meant to end.
 
 **Snapshot meta is the machine record.** Keep it at `$SNAP/.git/wayfare-meta`
 — inside the git dir, outside the worktree, so recording it never mints a
@@ -910,9 +942,10 @@ sync stops re-proposing it.
    - **`producer`** — this repo *is* the design system. Its `design-project`
      is the design system's own claude.ai/design project — the value every
      consumer's `design-system-repo` dereferences — and `design-system-repo`
-     is `none`: there is no upstream of the upstream, and Step 0 disables the
-     lane anyway when the two ids coincide. Propose exactly that and do not
-     go looking for a sibling.
+     is `none`: there is no upstream of the upstream. (Step 0's id-coincidence
+     check is the backstop for a producer that mis-sets the key to its own
+     path, not part of the normal producer shape.) Propose exactly that and
+     do not go looking for a sibling.
    - **`consumer`, or no block** — two pointers. `design-project` is the
      app's own design; the design system is a party of its own, found in
      step 3.
@@ -928,7 +961,11 @@ sync stops re-proposing it.
    link, use it for this session only. Also STOP if Step 0 printed a
    `design-transport` warning (a REJECTED value or an unknown word — the
    quiet absent-key default is fine) — reading via the wrong transport is the
-   same class of error. Verify `source-repo` resolves (for `.`, that the
+   same class of error. An `upstream design project UNRESOLVED` warning stops
+   it the same way: it says `design-system-repo` points at a repo whose
+   HERO.md could not answer, which is a fix in that repo, and nothing else
+   re-raises it — the design-system step below runs only while
+   `DS_REPO_STATE` is `UNSET`, and a configured repo is `SET`. Verify `source-repo` resolves (for `.`, that the
    working repo is readable; for anything else, one `git -C` probe).
 3. **`design-system-repo` (consumer only).** Runs only while `DS_REPO_STATE`
    is `UNSET`: `NONE` is the user's answer and is not re-asked; `REJECTED` is
@@ -946,10 +983,16 @@ sync stops re-proposing it.
    pointer to an unusable upstream: run Step 0's derivation against the
    candidate and `get_project` the result. Then one of:
    - a producer whose id resolves → propose the path, confirm, write;
+   - a producer whose `design-project` is a declared `none` or `ask` → still
+     propose the path. The path is also where `design-system-feedback` is
+     delivered, which needs no project id, and the vendored `_ds/` copy can
+     carry the lane on its own. Refusing here would leave a design system
+     with no project unreachable by either route;
    - two producers → a finding, not a choice: report both, write nothing;
    - a producer whose `role` or `design-project` read returned rc 2, or whose
-     `design-project` is absent or not a single UUID → STOP and name the
-     sibling; never fall through to `none`;
+     `design-project` is absent or is malformed (present, not `none`/`ask`,
+     and not a single UUID) → STOP and name the sibling; never fall through
+     to `none`. A declared `none`/`ask` is the case above, not this one;
    - `hero_fleet_repos` returned 3 (rows skipped) → say so before concluding
      anything about producers; the skipped row may be the producer;
    - no fleet, no producer sibling, or the user says this repo has no
@@ -1059,8 +1102,9 @@ that reports no findings is indistinguishable from a lane that found none):
 
 - **ds-drift** — the source's own token layer, component surface, or
   guidance has diverged from the design system's, read at the source in both:
-  the stylesheet's token block against `$DS_SNAP`'s, a registry entry's props
-  against its specimen. Three outcomes only — **adopt** (the system covers it,
+  the stylesheet's token block against the upstream one, a registry entry's
+  props against its specimen — always against whichever source the lane read
+  (`_ds/` or `$DS_SNAP`), and the report says which. Three outcomes only — **adopt** (the system covers it,
   replace ours), **propose** (a real gap: keep ours and raise it as a
   `design-system-feedback` item, naming the file it would live in), **diverge**
   (a named exception with a reason, re-justified every sync). Never fork a
@@ -1280,12 +1324,20 @@ So the pass runs across the roadmap:
    as one user-visible outcome is not a goal; it is a filter over the
    roadmap, and it will report `done` without anything having shipped that a
    person would notice. Each proposal goes through the same confirm flow as
-   any other row, written `status: todo` with `covers` in dependency order,
-   `budget` = `len(covers)`, `concurrency: 3`, and a DoD spanning the group.
-   Concatenating the features' own DoDs is not that: it asserts only what each
-   feature already asserts alone. Exclude any feature already in another goal's
-   `covers`: overlap is the store defect two goals pre-authorizing merges on
-   one feature.
+   any other row, and is written in **the full goal item format** (*Item
+   formats* below) — not the subset this paragraph happens to discuss. Sync
+   decides four of its values: `status: todo`, `covers` in dependency order,
+   `budget` = `len(covers)`, `concurrency: 3`. The rest of the format is not
+   optional. `source_ref` and `target_ref` are anchored here, from the heads
+   this run already resolved: a non-`done` item with no `target_ref` is a
+   store defect the *next* sync reports, so a pass that omits them writes
+   defects it had the values to prevent. `## Stop conditions` gets the
+   documented defaults; it is the one per-goal brake on a loop that
+   pre-authorizes merges, and a turn reads it every time. The `## Definition
+   of Done` spans the group. Concatenating the features' own DoDs is not that:
+   it asserts only what each feature already asserts alone. Exclude any
+   feature already in another goal's `covers` — overlapping `covers` is a
+   store defect, two goals pre-authorizing merges on one feature.
 
    **Sync writes the item and stops there — it never authorizes.** The
    approval that pre-authorizes mark-ready and merge is typed by a person at
@@ -2064,7 +2116,7 @@ Stamp `origin` with the producer that actually authored the item; never claim
 
 Pick exactly one, from the store's current state:
 
-- **A `todo` goal's `covers` are all planned**: `Next step: hero-skills:wayfare goal N — authorize the run and start the loop`.
+- **A `todo` goal whose `covers` are all `ready` or further**: `Next step: hero-skills:wayfare goal N — authorize the run and start the loop`.
 - **A feature is READY or mid-flight**: `Next step: hero-skills:wayfare do N — build feature N` (the active one, else the lowest READY id); under a goal, `hero-skills:wayfare goal GOAL` runs its next turn.
 - **Features are unplanned (`todo`), no roadmap yet, or the world moved** (target changed, work landed out-of-band, design feedback awaits delivery, features look horizontal): `Next step: hero-skills:wayfare sync — bootstraps or converges the roadmap, then plans the set`.
 - **Open Dependabot PRs**: `Next step: hero-skills:wayfare deps — takes the most severe one to merged and deployed`.
