@@ -2,7 +2,7 @@
 name: ship-pr
 # prettier-ignore
 description: Trigger auto-approve on a PR, wait for the verdict, merge if it passes, and reset to the default branch. Use after hero-skills:review-pr and any bot review when the PR is ready to ship.
-argument-hint: [pr-number]
+argument-hint: "[pr-number | recalibrate]"
 ---
 
 # Ship — Trigger Auto-Approve, Merge, Reset Local Branch
@@ -32,14 +32,35 @@ The workflow lives at `.github/workflows/auto-approve.yaml` (or `.yml` — both 
 ## Arguments
 
 - `$ARGUMENTS` - PR number or URL (optional)
+  - `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before every other form.
   - If omitted: auto-detect from current branch
 
 ## Prerequisites
 
 - `gh` CLI installed and authenticated with `repo` scope
-- `.github/workflows/auto-approve.yaml` (or `.yml`) present on the default branch — run `hero-skills:init-hero --update` to install it
+- `.github/workflows/auto-approve.yaml` (or `.yml`) present on the default branch — run `hero-skills:init-hero recalibrate` to install it
 - The repo has an `ANTHROPIC_API_KEY` secret configured (used by the workflow)
 - `kubectl`/`argocd` (k8s deploys) or `curl`-reachable health endpoints (VM/PaaS) — only needed if HERO.md declares a deployment platform
+
+## `recalibrate`
+
+`hero-skills:ship-pr recalibrate` tunes the config that drives this skill, and
+stops. It does not then run the skill — the point is to see which field was
+wrong, not to spend a run finding out. Dispatch on it before any other
+argument parsing — whichever step does that in this skill: when the first
+token of `$ARGUMENTS` is exactly `recalibrate`, announce
+`ship-pr: running recalibrate`, then follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
+— using this table as the report, and stop.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" ship-pr
+```
+
+Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
+`(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
+the user says is wrong. A row that already holds the right value is not a
+question.
 
 ## Instructions
 
@@ -120,7 +141,7 @@ GitHub only honors issue_comment workflows that already exist on the default bra
 Posting @auto-approve here will silently do nothing.
 
 Fix:
-  1. Run hero-skills:init-hero --update to install the workflow
+  1. Run hero-skills:init-hero recalibrate to install the workflow
   2. Open a PR for that workflow file alone, get it reviewed and merged to DEFAULT_BRANCH
   3. Re-run hero-skills:ship-pr
 ```

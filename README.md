@@ -188,9 +188,9 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 | `hero-skills:harden` | Audit read-only for hardening — dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness — and emit execution-ready plans as `.plans/` items |
 | `hero-skills:think-it-through` | Brainstorm + grill an idea one question at a time into shared understanding and dependency-aware work-items |
 | `hero-skills:my-humanizer` | Strip AI-writing patterns from prose (Wikipedia's "Signs of AI writing"). Runs inline inside the pipeline on everything a person reads: code comments, docs, commit bodies, and the PR body in `push-pr`, review comments in `review-pr`, thread replies in `respond-to-comments`; standalone on any text |
-| `hero-skills:architecture` | Create + converge a single root `DESIGN.md` — tech stack, boundaries, dependency rules, invariants, users, flows, interaction standards, append-only decisions; never restates what the code says. `sync` converges, `review` reports drift read-only |
+| `hero-skills:architecture` | Create + converge a single root `DESIGN.md` — tech stack, boundaries, dependency rules, invariants, users, flows, interaction standards, append-only decisions; never restates what the code says. `sync` converges, `review` reports drift read-only, `recalibrate` tunes the HERO.md fields it reads |
 | `hero-skills:fleet` | Create + converge `FLEET.md` — the local, unversioned map of the repos checked out beside each other (group, port). `sync` scans the folder and proposes rows, `review` reports drift read-only. Every repo skill run from the fleet root fans out to the repos you pick (see `docs/FLEET-MD.md`) |
-| `hero-skills:wayfare` | Feature roadmap from source to the claude.ai/design project (HERO.md-configured, read via DesignSync or a manual snapshot drop), four verbs: `sync` reads both ends, converges the `.plans/` roadmap, then plans the set as its postflight (think-it-through per feature, your ready-mark); `do N` builds one planned feature via one-shot; `goal` runs a multi-feature goal under `/goal`, building up to `concurrency` dep-free features at once, each in its own git worktree; `deps [N]` takes one Dependabot PR — review, local tests, `@auto-approve`, merge, deployment check — without ever committing on the bot's branch. Features are SLC vertical slices (user stories, never layers) carrying subtasks, a definition of done, comments, design feedback back to the design team, and staleness flags |
+| `hero-skills:wayfare` | Feature roadmap from source to the claude.ai/design project (HERO.md-configured, read via DesignSync or a manual snapshot drop), five verbs: `sync` reads both ends, converges the `.plans/` roadmap, then plans the set as its postflight (think-it-through per feature, your ready-mark); `do N` builds one planned feature via one-shot; `goal` runs a multi-feature goal under `/goal`, building up to `concurrency` dep-free features at once, each in its own git worktree; `deps [N]` takes one Dependabot PR — review, local tests, `@auto-approve`, merge, deployment check — without ever committing on the bot's branch; `recalibrate` tunes the `## Wayfare` block and the Repository field it reads. Features are SLC vertical slices (user stories, never layers) carrying subtasks, a definition of done, comments, design feedback back to the design team, and staleness flags |
 | `hero-skills:handoff` | Distill the current conversation into one self-contained work-item for a downstream agent (optionally filed to the tracker, or to **another repo** with `--repo OWNER/NAME`) |
 
 ### Utilities
@@ -269,7 +269,20 @@ with what `auto-approve.yaml` declares.
 
 Every skill reads `HERO.md` from your repo root. It declares your stack so skills don't have to guess. **HERO.md is committed to the repo** — it's team-shared, so every developer and every skill works from the same config.
 
-When project config drifts (new deps, CI changes, switched task runner), skills detect the staleness and remind you to run `hero-skills:init-hero --update` to refresh. There is no auto-pre-commit hook for this — it was too slow. Run the refresh on demand.
+When project config drifts (new deps, CI changes, switched task runner), skills detect the staleness and remind you to run `hero-skills:init-hero recalibrate` to refresh. There is no auto-pre-commit hook for this — it was too slow. Run the refresh on demand.
+
+**`recalibrate` is on sixteen skills.** When a skill does the wrong thing
+because its config is wrong, you fix it where you noticed:
+`hero-skills:ship-pr recalibrate` asks about the eight fields `ship-pr` reads
+across Repository, CI/CD and Deployment, writes what you confirm, commits, and
+stops — it does not then ship. `hero-skills:init-hero recalibrate` is the
+whole-file pass. `scripts/hero-fields.sh SKILL` prints the fields of any skill
+that carries the verb, with their current values. See
+[docs/RECALIBRATE.md](docs/RECALIBRATE.md).
+
+Note that `recalibrate` is not `sync`: `architecture sync` converges
+`DESIGN.md`, `fleet sync` converges `FLEET.md`, and `wayfare sync` converges
+the plan. Those keep their own verbs, and none of them is configuration.
 
 Here's what a minimal config looks like:
 

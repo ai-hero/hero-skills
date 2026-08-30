@@ -1,8 +1,8 @@
 ---
 name: architecture
 # prettier-ignore
-description: Create and converge a single root DESIGN.md — boundaries, dependency rules, invariants, users, flows, interaction standards, decisions the code cannot state. sync converges (propose-confirm-write); review reports drift read-only.
-argument-hint: "[sync | review]"
+description: Create and converge a single root DESIGN.md — boundaries, invariants, users, flows, decisions the code cannot state. sync converges; review reports drift; recalibrate tunes its HERO.md fields.
+argument-hint: "[sync | review | recalibrate]"
 ---
 
 # Design — The One File the Code Cannot Tell You
@@ -198,10 +198,31 @@ covers both a missing HERO.md and one without these sections: suggest
 `hero-skills:init-hero` but proceed from a direct read.
 
 Then dispatch — and **announce the dispatched verb first** (`architecture:
-running sync` / `running review`), so a typo'd `review` never lands in the
-write verb silently: `review` runs the verb below of that name; anything else
-— including no arguments — is `sync`, with any trailing text carried in as
-context (an area to focus on, or a decision to record).
+running sync` / `running review` / `running recalibrate`), so a typo'd
+`review` never lands in the write verb silently: `review` and `recalibrate`
+run the verbs below of those names; anything else — including no arguments —
+is `sync`, with any trailing text carried in as context (an area to focus on,
+or a decision to record).
+
+`recalibrate` is not `sync`. It writes `HERO.md`, never `DESIGN.md`: the three
+fields above are what tell this skill _how_ to run, and converging the design
+record with the codebase is `sync`'s job. See
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md).
+
+### `recalibrate` — tune the HERO.md fields this skill reads
+
+Follow the four phases in [docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) —
+report, ask, write, commit — using this table as the report, then stop. Do not
+go on to `sync`.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" architecture
+```
+
+Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
+`(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
+the user says is wrong. A row that already holds the right value is not a
+question.
 
 ### `sync` — converge DESIGN.md with the codebase
 

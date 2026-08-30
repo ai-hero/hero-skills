@@ -2,7 +2,7 @@
 name: preflight
 # prettier-ignore
 description: Run pre-flight checks for the hero-skills pipeline. Catches missing tooling, stale HERO.md, .env mismatches, busy ports — before any step does destructive work.
-argument-hint: [--bucket tooling|repo|runtime|pipeline|all] [--projects p1,p2]
+argument-hint: "[--bucket tooling|repo|runtime|pipeline|all] [--projects p1,p2] | recalibrate"
 disable-model-invocation: true
 ---
 
@@ -14,6 +14,7 @@ The actual checks live in `scripts/preflight.sh`. This skill is a thin wrapper: 
 
 ## Arguments
 
+- `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before every other form.
 - `$ARGUMENTS` — Optional flags passed straight to `scripts/preflight.sh`:
   - `--bucket BUCKET` — Run only one bucket. Values: `tooling`, `repo`, `runtime`, `pipeline`, or `all` (default).
   - `--projects p1,p2` — Restrict the `runtime` bucket to specific project paths or names from HERO.md. Useful when the diff only touches part of a monorepo.
@@ -36,6 +37,26 @@ The actual checks live in `scripts/preflight.sh`. This skill is a thin wrapper: 
 - `[SKIP]` — check not applicable (e.g., no `.env.example`, no projects in HERO.md)
 
 Exit code is `1` if any `BLOCKER` fired, `0` otherwise. Warnings never block.
+
+## `recalibrate`
+
+`hero-skills:preflight recalibrate` tunes the config that drives this skill, and
+stops. It does not then run the skill — the point is to see which field was
+wrong, not to spend a run finding out. Dispatch on it before any other
+argument parsing — whichever step does that in this skill: when the first
+token of `$ARGUMENTS` is exactly `recalibrate`, announce
+`preflight: running recalibrate`, then follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
+— using this table as the report, and stop.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" preflight
+```
+
+Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
+`(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
+the user says is wrong. A row that already holds the right value is not a
+question.
 
 ## Instructions
 

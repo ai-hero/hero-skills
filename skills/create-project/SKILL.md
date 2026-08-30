@@ -2,7 +2,7 @@
 name: create-project
 # prettier-ignore
 description: Scaffold a new project. Supports standalone repos or monorepo subprojects. Creates Python (FastAPI/CLI/library), full-stack (FastAPI + Next.js/Vite), or Node.js projects with AGENTS.md.
-argument-hint: PROJECT_NAME [description]
+argument-hint: "PROJECT_NAME [description] | recalibrate"
 disable-model-invocation: true
 ---
 
@@ -32,7 +32,28 @@ This skill drives the **scaffold** step and then invokes `hero-skills:setup-dev`
 
 ## Arguments
 
+- `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before the project name.
 - `$ARGUMENTS` — Project name (required) and optional description
+
+## `recalibrate`
+
+`hero-skills:create-project recalibrate` tunes the config that drives this skill, and
+stops. It does not then run the skill — the point is to see which field was
+wrong, not to spend a run finding out. Dispatch on it before any other
+argument parsing — whichever step does that in this skill: when the first
+token of `$ARGUMENTS` is exactly `recalibrate`, announce
+`create-project: running recalibrate`, then follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
+— using this table as the report, and stop.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" create-project
+```
+
+Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
+`(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
+the user says is wrong. A row that already holds the right value is not a
+question.
 
 ## Instructions
 
@@ -50,6 +71,7 @@ Read `HERO.md` for repo type (single vs monorepo), code quality tools, and codin
 
 ### Step 1: Parse Arguments
 
+- `recalibrate` as the first word is the verb, not a project name — run the `recalibrate` section above and stop. A project genuinely named `recalibrate` has to be created by hand.
 - **Project name** (required): First word. Ask if missing.
 - **Description** (optional): Remaining text.
 

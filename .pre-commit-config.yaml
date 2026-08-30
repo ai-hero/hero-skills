@@ -5,7 +5,7 @@
 # =============================================================================
 # Note: HERO.md is no longer auto-updated by a pre-commit hook (too slow).
 # Skills detect when HERO.md is stale and recommend running
-# `hero-skills:init-hero --update` to refresh it.
+# `hero-skills:init-hero recalibrate` to refresh it.
 # =============================================================================
 
 # Everything below runs on commit unless a hook overrides `stages` itself.

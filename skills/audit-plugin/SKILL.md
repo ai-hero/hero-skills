@@ -106,7 +106,20 @@ DRY VIOLATIONS
 
 #### 2d: HERO.md Field Coverage
 
-Cross-reference every field in the HERO.md template (as defined in init) against which skills consume it:
+`scripts/hero-fields.sh --all` is the declared map — which skill reads which
+field, and what it decides there (its CURRENT column is always `-`; the map
+reads no repo). It is a claim, not evidence: cross-reference
+it against the HERO.md template in init-hero and against what the skills
+actually read, and report both directions of drift.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" --all
+```
+
+A field the map omits is a field no `recalibrate` will ever ask about, which
+is how a skill keeps misbehaving after the user has run the verb that was
+supposed to fix it. A field in the map that no skill reads sends the user to
+answer a question that changes nothing.
 
 ```
 HERO.MD FIELD COVERAGE

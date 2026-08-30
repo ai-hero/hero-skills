@@ -2,7 +2,7 @@
 name: setup-dev
 # prettier-ignore
 description: Set up a developer's local environment. Reads HERO.md, checks required tools, guides through git config, CLI auth, and missing dependencies. Per-developer — never modifies shared files.
-argument-hint: [--check]
+argument-hint: "[--check | recalibrate]"
 disable-model-invocation: true
 ---
 
@@ -12,6 +12,7 @@ Guide an individual developer through setting up their local environment based o
 
 ## Arguments
 
+- `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before every other form.
 - `$ARGUMENTS`:
   - (none) — Full guided setup
   - `--check` — Just verify current setup, report what's missing
@@ -24,9 +25,31 @@ Guide an individual developer through setting up their local environment based o
 No HERO.md found. Run hero-skills:init-hero first to configure the project.
 ```
 
+## `recalibrate`
+
+`hero-skills:setup-dev recalibrate` tunes the config that drives this skill, and
+stops. It does not then run the skill — the point is to see which field was
+wrong, not to spend a run finding out. Dispatch on it before any other
+argument parsing — whichever step does that in this skill: when the first
+token of `$ARGUMENTS` is exactly `recalibrate`, announce
+`setup-dev: running recalibrate`, then follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
+— using this table as the report, and stop.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" setup-dev
+```
+
+Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
+`(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
+the user says is wrong. A row that already holds the right value is not a
+question.
+
 ## Instructions
 
 ### Step 1: Read HERO.md
+
+**If the first token of `$ARGUMENTS` is exactly `recalibrate`, run the `recalibrate` section above and stop** — before the missing-HERO.md check below, which would otherwise send the user to `init-hero` for the very file the verb is there to fill in.
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
@@ -196,7 +219,7 @@ Remaining action items:
   2. Verify Linear MCP server is configured in Claude settings
 
 Your environment is ready for development! 🎉
-Run hero-skills:init-hero --update if the project setup has changed.
+Run hero-skills:init-hero recalibrate if the project setup has changed.
 
 Next step: hero-skills:preflight — sanity-check tooling, .env, ports before starting (print only — model-invocation-restricted, cannot auto-run)
 ```

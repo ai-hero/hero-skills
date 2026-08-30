@@ -62,6 +62,12 @@ other repos (the auto-approve caller, the design-system rule and hook, the
   green on the rebased head. A verdict on a stale head is a verdict on code
   that will not merge. Rebase *before* `@auto-approve`, never between the
   verdict and the merge: branch protection dismisses approvals on push.
+- **`recalibrate` writes HERO.md; `sync` writes the skill's own file.** Sixteen
+  skills carry the verb ([docs/RECALIBRATE.md](./docs/RECALIBRATE.md)); their
+  field map is `scripts/hero-fields.sh`, and a field missing there is a field
+  no recalibrate can ask about. `architecture sync`, `fleet sync` and
+  `wayfare sync` are unrelated: they converge DESIGN.md, FLEET.md and the
+  plan, not config.
 - **Assets are vendored downstream, not authored there.** Fix a bug here, then
   re-vendor. A consuming repo's copy is output.
 - **Tests are `scripts/*.test.sh` and both runners glob.** Add a suite and it

@@ -2,7 +2,7 @@
 name: create-skill
 # prettier-ignore
 description: Create a new Claude Code skill, subagent, rule, or hook. Guides through trigger conditions, success criteria, and writes a well-structured SKILL.md. Use when extending Claude.
-argument-hint: DESCRIPTION_OF_WHAT_YOU_WANT_CLAUDE_TO_DO
+argument-hint: "DESCRIPTION_OF_WHAT_YOU_WANT_CLAUDE_TO_DO | recalibrate"
 disable-model-invocation: true
 ---
 
@@ -12,6 +12,7 @@ Create skills and other components that extend Claude's capabilities.
 
 ## Arguments
 
+- `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before the description.
 - `$ARGUMENTS` — Description of what you want the skill to do
 
 ## Core Principles
@@ -66,9 +67,31 @@ disable-model-invocation: true
 | Duplicate info across files | Single source of truth |
 | Lowercase angle bracket placeholders | Use UPPER_CASE (e.g., PROJECT_NAME) |
 
+## `recalibrate`
+
+`hero-skills:create-skill recalibrate` tunes the config that drives this skill, and
+stops. It does not then run the skill — the point is to see which field was
+wrong, not to spend a run finding out. Dispatch on it before any other
+argument parsing — whichever step does that in this skill: when the first
+token of `$ARGUMENTS` is exactly `recalibrate`, announce
+`create-skill: running recalibrate`, then follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
+— using this table as the report, and stop.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" create-skill
+```
+
+Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
+`(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
+the user says is wrong. A row that already holds the right value is not a
+question.
+
 ## Instructions
 
 ### Step 0: Load Configuration
+
+**If `$ARGUMENTS` is exactly `recalibrate`, run the `recalibrate` section above and stop** — the rest of this skill reads `$ARGUMENTS` as free-text describing the skill to build, so the verb would otherwise become a skill description.
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)

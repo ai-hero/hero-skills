@@ -2,7 +2,7 @@
 name: harden
 # prettier-ignore
 description: Audit the codebase for hardening opportunities — dependency CVEs, container CVEs (Scout + Trivy), code-level robustness — read-only, and emit execution-ready plans as .plans items. Never edits source.
-argument-hint: "[deps|docker|code|all]"
+argument-hint: "[deps|docker|code|all|recalibrate]"
 disable-model-invocation: true
 ---
 
@@ -23,12 +23,33 @@ Inspired by [shadcn/improve](https://github.com/shadcn/improve): the expensive, 
   - `docker` - Container image CVEs only (Docker Scout + Trivy)
   - `code` - Code-level hardening audit only
   - `all` - Everything
+  - `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before every other form.
 
 ## Prerequisites
 
 - `gh` CLI installed and authenticated (for Dependabot alerts)
 - `docker` CLI installed (for Docker Scout; the `docker` part degrades to skipped without it)
 - `trivy` CLI installed (second container scanner — see Part B; degrades to Scout-only with a note if unavailable)
+
+## `recalibrate`
+
+`hero-skills:harden recalibrate` tunes the config that drives this skill, and
+stops. It does not then run the skill — the point is to see which field was
+wrong, not to spend a run finding out. Dispatch on it before any other
+argument parsing — whichever step does that in this skill: when the first
+token of `$ARGUMENTS` is exactly `recalibrate`, announce
+`harden: running recalibrate`, then follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
+— using this table as the report, and stop.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" harden
+```
+
+Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
+`(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
+the user says is wrong. A row that already holds the right value is not a
+question.
 
 ## Instructions
 
