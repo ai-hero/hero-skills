@@ -943,8 +943,7 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - design-project: none # a claude.ai/design link or project UUID; `ask` prompts for the link each session; none disables the target substrate (unless design-transport is manual)
 - design-transport: auto # auto | designsync | manual — manual = you carry exported design files into the local snapshot (two-account setups)
 - feedback-repo: none # OWNER/NAME GitHub repo where design-feedback and architecture-feedback issues are filed; none keeps feedback in local packets
-- design-system-project: none # the UPSTREAM design system's own claude.ai/design project (link or UUID); none skips the upstream reconciliation lane
-- design-system-repo: none # LOCAL PATH to a design-system checkout; design-system feedback is written into its .plans/ store, not filed as an issue
+- design-system-repo: none # LOCAL PATH to a design-system checkout; none skips the upstream reconciliation lane. Its own HERO.md design-project is where the design system's design is read from, and design-system feedback is written into its .plans/ store rather than filed as an issue
 <!-- reconciliation: path, in the DESIGN PROJECT, of a rolling reconciliation
      document the target already keeps. Left unset for the same reason ux-flow is:
      unset means "nobody has looked", and `none` asserts "looked, it keeps none"
