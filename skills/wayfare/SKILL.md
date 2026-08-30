@@ -38,8 +38,9 @@ absence as a defect unless a design project is configured. Items without a
 The source repo sits between two things it does not own — the **design
 system** it consumes upstream, and the **app design** it is built toward. A
 sync is one round of reconciliation across all three. Wayfare's items come in
-eight kinds — `sync` writes the first six, the `goal` verb writes the
-seventh, and `deps` the eighth:
+eight kinds — `sync` writes the first six and proposes the seventh over
+them, the `goal` verb also writes the seventh when the user names one
+directly, and `deps` the eighth:
 
 | `kind` | What it is | Class | Ends at |
 | --- | --- | --- | --- |
@@ -193,7 +194,7 @@ skipped for work that does not need it (see below).
 | Status | Meaning | Flipped by |
 | --- | ------------------------------------ | --- |
 | `new` | Created, not yet triaged | the default for any item with no `status:` line |
-| `todo` | On the roadmap, not yet planned | `sync` writes accepted features as `todo` |
+| `todo` | On the roadmap, not yet planned | `sync` writes accepted features as `todo`, and the goals it proposes over them |
 | `planning` | Being planned via think-it-through | `sync`'s planning postflight, as each feature's grill starts (`hero-skills:think-it-through FEATURE_ID`, Feature mode) |
 | `ready` | Plan approved — eligible to build | **The user, only ever explicitly** — never wayfare |
 | `implementing` | Being built | one-shot, at its first edit |
@@ -282,8 +283,7 @@ an anchor.
 - design-transport: auto # auto | designsync | manual — how the design snapshot is refreshed (see Reading the target)
 - feedback-repo: none # OWNER/NAME GitHub repo where design-feedback and architecture-feedback issues are filed; `none` keeps feedback in local packets
 - ux-flow: flows/ # optional path, relative to the DESIGN PROJECT ROOT, holding the UX prototype flow / guided tour; `none` = the design genuinely has none
-- design-system-project: none # the UPSTREAM design system's own claude.ai/design project — a link or bare UUID; `none` skips the upstream lane entirely
-- design-system-repo: none # LOCAL PATH to a checkout of the design-system repo; design-system feedback is written into ITS `.plans/` store, not filed as an issue
+- design-system-repo: none # LOCAL PATH to a checkout of the design-system repo; `none` skips the upstream lane entirely. Its own HERO.md `design-project` is where the design system's design is read from, and design-system feedback is written into ITS `.plans/` store rather than filed as an issue
 # reconciliation: docs/Design Reconciliation.md # path, relative to the DESIGN PROJECT ROOT, of the target's own rolling reconciliation document. Leave UNSET until you have looked; `none` asserts "looked, it keeps none" and stops sync from proposing it
 ```
 
@@ -291,37 +291,51 @@ an anchor.
 that consumes a design system typically **vendors it into itself**, at
 `_ds/DESIGN_SYSTEM_SLUG-DESIGN_SYSTEM_UUID/` — stylesheets, the manifest, the
 component surface. When that directory exists in the target snapshot, it is the
-better read and `design-system-project` is not needed: the vendored copy is the
-version **the design is actually bound to**, whereas the upstream project head
-is whatever shipped most recently. Reconciling the source against a design
-system the design itself has not adopted yet manufactures drift that is nobody's
-to fix.
+better read: the vendored copy is the version **the design is actually bound
+to**, whereas the upstream project head is whatever shipped most recently.
+Reconciling the source against a design system the design itself has not
+adopted yet manufactures drift that is nobody's to fix.
 
 So the order is: use `_ds/` when the target snapshot has it; fall back to
-`design-system-project` when it does not; report the upstream lane as skipped
-when neither is available. Say which one was read — the two can disagree, and
-that disagreement is itself a finding (the design is behind its own system).
+`$DS_SNAP` — the design system's own design project, read from
+`design-system-repo`'s HERO.md — when it does not; report the upstream lane as
+skipped when neither is available. Say which one was read — the two can
+disagree, and that disagreement is itself a finding (the design is behind its
+own system).
 
-**Why the design system gets its own two keys.** `## Design System` in HERO.md
+**Why the design system gets exactly one key.** `## Design System` in HERO.md
 already describes the registry the source *installs from* — namespace,
-registry URL, handbook. These two are about the same system as a **party to
-the reconciliation**: `design-system-project` is where its surface is read,
-`design-system-repo` is where feedback to it lands. Both default to `none`,
-and `none` is a complete answer — a repo with no upstream design system runs
-the two-layer round it always ran, with no upstream lane and no
-`design-system-feedback` items.
+registry URL, handbook. `design-system-repo` is about that same system as a
+**party to the reconciliation**, and it is one key because it answers both
+questions the reconciliation asks. Feedback lands in that repo's `.plans/`
+store; the design system's **design** is read from that repo's own HERO.md
+`design-project`, which is the authority on where its design lives. It
+defaults to `none`, and `none` is a complete answer — a repo with no upstream
+design system runs the two-layer round it always ran, with no upstream lane
+and no `design-system-feedback` items.
+
+**The design system's project id is never configured twice.** A consumer that
+kept its own copy of the id would hold a second source of truth that goes
+stale silently: the design system moves its project, its own HERO.md is
+updated, and every consumer keeps reconciling against the abandoned one,
+reporting drift that is an artifact of the copy. Dereferencing
+`design-system-repo`'s HERO.md every run means the producer and every consumer
+in the fleet read one value, and the only thing a consumer configures is
+*which repo*.
 
 For the design system's **own** repo (`role: producer` under `## Design
-System`) the two keys are `none` by definition and `design-project` is the
-design system's claude.ai/design project — it is the registry, so it has no
-upstream. A consumer in the same fleet gets both keys from that repo: `sync`'s
-config gate reads the producer sibling's `design-project` rather than asking
-for the id a second time.
+System`) `design-system-repo` is `none` by definition and `design-project` is
+the design system's claude.ai/design project — it is the registry, so it has
+no upstream. That is the same key a consumer's `design-system-repo` points
+*at*, which is what makes one setting enough at both ends.
 
 `design-system-repo` is a **local path, not a GitHub slug**, because delivery
 writes an item into that repo's own `.plans/` store rather than filing an
-issue. It therefore reaches `git -C` and the filesystem, and gets the same
-rc=2-vs-rc=1 split and the same guards `source-repo` gets.
+issue, and because the id deref reads a file. It therefore reaches `git -C`
+and the filesystem, and gets the same rc=2-vs-rc=1 split and the same guards
+`source-repo` gets. A sibling's HERO.md is repo content like any other, so
+the id it yields goes through the identical extraction `design-project` gets
+before it reaches `DesignSync`.
 
 **Why `reconciliation` exists.** A target project may already run its own
 numbered reconciliation rounds — a rolling document naming what it read, what
@@ -505,46 +519,12 @@ esac
 # Lowercase before the sentinel test: `None` must not slip through as a path.
 [ "$(printf '%s' "$UX_FLOW" | tr '[:upper:]' '[:lower:]')" = none ] && UX_FLOW=NONE
 
-# design-system-project is a SECOND claude.ai/design project id and gets the
-# identical extraction — it is the same class of value reaching the same tool,
-# so a weaker check here would be the one hole in the pair.
-# DS_PROJECT is what the lanes read (`none` = no upstream lane). DS_PROJECT_STATE
-# is what the config gate reads, and it keeps the three cases the lanes fold
-# together apart: UNSET (never looked — the gate proposes), NONE (the user
-# said none — the gate stops re-proposing), REJECTED (the gate STOPs). Same
-# pair for DS_REPO below.
-DS_PROJECT_RAW=$(hero_field design-system-project); rc=$?
-if [ "$rc" = 2 ]; then
-  echo "wayfare: design-system-project REJECTED as unsafe — upstream lane DISABLED (fix HERO.md)" >&2
-  DS_PROJECT=none; DS_PROJECT_STATE=REJECTED
-elif [ "$rc" != 0 ]; then
-  DS_PROJECT=none; DS_PROJECT_STATE=UNSET
-else
-  DS_PROJECT_STATE=SET
-  case "$(printf '%s' "$DS_PROJECT_RAW" | tr '[:upper:]' '[:lower:]')" in
-    none) DS_PROJECT=none; DS_PROJECT_STATE=NONE ;;
-    *)
-      DS_MATCHES=$(printf '%s' "$DS_PROJECT_RAW" \
-        | grep -oiE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' \
-        | tr '[:upper:]' '[:lower:]' | sort -u)
-      if [ -z "$DS_MATCHES" ] || [ "$(printf '%s\n' "$DS_MATCHES" | wc -l)" -gt 1 ]; then
-        echo "wayfare: design-system-project holds no single project UUID — upstream lane DISABLED" >&2
-        DS_PROJECT=none
-      else
-        DS_PROJECT=$DS_MATCHES
-      fi ;;
-  esac
-fi
-# A design-system project that is the SAME id as the app design is a
-# misconfiguration, not a shortcut: the two snapshots would fight over one
-# directory and every upstream finding would be reported against itself.
-[ "$DS_PROJECT" != none ] && [ "$DS_PROJECT" = "$DESIGN_PROJECT" ] && {
-  echo "wayfare: design-system-project equals design-project — upstream lane DISABLED (they must be different projects)" >&2
-  DS_PROJECT=none
-}
-
 # design-system-repo is a LOCAL PATH that reaches `git -C` and the filesystem,
-# so it gets source-repo's rc split and ux-flow's embedded-option check.
+# so it gets source-repo's rc split and ux-flow's embedded-option check. It is
+# the ONLY upstream key. DS_REPO_STATE is what the config gate reads, and it
+# keeps the three cases DS_REPO folds together apart: UNSET (never looked —
+# the gate proposes), NONE (the user said none — the gate stops re-proposing),
+# REJECTED (the gate STOPs).
 DS_REPO=$(hero_field design-system-repo); rc=$?
 DS_REPO_STATE=SET
 [ "$(printf '%s' "$DS_REPO" | tr '[:upper:]' '[:lower:]')" = none ] && { DS_REPO=none; DS_REPO_STATE=NONE; }
@@ -558,6 +538,45 @@ case "$DS_REPO" in *' -'*)
   echo "wayfare: design-system-repo contains an embedded option — REJECTED" >&2
   DS_REPO=REJECTED ;;
 esac
+
+# DS_PROJECT is DERIVED from that repo's HERO.md, never configured here. A
+# consumer that kept its own copy of the id holds a second source of truth: the
+# design system moves its project, updates its own HERO.md, and the stale copy
+# keeps reconciling against the abandoned one — reporting drift that is an
+# artifact of the copy. The sibling HERO.md is repo content, so the value gets
+# design-project's IDENTICAL extraction; it is the same class of value reaching
+# the same tool, and a weaker check here would be the one hole in the pair.
+# `none` here is not fatal: the lane prefers the target's vendored `_ds/` copy
+# and only falls back to $DS_SNAP, so the gate on the lane is BOTH sources.
+DS_PROJECT=none
+if [ "$DS_REPO" != none ] && [ "$DS_REPO" != REJECTED ]; then
+  # rc 2 and rc 1 must not look alike here either: rc 2 means that repo's
+  # HERO.md holds a value someone WROTE and this sanitizer refused, which is a
+  # fix in the design system's repo, not an absence to shrug at.
+  DS_PROJECT_RAW=$(hero_field design-project "$DS_REPO"); rc=$?
+  if [ "$rc" = 2 ]; then
+    echo "wayfare: design-system-repo '$DS_REPO' has a design-project REJECTED as unsafe — upstream design project UNRESOLVED (fix that repo's HERO.md)" >&2
+  elif [ "$rc" != 0 ]; then
+    echo "wayfare: design-system-repo '$DS_REPO' has no readable design-project in its HERO.md — upstream design project UNRESOLVED" >&2
+  else
+    DS_MATCHES=$(printf '%s' "$DS_PROJECT_RAW" \
+      | grep -oiE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' \
+      | tr '[:upper:]' '[:lower:]' | sort -u)
+    if [ -z "$DS_MATCHES" ] || [ "$(printf '%s\n' "$DS_MATCHES" | wc -l)" -gt 1 ]; then
+      echo "wayfare: design-system-repo's design-project holds no single project UUID — upstream design project UNRESOLVED" >&2
+    else
+      DS_PROJECT=$DS_MATCHES
+    fi
+  fi
+fi
+# The same id at both ends means design-system-repo resolves back to this repo's
+# own design — the producer case, where there is no upstream. Left alone, the
+# two snapshots would fight over one directory and every upstream finding would
+# be reported against itself.
+[ "$DS_PROJECT" != none ] && [ "$DS_PROJECT" = "$DESIGN_PROJECT" ] && {
+  echo "wayfare: design-system-repo's design-project equals this repo's — no upstream (a producer has none)" >&2
+  DS_PROJECT=none
+}
 
 # reconciliation is a path INSIDE the design project, so it rides `git show`
 # pathspecs exactly as ux-flow does and needs ux-flow's three-state split.
@@ -603,7 +622,8 @@ other verbs may proceed in the degraded state the message names.
 
 `DESIGN_PROJECT` is now `none`, `ASK`, or a bare lowercase project UUID, and
 `DS_PROJECT` is `none` or a bare lowercase UUID — use those (never the raw
-HERO.md values) everywhere below. It never
+HERO.md values, and never `design-system-repo`'s HERO.md directly) everywhere
+below. It never
 reaches git or `gh` argv, where a crafted value could parse as a URL or
 option — `DesignSync` takes it as a tool parameter, and the sanitizer's own
 quoted `printf`/`echo` lines are its only shell contact.
@@ -695,14 +715,18 @@ may run against it, flagged once as "snapshot as of DATE — remote not
 checked", which is a caveat on freshness, never a substitute for sync's
 config gate.
 
-**The upstream snapshot is the same mechanism, one directory over.** When
-`$DS_PROJECT` is a project id, refresh `$DS_SNAP` by the identical route —
+**The upstream snapshot is the same mechanism, one directory over.** It is
+only needed when the target snapshot has no vendored `_ds/` copy; where there
+is one, that is the better read. When `$DS_PROJECT` is a project id — derived in
+Step 0 from `design-system-repo`'s HERO.md — refresh `$DS_SNAP` by the
+identical route —
 `get_project` / `list_files` / `get_file` / harvest / commit — with its own
 meta, its own head, and its own `updatedAt` predicate. It is read for the
 upstream lane only (tokens, component surfaces, guidance, and the design
 system's own reconciliation document when it keeps one); it never supplies
-`target_ref`, which always anchors to `$SNAP`. `$DS_PROJECT` = `none` skips it
-entirely and the upstream lane reports nothing rather than reporting clean.
+`target_ref`, which always anchors to `$SNAP`. `$DS_PROJECT` = `none` skips
+the refresh; whether the *lane* runs is a separate question, answered by
+`_ds/` and `$DS_SNAP` together — see the upstream lane below.
 
 **Snapshot meta is the machine record.** Keep it at `$SNAP/.git/wayfare-meta`
 — inside the git dir, outside the worktree, so recording it never mints a
@@ -884,11 +908,11 @@ sync stops re-proposing it.
    REJECTED value) is a STOP like every other rejected key; rc 1 (absent)
    is a consumer.
    - **`producer`** — this repo *is* the design system. Its `design-project`
-     is the design system's own claude.ai/design project, and
-     `design-system-project` and `design-system-repo` are both `none`: there
-     is no upstream of the upstream, and Step 0 disables the lane anyway when
-     the two ids coincide. Propose exactly that and do not go looking for a
-     sibling.
+     is the design system's own claude.ai/design project — the value every
+     consumer's `design-system-repo` dereferences — and `design-system-repo`
+     is `none`: there is no upstream of the upstream, and Step 0 disables the
+     lane anyway when the two ids coincide. Propose exactly that and do not
+     go looking for a sibling.
    - **`consumer`, or no block** — two pointers. `design-project` is the
      app's own design; the design system is a party of its own, found in
      step 3.
@@ -906,33 +930,32 @@ sync stops re-proposing it.
    quiet absent-key default is fine) — reading via the wrong transport is the
    same class of error. Verify `source-repo` resolves (for `.`, that the
    working repo is readable; for anything else, one `git -C` probe).
-3. **The design-system pointers (consumer only).** Runs only while
-   `DS_PROJECT_STATE` or `DS_REPO_STATE` is `UNSET`: `NONE` is the user's
-   answer and is not re-asked; `REJECTED` is a STOP. Look in the fleet first.
-   When `hero_fleet_root` finds one, walk `hero_fleet_repos` — **only rows
-   whose group is not `none` and whose path is a git checkout**; a parked
-   clone is exactly the repo "match the fleet" must not reach, and its
-   HERO.md is untrusted content — and read each sibling's `role` under
-   `## Design System`. The sibling whose role is `producer` is the
-   design-system repo. Propose `design-system-repo` as the registry's
-   absolute path made relative to `$ROOT` (`../NAME` when it is a direct
-   sibling; the registry, not the name, is the source) and
-   `design-system-project` as **that repo's own `design-project`** — its
-   HERO.md is the authority on where its design lives, and copying the id
-   keeps every consumer and the producer pointed at one project. The copied
-   value goes through Step 0's UUID extraction (exactly one UUID, or it is
-   not an id) and `get_project` before anything is written. Then one of:
-   - a producer with a usable id → propose both, confirm, write;
+3. **`design-system-repo` (consumer only).** Runs only while `DS_REPO_STATE`
+   is `UNSET`: `NONE` is the user's answer and is not re-asked; `REJECTED` is
+   a STOP. One key, so one question. Look in the fleet first. When
+   `hero_fleet_root` finds one, walk `hero_fleet_repos` — **only rows whose
+   group is not `none` and whose path is a git checkout**; a parked clone is
+   exactly the repo "match the fleet" must not reach, and its HERO.md is
+   untrusted content — and read each sibling's `role` under `## Design
+   System`. The sibling whose role is `producer` is the design-system repo.
+   Propose it as the registry's absolute path made relative to `$ROOT`
+   (`../NAME` when it is a direct sibling; the registry, not the name, is the
+   source). Its design project id is **not** written here — Step 0 derives
+   `DS_PROJECT` from that repo's HERO.md every run — but verify it resolves
+   before proposing the path, since a repo whose id cannot be read is a
+   pointer to an unusable upstream: run Step 0's derivation against the
+   candidate and `get_project` the result. Then one of:
+   - a producer whose id resolves → propose the path, confirm, write;
    - two producers → a finding, not a choice: report both, write nothing;
-   - a producer whose `role` or `design-project` read returned rc 2, or
-     whose `design-project` is absent or not a single UUID → STOP and name
-     the sibling; never fall through to `none`;
+   - a producer whose `role` or `design-project` read returned rc 2, or whose
+     `design-project` is absent or not a single UUID → STOP and name the
+     sibling; never fall through to `none`;
    - `hero_fleet_repos` returned 3 (rows skipped) → say so before concluding
      anything about producers; the skipped row may be the producer;
    - no fleet, no producer sibling, or the user says this repo has no
-     upstream system → `none` for both, and say which of the three it was.
-   (At read time the target's vendored `_ds/` copy still wins over
-   `design-system-project` — see *Configuration*.)
+     upstream system → `none`, and say which of the three it was.
+   (At read time the target's vendored `_ds/` copy still wins over `$DS_SNAP`
+   — see *Configuration*.)
 4. **`feedback-repo`.** Ask once; `none` keeps feedback in local packets.
    `ux-flow` and `reconciliation` are set up where sync first needs them
    (*Investigate*), not here.
@@ -1029,8 +1052,10 @@ from `references/reconciliation.md`'s vocabulary and satisfies its evidence
 rules.** A finding whose evidence rule could not be satisfied is reported
 `unverified`; it is never dropped and never promoted.
 
-**Upstream lane — the design system** (skipped entirely when `$DS_PROJECT` is
-`none`; say it is skipped rather than reporting clean):
+**Upstream lane — the design system** (read from the target's vendored `_ds/`
+copy when it has one, else `$DS_SNAP`; skipped entirely when there is neither,
+and then say it is skipped rather than reporting clean — a lane with no source
+that reports no findings is indistinguishable from a lane that found none):
 
 - **ds-drift** — the source's own token layer, component surface, or
   guidance has diverged from the design system's, read at the source in both:
@@ -1241,6 +1266,34 @@ So the pass runs across the roadmap:
    was not planned stays `todo` and is named in the report; `do` refuses it
    until the next `sync` plans it. Nothing is silently deferred.
 
+4. **Propose goals over what was planned.** A goal is the unit `/goal` loops
+   against, and every feature in its `covers` must already be `ready`
+   (*Starting a goal*, step 1) — so the end of this pass is the one moment in
+   the workflow where a goal can be formed *from* the set instead of
+   reassembled by hand afterwards. Roadmap mode has just settled the
+   cross-cutting decisions and the dependency order across these features. A
+   goal written later has to re-derive that grouping from the items alone,
+   without the reasoning that produced it.
+
+   Group by **outcome** — what a person can do once the whole group ships —
+   never by area or layer. A group whose Definition of Done cannot be stated
+   as one user-visible outcome is not a goal; it is a filter over the
+   roadmap, and it will report `done` without anything having shipped that a
+   person would notice. Each proposal goes through the same confirm flow as
+   any other row, written `status: todo` with `covers` in dependency order,
+   `budget` = `len(covers)`, `concurrency: 3`, and a DoD spanning the group.
+   Concatenating the features' own DoDs is not that: it asserts only what each
+   feature already asserts alone. Exclude any feature already in another goal's
+   `covers`: overlap is the store defect two goals pre-authorizing merges on
+   one feature.
+
+   **Sync writes the item and stops there — it never authorizes.** The
+   approval that pre-authorizes mark-ready and merge is typed by a person at
+   `wayfare goal ID`'s gate, in-session, and is never written to the item; a
+   sync that carried it would put into a file exactly the flag *Starting a
+   goal* step 4 forbids. Proposing no goals is a normal outcome — features
+   that do not add up to one outcome are left to `do`.
+
 **This is not a gate on building.** The roadmap does not have to be fully
 planned before the first feature ships — that would be waterfall, and it
 contradicts slicing the work so each piece stands alone. Plan the set as far
@@ -1298,7 +1351,9 @@ Three facts about `/goal` shape everything below:
 #### Starting a goal — `wayfare goal GOAL` in a session with no `/goal` set
 
 1. **Resolve or create the goal item.** An id or title matching a `kind: goal`
-   item resumes it. Anything else is new: work out which features it spans,
+   item resumes it — including one `sync` proposed, which arrives `todo` with
+   `covers`, `budget` and a DoD already written, needing only the
+   authorization below. Anything else is new: work out which features it spans,
    write a Definition of Done across them, set a PR budget, propose it. Every
    feature in `covers` must already be planned (`ready` or further along):
    an unplanned one is a STOP with `Next step: wayfare sync` — planning is
@@ -1991,7 +2046,8 @@ Stamp `origin` with the producer that actually authored the item; never claim
 | Measuring age in rounds | A round can be one-sided. Twenty commits can land under a document that is correct by its own process. |
 | Trusting the target's reconciliation document as current | The screens run ahead of it. Anchor to the design head, read past the document. |
 | Rewriting pulled files out of context | `get_file` returns content through context — harvest from the tool results on disk, or commit a 2-of-24 snapshot as a full export. |
-| Reporting the upstream lane clean when `design-system-project` is `none` | Not-looked-at is not converged. Say the lane was skipped. |
+| Reporting the upstream lane clean when there is no `_ds/` and no `$DS_SNAP` | Not-looked-at is not converged. Say the lane was skipped. |
+| Copying the design system's project id into a consumer's HERO.md | A second source of truth. It goes stale silently and the consumer reconciles against an abandoned project. Deref `design-system-repo`. |
 | Delivering two lanes in one issue | Surface and structure are answered by different people on different evidence. |
 | Building a feedback item | Feedback is delivered, never built — `hero_ready_items` never hands one out READY. |
 | Planning an item already satisfied | Check the codebase before think-it-through; finished work must not be grilled. |
@@ -2008,6 +2064,7 @@ Stamp `origin` with the producer that actually authored the item; never claim
 
 Pick exactly one, from the store's current state:
 
+- **A `todo` goal's `covers` are all planned**: `Next step: hero-skills:wayfare goal N — authorize the run and start the loop`.
 - **A feature is READY or mid-flight**: `Next step: hero-skills:wayfare do N — build feature N` (the active one, else the lowest READY id); under a goal, `hero-skills:wayfare goal GOAL` runs its next turn.
 - **Features are unplanned (`todo`), no roadmap yet, or the world moved** (target changed, work landed out-of-band, design feedback awaits delivery, features look horizontal): `Next step: hero-skills:wayfare sync — bootstraps or converges the roadmap, then plans the set`.
 - **Open Dependabot PRs**: `Next step: hero-skills:wayfare deps — takes the most severe one to merged and deployed`.
