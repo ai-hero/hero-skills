@@ -107,7 +107,8 @@ DRY VIOLATIONS
 #### 2d: HERO.md Field Coverage
 
 `scripts/hero-fields.sh --all` is the declared map — which skill reads which
-field, and what it decides there. It is a claim, not evidence: cross-reference
+field, and what it decides there (its CURRENT column is always `-`; the map
+reads no repo). It is a claim, not evidence: cross-reference
 it against the HERO.md template in init-hero and against what the skills
 actually read, and report both directions of drift.
 

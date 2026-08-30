@@ -219,6 +219,11 @@ go on to `sync`.
 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" architecture
 ```
 
+Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
+`(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
+the user says is wrong. A row that already holds the right value is not a
+question.
+
 ### `sync` — converge DESIGN.md with the codebase
 
 **Investigate, propose, write only what the user confirms** — in both modes.

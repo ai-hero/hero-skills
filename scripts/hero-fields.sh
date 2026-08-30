@@ -13,15 +13,33 @@
 #   scripts/hero-fields.sh --list         skill names that have a map entry
 #   scripts/hero-fields.sh --all          every row, no values read
 #
-# Output is TSV with a header: SECTION KEY CURRENT DECIDES.
-# KEY `*` means the whole section, and CURRENT is then `present` / `absent`.
-# CURRENT is `unset` for a field the file does not carry and `refused` for one
-# the reader rejected as unsafe — the two are different findings, and
+# Output is TSV with a header: SECTION KEY CURRENT DECIDES — the same four
+# columns in every mode, so one record type describes the whole command.
+# `--all` fills CURRENT with `-` because it reads no file.
+#
+# CURRENT is either a HERO.md value or one of six parenthesised sentinels.
+# The parentheses are what keep the two domains disjoint: no branch name,
+# command or registry URL starts with `(`, so a file that literally says
+# `- default-branch: unset` cannot be mistaken for a field that has none.
+#
+#   (present) (absent)      a `*` row's section heading, found or not
+#   (unset)                 the file does not carry this field, or carries it empty
+#   (no-section)            the heading this field lives under is missing
+#   (refused)               the reader rejected the value as unsafe
+#   (no-file)               there is no readable HERO.md at all
+#
+# `(unset)` and `(refused)` are different findings and must stay that way:
 # collapsing them would send `recalibrate` to ask about a field that is
 # actually set to something dangerous.
 #
-# Exit: 0 rows printed, 2 unknown skill.
+# Exit: 0 rows printed, 1 cannot run (no lib, bad ROOT, reader failure),
+# 2 unknown skill.
 
+# Deliberately not `set -e`, unlike its six siblings in this directory. An
+# unset field makes `hero_md_field` return non-zero, and that is this script's
+# finding to report, not an error to die on — with `-e` the table stops at the
+# first unset field and exits 1, silently, and every recalibrate that reads it
+# then asks about nothing.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -94,7 +112,7 @@ harden|Projects|*|per project: language and dependency file, which decide the CV
 recomponentize-ui|Design System|role|producer refuses the run; consumer is what the pass is for
 recomponentize-ui|Design System|namespace|the registry prefix components are sourced under
 recomponentize-ui|Design System|registry-url|where the registry is fetched from
-recomponentize-ui|Design System|token-env|the env var holding the registry token
+recomponentize-ui|Design System|token-env-var|the env var holding the registry token
 recomponentize-ui|Projects|*|per project: the framework, which decides whether there is a UI at all
 abandon|Repository|default-branch|what the tree resets to once the work is discarded
 abandon|Repository|branch-convention|which branches are this pipeline's to discard
@@ -113,47 +131,102 @@ handoff|Project Management|issue-prefix|the ID shape the item is named with
 ROWS
 }
 
-usage() { sed -n '3,20p' "$0" | sed 's/^# \{0,1\}//'; }
+# The header block above IS the help text, so this range tracks it: line 6 is
+# the first line after the copyright, line 36 the last of the exit contract.
+# Reflowing that block without moving these numbers prints the copyright as
+# usage and truncates the range mid-sentence.
+usage() { sed -n '6,36p' "$0" | sed 's/^# \{0,1\}//'; }
 
 case "${1:-}" in
   ''|-h|--help) usage; exit 0 ;;
   --list) rows | cut -d'|' -f1 | sort -u; exit 0 ;;
   --all)
-    printf 'SKILL\tSECTION\tKEY\tDECIDES\n'
-    rows | tr '|' '\t'
+    printf 'SKILL\tSECTION\tKEY\tCURRENT\tDECIDES\n'
+    rows | awk -F'|' -v OFS='\t' '{ print $1, $2, $3, "-", $4 }'
     exit 0 ;;
 esac
 
 SKILL="$1"
 ROOT="${2:-$(hero_root)}"
 
-SKILL_ROWS=$(rows | grep "^$SKILL|" || true)
+# A ROOT that is not a directory is a caller bug (a typo, a stale variable),
+# not a repo without config. Without this it would render a full table of
+# `(no-file)` and exit 0, and recalibrate would offer to write a fresh HERO.md
+# into a tree that does not exist.
+[ -d "$ROOT" ] || { echo "hero-fields: ROOT is not a directory: $ROOT" >&2; exit 1; }
+
+# Compare the field, don't interpolate into a regex: `grep "^$SKILL|"` made
+# `hero-fields.sh push.pr` print push-pr's table and exit 0, so a mangled
+# argument reported another skill's fields and recalibrate wrote them.
+SKILL_ROWS=$(rows | awk -F'|' -v s="$SKILL" '$1 == s')
 if [ -z "$SKILL_ROWS" ]; then
   echo "hero-fields: no map entry for '$SKILL' — run --list for the skills that have one" >&2
   exit 2
 fi
 
-printf 'SECTION\tKEY\tCURRENT\tDECIDES\n'
-printf '%s\n' "$SKILL_ROWS" | while IFS='|' read -r _skill section key decides; do
-  target="$ROOT/HERO.md"
+TARGET="$ROOT/HERO.md"
+if [ -e "$TARGET" ] && [ ! -r "$TARGET" ]; then
+  # Distinct from absent on purpose: a HERO.md nobody can read is a
+  # permissions problem to surface, and reporting it as "no config" invites
+  # recalibrate to propose writing over a file that is already there.
+  echo "hero-fields: $TARGET exists but is not readable" >&2
+  exit 1
+fi
 
-  if [ ! -r "$target" ]; then
-    current="no-file"
+# `hero_md_field` skips fenced code blocks because HERO.md documents its own
+# syntax in examples. This heading probe must skip them too, or a `## Section`
+# quoted inside a fence reports as present and recalibrate never asks for it.
+has_section() { # SECTION FILE
+  awk -v want="## $1" '
+    /^```/ { fence = !fence; next }
+    fence  { next }
+    { line = $0; sub(/[[:space:]]+$/, "", line) }
+    line == want { found = 1; exit }
+    END { exit !found }
+  ' "$2"
+}
+
+# Not `rows | while` — a pipeline puts the loop in a subshell, where a reader
+# failure could set no flag the script could exit on. Every row read below
+# reported success no matter how badly hero_md_field broke.
+ERRF=$(mktemp); trap 'rm -f "$ERRF"' EXIT
+FAILED=0
+
+printf 'SECTION\tKEY\tCURRENT\tDECIDES\n'
+while IFS='|' read -r _skill section key decides; do
+  [ -n "$section" ] || continue
+
+  if [ ! -r "$TARGET" ]; then
+    current="(no-file)"
   elif [ "$key" = '*' ]; then
-    if [ "$section" = '*' ] || grep -q "^## ${section}[[:space:]]*$" "$target"; then
-      current="present"
+    if [ "$section" = '*' ] || has_section "$section" "$TARGET"; then
+      current="(present)"
     else
-      current="absent"
+      current="(absent)"
     fi
+  elif ! has_section "$section" "$TARGET"; then
+    # The field cannot be unset when the heading it lives under is missing —
+    # those need different questions, and phase 3 needs to know it is creating
+    # a section rather than filling a blank in one.
+    current="(no-section)"
   else
-    current=$(hero_md_field "$target" "$key" "## $section" 2>/dev/null)
-    case "$?" in
-      0) : ;;
-      2) current="refused" ;;
-      *) current="unset" ;;
+    current=$(hero_md_field "$TARGET" "$key" "## $section" 2>"$ERRF"); rc=$?
+    case "$rc" in
+      0) ;;
+      1) current="(unset)" ;;
+      2) current="(refused)" ;;
+      # hero_md_field returns only 0, 1 or 2. Anything else means the reader
+      # itself broke — renamed by a refactor, or a stale vendored hero-lib.sh
+      # where the function is simply gone (127). Reporting that as `(unset)`
+      # is how a field holding `--exec=...` gets read as merely absent.
+      *) echo "hero-fields: reader failed rc=$rc on $section/$key: $(cat "$ERRF")" >&2
+         current="(reader-failed)"; FAILED=1 ;;
     esac
-    [ -n "$current" ] || current="unset"
   fi
 
   printf '%s\t%s\t%s\t%s\n' "$section" "$key" "$current" "$decides"
-done
+done <<EOF
+$SKILL_ROWS
+EOF
+
+exit "$FAILED"

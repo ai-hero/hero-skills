@@ -1,9 +1,10 @@
 # The recalibrate verb
 
-Every skill that reads `HERO.md` accepts `recalibrate`: ask me the questions
-that decide how this skill works, and write the answers.
-`scripts/hero-fields.sh` holds the map of which skill reads which fields, and
-`scripts/hero-fields.test.sh` ties the map and the skills to each other.
+Sixteen skills accept `recalibrate`: ask me the questions that decide how this
+skill works, and write the answers. `scripts/hero-fields.sh` holds the map of
+which skill reads which fields, and `scripts/hero-fields.test.sh` ties the map
+and the skills to each other in both directions — a skill declaring the verb
+with no rows, or rows with no skill, fails the suite.
 
 ## The principle
 
@@ -13,8 +14,8 @@ fix — and the moment you notice is the moment you know which field is wrong.
 
 `recalibrate` puts the fix where the noticing happens. You do not re-run a
 repo-wide investigation because `ship-pr` merged with the wrong strategy; you
-run `hero-skills:ship-pr recalibrate` and answer four questions about the
-Repository and CI/CD sections.
+run `hero-skills:ship-pr recalibrate`, which asks about the eight fields
+`ship-pr` reads across Repository, CI/CD and Deployment — and nothing else.
 
 Three properties make it safe to reach for:
 
@@ -41,14 +42,21 @@ never touches the files those skills keep:
 | `fleet sync` | `FLEET.md` | converge the map with the folder beside it |
 | `wayfare sync` | `.plans/` | converge the plan with the design |
 
-`architecture` and `fleet` have both: `sync` for their own file, `recalibrate`
-for the `HERO.md` fields that tell them how to run. `fleet` is the one skill
-with no `recalibrate` — it runs at the fleet root, where there is no `HERO.md`
-to recalibrate.
+`architecture` has both: `sync` for `DESIGN.md`, `recalibrate` for the three
+`HERO.md` fields that tell it how to run.
+
+Three skills read `HERO.md` and deliberately have no `recalibrate`. `fleet`
+runs at the fleet root, where there is no `HERO.md` to recalibrate.
+`audit-plugin` reads the file as the *subject* of its audit rather than as its
+own config. `think-it-through` is a dialogue with the user, and stopping it to
+ask about config fields is the interruption the verb exists to avoid —
+recalibrate the skill that acts on its output instead.
 
 `hero-skills:init-hero recalibrate` is the whole-file pass, and the only one.
 It replaced `init-hero --update`; every other skill's `recalibrate` is a
-scoped slice of the same motion.
+scoped slice of the same motion. `init-hero` is also the one mapped skill that
+does not call `hero-fields.sh`: it re-investigates the repo rather than
+reading a field table.
 
 ## The procedure
 
@@ -56,9 +64,12 @@ Four phases, in this order, in every skill.
 
 1. **Report.** Print the fields this skill reads, their current values, and
    what each one decides for this skill — `scripts/hero-fields.sh SKILL` is
-   that table. Then look at the repo for the ones marked `unset`, `refused`,
-   or `no-file`: a field the tree can answer should reach the user as a
-   proposal with its evidence, not as an open question.
+   that table. Anything in parentheses is a finding rather than a value:
+   `(unset)`, `(no-section)`, `(refused)`, `(no-file)`, and `(absent)` for a
+   missing section. Then look at the repo for those rows — a field the tree
+   can answer should reach the user as a proposal with its evidence, not as an
+   open question. `(no-file)` on every row is not a recalibrate at all: send
+   the user to `hero-skills:init-hero`.
 2. **Ask.** One numbered list, every question at once. Each question carries
    the evidence behind the proposal and the value it would replace. Never
    ask in freeform prose, and never ask about a field that already holds the

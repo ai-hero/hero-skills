@@ -141,9 +141,11 @@ Owner: `hero-skills:init-hero`. Four steps:
 Run by itself (`hero-skills:init-hero` or `hero-skills:init-hero recalibrate`) or
 as the third step of Pipeline 1.
 
-Every other skill that reads HERO.md carries a scoped slice of this pipeline
-as its own `recalibrate` verb: the same four steps, over only the fields that
-skill reads, ending at `commit` without going on to do the skill's work. The
+Fifteen other skills carry a scoped slice of this pipeline as their own
+`recalibrate` verb. RECALIBRATE.md names its phases `report → ask → write →
+commit` — `report` is this pipeline's `investigate` narrowed to the fields
+that skill reads, and the verb ends at `commit` without going on to do the
+skill's work. The
 field map is `scripts/hero-fields.sh`; the contract is
 [RECALIBRATE.md](./RECALIBRATE.md).
 

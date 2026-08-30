@@ -18,15 +18,16 @@ The test phase (Step 2) absorbed the former `hero-skills:test-changes` skill —
   - (none, default) - Test, commit if dirty, push, and create a **draft** PR
   - `test [MODIFIER...]` - Run only Step 2 (verification + smoke tests) and stop — no commit, no push. Optional trailing tokens narrow the run: `verify` (static checks + unit tests only), `smoke` (skip verification), `backend`, `frontend [routes...]` (routes must start with `/`), `cli`, `mcp`, or free text (a test description to focus on)
   - `ready` - Test, commit if dirty, push, and create a non-draft PR (ready for review immediately) — only use when you have already self-reviewed or for trivial changes
-  - Any other first token - Treated as a target branch name (e.g., `main`, `develop`): test, commit if dirty, push, then merge into that branch (no PR)
+  - Any other first token - Treated as a target branch name (e.g., `main`, `develop`): test, commit if dirty, push, then merge into that branch (no PR). A branch literally named `recalibrate`, `test`, or `ready` cannot be targeted this way and needs a rename or a manual `git merge`
 
 ## `recalibrate`
 
 `hero-skills:push-pr recalibrate` tunes the config that drives this skill, and
 stops. It does not then run the skill — the point is to see which field was
-wrong, not to spend a run finding out. Dispatch on it before anything else in
-Step 0: when the first token of `$ARGUMENTS` is exactly `recalibrate`,
-announce `push-pr: running recalibrate`, then follow the four phases in
+wrong, not to spend a run finding out. Dispatch on it before any other
+argument parsing — whichever step does that in this skill: when the first
+token of `$ARGUMENTS` is exactly `recalibrate`, announce
+`push-pr: running recalibrate`, then follow the four phases in
 [docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
 — using this table as the report, and stop.
 
@@ -34,9 +35,10 @@ announce `push-pr: running recalibrate`, then follow the four phases in
 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" push-pr
 ```
 
-Ask only about the rows the table marks `unset`, `refused`, or `no-file`, plus
-any row whose value the user says is wrong. A row that already holds the right
-value is not a question.
+Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
+`(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
+the user says is wrong. A row that already holds the right value is not a
+question.
 
 ## Instructions
 
@@ -75,6 +77,8 @@ FIRST_ARG=$(printf '%s' "$ARGUMENTS" | awk '{print $1}')
 ```
 
 Parse only the first whitespace-separated token — a target branch that happens to start with `test` (e.g. `testing`, `test-staging`) must not be misread as the `test` keyword.
+
+**If `$FIRST_ARG` is exactly `recalibrate`, none of this step runs** — go to the `recalibrate` section above and stop there. The catch-all below treats any unrecognized first token as a branch to merge into, so missing this dispatch merges the work into a branch named `recalibrate`.
 
 **If `$FIRST_ARG` is exactly `test`, skip this step** — a test-only run commits nothing, so it may run on any branch, including the default.
 

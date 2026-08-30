@@ -46,9 +46,10 @@ shadcn or the project's existing UI library instead of a private registry.
 
 `hero-skills:recomponentize-ui recalibrate` tunes the config that drives this skill, and
 stops. It does not then run the skill — the point is to see which field was
-wrong, not to spend a run finding out. Dispatch on it before anything else in
-Step 0: when the first token of `$ARGUMENTS` is exactly `recalibrate`,
-announce `recomponentize-ui: running recalibrate`, then follow the four phases in
+wrong, not to spend a run finding out. Dispatch on it before any other
+argument parsing — whichever step does that in this skill: when the first
+token of `$ARGUMENTS` is exactly `recalibrate`, announce
+`recomponentize-ui: running recalibrate`, then follow the four phases in
 [docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
 — using this table as the report, and stop.
 
@@ -56,11 +57,14 @@ announce `recomponentize-ui: running recalibrate`, then follow the four phases i
 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" recomponentize-ui
 ```
 
-Ask only about the rows the table marks `unset`, `refused`, or `no-file`, plus
-any row whose value the user says is wrong. A row that already holds the right
-value is not a question.
+Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
+`(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
+the user says is wrong. A row that already holds the right value is not a
+question.
 
 ## Step 0: Resolve the component source
+
+**If the first token of `$ARGUMENTS` is exactly `recalibrate`, run the `recalibrate` section above and stop** — before the producer opt-out below, which halts the skill entirely on a `role: producer` repo and would take the verb down with it.
 
 ### Producer repos must opt out — check this first
 

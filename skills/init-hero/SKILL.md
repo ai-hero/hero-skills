@@ -37,6 +37,7 @@ Now running: confirm
 
 - `$ARGUMENTS`:
   - (none) - Investigate repo and create `HERO.md`
+  - `--update` - Deprecated spelling of `recalibrate`. Accept it, say once that the verb was renamed, and continue — the old name is vendored into consumer repos' instructions and stays in circulation until they re-vendor.
   - `recalibrate` - Re-investigate and update the existing `HERO.md`. The whole-file pass of the verb every skill carries — see [docs/RECALIBRATE.md](../../docs/RECALIBRATE.md). A skill that is misbehaving over one field is cheaper to fix with that skill's own `recalibrate`.
 
 ## Why This Matters
