@@ -23,7 +23,7 @@ repos:
   # General safety checks
   # ===========================================================================
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: check-added-large-files
         args: [--maxkb=500]
@@ -59,23 +59,16 @@ repos:
   # Markdown linting
   # ===========================================================================
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.44.0
+    rev: v0.48.0
     hooks:
       - id: markdownlint
-        args:
-          - --fix
-          - --disable=MD013  # line length — impractical for skill docs
-          - --disable=MD024  # duplicate headings — skills reuse step headers
-          - --disable=MD033  # inline HTML — needed for comments in HERO.md
-          - --disable=MD036  # emphasis as heading
-          - --disable=MD040  # fenced code block language — not all blocks need it
-          - --disable=MD041  # first line heading — frontmatter comes first
+        args: [--fix]
 
   # ===========================================================================
   # Typo detection
   # ===========================================================================
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
+    rev: v2.4.2
     hooks:
       - id: codespell
         args: [--skip, '*.lock']
@@ -128,9 +121,10 @@ repos:
         args:
           - --config=auto
           - --error
+          - --skip-unknown-extensions
 
   - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v4.0.0
+    rev: v4.4.0
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]

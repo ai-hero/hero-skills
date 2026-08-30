@@ -46,7 +46,7 @@ Each skill needs specific information to work well. This skill figures out what'
 **What each skill needs from HERO.md:**
 
 | Skill | Needs |
-|-------|-------|
+| --- | --- |
 | `hero-skills:push-pr` | Default branch, branch convention, hosting platform (`gh`/`glab`), issue prefix, commit convention, pre-commit run command, CI platform, workflow names, registry, required status checks |
 | `hero-skills:one-shot` | PM tool + MCP server name, branch template, issue prefix, project list |
 | `hero-skills:push-pr` (test phase) | Language, framework, lint/format/typecheck commands, test/dev/install commands, ports, dependency file |
@@ -93,7 +93,7 @@ fi
 Act on the state. **Never delete a `CLAUDE.md` whose content is not already preserved in `AGENTS.md`.**
 
 | State | Action |
-|-------|--------|
+| --- | --- |
 | `CORRECT` | Nothing to do. Edit `AGENTS.md` in Step 5. |
 | `NEITHER` | Create `AGENTS.md` with the scaffold below, then `ln -s AGENTS.md CLAUDE.md`. |
 | `AGENTS_ONLY` | Create the symlink: `ln -s AGENTS.md CLAUDE.md`. |

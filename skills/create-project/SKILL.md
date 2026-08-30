@@ -63,7 +63,7 @@ ls */pyproject.toml */package.json 2>/dev/null | head -5
 Ask based on context:
 
 | Context | Question |
-|---------|----------|
+| --- | --- |
 | Not in a repo | Create standalone repo, or add to an existing one? |
 | In a repo with siblings | Add as a new subproject? |
 | Empty repo | Initialize this repo with the new project? |

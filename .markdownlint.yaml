@@ -1,0 +1,19 @@
+default: true
+
+# Line length — impractical for skill docs.
+MD013: false
+
+# Duplicate headings — skills reuse step headers.
+MD024: false
+
+# Inline HTML — needed for comments in HERO.md.
+MD033: false
+
+# Emphasis as heading.
+MD036: false
+
+# Fenced code block language — not all blocks need it.
+MD040: false
+
+# First line heading — frontmatter comes first.
+MD041: false

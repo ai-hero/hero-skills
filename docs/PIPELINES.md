@@ -61,7 +61,7 @@ plan → implement → simplify → push → self-review → mark-ready → awai
 Owner: `hero-skills:one-shot`. Invoked with an issue ID or description it starts at `plan`; invoked with no arguments it resumes the current goal (in-progress branch/diff/PR on the current branch, plus the in-flight item's `## Subtasks` checklist — the plan file is the state file, so a run that died mid-implement resumes at its first unchecked line) from the detected step and drives it — through the usual user gates — to merged + a reset checkout. Nine steps — each maps to a single skill (or `inline` when one-shot drives it directly without delegating):
 
 | # | Step | Skill to run standalone | Notes |
-|---|------|-------------------------|-------|
+| --- | --- | --- | --- |
 | 1 | `plan` | `hero-skills:think-it-through` | resolve `$ARGUMENTS` against `.plans/` and the tracker first; grill only if nothing matches. Re-verifies the item is still outstanding before building |
 | 2 | `implement` | `inline` | executes the resolved work-item against its `success` criteria |
 | 3 | `simplify` | `/simplify` (external) | review the dirty diff for reuse/quality/efficiency and fix; `(–)` if `/simplify` unavailable |

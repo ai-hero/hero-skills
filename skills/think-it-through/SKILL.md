@@ -386,16 +386,16 @@ verify before acting — `hero-skills:one-shot` Step 1c does exactly that.
 
 ## Anti-Patterns
 
-| Smell                                            | Why it's wrong                                                   |
-| ------------------------------------------------ | --------------------------------------------------------------- |
-| Asking three questions in one message            | Destroys design-tree order; overwhelms. One at a time.          |
-| Asking without proposing an answer               | Makes the user do all the work. Always recommend.               |
-| Asking what the codebase already answers         | Wastes attention. Go read it first.                             |
-| Declaring "we're aligned" yourself               | The user signals shared understanding, not you.                 |
-| Emitting work-items before the gate              | Violates the Prime Directive. Wait for the yes.                 |
-| Marking your own items ready                     | The ready-mark is the user's. Emitted items stay `planning`.    |
-| A work-item with an empty `success`              | If you can't state done, you don't understand it yet.           |
-| Skipping the one-way-door question               | The most expensive mistakes hide behind unasked reversibility.  |
+| Smell | Why it's wrong |
+| --- | --- |
+| Asking three questions in one message | Destroys design-tree order; overwhelms. One at a time. |
+| Asking without proposing an answer | Makes the user do all the work. Always recommend. |
+| Asking what the codebase already answers | Wastes attention. Go read it first. |
+| Declaring "we're aligned" yourself | The user signals shared understanding, not you. |
+| Emitting work-items before the gate | Violates the Prime Directive. Wait for the yes. |
+| Marking your own items ready | The ready-mark is the user's. Emitted items stay `planning`. |
+| A work-item with an empty `success` | If you can't state done, you don't understand it yet. |
+| Skipping the one-way-door question | The most expensive mistakes hide behind unasked reversibility. |
 
 ## Next steps
 

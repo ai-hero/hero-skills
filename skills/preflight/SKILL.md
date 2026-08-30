@@ -22,7 +22,7 @@ The actual checks live in `scripts/preflight.sh`. This skill is a thin wrapper: 
 ## Buckets
 
 | Bucket | Checks |
-|--------|--------|
+| --- | --- |
 | `tooling` | `gh` + auth + `repo` scope, `jq`, Node ≥18, Playwright MCP registered, pr-review-toolkit plugin installed, `pre-commit` present when `.pre-commit-config.yaml` exists |
 | `repo` | HERO.md present + non-stale, `.github/workflows/auto-approve.yml` on default branch, no in-progress merge/rebase/cherry-pick |
 | `runtime` | Per-project `.env` covers every key in `.env.example`, declared `port:` is free, declared `dependency-file:` exists |
