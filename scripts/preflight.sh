@@ -262,17 +262,33 @@ check_tooling() {
     emit WARN "tooling: cannot detect playwright MCP — push-pr's test-phase UI smoke may skip. Install: claude mcp add playwright npx @playwright/mcp@latest"
   fi
 
-  # 5. pr-review-toolkit plugin. Check both the user plugin dir and the
-  #    project's .claude/plugins/ dir.
+  # 5. pr-review-toolkit plugin. A marketplace install never lands at either
+  #    legacy directory (it writes to plugins/cache/MARKETPLACE/PLUGIN/SHA),
+  #    so check installed_plugins.json first — the marketplace's own record —
+  #    then fall back to the two legacy directories for a hand-placed plugin.
   local plugin_found=false
-  for d in "$HOME/.claude/plugins/pr-review-toolkit" \
-           "$ROOT/.claude/plugins/pr-review-toolkit"; do
-    [ -d "$d" ] && plugin_found=true && break
-  done
+  local installed_json="$HOME/.claude/plugins/installed_plugins.json"
+  if [ -f "$installed_json" ] && command -v jq >/dev/null 2>&1; then
+    local jq_rc
+    jq -e '.plugins | has("pr-review-toolkit@claude-plugins-official")' \
+      "$installed_json" >/dev/null 2>&1
+    jq_rc=$?
+    case "$jq_rc" in
+      0) plugin_found=true ;;
+      1) ;; # valid JSON, key absent — fall through to the directory probe
+      *) emit WARN "tooling: installed_plugins.json is present but unreadable/malformed (jq exit $jq_rc) — falling back to directory probe" ;;
+    esac
+  fi
+  if ! $plugin_found; then
+    for d in "$HOME/.claude/plugins/pr-review-toolkit" \
+             "$ROOT/.claude/plugins/pr-review-toolkit"; do
+      [ -d "$d" ] && plugin_found=true && break
+    done
+  fi
   if $plugin_found; then
     emit OK "tooling: pr-review-toolkit plugin installed"
   else
-    emit WARN "tooling: pr-review-toolkit plugin not found — Step 8 (self-review) runs a thinner review. Install: /plugin install pr-review-toolkit"
+    emit WARN "tooling: pr-review-toolkit plugin not found — Step 5 (self-review) runs a thinner review. Install: /plugin install pr-review-toolkit"
   fi
 
   # 6. pre-commit, only if the repo declares hooks. Verify *both* that the
