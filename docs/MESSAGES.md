@@ -71,7 +71,9 @@ a note to the session after this one.
 REPO/.plans/inbox/m-7f3a9c.md
 ```
 
-`.plans/` is already git-ignored wholesale, so the inbox is too.
+`.plans/` is excluded via `.git/info/exclude` (repo-local, unversioned), so
+the inbox rides that same exclusion — and a fresh clone that never wrote that
+entry would let an inbound message get committed like any other file.
 
 **Hash-named, never numbered.** `.plans/` item ids are a sequential integer
 namespace, and goal turns run concurrent subagents. A sender allocating an id
@@ -215,7 +217,7 @@ is built from.
 new | todo | planning | ready | implementing | reviewing | suspended | done
 ```
 
-It must be all three of these, and each one is load-bearing:
+It must be all three of these, and dropping any one reintroduces a defect:
 
 - **Never READY.** Same reason `active` is separate — it keeps a second
   session off an item that is mid-flight.

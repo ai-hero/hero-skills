@@ -268,10 +268,16 @@ check_tooling() {
   #    then fall back to the two legacy directories for a hand-placed plugin.
   local plugin_found=false
   local installed_json="$HOME/.claude/plugins/installed_plugins.json"
-  if [ -f "$installed_json" ] && command -v jq >/dev/null 2>&1 \
-    && jq -e '.plugins | has("pr-review-toolkit@claude-plugins-official")' \
-      "$installed_json" >/dev/null 2>&1; then
-    plugin_found=true
+  if [ -f "$installed_json" ] && command -v jq >/dev/null 2>&1; then
+    local jq_rc
+    jq -e '.plugins | has("pr-review-toolkit@claude-plugins-official")' \
+      "$installed_json" >/dev/null 2>&1
+    jq_rc=$?
+    case "$jq_rc" in
+      0) plugin_found=true ;;
+      1) ;; # valid JSON, key absent — fall through to the directory probe
+      *) emit WARN "tooling: installed_plugins.json is present but unreadable/malformed (jq exit $jq_rc) — falling back to directory probe" ;;
+    esac
   fi
   if ! $plugin_found; then
     for d in "$HOME/.claude/plugins/pr-review-toolkit" \
