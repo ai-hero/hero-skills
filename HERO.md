@@ -15,6 +15,7 @@
 - commit-convention: conventional
 - merge-method: squash
 - auto-delete-branches: true
+- task-runner: just
 
 ## CI/CD
 

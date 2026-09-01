@@ -62,7 +62,7 @@ If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **A
 
 Read `HERO.md` if it exists. This skill uses:
 
-- **Repository** → default branch (for branching and PR base), branch convention, commit convention
+- **Repository** → default branch (for branching and PR base), branch convention, commit convention, task runner (test phase: prefer its targets over per-project raw commands when set)
 - **Code Quality** → linters, formatters, type checkers (test phase + pre-commit steps)
 - **Projects** → language, framework, install/test/dev commands, ports (test phase; skips auto-detection)
 - **CI/CD** → platform name for PR description context and CI status reporting
@@ -180,6 +180,8 @@ mapfile -t CHANGED_FILES < <(printf "%s\n" "${CHANGED_FILES[@]}" | sort -u)
 ```
 
 If `CHANGED_FILES` is empty, run the checks on the whole project (replace `"${CHANGED_FILES[@]}"` with `.` or the project root).
+
+If `HERO.md`'s **Repository** section sets `task-runner` (e.g. `just`, `make`), prefer that tool's targets (`just lint`, `just test`, …) over the per-project commands below when both exist — the task runner is what CI itself calls, so it is the copy that cannot drift from CI's actual gate.
 
 Use commands from `HERO.md` **Code Quality** and **Projects** sections when available. Otherwise auto-detect:
 

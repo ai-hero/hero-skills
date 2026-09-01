@@ -127,7 +127,7 @@ check "a heading inside a code fence is not present" \
 mkdir -p "$TMP/bare"
 BARE=$("$FIELDS" push-pr "$TMP/bare"); check "missing HERO.md exits 0" "0" "$?"
 check "every row is no-file when there is no HERO.md" \
-  "8" "$(printf '%s\n' "$BARE" | tail -n +2 | grep -c '(no-file)' | tr -d ' ')"
+  "9" "$(printf '%s\n' "$BARE" | tail -n +2 | grep -c '(no-file)' | tr -d ' ')"
 
 # A reader that breaks must not look like a file that is merely empty. This is
 # the case that turns a `--exec=` payload into a benign-looking blank.
