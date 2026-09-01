@@ -15,6 +15,7 @@
 - commit-convention: conventional
 - merge-method: squash
 - auto-delete-branches: true
+- task-runner: just
 
 ## CI/CD
 
@@ -36,13 +37,21 @@
 
 ## Code Review Agent
 
-- agent: copilot
+<!-- No external review bot posts to PRs here (checked #68-#72: only
+     github-actions[bot], which is this repo's own auto-approve workflow).
+     `agent: none` — not a made-up value — is what tells one-shot's Step 7
+     to skip the bot-await poll; self-review already runs as one-shot's own
+     Step 5 via hero-skills:review-pr regardless of this field. -->
+- agent: none
+- trigger: none
+- poll-method: none
+- bot-username: none
 
 ## Code Quality
 
 - pre-commit: true
 - linters: markdownlint, shellcheck, codespell
-- hooks: detect-secrets, validate-plugin, audit, init-update
+- hooks: detect-secrets, validate-plugin, audit, shell-unit-tests, agents-md, agents-md-commit-msg
 
 ## Wayfare
 

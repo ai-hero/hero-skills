@@ -65,6 +65,7 @@ architecture|Projects|*|the project list, and in a monorepo which one the file d
 push-pr|Repository|default-branch|the branch to cut from and the PR base
 push-pr|Repository|branch-convention|the shape of the branch name it creates
 push-pr|Repository|commit-convention|the shape of the commit message it writes
+push-pr|Repository|task-runner|the tool (just, make, …) whose targets the test phase prefers over per-project raw commands, when set
 push-pr|Project Management|issue-prefix|the ticket ID in the branch name and the PR trailers
 push-pr|Code Quality|pre-commit|whether the commit step expects hooks to run and re-stage
 push-pr|Code Quality|linters|the static checks the verify phase runs
