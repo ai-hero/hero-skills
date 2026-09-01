@@ -56,9 +56,12 @@
 ## Wayfare
 
 - source-repo: .
-- design-project: none # set to a claude.ai/design link or project UUID to enable the target substrate; `ask` prompts for the link each session; under design-transport manual, none is allowed (the snapshot you fill is the target)
-- design-transport: auto # auto | designsync | manual — manual = you carry exported design files into the local snapshot (two-account setups)
+- design-project: none # PERMANENT — hero-skills is a plugin repo with no product and no UI (per AGENTS.md); it will never have a claude.ai/design app-design project. Do not re-propose at sync
+- design-transport: auto # auto | designsync | manual — unused while design-project is permanently none, but still validated by sync's config gate, so keep it one of the three valid words
 - feedback-repo: none # OWNER/NAME GitHub repo where design-feedback issues are filed; none keeps feedback in local packets
+- ux-flow: none # no design-project (permanent) — no UX flow path to point at
+- design-system-repo: none # no fleet folder or sibling checkout with `role: producer` under `## Design System` found
+- reconciliation: none # no design-project (permanent)
 
 ## Projects
 

@@ -1,7 +1,7 @@
 ---
 name: wayfare
 # prettier-ignore
-description: Reconcile the source repo against its app design and design system into SLC feature slices, architecture work, visual polish, goals under /goal, and feedback; deps ships one Dependabot PR.
+description: Reconcile the source repo against its app design (optional) and design system into SLC feature slices, architecture work, visual polish, goals under /goal, and feedback; deps ships one Dependabot PR.
 argument-hint: "[sync | do FEATURE_ID | goal [GOAL] | deps [PR_NUMBER] | recalibrate]"
 ---
 
@@ -9,12 +9,15 @@ argument-hint: "[sync | do FEATURE_ID | goal [GOAL] | deps [PR_NUMBER] | recalib
 
 Source is the product as it is; Target is the product as it should be — a
 claude.ai/design project configured in HERO.md, read through the `DesignSync`
-tool. Every **feature** is one leg of the
+tool. Target is optional: with no design project configured, `sync` reconciles
+Source against itself instead — DESIGN.md, its own gaps, its own hardening —
+a **self-review** (see `sync` below). Every **feature** is one leg of the
 route between them — one whole leg, planned and built in a single run: a
 `.plans/` item naming the source paths it changes and the target paths it
-satisfies. `/wayfare sync` reads both ends and converges
-the roadmap — shipped work folds back into Source, target changes surface as
-new or stale features, and nothing goes false silently.
+satisfies. `/wayfare sync` reads whichever ends are configured and converges
+the roadmap — shipped work folds back into Source, target changes (when there
+is a target) surface as new or stale features, and nothing goes false
+silently.
 
 The route runs both ways. Target changes reach the roadmap as stale and
 uncovered features; what **building** teaches about the design travels back
@@ -279,7 +282,7 @@ an anchor.
 ## Wayfare
 
 - source-repo: . # the repo wayfare runs in; virtually always `.`
-- design-project: https://claude.ai/design/PROJECT_UUID # a claude.ai/design link or bare project UUID; `ask` = prompt for the link in-session, never stored; `none` disables the target (unless design-transport is manual)
+- design-project: https://claude.ai/design/PROJECT_UUID # a claude.ai/design link or bare project UUID; `ask` = prompt for the link in-session, never stored; `none` disables the target and runs sync in self-review mode (source only) — sync asks each run whether to add one, unless the comment says `none # PERMANENT — reason` (a repo that structurally can't have one)
 - design-transport: auto # auto | designsync | manual — how the design snapshot is refreshed (see Reading the target)
 - feedback-repo: none # OWNER/NAME GitHub repo where design-feedback and architecture-feedback issues are filed; `none` keeps feedback in local packets
 - ux-flow: flows/ # optional path, relative to the DESIGN PROJECT ROOT, holding the UX prototype flow / guided tour; `none` = the design genuinely has none
@@ -376,13 +379,29 @@ exactly as `DesignSync list_files` reports paths.
 URL or an option — `DesignSync` takes the project id as a tool parameter —
 so its only sanitizer is the extraction itself: a configured value must be
 `none`, `ask`, or text containing exactly one project UUID, and anything
-else disables the target loudly rather than silently. A missing block or `design-project: none` stops `sync`
-with a setup offer — a roadmap needs both ends — **except** under
-`design-transport: manual`, where the target is the snapshot the user fills
-and no project id is required (the link, when present, is only quoted in the
-sync instructions). `ask` is for repos that must not pin a project (or users
-who prefer to paste the link): each session asks for the claude.ai/design
-link and nothing is written to HERO.md.
+else disables the target loudly rather than silently. **A design target is
+optional.** A missing block or `design-project: none` offers to set one up —
+a design target sharpens the roadmap — but declining does not stop `sync`;
+it runs in self-review mode instead (source only, see `sync` below). That
+offer is re-asked every run, unlike every other key in the config gate: a
+confirmed `design-system-repo: none` is a settled answer because there is
+nothing more to check for, but a design project can simply show up later, and
+design-driven reconciliation is strictly more than self-review, so the
+question stays open — **unless the comment on the line says `PERMANENT`**
+(e.g. `design-project: none # PERMANENT — reason`), which is how a repo that
+structurally cannot have one (no product, no UI — the reason belongs in the
+comment) opts out for good. That marker is prose for the reader, not a value
+`hero_field` returns — it strips comments — so honoring it is something only
+the agent reading the raw line does, the same way it reads every other
+human-authored note in HERO.md; write it once, by hand or when `sync`'s
+config gate writes the confirmed `none` and the user says why, never inferred
+from silence. `ask` is for repos that must not pin a project
+(or users who prefer to paste the link): each session asks for the
+claude.ai/design link and nothing is written to HERO.md; declining that
+prompt self-reviews for the session. `design-transport: manual` still works
+exactly as before — the target is the snapshot the user fills, and no
+project id is required (the link, when present, is only quoted in the sync
+instructions).
 
 `feedback-repo` is the design-feedback delivery destination
 (`references/feedback-channels.md`); it reaches `gh --repo`, so it is held to
@@ -903,7 +922,9 @@ READY/blocked → active → review → done, then goal, then feedback), each wi
   remote not checked" caveat instead — never pass a control value to the
   tool. An absent or non-40-hex `target_ref` on a non-`done` feature is a
   **store defect** to flag for `sync` — as is a 40-hex one the snapshot
-  cannot resolve (an unresolvable anchor, per *Reading the target*) — never
+  cannot resolve (an unresolvable anchor, per *Reading the target*) — **only
+  when `$DESIGN_PROJECT` is a project id**; in self-review mode an absent
+  `target_ref` is the normal state of every item, per the intro, and never
   an input to compute staleness from,
 - its subtask progress when planned (checked/total from `## Subtasks`, e.g. `2/4`),
 - its open-comment count (entries in `## Comments`),
@@ -974,23 +995,35 @@ sync stops re-proposing it.
    - **`consumer`, or no block** — two pointers. `design-project` is the
      app's own design; the design system is a party of its own, found in
      step 3.
-2. **`design-project`.** `sync` needs both ends. If Step 0 left
-   `DESIGN_PROJECT=none` — missing block, `design-project: none`, no
-   extractable UUID, or a REJECTED value (Step 0 prints which) — and the
-   transport is not `manual`, STOP and offer to set it up: ask for the
-   claude.ai/design link (or run `DesignSync list_projects` and let the user
-   pick, or offer `design-transport: manual` for a project this session's
-   account cannot reach), extract and verify the UUID with `get_project`
-   BEFORE writing anything, then write or fix the block in `$ROOT/HERO.md`
-   and re-run Step 0. `DESIGN_PROJECT=ASK` resolves here too: ask for the
-   link, use it for this session only. Also STOP if Step 0 printed a
-   `design-transport` warning (a REJECTED value or an unknown word — the
-   quiet absent-key default is fine) — reading via the wrong transport is the
-   same class of error. An `upstream design project UNRESOLVED` warning stops
-   it the same way: it says `design-system-repo` points at a repo whose
-   HERO.md could not answer, which is a fix in that repo, and nothing else
-   re-raises it — the design-system step below runs only while
-   `DS_REPO_STATE` is `UNSET`, and a configured repo is `SET`. Verify `source-repo` resolves (for `.`, that the
+2. **`design-project` — optional.** A design target sharpens the roadmap but
+   is not required. If Step 0 left `DESIGN_PROJECT=none` — missing block,
+   `design-project: none`, no extractable UUID, or a REJECTED value (Step 0
+   prints which) — and the transport is not `manual`, offer to set one up:
+   ask for the claude.ai/design link (or run `DesignSync list_projects` and
+   let the user pick, or offer `design-transport: manual` for a project this
+   session's account cannot reach), extract and verify the UUID with
+   `get_project` BEFORE writing anything, then write or fix the block in
+   `$ROOT/HERO.md` and re-run Step 0. Decline → proceed in **self-review**
+   mode (source only) for this run; unlike every other key in this gate, this
+   question is asked again next time, since a design project can show up
+   later and design-driven reconciliation is strictly more than self-review —
+   **unless the raw `design-project: none` line's comment says `PERMANENT`**
+   (read the line itself; `hero_field` strips the comment), which is the
+   repo saying it structurally cannot have one and stops the ask for good,
+   same as any other settled `none` in this gate. A REJECTED value is still
+   a STOP, same as any other key Step 0 flags — this is about the absent
+   case, not the rejected one. `DESIGN_PROJECT=ASK`
+   resolves here too: ask for the link, use it for this session only, and
+   self-review if declined. Also STOP if Step 0 printed a `design-transport`
+   warning (a REJECTED value or an unknown word — the quiet absent-key
+   default is fine) — reading via the wrong transport is the same class of
+   error, and Step 0 raises it regardless of whether a project is configured,
+   so this STOP is not conditioned on `design-project` either. An `upstream design
+   project UNRESOLVED` warning stops it the same way: it says
+   `design-system-repo` points at a repo whose HERO.md could not answer,
+   which is a fix in that repo, and nothing else re-raises it — the
+   design-system step below runs only while `DS_REPO_STATE` is `UNSET`, and a
+   configured repo is `SET`. Verify `source-repo` resolves (for `.`, that the
    working repo is readable; for anything else, one `git -C` probe).
 3. **`design-system-repo` (consumer only).** Runs only while `DS_REPO_STATE`
    is `UNSET`: `NONE` is the user's answer and is not re-asked; `REJECTED` is
@@ -1052,7 +1085,10 @@ store that won't list is a failed check — STOP and name the path.
    declines, derive the layering from a direct read of the source instead —
    but say it is unverified. **This map orders subtasks, never features** —
    feature order comes from step 3's journey.
-2. **Investigate.** Refresh the design snapshot per *Reading the target*
+2. **Investigate.** Two paths, chosen by whether `design-project` is
+   configured (per the config gate above).
+
+   **Design-driven.** Refresh the design snapshot per *Reading the target*
    (pull via the transport, commit, resolve the head), then read it and the
    corresponding source paths. **Assert the refresh succeeded first** — the
    pull or drop completed, the snapshot is non-empty, and `ux-flow`, when
@@ -1064,7 +1100,24 @@ store that won't list is a failed check — STOP and name the path.
    or transfer error. Never propose a roadmap from a target you could not
    see.
 
-   Also check whether the source repo builds UI from a component registry —
+   **Self-review — no `design-project`.** There is no target to pull, so
+   "investigate" means reading the source repo against itself, at the
+   current source head:
+   - **DESIGN.md and its architecture review** — step 1 already ran
+     `hero-skills:architecture review`; any decision it records as
+     incomplete, deferred, or now contradicted by the code is a candidate.
+   - **Code-level gaps** — TODO/FIXME markers, stub implementations, and
+     ground a DESIGN.md boundary implies should exist but does not. A grep
+     hit is a lead, not a feature — read enough of the surrounding code to
+     state what finishing it would let a person do.
+   - **Hardening gaps** — an existing flow with missing error handling,
+     unvalidated input, or an edge case the code does not guard, found by
+     reading the flow itself, not by counting `try`/`catch` blocks.
+   Every self-review candidate still owes step 4's SLC test: closing a TODO
+   or catching an exception that changes nothing a person can do is a chore,
+   not a feature, and stays off the roadmap.
+
+   **Both paths.** Also check whether the source repo builds UI from a component registry —
    a shadcn `components.json` with a `registries` block, or an equivalent
    design-system rule file (e.g. `.claude/rules/design-system*.md`) — and,
    when the target names components by a visible convention of its own (a
@@ -1074,7 +1127,10 @@ store that won't list is a failed check — STOP and name the path.
    features step 4 proposes, per Feature format below, so planning starts
    with concrete registry search terms instead of rediscovering them from
    scratch.
-3. **Find the journey.** Read the UX flow — `ux-flow` when it holds a path,
+3. **Find the journey.** **Self-review has no target to search** — skip
+   straight to the source's own entry points (routes, CLI commands, screens),
+   labeled inferred by the same rule this step already uses below.
+   Design-driven mode reads the UX flow — `ux-flow` when it holds a path,
    otherwise go looking for a prototype flow, screen sequence, guided tour,
    or journey doc in the target. The ordered steps a person takes through the
    product are the candidate slices, so this read is what makes SLC features
@@ -1085,9 +1141,13 @@ store that won't list is a failed check — STOP and name the path.
    the source's existing entry points — and carry that caveat into the
    proposal: these slices are inferred, not read.
 4. **Propose.** One table, a row per candidate feature: title (a user story),
-   source paths, target paths, dependencies. Every row must pass the SLC test
-   from *Slices, not layers*: state in the table what a person can do when
-   that row ships, and drop any row whose honest answer is "nothing yet".
+   source paths, target paths, dependencies. Self-review mode has no target
+   paths — leave that column empty; the written feature's `target` and
+   `target_ref` stay absent, which is already the normal, non-defect shape
+   for a feature with no design project (see the intro). Every row must pass
+   the SLC test from *Slices, not layers*: state in the table what a person
+   can do when that row ships, and drop any row whose honest answer is
+   "nothing yet".
    Order rows by the journey from step 3 — the story a user reaches first
    comes first — and set `depends_on` only where one story genuinely requires
    another to exist. Each row's slice cuts through the layers step 1 mapped;
@@ -1097,15 +1157,21 @@ store that won't list is a failed check — STOP and name the path.
    converted; a legacy plain item likewise.
 5. **Confirm, then write.** On the user's confirmation of the list (edits
    welcome — drop rows, reword, re-scope), write each feature in the format
-   below: `status: todo`, `target_ref` = the target head resolved in step 2.
-   Ids continue the store's single sequence (think-it-through's numbering
+   below: `status: todo`, `target_ref` = the target head resolved in step 2
+   (self-review mode resolved no target head, so leave it absent). Ids
+   continue the store's single sequence (think-it-through's numbering
    rules).
 6. **Plan the set — the postflight.** See *Plan the set* below. `sync` is
    not finished when the rows are written; it is finished when every feature
    that needs a plan has one and the user has marked what they mark.
 
 **Update — roadmap exists.** Re-read both ends and report, one table, a row
-per finding. Shipped features change the source, so `DESIGN.md` can
+per finding. **Self-review mode (no `design-project`) has no app-design
+target** — the Target lane below is skipped and reported as such, never as
+clean. The Upstream lane is a separate question, gated on `design-system-repo`
+rather than `design-project`, and still runs from `$DS_SNAP` when that key is
+configured — see its own header below for exactly which source it reads and
+when it, too, is skipped. Shipped features change the source, so `DESIGN.md` can
 trail reality: run `hero-skills:architecture review` first and offer its
 `sync` for anything it reports stale — or to bootstrap the file when it
 reports `MISSING` (the same offer bootstrap-mode makes). The refreshed map
@@ -1123,7 +1189,10 @@ rules.** A finding whose evidence rule could not be satisfied is reported
 **Upstream lane — the design system** (read from the target's vendored `_ds/`
 copy when it has one, else `$DS_SNAP`; skipped entirely when there is neither,
 and then say it is skipped rather than reporting clean — a lane with no source
-that reports no findings is indistinguishable from a lane that found none):
+that reports no findings is indistinguishable from a lane that found none. In
+self-review mode there is no target, so no vendored `_ds/` copy either — read
+`$DS_SNAP` alone when `design-system-repo` is configured, and skip the lane
+same as any other missing-source case when it is not):
 
 - **ds-drift** — the source's own token layer, component surface, or
   guidance has diverged from the design system's, read at the source in both:
@@ -1142,7 +1211,10 @@ that reports no findings is indistinguishable from a lane that found none):
   reach. Report it as unreachable from here and say what would have to run to
   see it. Reporting clean is the wrong answer; so is guessing.
 
-**Target lane — the app design** (the findings this skill has always had):
+**Target lane — the app design** (the findings this skill has always had;
+skipped entirely in self-review mode — there is no target, so say it is
+skipped rather than reporting clean, the same rule the Upstream lane above
+follows):
 
 - **stale** — the target head moved past a feature's `target_ref`: diff the
   feature's target paths between the two SHAs and summarize what actually
@@ -1228,8 +1300,10 @@ that reports no findings is indistinguishable from a lane that found none):
   it. When a new item names a `subject:` some `rejected` item already names,
   say so in the proposal — otherwise the rejection history is written and never
   read, and the same divergence gets re-raised.
-- **no-ux-flow** — `UX_FLOW` is `UNSET` and no flow was found in the target,
-  or it holds a path that does not exist at the resolved SHA. Report it and
+- **no-ux-flow** — meaningless without a target, so it never fires in
+  self-review mode. With a `design-project` configured: `UX_FLOW` is `UNSET`
+  and no flow was found in the target, or it holds a path that does not exist
+  at the resolved SHA. Report it and
   offer two moves: set `ux-flow` to the real path if a flow exists under
   another name, or set `ux-flow: none` to accept the gap and stop being asked.
   Never block on it; slices cut without a flow are allowed, they just get
@@ -1355,8 +1429,11 @@ So the pass runs across the roadmap:
    `budget` = `len(covers)`, `concurrency: 3`. The rest of the format is not
    optional. `source_ref` and `target_ref` are anchored here, from the heads
    this run already resolved: a non-`done` item with no `target_ref` is a
-   store defect the *next* sync reports, so a pass that omits them writes
-   defects it had the values to prevent. `## Stop conditions` gets the
+   store defect the *next* sync reports **when `$DESIGN_PROJECT` is a project
+   id** — the same carve-out the store-defects finding uses, since self-review
+   mode resolves no target head to anchor. So a pass that omits `target_ref`
+   while a design project is configured writes defects it had the values to
+   prevent. `## Stop conditions` gets the
    documented defaults; it is the one per-goal brake on a loop that
    pre-authorizes merges, and a turn reads it every time. The `## Definition
    of Done` spans the group. Concatenating the features' own DoDs is not that:
@@ -1854,7 +1931,8 @@ roadmap — and wayfare owns only the contract it fills:
   verifiable statements, never restatements of subtasks). At least one DoD
   line must assert the **user-visible story working end to end**: a DoD whose
   every line is about one layer describes a layer, not a slice.
-  `target_ref` is refreshed to the head planned against.
+  `target_ref` is refreshed to the head planned against — in self-review
+  mode there is no target head to refresh it to, so it stays absent.
 - The feature is the unit of work: no separate work-items — subtasks are
   checklist lines, and one-shot works through them in order (PR granularity
   is one-shot's call, per its Step 2).
