@@ -39,10 +39,12 @@
 
 <!-- No external review bot posts to PRs here (checked #68-#72: only
      github-actions[bot], which is this repo's own auto-approve workflow).
-     Review is self-enforced via hero-skills:review-pr instead. -->
-- agent: hero-skills
-- trigger: hero-skills:review-pr # run on the author's own draft PR before marking ready / before @auto-approve
-- poll-method: none # self-review, not an external bot to poll
+     `agent: none` — not a made-up value — is what tells one-shot's Step 7
+     to skip the bot-await poll; self-review already runs as one-shot's own
+     Step 5 via hero-skills:review-pr regardless of this field. -->
+- agent: none
+- trigger: none
+- poll-method: none
 - bot-username: none
 
 ## Code Quality
