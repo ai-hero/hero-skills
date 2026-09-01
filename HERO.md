@@ -59,6 +59,9 @@
 - design-project: none # set to a claude.ai/design link or project UUID to enable the target substrate; `ask` prompts for the link each session; under design-transport manual, none is allowed (the snapshot you fill is the target)
 - design-transport: auto # auto | designsync | manual — manual = you carry exported design files into the local snapshot (two-account setups)
 - feedback-repo: none # OWNER/NAME GitHub repo where design-feedback issues are filed; none keeps feedback in local packets
+- ux-flow: none # no design-project configured (target disabled) — no UX flow path to point at; revisit once design-project is set
+- design-system-repo: none # no fleet folder or sibling checkout with `role: producer` under `## Design System` found
+- reconciliation: none # no design-project configured; revisit once one is set
 
 ## Projects
 
