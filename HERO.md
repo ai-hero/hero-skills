@@ -36,13 +36,19 @@
 
 ## Code Review Agent
 
-- agent: copilot
+<!-- No external review bot posts to PRs here (checked #68-#72: only
+     github-actions[bot], which is this repo's own auto-approve workflow).
+     Review is self-enforced via hero-skills:review-pr instead. -->
+- agent: hero-skills
+- trigger: hero-skills:review-pr # run on the author's own draft PR before marking ready / before @auto-approve
+- poll-method: none # self-review, not an external bot to poll
+- bot-username: none
 
 ## Code Quality
 
 - pre-commit: true
 - linters: markdownlint, shellcheck, codespell
-- hooks: detect-secrets, validate-plugin, audit, init-update
+- hooks: detect-secrets, validate-plugin, audit, shell-unit-tests, agents-md, agents-md-commit-msg
 
 ## Wayfare
 
