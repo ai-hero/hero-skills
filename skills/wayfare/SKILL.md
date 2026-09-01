@@ -14,9 +14,10 @@ Source against itself instead — DESIGN.md, its own gaps, its own hardening —
 a **self-review** (see `sync` below). Every **feature** is one leg of the
 route between them — one whole leg, planned and built in a single run: a
 `.plans/` item naming the source paths it changes and the target paths it
-satisfies. `/wayfare sync` reads both ends and converges
-the roadmap — shipped work folds back into Source, target changes surface as
-new or stale features, and nothing goes false silently.
+satisfies. `/wayfare sync` reads whichever ends are configured and converges
+the roadmap — shipped work folds back into Source, target changes (when there
+is a target) surface as new or stale features, and nothing goes false
+silently.
 
 The route runs both ways. Target changes reach the roadmap as stale and
 uncovered features; what **building** teaches about the design travels back
@@ -392,8 +393,9 @@ structurally cannot have one (no product, no UI — the reason belongs in the
 comment) opts out for good. That marker is prose for the reader, not a value
 `hero_field` returns — it strips comments — so honoring it is something only
 the agent reading the raw line does, the same way it reads every other
-human-authored note in HERO.md; write it once, by hand or via `recalibrate`,
-never inferred from silence. `ask` is for repos that must not pin a project
+human-authored note in HERO.md; write it once, by hand or when `sync`'s
+config gate writes the confirmed `none` and the user says why, never inferred
+from silence. `ask` is for repos that must not pin a project
 (or users who prefer to paste the link): each session asks for the
 claude.ai/design link and nothing is written to HERO.md; declining that
 prompt self-reviews for the session. `design-transport: manual` still works
@@ -920,7 +922,9 @@ READY/blocked → active → review → done, then goal, then feedback), each wi
   remote not checked" caveat instead — never pass a control value to the
   tool. An absent or non-40-hex `target_ref` on a non-`done` feature is a
   **store defect** to flag for `sync` — as is a 40-hex one the snapshot
-  cannot resolve (an unresolvable anchor, per *Reading the target*) — never
+  cannot resolve (an unresolvable anchor, per *Reading the target*) — **only
+  when `$DESIGN_PROJECT` is a project id**; in self-review mode an absent
+  `target_ref` is the normal state of every item, per the intro, and never
   an input to compute staleness from,
 - its subtask progress when planned (checked/total from `## Subtasks`, e.g. `2/4`),
 - its open-comment count (entries in `## Comments`),
@@ -1013,7 +1017,8 @@ sync stops re-proposing it.
    self-review if declined. Also STOP if Step 0 printed a `design-transport`
    warning (a REJECTED value or an unknown word — the quiet absent-key
    default is fine) — reading via the wrong transport is the same class of
-   error, and it only fires when a project is configured. An `upstream design
+   error, and Step 0 raises it regardless of whether a project is configured,
+   so this STOP is not conditioned on `design-project` either. An `upstream design
    project UNRESOLVED` warning stops it the same way: it says
    `design-system-repo` points at a repo whose HERO.md could not answer,
    which is a fix in that repo, and nothing else re-raises it — the
@@ -1112,7 +1117,7 @@ store that won't list is a failed check — STOP and name the path.
    or catching an exception that changes nothing a person can do is a chore,
    not a feature, and stays off the roadmap.
 
-   Also check whether the source repo builds UI from a component registry —
+   **Both paths.** Also check whether the source repo builds UI from a component registry —
    a shadcn `components.json` with a `registries` block, or an equivalent
    design-system rule file (e.g. `.claude/rules/design-system*.md`) — and,
    when the target names components by a visible convention of its own (a
@@ -1161,11 +1166,12 @@ store that won't list is a failed check — STOP and name the path.
    that needs a plan has one and the user has marked what they mark.
 
 **Update — roadmap exists.** Re-read both ends and report, one table, a row
-per finding. **Self-review mode (no `design-project`) has only one end** —
-skip straight to the Source and Feedback lanes below; the Upstream and Target
-lanes are skipped and reported as such, the same way the Upstream lane
-already reports itself skipped when there is no design-system snapshot to
-read, never as clean. Shipped features change the source, so `DESIGN.md` can
+per finding. **Self-review mode (no `design-project`) has no app-design
+target** — the Target lane below is skipped and reported as such, never as
+clean. The Upstream lane is a separate question, gated on `design-system-repo`
+rather than `design-project`, and still runs from `$DS_SNAP` when that key is
+configured — see its own header below for exactly which source it reads and
+when it, too, is skipped. Shipped features change the source, so `DESIGN.md` can
 trail reality: run `hero-skills:architecture review` first and offer its
 `sync` for anything it reports stale — or to bootstrap the file when it
 reports `MISSING` (the same offer bootstrap-mode makes). The refreshed map
@@ -1925,7 +1931,8 @@ roadmap — and wayfare owns only the contract it fills:
   verifiable statements, never restatements of subtasks). At least one DoD
   line must assert the **user-visible story working end to end**: a DoD whose
   every line is about one layer describes a layer, not a slice.
-  `target_ref` is refreshed to the head planned against.
+  `target_ref` is refreshed to the head planned against — in self-review
+  mode there is no target head to refresh it to, so it stays absent.
 - The feature is the unit of work: no separate work-items — subtasks are
   checklist lines, and one-shot works through them in order (PR granularity
   is one-shot's call, per its Step 2).
