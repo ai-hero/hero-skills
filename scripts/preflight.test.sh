@@ -93,21 +93,33 @@ check "malformed JSON -> distinct WARN naming installed_plugins.json" "installed
 
 # Case 5: installed_plugins.json matches, but jq is not on PATH, no legacy
 # directory -> falls back to the (correctly negative) directory probe, same
-# as if the file were absent. Shadow only the directory holding the real jq
-# with a copy (as symlinks) of every OTHER binary in it, so every other tool
-# preflight needs — dirname, sed, grep, etc., which commonly share jq's
-# directory (e.g. /usr/bin) — stays reachable.
-REAL_JQ_PATH="$(command -v jq)"
-REAL_JQ_DIR="$(cd "$(dirname "$REAL_JQ_PATH")" && pwd)"
-SHADOW_DIR="$TMP/shadow-no-jq"
-mkdir -p "$SHADOW_DIR"
-for f in "$REAL_JQ_DIR"/*; do
-  base="$(basename "$f")"
-  [ "$base" = "jq" ] && continue
-  ln -s "$f" "$SHADOW_DIR/$base" 2>/dev/null
+# as if the file were absent. `command -v jq` only reports the FIRST PATH hit,
+# but a runner can have jq reachable from more than one directory (a distro
+# package plus a language-toolchain shim, e.g.) — shadowing only that one
+# match left the real jq reachable from a later directory on Linux CI while
+# passing on macOS. Instead, walk every PATH entry and shadow (as symlinks to
+# every OTHER binary) any directory that itself contains a `jq` executable,
+# so no directory in the rebuilt PATH can resolve jq.
+SHADOW_ROOT="$TMP/shadow-no-jq"
+NO_JQ_PATH=""
+OLD_IFS="$IFS"
+IFS=':'
+i=0
+for dir in $PATH; do
+  i=$((i + 1))
+  if [ -n "$dir" ] && [ -x "$dir/jq" ]; then
+    shadow="$SHADOW_ROOT/$i"
+    mkdir -p "$shadow"
+    for f in "$dir"/*; do
+      base="$(basename "$f")"
+      [ "$base" = "jq" ] && continue
+      ln -s "$f" "$shadow/$base" 2>/dev/null
+    done
+    dir="$shadow"
+  fi
+  NO_JQ_PATH="${NO_JQ_PATH:+$NO_JQ_PATH:}$dir"
 done
-NO_JQ_PATH="$(printf '%s' "$PATH" | tr ':' '\n' \
-  | sed "s|^${REAL_JQ_DIR}\$|${SHADOW_DIR}|" | paste -sd: -)"
+IFS="$OLD_IFS"
 FAKE_HOME_5="$TMP/no-jq"
 mkdir -p "$FAKE_HOME_5/.claude/plugins"
 printf '{"plugins": {"pr-review-toolkit@claude-plugins-official": [{"scope": "user", "installPath": "x"}]}}' \
