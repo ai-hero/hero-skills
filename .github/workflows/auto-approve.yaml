@@ -105,9 +105,38 @@ jobs:
           # author stays dependabot[bot]; keyed on the author alone, that
           # commit would be approved with no model and no human reading it.
           BOT_RE='^(dependabot|renovate)(\[bot\])?$'
+          # Only a bot-authored PR needs the commit list, so the fetch is
+          # gated — and it fails CLOSED. This step runs under `bash -e` with
+          # no pipefail, so `gh ... | jq ...` would swallow a gh failure: jq
+          # succeeds on empty input, the list comes back empty, empty reads as
+          # "no non-bot commits", and the PR takes the scripted lane with no
+          # model and nobody having read it. Fetch first, check the status,
+          # then filter.
           if jq -e --arg re "$BOT_RE" '.user.login | test($re)' pr.json > /dev/null; then
-            NON_BOT_COMMITS=$(gh api --paginate "/repos/${{ github.repository }}/pulls/$PR_NUMBER/commits?per_page=100" \
-              --jq --arg re "$BOT_RE" '.[] | select((.author.login // "") | test($re) | not) | .sha')
+            if ! gh api --paginate "/repos/${{ github.repository }}/pulls/$PR_NUMBER/commits?per_page=100" > pr_commits.json; then
+              echo "::error::could not read this PR's commits, so the review lane cannot be classified. Re-run \`@auto-approve\`."
+              exit 1
+            fi
+          else
+            : > pr_commits.json
+          fi
+
+          # test: begin bot-lane
+          # `gh api --jq` takes exactly ONE argument and has no `--arg` of its
+          # own, so `--jq --arg re "$RE" '<filter>'` handed gh FOUR positional
+          # arguments and it exited with "accepts 1 arg(s), received 4". That
+          # is a crash rather than a verdict, and it fired on every bot PR —
+          # the one lane this block exists to select — while human PRs never
+          # entered the branch and looked fine. Real jq takes the `--arg`; gh
+          # only fetches. Keep them on separate sides of the boundary.
+          #
+          # An empty pr_commits.json means the author is not a bot, which is
+          # the model lane. A commit whose `author` is null (an unlinked
+          # GitHub account) has no login and so counts as non-bot, which is
+          # the safe direction.
+          if [ -s pr_commits.json ]; then
+            NON_BOT_COMMITS=$(jq -r --arg re "$BOT_RE" \
+              '.[] | select((.author.login // "") | test($re) | not) | .sha' pr_commits.json)
             if [ -z "$NON_BOT_COMMITS" ]; then
               echo "deps_bot=true" >> "$GITHUB_OUTPUT"
             else
@@ -117,6 +146,7 @@ jobs:
           else
             echo "deps_bot=false" >> "$GITHUB_OUTPUT"
           fi
+          # test: end bot-lane
 
           # The unified diff is best-effort: GitHub's diff media type 406s on
           # PRs over 300 changed files. Under `bash -e` a hard failure here

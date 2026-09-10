@@ -51,7 +51,7 @@ run_block() { # NAME [env assignments...] -> runs in $WORK under bash -e
   ( cd "$WORK" && env "$@" bash -e "$WORK/$name.sh" )
 }
 
-for name in classify diff-filter go-pkgs claims ci-decision verdict-parse; do
+for name in classify diff-filter go-pkgs claims ci-decision verdict-parse bot-lane; do
   extract "$name" > "$WORK/$name.sh"
   check "extract: $name non-empty" "yes" "$([[ -s "$WORK/$name.sh" ]] && echo yes || echo no)"
   check "extract: $name parses" "0" "$(bash -n "$WORK/$name.sh" 2>/dev/null; echo $?)"
@@ -166,6 +166,40 @@ printf 'No backticks in this body at all.\n' > "$WORK/pr_body.txt"; : > "$WORK/u
 rc=$(cd "$WORK" && bash -eo pipefail "$WORK/claims.sh" >/dev/null 2>&1; echo $?)
 check "claims: body without backticks survives pipefail" "0" "$rc"
 check "claims: body without backticks -> no claims" "0" "$(wc -l < "$WORK/claims.txt" | tr -d ' ')"
+
+# --- bot-lane ---------------------------------------------------------------
+# Regression: this block used to call `gh api --jq --arg re "$RE" '<filter>'`.
+# `gh api --jq` accepts ONE argument and has no --arg, so gh got four
+# positional args and died with "accepts 1 arg(s), received 4" — on every bot
+# PR, which is the only lane the block exists to pick. Human PRs skipped the
+# branch entirely, so nothing here caught it and the crash shipped.
+lane() { # COMMITS_JSON -> "deps_bot value|log line"
+  printf '%b' "$1" > "$WORK/pr_commits.json"
+  : > "$WORK/out"
+  local log
+  log=$( cd "$WORK" && BOT_RE='^(dependabot|renovate)(\[bot\])?$' GITHUB_OUTPUT="$WORK/out" bash -e "$WORK/bot-lane.sh" 2>&1 )
+  printf '%s|%s' "$(sed -n 's/^deps_bot=//p' "$WORK/out")" "$log"
+}
+
+check "bot-lane: all commits bot-authored -> scripted lane" "true|" \
+  "$(lane '[{"sha":"aaa","author":{"login":"dependabot[bot]"}}]\n')"
+check "bot-lane: renovate too" "true|" \
+  "$(lane '[{"sha":"aaa","author":{"login":"renovate[bot]"}}]\n')"
+check "bot-lane: a human commit on a bot branch -> model lane" \
+  "false|bot-authored PR carries non-bot commits; routing to the model lane: ccc " \
+  "$(lane '[{"sha":"aaa","author":{"login":"dependabot[bot]"}},{"sha":"ccc","author":{"login":"someone"}}]\n')"
+# --paginate emits one array PER PAGE, concatenated. A filter that only reads
+# the first array would call a PR clean while page two holds the human commit.
+check "bot-lane: reads every --paginate page, not just the first" \
+  "false|bot-authored PR carries non-bot commits; routing to the model lane: ccc " \
+  "$(lane '[{"sha":"aaa","author":{"login":"dependabot[bot]"}}]\n[{"sha":"ccc","author":{"login":"someone"}}]\n')"
+# A commit from an unlinked GitHub account has author: null and therefore no
+# login. It must count as NON-bot: the safe direction is the model lane.
+check "bot-lane: null author counts as non-bot" \
+  "false|bot-authored PR carries non-bot commits; routing to the model lane: ddd " \
+  "$(lane '[{"sha":"ddd","author":null}]\n')"
+# Empty file is how the workflow signals "PR author is not a bot".
+check "bot-lane: no commits file -> model lane" "false|" "$(lane '')"
 
 # --- ci-decision ------------------------------------------------------------
 ci() { # CHECKS_TSV HAS_WORKFLOWS -> "passed|first line of ci_status"
