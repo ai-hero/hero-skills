@@ -165,21 +165,33 @@ jobs:
           fi
 
           if [ "$AUTHOR_IS_BOT" = true ]; then
-            # A commit counts as the bot's only if all three hold. `.author`
-            # and `.committer` are GitHub's ATTRIBUTION, resolved from the
-            # commit object's email — not proof of who pushed. A collaborator
-            # can `git commit --author='dependabot[bot] <...noreply...>'` onto
-            # an open dependabot/* branch and own every attribution field, so
-            # the signature is the only part they cannot forge: Dependabot and
-            # Renovate commits are GPG-signed by GitHub. Until this check
-            # existed the crash above was what kept the lane shut.
+            # A commit counts as the bot's if it is ATTRIBUTED to the bot and
+            # carries a valid signature. Both parts, and no more than these
+            # two, for reasons that cost a live regression to learn:
+            #
+            # DO NOT add `.committer.login` to this test. Dependabot commits
+            # through GitHub's API, so `.committer` is `web-flow` — GitHub's
+            # own identity — not the bot. Requiring it to match sends every
+            # real Dependabot PR to the model lane, which is the lane this
+            # block exists to avoid.
+            #
+            # And be clear about what the signature does and does not buy.
+            # `.author` is attribution resolved from the commit object's email,
+            # so a collaborator can `git commit --author='dependabot[bot]
+            # <...noreply...>'` and own it. Requiring a signature defeats that
+            # plain-push spoof, because a hand-pushed commit is unsigned. It
+            # does NOT defeat the same actor creating the commit through
+            # GitHub's API, which yields exactly the shape a real Dependabot
+            # commit has: author spoofed, committer `web-flow`, verified true.
+            # Nothing on this endpoint separates those two. The real boundary
+            # for that actor is the author_association gate on the trigger;
+            # this test is defence in depth, not the wall.
             #
             # A null `.author` (an unlinked account) has no login and so falls
             # out as non-bot, which is the safe direction.
             NON_BOT_COMMITS=$(jq -r --arg re "$BOT_RE" '
               .[] | select(
                 ((.author.login // "") | test($re) | not)
-                or ((.committer.login // "") | test($re) | not)
                 or (.commit.verification.verified != true)
               ) | .sha' pr_commits.json)
             if [ -z "$NON_BOT_COMMITS" ]; then
