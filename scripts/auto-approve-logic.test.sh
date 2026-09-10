@@ -168,38 +168,104 @@ check "claims: body without backticks survives pipefail" "0" "$rc"
 check "claims: body without backticks -> no claims" "0" "$(wc -l < "$WORK/claims.txt" | tr -d ' ')"
 
 # --- bot-lane ---------------------------------------------------------------
-# Regression: this block used to call `gh api --jq --arg re "$RE" '<filter>'`.
-# `gh api --jq` accepts ONE argument and has no --arg, so gh got four
-# positional args and died with "accepts 1 arg(s), received 4" — on every bot
-# PR, which is the only lane the block exists to pick. Human PRs skipped the
-# branch entirely, so nothing here caught it and the crash shipped.
-lane() { # COMMITS_JSON -> "deps_bot value|log line"
-  printf '%b' "$1" > "$WORK/pr_commits.json"
-  : > "$WORK/out"
-  local log
-  log=$( cd "$WORK" && BOT_RE='^(dependabot|renovate)(\[bot\])?$' GITHUB_OUTPUT="$WORK/out" bash -e "$WORK/bot-lane.sh" 2>&1 )
-  printf '%s|%s' "$(sed -n 's/^deps_bot=//p' "$WORK/out")" "$log"
-}
+# This block classifies the review lane: deps_bot=true means a scripted APPROVE
+# with the model skipped, so every assertion here is about not granting that
+# wrongly. It was untested when an arity bug in its `gh` call shipped, and the
+# first attempt at covering it bracketed only the filter — re-adding the broken
+# call to the fetch line left the suite green. The markers now start above the
+# fetch, and `gh` is stubbed so the fetch itself is under test.
+#
+# BOT_RE is read FROM THE WORKFLOW, not retyped. A copy here would keep passing
+# against the old value after someone widened the real one, and that direction
+# is fail-open.
+BOT_RE_WF=$(sed -n "s/^ *BOT_RE='\(.*\)'$/\1/p" "$WF" | head -1)
+check "bot-lane: BOT_RE still assigned in the workflow" "yes" \
+  "$([[ -n "$BOT_RE_WF" ]] && echo yes || echo no)"
 
-check "bot-lane: all commits bot-authored -> scripted lane" "true|" \
-  "$(lane '[{"sha":"aaa","author":{"login":"dependabot[bot]"}}]\n')"
-check "bot-lane: renovate too" "true|" \
-  "$(lane '[{"sha":"aaa","author":{"login":"renovate[bot]"}}]\n')"
-check "bot-lane: a human commit on a bot branch -> model lane" \
-  "false|bot-authored PR carries non-bot commits; routing to the model lane: ccc " \
-  "$(lane '[{"sha":"aaa","author":{"login":"dependabot[bot]"}},{"sha":"ccc","author":{"login":"someone"}}]\n')"
-# --paginate emits one array PER PAGE, concatenated. A filter that only reads
-# the first array would call a PR clean while page two holds the human commit.
-check "bot-lane: reads every --paginate page, not just the first" \
-  "false|bot-authored PR carries non-bot commits; routing to the model lane: ccc " \
-  "$(lane '[{"sha":"aaa","author":{"login":"dependabot[bot]"}}]\n[{"sha":"ccc","author":{"login":"someone"}}]\n')"
-# A commit from an unlinked GitHub account has author: null and therefore no
-# login. It must count as NON-bot: the safe direction is the model lane.
-check "bot-lane: null author counts as non-bot" \
-  "false|bot-authored PR carries non-bot commits; routing to the model lane: ddd " \
-  "$(lane '[{"sha":"ddd","author":null}]\n')"
-# Empty file is how the workflow signals "PR author is not a bot".
-check "bot-lane: no commits file -> model lane" "false|" "$(lane '')"
+# lane PR_JSON COMMITS_BODY [GH_RC] [BOT_RE] -> "rc|deps_bot|log"
+# rc is captured because a crash and a clean run that wrote nothing are
+# otherwise indistinguishable — which is what let the fail-closed paths go
+# unasserted. A later `|| true` or `// empty` has to fail a test.
+lane() {
+  printf '%b' "$1" > "$WORK/pr.json"
+  printf '%b' "$2" > "$WORK/gh_stdout"
+  mkdir -p "$WORK/bin"
+  { echo '#!/usr/bin/env bash'
+    echo "printf '%s\\n' \"\$*\" >> $WORK/gh_argv"
+    echo "cat $WORK/gh_stdout"
+    echo "exit ${3:-0}"
+  } > "$WORK/bin/gh"
+  chmod +x "$WORK/bin/gh"
+  : > "$WORK/out"; : > "$WORK/gh_argv"; rm -f "$WORK/lane_error.txt"
+  local log rc
+  log=$( cd "$WORK" && PATH="$WORK/bin:$PATH" BOT_RE="${4-$BOT_RE_WF}" \
+    REPO=o/r PR_NUMBER=1 GITHUB_OUTPUT="$WORK/out" bash -e "$WORK/bot-lane.sh" 2>&1 ); rc=$?
+  printf '%s|%s|%s' "$rc" "$(sed -n 's/^deps_bot=//p' "$WORK/out")" "$log"
+}
+BOT_PR='{"user":{"login":"dependabot[bot]"},"commits":1}'
+HUMAN_PR='{"user":{"login":"someone"},"commits":1}'
+signed() { printf '[{"sha":"%s","author":{"login":"%s"},"committer":{"login":"%s"},"commit":{"verification":{"verified":%s}}}]' "$1" "$2" "$2" "${3:-true}"; }
+
+# --- the lane itself
+check "bot-lane: signed bot commit -> scripted lane" "0|true|" \
+  "$(lane "$BOT_PR" "$(signed aaa 'dependabot[bot]')")"
+check "bot-lane: renovate too" "0|true|" \
+  "$(lane "$BOT_PR" "$(signed aaa 'renovate[bot]')")"
+check "bot-lane: human author -> model lane, no fetch" "0|false|" \
+  "$(lane "$HUMAN_PR" '')"
+
+# --- attribution is forgeable; the signature is not
+# A collaborator can push `git commit --author='dependabot[bot] <...>'` onto an
+# open dependabot/* branch and own every attribution field. Dependabot's real
+# commits are GPG-signed by GitHub, so an unsigned one is not the bot's however
+# it is labelled. Without this the scripted lane APPROVES attacker code.
+check "bot-lane: UNSIGNED commit attributed to the bot -> model lane" \
+  "0|false|bot-authored PR carries commits that are not the bot's; routing to the model lane: spoof " \
+  "$(lane "$BOT_PR" "$(signed spoof 'dependabot[bot]' false)")"
+check "bot-lane: committer not the bot -> model lane" \
+  "0|false|bot-authored PR carries commits that are not the bot's; routing to the model lane: ccc " \
+  "$(lane "$BOT_PR" '[{"sha":"ccc","author":{"login":"dependabot[bot]"},"committer":{"login":"someone"},"commit":{"verification":{"verified":true}}}]')"
+check "bot-lane: null author -> model lane" \
+  "0|false|bot-authored PR carries commits that are not the bot's; routing to the model lane: ddd " \
+  "$(lane "$BOT_PR" '[{"sha":"ddd","author":null,"committer":null,"commit":{"verification":{"verified":true}}}]')"
+
+# --- the regex must not over-match
+# Anchors are load-bearing. Unanchoring BOT_RE to "support dependabot-preview"
+# would let `notdependabot` take the scripted lane.
+check "bot-lane: impostor login -> model lane" \
+  "0|false|bot-authored PR carries commits that are not the bot's; routing to the model lane: eee " \
+  "$(lane '{"user":{"login":"dependabot[bot]"},"commits":1}' "$(signed eee 'notdependabot')")"
+
+# --- --paginate emits one array PER PAGE, concatenated
+# A filter reading only the first array would call a PR clean while page two
+# holds the human commit.
+check "bot-lane: reads every page, not just the first" \
+  "0|false|bot-authored PR carries commits that are not the bot's; routing to the model lane: ccc " \
+  "$(lane '{"user":{"login":"dependabot[bot]"},"commits":2}' \
+     "$(signed aaa 'dependabot[bot]')\n$(signed ccc 'someone')")"
+
+# --- fail-closed: every one of these must exit non-zero and write NO deps_bot
+check "bot-lane: gh failure exits non-zero, no lane" "1||" \
+  "$(lane "$BOT_PR" '' 1 | sed 's/|[^|]*$/|/')"
+check "bot-lane: empty commit array exits, no lane" "1||" \
+  "$(lane "$BOT_PR" '[]' | sed 's/|[^|]*$/|/')"
+check "bot-lane: whitespace body exits, no lane" "1||" \
+  "$(lane "$BOT_PR" '   \n' | sed 's/|[^|]*$/|/')"
+check "bot-lane: truncated list (250-cap) exits, no lane" "1||" \
+  "$(lane '{"user":{"login":"dependabot[bot]"},"commits":300}' "$(signed aaa 'dependabot[bot]')" | sed 's/|[^|]*$/|/')"
+check "bot-lane: API error object exits, no lane" "5||" \
+  "$(lane "$BOT_PR" '{"message":"Not Found"}' | sed 's/|[^|]*$/|/')"
+check "bot-lane: unset BOT_RE refuses to classify" "1||" \
+  "$(lane "$BOT_PR" "$(signed aaa 'dependabot[bot]')" 0 '' | sed 's/|[^|]*$/|/')"
+# The reason reaches the PR, not just the run log.
+check "bot-lane: names the reason for the crash reporter" "yes" \
+  "$(lane "$BOT_PR" '[]' >/dev/null; [[ -s "$WORK/lane_error.txt" ]] && echo yes || echo no)"
+# The exact argv of the fetch. This is the regression itself: the bug was
+# `--jq --arg re "$RE" '<filter>'` appended here, which gh rejects as an arity
+# error. Pinning the whole string fails on any flag added back to this call.
+check "bot-lane: fetch argv carries no --jq/--arg" \
+  "api --paginate /repos/o/r/pulls/1/commits?per_page=100" \
+  "$(lane "$BOT_PR" "$(signed aaa 'dependabot[bot]')" >/dev/null; cat "$WORK/gh_argv")"
 
 # --- ci-decision ------------------------------------------------------------
 ci() { # CHECKS_TSV HAS_WORKFLOWS -> "passed|first line of ci_status"

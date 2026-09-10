@@ -105,43 +105,88 @@ jobs:
           # author stays dependabot[bot]; keyed on the author alone, that
           # commit would be approved with no model and no human reading it.
           BOT_RE='^(dependabot|renovate)(\[bot\])?$'
-          # Only a bot-authored PR needs the commit list, so the fetch is
-          # gated — and it fails CLOSED. This step runs under `bash -e` with
-          # no pipefail, so `gh ... | jq ...` would swallow a gh failure: jq
-          # succeeds on empty input, the list comes back empty, empty reads as
-          # "no non-bot commits", and the PR takes the scripted lane with no
-          # model and nobody having read it. Fetch first, check the status,
-          # then filter.
-          if jq -e --arg re "$BOT_RE" '.user.login | test($re)' pr.json > /dev/null; then
-            if ! gh api --paginate "/repos/${{ github.repository }}/pulls/$PR_NUMBER/commits?per_page=100" > pr_commits.json; then
-              echo "::error::could not read this PR's commits, so the review lane cannot be classified. Re-run \`@auto-approve\`."
-              exit 1
-            fi
-          else
-            : > pr_commits.json
-          fi
+          REPO="${{ github.repository }}"
 
           # test: begin bot-lane
           # `gh api --jq` takes exactly ONE argument and has no `--arg` of its
-          # own, so `--jq --arg re "$RE" '<filter>'` handed gh FOUR positional
-          # arguments and it exited with "accepts 1 arg(s), received 4". That
-          # is a crash rather than a verdict, and it fired on every bot PR —
-          # the one lane this block exists to select — while human PRs never
-          # entered the branch and looked fine. Real jq takes the `--arg`; gh
-          # only fetches. Keep them on separate sides of the boundary.
+          # own, so `--jq --arg re "$RE" '<filter>'` hands gh several
+          # positional arguments and it dies with a Cobra arity error
+          # (`accepts 1 arg(s), received N`; the count tracks the exact
+          # invocation). Real jq takes the `--arg`; gh only fetches. Keep them
+          # on separate sides of that boundary.
           #
-          # An empty pr_commits.json means the author is not a bot, which is
-          # the model lane. A commit whose `author` is null (an unlinked
-          # GitHub account) has no login and so counts as non-bot, which is
-          # the safe direction.
-          if [ -s pr_commits.json ]; then
-            NON_BOT_COMMITS=$(jq -r --arg re "$BOT_RE" \
-              '.[] | select((.author.login // "") | test($re) | not) | .sha' pr_commits.json)
+          # Everything below is inside the test markers on purpose. The arity
+          # bug lived on the FETCH line, and while the markers started below
+          # it the suite bound the filter and not the regression: re-adding the
+          # broken call left it green.
+          : "${BOT_RE:?BOT_RE must be set before the review lane is classified}"
+
+          # The author verdict is its own variable rather than the emptiness
+          # of a file. It used to be `: > pr_commits.json` for a human PR, read
+          # back as `[ -s ... ]` — which made a zero-byte file mean "not a bot"
+          # and, fatally, made `[]` mean "every commit is the bot's". Anyone
+          # tidying that `: >` into `echo '[]' >` — valid JSON, looks stricter
+          # — would have routed EVERY human PR to the scripted lane with the
+          # whole suite still green.
+          if jq -e --arg re "$BOT_RE" '.user.login | test($re)' pr.json > /dev/null; then
+            AUTHOR_IS_BOT=true
+          else
+            AUTHOR_IS_BOT=false
+          fi
+
+          LANE_ERROR=
+          if [ "$AUTHOR_IS_BOT" = true ]; then
+            # Fails CLOSED. This step runs `bash -e` with no pipefail, so
+            # `gh ... | jq ...` would swallow a gh failure: jq succeeds on
+            # empty input, the list reads as "no non-bot commits", and the PR
+            # takes the scripted lane with no model and nobody having read it.
+            if ! gh api --paginate "/repos/$REPO/pulls/$PR_NUMBER/commits?per_page=100" > pr_commits.json; then
+              LANE_ERROR="could not read this PR's commits, so the review lane cannot be classified."
+            else
+              # A PR always has at least one commit, and --paginate stops at
+              # the endpoint's 250-commit ceiling. So a count that disagrees
+              # with the PR's own total means the list is truncated or empty,
+              # and a scripted APPROVE granted from commits nobody enumerated
+              # is the fail-open this whole block exists to avoid.
+              SEEN=$(jq -s 'add | length' pr_commits.json)
+              EXPECTED=$(jq -r '.commits' pr.json)
+              if [ "$SEEN" -eq 0 ] || [ "$SEEN" != "$EXPECTED" ]; then
+                LANE_ERROR="saw $SEEN of $EXPECTED commits, so the review lane cannot be classified."
+              fi
+            fi
+          fi
+
+          if [ -n "$LANE_ERROR" ]; then
+            # The annotation is for the log; the file is what the crashed-run
+            # reporter puts on the PR, where the author is actually looking.
+            printf '%s\n' "$LANE_ERROR" > lane_error.txt
+            echo "::error::$LANE_ERROR Re-run \`@auto-approve\`."
+            exit 1
+          fi
+
+          if [ "$AUTHOR_IS_BOT" = true ]; then
+            # A commit counts as the bot's only if all three hold. `.author`
+            # and `.committer` are GitHub's ATTRIBUTION, resolved from the
+            # commit object's email — not proof of who pushed. A collaborator
+            # can `git commit --author='dependabot[bot] <...noreply...>'` onto
+            # an open dependabot/* branch and own every attribution field, so
+            # the signature is the only part they cannot forge: Dependabot and
+            # Renovate commits are GPG-signed by GitHub. Until this check
+            # existed the crash above was what kept the lane shut.
+            #
+            # A null `.author` (an unlinked account) has no login and so falls
+            # out as non-bot, which is the safe direction.
+            NON_BOT_COMMITS=$(jq -r --arg re "$BOT_RE" '
+              .[] | select(
+                ((.author.login // "") | test($re) | not)
+                or ((.committer.login // "") | test($re) | not)
+                or (.commit.verification.verified != true)
+              ) | .sha' pr_commits.json)
             if [ -z "$NON_BOT_COMMITS" ]; then
               echo "deps_bot=true" >> "$GITHUB_OUTPUT"
             else
               echo "deps_bot=false" >> "$GITHUB_OUTPUT"
-              echo "bot-authored PR carries non-bot commits; routing to the model lane: $(echo "$NON_BOT_COMMITS" | tr '\n' ' ')"
+              echo "bot-authored PR carries commits that are not the bot's; routing to the model lane: $(echo "$NON_BOT_COMMITS" | tr '\n' ' ')"
             fi
           else
             echo "deps_bot=false" >> "$GITHUB_OUTPUT"
@@ -944,12 +989,19 @@ jobs:
           PR_NUMBER: ${{ github.event.issue.number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # A step that failed for a reason it could name leaves it in
+          # lane_error.txt. Without this the author reads only "crashed" and
+          # has to open the run to learn that, say, the commit list came back
+          # truncated — a fact the failing step already knew.
+          REASON=
+          [ -s lane_error.txt ] && REASON="
+          $(cat lane_error.txt)"
           BODY="<!-- claude-approve -->
           🤖 **hero-skills Pre-Approve Check**
 
           ## Verdict
           REQUEST_CHANGES
-          The auto-approve run crashed before reaching a verdict — see $RUN_URL. Fix the cause (or re-run if it was transient) and post \`@auto-approve\` again."
+          The auto-approve run crashed before reaching a verdict — see $RUN_URL. Fix the cause (or re-run if it was transient) and post \`@auto-approve\` again.$REASON"
           EXISTING=$(gh api \
             /repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
             --jq '.[] | select(.body | startswith("<!-- claude-approve -->")) | .id' \
