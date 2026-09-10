@@ -204,7 +204,11 @@ lane() {
 }
 BOT_PR='{"user":{"login":"dependabot[bot]"},"commits":1}'
 HUMAN_PR='{"user":{"login":"someone"},"commits":1}'
-signed() { printf '[{"sha":"%s","author":{"login":"%s"},"committer":{"login":"%s"},"commit":{"verification":{"verified":%s}}}]' "$1" "$2" "$2" "${3:-true}"; }
+# Shaped from a REAL Dependabot commit (design-system#155): the bot is the
+# AUTHOR, the committer is GitHub's `web-flow` because Dependabot commits
+# through the API, and GitHub signs it. A fixture that made committer == author
+# is what let a committer check look correct while breaking every live bot PR.
+signed() { printf '[{"sha":"%s","author":{"login":"%s"},"committer":{"login":"web-flow"},"commit":{"verification":{"verified":%s,"reason":"valid"}}}]' "$1" "$2" "${3:-true}"; }
 
 # --- the lane itself
 check "bot-lane: signed bot commit -> scripted lane" "0|true|" \
@@ -222,9 +226,12 @@ check "bot-lane: human author -> model lane, no fetch" "0|false|" \
 check "bot-lane: UNSIGNED commit attributed to the bot -> model lane" \
   "0|false|bot-authored PR carries commits that are not the bot's; routing to the model lane: spoof " \
   "$(lane "$BOT_PR" "$(signed spoof 'dependabot[bot]' false)")"
-check "bot-lane: committer not the bot -> model lane" \
-  "0|false|bot-authored PR carries commits that are not the bot's; routing to the model lane: ccc " \
-  "$(lane "$BOT_PR" '[{"sha":"ccc","author":{"login":"dependabot[bot]"},"committer":{"login":"someone"},"commit":{"verification":{"verified":true}}}]')"
+# REGRESSION GUARD. A committer check was added here and merged, and it sent
+# every real Dependabot PR to the model lane: `.committer` is `web-flow`, not
+# the bot. This is the exact payload from design-system#155 and it must take
+# the SCRIPTED lane.
+check "bot-lane: real bot commit (committer web-flow) -> scripted lane" "0|true|" \
+  "$(lane "$BOT_PR" '[{"sha":"7b97275","author":{"login":"dependabot[bot]"},"committer":{"login":"web-flow"},"commit":{"verification":{"verified":true,"reason":"valid"}}}]')"
 check "bot-lane: null author -> model lane" \
   "0|false|bot-authored PR carries commits that are not the bot's; routing to the model lane: ddd " \
   "$(lane "$BOT_PR" '[{"sha":"ddd","author":null,"committer":null,"commit":{"verification":{"verified":true}}}]')"
