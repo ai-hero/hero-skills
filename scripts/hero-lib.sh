@@ -740,13 +740,51 @@ hero_item_status() {
 hero_item_class() {
   case "$1" in
     ''|work-order|hardening)                                      printf plain ;;
-    feature|architecture|polish|security)                         printf build ;;
+    feature|architecture|polish|security|bug)                     printf build ;;
     goal)                                                         printf goal ;;
     design-feedback|architecture-feedback|design-system-feedback) printf feedback ;;
     *)
       echo "hero_ready_items: $2 has unrecognized kind '$1' — listed on the plain enum but never handed out READY; add it to hero_item_class or fix the frontmatter" >&2
       printf unknown ;;
   esac
+}
+
+# Unread messages in a store's mailbox (docs/MESSAGES.md): inbox/*.md whose
+# `status:` is `new`, or absent — an inbound file with no status line was
+# written by a sender that predates the field and is still unread. Prints the
+# count; a store with no inbox/ is 0. Callers print this at Step 0 so a
+# waiting message is noticed; nothing else surfaces it.
+hero_inbox_count() { # STORE
+  local n=0 f st
+  [ -d "$1/inbox" ] || { printf 0; return 0; }
+  for f in "$1"/inbox/*.md; do
+    [ -f "$f" ] || continue
+    st=$(hero_item_field "$f" status | tr '[:upper:]' '[:lower:]')
+    case "$st" in ''|new) n=$((n + 1)) ;; esac
+  done
+  printf '%s' "$n"
+}
+
+# Repo-local skills that plug into wayfare: every .claude/skills/*/SKILL.md
+# whose frontmatter carries `wayfare: HOOK`, as `name<TAB>hook<TAB>path`, one
+# per line; HOOK filters to one hook. The three hooks are sync (a stage of
+# `wayfare sync`), verify (a Definition-of-Done verifier) and recipe (a way to
+# build that planning may name). Discovery, not configuration: a list of these
+# in HERO.md would be a copy of the directory and would go stale.
+hero_local_skills() { # ROOT [HOOK]
+  local f name hook
+  for f in "$1"/.claude/skills/*/SKILL.md; do
+    [ -f "$f" ] || continue
+    hook=$(hero_item_field "$f" wayfare | tr '[:upper:]' '[:lower:]')
+    [ -n "$hook" ] || continue
+    name=$(hero_item_field "$f" name)
+    case "$hook" in
+      sync|verify|recipe) ;;
+      *) echo "hero_local_skills: $f declares wayfare: '$hook' — not sync|verify|recipe; skipped" >&2; continue ;;
+    esac
+    [ -z "${2:-}" ] || [ "$2" = "$hook" ] || continue
+    printf '%s\t%s\t%s\n' "${name:-$(basename "$(dirname "$f")")}" "$hook" "$f"
+  done
 }
 
 # Normalize a work-item id for comparison: all-digit ids (the standard form)
@@ -943,6 +981,11 @@ hero_ready_items() (
       goal:active|build:implementing|build:in-progress|plain:in-progress|unknown:in-progress)
                                         echo "active  $f — $title"; continue ;;
       build:reviewing)                  echo "review  $f — $title"; continue ;;
+      # Suspended: waiting on a sibling repo's reply (docs/MESSAGES.md). Never
+      # READY and never in done_ids — a dependent stays blocked while the
+      # question is open. The annotation names what it waits on, so a row that
+      # has waited past its expiry is visible rather than merely parked.
+      build:suspended)                  echo "suspended $f — $title [awaiting: $(hero_item_field "$store/$f" awaiting)]"; continue ;;
       plain:planning|build:planning|unknown:planning)
                                         echo "plan    $f — $title"; continue ;;
       build:todo|unknown:todo)          row=backlog ;; # never READY, but falls through to the dep check: dangling refs must still warn, and unmet deps must annotate the row (a goal turn reads them)
@@ -955,7 +998,7 @@ hero_ready_items() (
         # ready-mark, silently defeating the gate the planning state exists to
         # enforce. Treat it like a rejected id: name it loudly, never READY.
         case "$class" in
-          build)    enum="new/todo/planning/ready/implementing/reviewing/done (kind: $kind)" ;;
+          build)    enum="new/todo/planning/ready/implementing/reviewing/suspended/done (kind: $kind)" ;;
           feedback) enum="new/todo/queued/delivered/rejected (kind: $kind)" ;;
           goal)     enum="new/todo/active/done (kind: goal)" ;;
           *)        enum="new/planning/todo/in-progress/done" ;;

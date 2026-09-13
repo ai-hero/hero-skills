@@ -897,6 +897,44 @@ check "self-review count: gh failure returns non-zero" "no" "$([ $? -eq 0 ] && e
 # The workflow carries its own copy of the marker; the two must agree.
 check "self-review marker matches the workflow's" "yes" "$(grep -q "$HERO_SELF_REVIEW_MARKER" "$(dirname "$0")/../.github/workflows/auto-approve.yaml" && echo yes || echo no)"
 
+# ---------- bug kind, suspended, the inbox, local skills -------------------
+# `bug` rides the build enum like polish; `suspended` (docs/MESSAGES.md) is
+# never READY and never done, so a dependent stays blocked while the sibling's
+# answer is open.
+W3="$TMP/w3/.plans"
+mkdir -p "$W3/inbox"
+W="$W3"
+item 090-bug.md 90 "Badge clips at 320px" "ready" "[]" "bug"
+item 091-bugtodo.md 91 "Untriaged bug" "todo" "[]" "bug"
+# Written by hand: item() has no slot for the awaiting field, and the field
+# must sit INSIDE the frontmatter for the reader to see it.
+printf -- '---\nid: 92\nkind: feature\ntitle: Waiting on design-system\nstatus: suspended\nawaiting: [m-7f3a9c]\ndepends_on: []\n---\n' > "$W3/092-susp.md"
+item 093-dep.md 93 "Blocked on the wait" "ready" "[92]" "feature"
+OUT3="$(hero_ready_items "$W3" 2>/dev/null)"
+check "kind: bug ready is READY"                 "READY"     "$(state_of 090-bug.md "$OUT3")"
+check "kind: bug todo is backlog"                "backlog"   "$(state_of 091-bugtodo.md "$OUT3")"
+check "suspended lists as suspended"             "suspended" "$(state_of 092-susp.md "$OUT3")"
+check "suspended row names what it awaits"       "yes"       "$(printf '%s' "$OUT3" | grep -q 'awaiting: \[m-7f3a9c\]' && echo yes || echo no)"
+check "a dependent of a suspended item is blocked" "blocked" "$(state_of 093-dep.md "$OUT3")"
+
+printf -- '---\nmsg_id: m-1\ntype: bug\nstatus: new\n---\n' > "$W3/inbox/m-1.md"
+printf -- '---\nmsg_id: m-2\ntype: ask\nstatus: answered\n---\n' > "$W3/inbox/m-2.md"
+printf -- '---\nmsg_id: m-3\ntype: ask\n---\n' > "$W3/inbox/m-3.md"
+check "inbox count: new + missing status, not answered" "2" "$(hero_inbox_count "$W3")"
+check "inbox count: no inbox is 0"                     "0" "$(hero_inbox_count "$TMP/w")"
+check "inbox files never list as items"                "no" "$(printf '%s' "$OUT3" | grep -q 'm-1' && echo yes || echo no)"
+
+R3="$TMP/r3"
+mkdir -p "$R3/.claude/skills/plan-drift" "$R3/.claude/skills/plain" "$R3/.claude/skills/odd"
+printf -- '---\nname: plan-drift\ndescription: d\nwayfare: sync\n---\n' > "$R3/.claude/skills/plan-drift/SKILL.md"
+printf -- '---\nname: plain\ndescription: d\n---\n' > "$R3/.claude/skills/plain/SKILL.md"
+printf -- '---\nname: odd\ndescription: d\nwayfare: deploy\n---\n' > "$R3/.claude/skills/odd/SKILL.md"
+check "local skills: only wayfare-tagged, valid hooks" "plan-drift	sync	$R3/.claude/skills/plan-drift/SKILL.md" "$(hero_local_skills "$R3" 2>/dev/null)"
+check "local skills: hook filter"                     ""  "$(hero_local_skills "$R3" verify 2>/dev/null)"
+check "local skills: unknown hook is named on stderr" "yes" "$(hero_local_skills "$R3" 2>&1 >/dev/null | grep -q "wayfare: 'deploy'" && echo yes || echo no)"
+check "local skills: no skills dir is empty, rc 0"    "yes" "$(hero_local_skills "$TMP/w" >/dev/null 2>&1 && echo yes || echo no)"
+W="$TMP/w/.plans"
+
 if [ "$FAIL" -gt 0 ]; then
   echo "hero-lib: $PASS passed, $FAIL FAILED"
   exit 1
