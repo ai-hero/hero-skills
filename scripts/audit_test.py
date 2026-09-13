@@ -197,6 +197,33 @@ class Snapshot(unittest.TestCase):
         self.assertEqual(len(self.worktrees()), 1)
 
 
+class AppliesTo(unittest.TestCase):
+    """applies_to resolves FLEET.md groups and leaves every other name to
+    the checkers. A capability name must never exempt a repo on its own:
+    the explicit lists it used to resolve to went stale and hid three
+    template clones from every Go and Node check."""
+    def setUp(self):
+        self.saved = dict(audit.GROUP_REPOS)
+        audit.GROUP_REPOS.clear()
+        audit.GROUP_REPOS.update({"apps": {"a", "b"}, "infra": {"tf"}})
+
+    def tearDown(self):
+        audit.GROUP_REPOS.clear(); audit.GROUP_REPOS.update(self.saved)
+
+    def test_groups(self):
+        self.assertTrue(audit.applies({"applies_to": "all"}, "tf"))
+        self.assertTrue(audit.applies({}, "tf"))
+        self.assertTrue(audit.applies({"applies_to": ["template", "apps"]}, "a"))
+        self.assertFalse(audit.applies({"applies_to": ["template", "apps"]}, "tf"))
+        self.assertTrue(audit.applies({"applies_to": "go"}, "tf"), "a capability is the checker's call")
+        self.assertTrue(audit.applies({"applies_to": ["go", "apps"]}, "a"))
+        self.assertFalse(audit.applies({"applies_to": ["go", "apps"]}, "tf"), "the group half still decides")
+
+    def test_no_fleet_reaches_everyone(self):
+        audit.GROUP_REPOS.clear()
+        self.assertTrue(audit.applies({"applies_to": ["apps"]}, "anything"))
+
+
 class IdeFloor(unittest.TestCase):
     def test_floor_and_gitignore_note(self):
         with tempfile.TemporaryDirectory() as d:

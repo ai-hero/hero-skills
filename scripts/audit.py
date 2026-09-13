@@ -67,6 +67,7 @@ ROOT = None
 REGISTER = None
 TEMPLATE = None
 REPO_DIR = {}
+GROUP_REPOS = {}    # FLEET.md group -> set of family repo names; see applies()
 
 PASS, FAIL, NA, MANUAL, ERROR = "PASS", "FAIL", "n/a", "MANUAL", "ERROR"
 STATUSES = {PASS, FAIL, NA, MANUAL, ERROR}
@@ -164,6 +165,7 @@ def configure(root=None):
     global ROOT, FAMILY, REGISTER, TEMPLATE
     root = pathlib.Path(root).resolve() if root else fleet_root()
     REPO_DIR.clear()
+    GROUP_REPOS.clear()
     if root is None:
         rc, top = sh(pathlib.Path.cwd(), "git rev-parse --show-toplevel")
         repo = pathlib.Path(top.strip()) if rc == 0 and top.strip() else pathlib.Path.cwd()
@@ -186,7 +188,33 @@ def configure(root=None):
             continue
         REPO_DIR[row["name"]] = path
         names.append(row["name"])
+        GROUP_REPOS.setdefault(row["group"], set()).add(row["name"])
     FAMILY = tuple(names)
+
+
+def applies(check, repo_name):
+    """Whether a check's `applies_to` reaches this repo. `all` (or absent)
+    reaches everyone. A name that is a FLEET.md group (template, apps,
+    infra, …) reaches that group's rows. Any other name is a capability the
+    checker detects for itself (has_go, has_ui, …) and is left to it. An
+    explicit repo list per capability (the old `applies_to_groups`) is not
+    honoured on purpose: it is a copy of what detection already answers, and
+    the first time it went stale it exempted three template clones from
+    every Go and Node check. A lone repo outside a fleet is reached by every
+    check, since there is no group to be outside of.
+
+    Purpose is why this exists: an infra repo is in the fleet and holds a
+    different kind of code, so the overlay can say `applies_to: [template,
+    apps]` on an app-shaped convention and the infra rows read n/a instead
+    of failing a rule that was never about them."""
+    want = check.get("applies_to") or "all"
+    names = [want] if isinstance(want, str) else list(want)
+    if "all" in names or not GROUP_REPOS:
+        return True
+    groups = [n for n in names if n in GROUP_REPOS]
+    if not groups:
+        return True
+    return any(repo_name in GROUP_REPOS[n] for n in groups)
 
 
 def sh(cwd, cmd):
@@ -410,7 +438,9 @@ def _(r):
 def _(r):
     _rc, out = sh(
         r,
-        "find . -name 'Dockerfile*' -not -path '*/node_modules/*' "
+        # .terraform/ is a module cache: third-party Dockerfiles land there
+        # on `terraform init` and are no more this repo's than node_modules'.
+        "find . -name 'Dockerfile*' -not -path '*/node_modules/*' -not -path '*/.terraform/*' "
         "-not -path './.git/*' -not -path './Dockerfile*' -not -path './.*'",
     )
     if not out:
@@ -3351,6 +3381,10 @@ def run_matrix(checks, repos):
         cells = []
         for rn in repos:
             fn = CHECKS.get(c["id"])
+            if not applies(c, rn):
+                want = c.get("applies_to")
+                cells.append((NA, f"applies_to: {want if isinstance(want, str) else ', '.join(want)}"))
+                continue
             if not fn:
                 cells.append((MANUAL, ""))
                 continue
@@ -3438,10 +3472,14 @@ def main():
     hi = [f for f in fails if sev_of(f[0], ctrl) == "high"]
     ctrls_touched = {k["control"] for k in checks}
     failing_ctrls = {f[0]["control"] for f in fails}
+    # Under --json stdout is one object per line and nothing else; the
+    # summary still prints, on stderr, so a consumer parsing stdout never
+    # meets prose.
+    out = sys.stderr if a.json else sys.stdout
     print(f"\n{len(fails)} failing (check x repo) results ({len(hi)} high) "
-          f"across {len(repos)} repos" + (f"; {len(errors)} checker errors" if errors else ""))
+          f"across {len(repos)} repos" + (f"; {len(errors)} checker errors" if errors else ""), file=out)
     print(f"{len(checks)} checks under {len(ctrls_touched)} controls; "
-          f"{len(failing_ctrls)} controls have at least one failing check")
+          f"{len(failing_ctrls)} controls have at least one failing check", file=out)
     if errors:
         return 2
     if a.fail_on:
