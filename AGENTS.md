@@ -31,7 +31,8 @@ not the logic and must stay small.
 
 `ls` shows it. The two non-obvious facts: `assets/` is installed **into**
 other repos (the auto-approve caller, the design-system rule and hook, the
-`## Fleet` section for AGENTS.md), and
+`## Fleet` section for AGENTS.md) — except `assets/compliance/`, the
+register baseline the engine reads in place — and
 `pr-check.yaml` is this repo's own gate while `auto-approve.yaml` is the fleet's.
 
 ## Conventions

@@ -1,18 +1,20 @@
 ---
 name: wayfare
 # prettier-ignore
-description: The front door. sync converges architecture, design, hardening, dependencies and the roadmap into .plans and proposes goals bottom-up; next hands you the next goal to run under /goal; do advances one item or one goal turn.
-argument-hint: "[sync [CONTEXT] | next | do ID | recalibrate]"
+description: The front door. sync converges architecture, design, hardening, compliance, deps and the roadmap into .plans and proposes goals; next hands out a goal; do advances one item; improve audits the fleet.
+argument-hint: "[sync [CONTEXT] | next | do ID | improve | recalibrate]"
 ---
 
 # Wayfare — The Route from Source to Target
 
-**Wayfare is the one skill a person runs.** Four verbs: `sync` reads the
+**Wayfare is the one skill a person runs.** Five verbs: `sync` reads the
 world and converges everything into `.plans/` — the architecture record, the
-design snapshot, the hardening audit, the dependency bots' PRs, the roadmap,
-and the goals over it; `next` hands out the next goal and the `/goal` line
-that runs it; `do ID` advances one item, or runs one turn of one goal;
-`recalibrate` tunes the config. The skills `sync` stitches together —
+design snapshot, the hardening audit, the compliance register, the
+dependency bots' PRs, the roadmap, and the goals over it; `next` hands out
+the next goal and the `/goal` line that runs it; `do ID` advances one item,
+or runs one turn of one goal; `improve` runs the compliance audit alone, for
+this repo or the whole fleet, and drafts the backports; `recalibrate` tunes
+the config. The skills `sync` stitches together —
 `hero-skills:architecture`, `hero-skills:harden`,
 `hero-skills:think-it-through` — still exist and still own their procedures,
 but they are run *by* wayfare, in order, and hidden from the slash menu
@@ -699,7 +701,7 @@ SOURCE_HEAD=$(git -C "$SOURCE_REPO" rev-parse --verify HEAD 2>/dev/null) && [ -n
 echo "wayfare: source=$SOURCE_REPO@${SOURCE_HEAD} design-project=$DP_SHOW transport=$DESIGN_TRANSPORT feedback-repo=$FEEDBACK_REPO ux-flow=$UX_FLOW ds-project=$DS_SHOW ds-repo=$DS_REPO reconciliation=$RECON"
 ```
 
-If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
+If `FLEET_ROOT` printed, this folder is a fleet, not a repo: for every verb but `improve`, stop and follow **At the fleet root** in `docs/FLEET-MD.md`; `improve` has a fleet-root form of its own (below).
 
 **If any variable above was set to REJECTED — `STORE`, `SOURCE_REPO`,
 `SOURCE_HEAD`, `UX_FLOW`, `DS_REPO`, or `RECON` — STOP** — every verb, not just sync. Those sentinels must never
@@ -910,8 +912,8 @@ never reach a `DesignSync` call as a project id. Only a value that passes its
 own test is a path (or a project id), and only then may it reach git (or the
 tool).
 
-Then dispatch. Four verbs: **`sync`**, **`next`**, **`do`**, and
-**`recalibrate`**.
+Then dispatch. Five verbs: **`sync`**, **`next`**, **`do`**, **`improve`**,
+and **`recalibrate`**.
 
 - `recalibrate` tunes the `## Wayfare` block plus every other field `sync`'s
   stages read, and stops — it is matched before everything else, because the
@@ -924,6 +926,9 @@ Then dispatch. Four verbs: **`sync`**, **`next`**, **`do`**, and
   `security` id with `bot:` runs *Carrying a bot's PR*; a goal id runs *One
   turn* of that goal — the verb `/goal` re-invokes. `do` without an id prints
   the roadmap view and asks which.
+- `improve` runs the `compliance` stage on its own and adds the backport
+  half `sync` never does; at a fleet root it audits the whole family. See
+  `improve` below.
 - Anything else is `sync`, with the trailing text carried in as context for its
   proposals (a feature idea to add, an area to focus on).
 
@@ -940,7 +945,7 @@ note before being treated as sync context.
 **`sync` is a pipeline, and it renders as one** (`docs/PIPELINES.md`):
 
 ```
-config → architecture → harden → deps → design → reconcile → plan → goals
+config → architecture → harden → compliance → deps → design → reconcile → plan → goals
 ```
 
 Print the DAG line at every stage transition. The order is the order the
@@ -1146,6 +1151,45 @@ line, a `Trivy: skipped (unavailable)` or `Docker/Scout: skipped
 (unavailable)` line, and every `Deferred:` line — each becomes an
 `unverified` row in this run's report (a part that ran on one scanner is
 partial, not clean), never "clean".
+
+**The `compliance` stage — this repo against the register.** The register
+has two halves: the generic baseline shipped with the plugin
+(`assets/compliance/`) and the fleet's overlay in the checkout FLEET.md
+names (`register:`, default `.fleet/`) — reference repos, incident history,
+`known_violations`. Outside a fleet only the baseline applies. Run the
+engine for this repo alone, as it sits:
+
+```bash
+# --repo . resolves this checkout to its FLEET.md row (a basename is not the
+# row when the row carries `path:`); outside a fleet it is the lone repo.
+# stdout is JSON only; the engine's summary and any failure go to stderr, so
+# a non-zero exit is recorded in a variable rather than printed into the
+# stream a parser is about to read.
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/audit.py" \
+  --repo . --no-snapshot --json > "$SCRATCH/compliance.jsonl" 2> "$SCRATCH/compliance.err"; COMPLIANCE_RC=$?
+[ "$COMPLIANCE_RC" = 0 ] || echo "COMPLIANCE_AUDIT_RC=$COMPLIANCE_RC — read $SCRATCH/compliance.err; rc 2 means a checker raised (its cells are in the JSON with status ERROR), anything else means the engine did not run: render (–) and say why."
+```
+
+`--json` prints one object per failing or erroring (check × repo) cell:
+`status` (`FAIL` | `ERROR`), `check`, `control`, `repo`, `severity`,
+`title`, `reference` (a row name, or null), `detail`, `rule`. MANUAL cells
+are not printed — they are not findings; a check declared manual is the
+register saying a person verifies it. Propose one item per **control**
+that has a failing check, never one per check — a control is the outcome
+("third-party code cannot change under us"), its checks are the Definition
+of Done lines. `kind: security` when the **highest** failing check's
+severity under that control is `high`, `kind: architecture` otherwise;
+`origin: wayfare`;
+`status: planning` with the rule text as the `## Approach` and the
+`detail` per check as the evidence in `## Context`; `source` = the paths
+the checks name. When `reference` names another repo, say so in
+`## Context` — the fix is to match that repo's file, not to invent one —
+and never propose changing the reference. A repo that carries a copy of
+the register (REG-01) is an item like any other: the copy goes, the
+register lives in the fleet's checkout. An `ERROR` cell is `unverified` —
+the checker broke, which is a finding about the engine, not about this
+repo — and never a proposed item. A repo outside any fleet says so in one
+line and audits against the baseline only.
 
 **The `deps` stage — the bots' open PRs.** A dependency bot opens PRs nobody
 planned; each is a bump already implemented on a branch that is not ours.
@@ -1652,6 +1696,44 @@ before writing; zero-pad only the filename.
   authorized in this session routes to *Starting a goal* — the gate that
   reads its permissions aloud — exactly as `next` would; no turn runs until
   the id is typed there.
+
+### `improve` — the compliance audit on its own, and the backports
+
+`improve` takes no argument. In a repo it runs the `compliance` stage
+exactly as `sync` does — same engine call, same items, same confirm flow —
+and then does the one thing `sync` never does: **the backport half**. Run
+the engine once more for the fleet's template (`--repo TEMPLATE`, the
+`template:` row in FLEET.md) and, for every check the template fails where
+this repo is the `reference`, draft a message into the template's
+`.plans/inbox/` per `docs/MESSAGES.md`: `from` this repo, `to` the template,
+`about` the item here if one exists, an `## Ask` naming the check and the
+file in this repo that satisfies it. That deposit is the only write outside
+this repo the messages standard allows, and it is confirmed like any
+outward-facing act: show the drafts, write on the user's word. Outside a
+fleet there is no template and no backport; say so.
+
+**At a fleet root** (Step 0 printed `FLEET_ROOT`), `improve` is the family
+audit:
+
+1. Run the engine for the whole family, at merged state:
+   `scripts/audit.py --md` (it snapshots each repo at `origin/main`; pass
+   `--no-snapshot` only when the user asks to audit the checkouts as they
+   sit). Print the table.
+2. Regenerate the fleet's table: `scripts/consistency.py` writes
+   `CONSISTENCY.md` into the register checkout. It is a git repo; propose
+   the commit and make it on the user's word.
+3. Read the register's `reference:` rows against the results: every check
+   where the reference repo itself fails is a **register defect** (the
+   reference is wrong, or the repo regressed) — report it first; it is the
+   one finding nobody else surfaces.
+4. Offer the per-repo fan-out per **At the fleet root** in
+   `docs/FLEET-MD.md`: the user picks repos, and each gets
+   `hero-skills:wayfare improve` in a subagent, which proposes its own
+   items in its own store. The fleet form writes into no repo's store —
+   items are a repo's own decision, made in that repo.
+
+A family whose FLEET.md rows all say `group: none` is not a family; say
+that instead of auditing nothing and reporting clean.
 
 ### `next` — hand out the next goal
 
@@ -2503,6 +2585,9 @@ Stamp `origin` with the producer that actually authored the item; never claim
 | Planning an item already satisfied | Check the codebase before think-it-through; finished work must not be grilled. |
 | A claim with no file | An opinion. It belongs in a feedback item, not a coverage verdict. |
 | Storing merge authorization on a goal | A file that grants a gate. It outlives the session that approved it — `## Permissions` says what to ask for; the grant is typed at `next`. |
+| Proposing one item per failing check | A control is the outcome; its checks are the DoD lines. Fifty check items is a bug tracker. |
+| Fixing a compliance finding by changing the reference repo | The reference is the one that is right. Match it, or raise a register defect if it is wrong. |
+| Writing items into a sibling repo from the fleet root | Items are a repo's own decision. Fan out and let each repo propose its own; only inbox messages cross. |
 | Calling `harden` or `architecture` by hand in the workflow | `sync` runs both, in order, with the map feeding the audit feeding the roadmap. Run alone they answer a narrower question and leave the roadmap unconverged. |
 | Reorganizing an `active` goal's `covers` | Its set was authorized as shown. New work is a follow-up goal; only an out-of-band `done` may leave. |
 | Authoring a goal's `depends_on` | It is derived from the features' `depends_on`. A hand-written order that disagrees is a defect, not a preference. |
@@ -2520,5 +2605,6 @@ Pick exactly one, from the store's current state:
 
 - **A goal is runnable** (`active`, or `todo` with its goal deps `done` and its `covers` all planned): `Next step: hero-skills:wayfare next — authorize its permissions and start the loop`; under an active `/goal`, `hero-skills:wayfare do GOAL_ID` is its next turn.
 - **An item is READY or mid-flight and no goal covers it**: `Next step: hero-skills:wayfare do N — build item N` (the active one, else the lowest READY id).
-- **Features are unplanned (`todo`), no roadmap yet, or the world moved** (target changed, work landed out-of-band, design feedback awaits delivery, features look horizontal, alerts or bot PRs appeared): `Next step: hero-skills:wayfare sync — converges architecture, design, hardening, dependencies and the roadmap, plans the set, then proposes goals`.
+- **Features are unplanned (`todo`), no roadmap yet, or the world moved** (target changed, work landed out-of-band, design feedback awaits delivery, features look horizontal, alerts or bot PRs appeared): `Next step: hero-skills:wayfare sync — converges architecture, design, hardening, compliance, dependencies and the roadmap, plans the set, then proposes goals`.
+- **A compliance finding names this repo as the reference for something the template fails**: `Next step: hero-skills:wayfare improve — draft the backport message`.
 - **Everything blocked or done**: print the roadmap view — it names each blocker's unmet deps, or the route is complete.

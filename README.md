@@ -97,9 +97,11 @@ Three commands. Everything else is run by them.
 hero-skills:init-hero
 
 # 2. Converge the world into a plan — one round, eight stages:
-#    config → architecture → harden → deps → design → reconcile → plan → goals
+#    config → architecture → harden → compliance → deps → design → reconcile → plan → goals
 #    Reviews DESIGN.md (offers to converge it), audits dependency/container/
-#    code hardening, gathers the bots' open PRs, refreshes the design snapshot,
+#    code hardening, checks the repo against the compliance register (generic
+#    baseline + your fleet's overlay), gathers the bots' open PRs, refreshes
+#    the design snapshot,
 #    reconciles source against design, plans every feature with you, then
 #    proposes goals bottom-up over what was planned — and re-cuts the ones
 #    already there. Writes only what you confirm; your ready-mark is the gate.
@@ -113,8 +115,10 @@ hero-skills:wayfare next
 ```
 
 `hero-skills:wayfare do ID` advances one thing on its own — a feature through
-one-shot, a Dependabot PR to merged and deployed, or one goal turn. `recalibrate`
-tunes the config every stage reads.
+one-shot, a Dependabot PR to merged and deployed, or one goal turn. `improve`
+runs the compliance audit alone — in one repo, or across the whole fleet from
+its root — and drafts backports where this repo is ahead of the template.
+`recalibrate` tunes the config every stage reads.
 
 ### Or: one piece at a time
 
@@ -204,7 +208,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:wayfare` | Four verbs. `sync` runs one round of convergence — `config → architecture → harden → deps → design → reconcile → plan → goals` — writing every `.plans/` item (features, architecture, polish, security, feedback, goals) and proposing goals bottom-up while re-cutting the `todo` ones; `next` picks the next runnable goal, reads its `## Permissions` (mark-ready, respond, auto-approve, merge, deploy) for your in-session authorization, and prints the `/goal` line; `do ID` builds one feature via one-shot, carries one Dependabot PR to merged and deployed, or runs one goal turn (up to `concurrency` items in parallel worktrees); `recalibrate` tunes every field the stages read. Features are SLC vertical slices (user stories, never layers) carrying subtasks, a definition of done, comments, design feedback back to the design team, and staleness flags |
+| `hero-skills:wayfare` | Five verbs. `sync` runs one round of convergence — `config → architecture → harden → compliance → deps → design → reconcile → plan → goals` — writing every `.plans/` item (features, architecture, polish, security, feedback, goals) and proposing goals bottom-up while re-cutting the `todo` ones; `next` picks the next runnable goal, reads its `## Permissions` (mark-ready, respond, auto-approve, merge, deploy) for your in-session authorization, and prints the `/goal` line; `do ID` builds one feature via one-shot, carries one Dependabot PR to merged and deployed, or runs one goal turn (up to `concurrency` items in parallel worktrees); `improve` audits this repo — or the whole fleet from its root — against the compliance register and proposes the fixes and backports; `recalibrate` tunes every field the stages read. Features are SLC vertical slices (user stories, never layers) carrying subtasks, a definition of done, comments, design feedback back to the design team, and staleness flags |
 
 Two skills are stages of `sync` and hidden from the slash menu (`user-invocable: false`) — you never call them, but they still own their procedures:
 
@@ -363,3 +367,15 @@ Skills are markdown files in the `skills/` directory. Each is a structured promp
 ## License
 
 MIT — built by [AI Hero](https://aihero.studio).
+
+## Compliance register
+
+`scripts/audit.py` computes (check × repo) results live, from a register in
+two halves: the generic **baseline** in `assets/compliance/`, shipped here,
+and your fleet's private **overlay** — reference repos, incident history,
+`known_violations` — in the register checkout FLEET.md names (`register:
+.fleet/`). Inside a fleet the family is FLEET.md's rows whose group is not
+`none`; anywhere else, the current repo alone against the baseline.
+`scripts/consistency.py` writes the fleet's human table into that checkout.
+`wayfare sync` runs the audit as its `compliance` stage; `wayfare improve`
+runs it alone. See `assets/compliance/README.md`.
