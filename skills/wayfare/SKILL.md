@@ -1028,9 +1028,14 @@ feedback), each with:
   of zero is indistinguishable from "no feedback exists",
 - the single next action: `wayfare next` when a goal is runnable (see
   `next` — an `active` goal, else the first `todo` goal in bottom-up order
-  whose `covers` are all planned), `wayfare do N` for a READY or mid-flight
-  item no goal covers, `wayfare sync` for unplanned features, stale rows,
-  defects, and undelivered design feedback.
+  whose `covers` are all planned), `wayfare do N` for a mid-flight item,
+  `wayfare sync` for unplanned features, READY items no goal covers, stale
+  rows, defects, and undelivered design feedback.
+
+Print the `hero_ready_items` "no open goal covers it" warnings as their own
+line under the READY group, one per item — they are the orphans `next` can
+never reach, and `sync` is what groups them. `do N` builds one by hand; it is
+not the fix.
 
 Print one banner line above the groups when `UX_FLOW` is `UNSET`, or when it
 holds a path that does not resolve at the target head:
@@ -1588,7 +1593,9 @@ follows):
   features' `depends_on`; a goal whose `## Permissions` is missing, lacks a
   key, or holds a value outside `yes`/`no` (`verify`/`none` for `deploy`),
   or whose `## Permissions` changed while `active`; a `concurrency` that is
-  not a positive integer;
+  not a positive integer; a build item at `ready` or further, not `done`,
+  that no `todo` or `active` goal covers (the listing warns on stderr; the
+  fix is the goals stage of this same run, never a hand-written `covers`);
   every `[item: N]` marker in a `## Design Feedback` section checked per
   `references/feedback-channels.md` (N exists, is a feedback kind, its
   `entry:` names this entry, its `discovered_from` is this feature); a goal
@@ -1690,60 +1697,93 @@ So the pass runs across the roadmap:
    was not planned stays `todo` and is named in the report; `do` refuses it
    until the next `sync` plans it. Nothing is silently deferred.
 
-4. **Goals — propose bottom-up, and reorganize what is already there.** A
-   goal is the unit `next` hands out and `/goal` loops against, and every
-   item in its `covers` must already be `ready` (*Starting a goal*, step 1)
-   — so the end of this pass is the one moment in the workflow where a goal
-   can be formed *from* the set instead of reassembled by hand afterwards.
-   Roadmap mode has just settled the cross-cutting decisions and the
-   dependency order across these features. A goal written later has to
-   re-derive that grouping from the items alone, without the reasoning that
-   produced it.
+4. **Goals — cover every planned item, bottom-up, and re-cut what is
+   already there.** A goal is the unit `next` hands out and `/goal` loops
+   against, and every item in its `covers` must already be `ready`
+   (*Starting a goal*, step 1) — so the end of this pass is the one moment
+   in the workflow where a goal can be formed *from* the set instead of
+   reassembled by hand afterwards. Roadmap mode has just settled the
+   cross-cutting decisions and the dependency order across these features.
+   A goal written later has to re-derive that grouping from the items alone,
+   without the reasoning that produced it.
+
+   **This stage always runs, and it ends with no planned item outside a
+   goal.** `next` walks goals and never items, so a `ready` build item no
+   goal covers is never handed out: it sits READY until someone types `do N`
+   by hand, and nothing in the loop ever reaches it. That is the orphan this
+   stage exists to prevent. The invariant at the end of the pass: **every
+   build item at `ready` or further and not `done` is in exactly one open
+   goal.** A single item that adds up to nothing larger is a one-item goal
+   with `budget: 1` — small, but reachable. The stage runs even when the
+   plan pass stopped early or the user declined a ready-mark: it groups
+   what is `ready`, and names each `todo` or `planning` leftover as the
+   reason a goal is still missing. It never renders `(–)`. A run that
+   proposes no goal while an uncovered `ready` item exists has skipped the
+   stage, and the next `hero_ready_items` says so on stderr.
 
    **Bottom-up means the order is derived from the items, not imposed on
    them.** Build the groups from the leaves of the `depends_on` graph
    upward: the first goal is the smallest outcome whose features depend on
    nothing outside the group; the next is the smallest outcome whose
    remaining dependencies are all inside goals already formed; and so on
-   until every `ready` build item is either in a goal or left to `do`. A
-   goal's own `depends_on` names the **goals** its features' dependencies
-   fall in — derived, never authored: if any feature in goal B `depends_on`
-   a feature in goal A, then B `depends_on: [A]`. That derived order is what
-   `next` walks, so a goal whose dependencies are not `done` is never handed
-   out, and two goals with no edge between them are independent and may run
-   in either order. A cycle between goals means the grouping is wrong — say
-   so and re-cut rather than write it.
+   until every `ready` build item is in a goal. A goal's own `depends_on`
+   names the **goals** its features' dependencies fall in — derived, never
+   authored: if any feature in goal B `depends_on` a feature in goal A, then
+   B `depends_on: [A]`. That derived order is what `next` walks, so a goal
+   whose dependencies are not `done` is never handed out, and two goals with
+   no edge between them are independent and may run in either order. A
+   cycle between goals means the grouping is wrong — say so and re-cut
+   rather than write it.
 
    Group by **outcome** — what a person can do once the whole group ships —
    never by area or layer. A group whose Definition of Done cannot be stated
    as one user-visible outcome is not a goal; it is a filter over the
    roadmap, and it will report `done` without anything having shipped that a
-   person would notice. Security items are the one exception, because their
-   outcome is stated on the item already: `ready` bot items and harden items
-   group into one goal per round whose DoD is "no open alert this round
-   found, every bump merged and deployed" — they never mix into a product
-   goal, because their turns run a different pipeline (*Carrying a bot's
-   PR*), and because a person authorizing a feature goal should not be
-   authorizing dependency merges in the same breath.
+   person would notice. Three kinds state their outcome differently, and
+   the outcome test must not leave them orphaned:
+   - **Security items** — `ready` bot items and harden items group into one
+     goal per round whose DoD is "no open alert this round found, every
+     bump merged and deployed". They never mix into a product goal, because
+     their turns run a different pipeline (*Carrying a bot's PR*), and
+     because a person authorizing a feature goal should not be authorizing
+     dependency merges in the same breath.
+   - **Bugs and polish** group per surface — the screen or flow they
+     correct — into a goal whose DoD is that surface working as designed:
+     each item's `success` line, plus one line stating the surface's story
+     end to end. A bug on a surface a feature in this round also changes
+     joins that feature's goal instead.
+   - **Architecture items** join the goal of the first feature that
+     `depends_on` them; one with no dependent feature this round is its own
+     goal, whose DoD is the invariant the item names, stated as something
+     the code now enforces.
 
-   **Reorganize before proposing.** Existing goals are input, not fixed
-   points, and there are two kinds:
-   - **`todo` goals are re-cut freely.** Re-derive the grouping over the
-     current `ready` set as if from scratch, then diff it against each
-     `todo` goal: a feature planned this round that serves an existing
-     goal's outcome joins its `covers` (`budget` grows with it); a feature
-     that went `done` out-of-band or `obsolete` leaves; two goals that name
-     one outcome merge; a goal whose DoD has become two outcomes splits. A
-     re-cut goal keeps its id and its `## Comments`; every change is a
-     dated comment naming what moved and why. Each proposed change is a row
-     in the same confirm flow as a new goal.
+   **Re-cut before proposing — coalesce and split.** Existing goals are
+   input, not fixed points. Re-derive the grouping over the current `ready`
+   set from scratch, as if no goal existed, then diff the result against
+   every goal in the store. Goals written under an earlier rule — a
+   feature left to `do`, a round of bugs never grouped — get no exemption:
+   the diff is what brings them under this one. Two kinds of goal, two
+   rules:
+   - **`todo` goals are re-cut freely.** A feature planned this round that
+     serves an existing goal's outcome joins its `covers` (`budget` grows
+     with it); a feature that went `done` out-of-band or `obsolete` leaves;
+     **two goals whose DoDs name one outcome coalesce** into the lower id,
+     the other going `done` with a comment pointing at the survivor; **a
+     goal whose DoD has become two outcomes splits**, the second outcome
+     taking a new id and a comment on the first naming what moved. A
+     coalesce or split re-derives `depends_on`, `covers` order, and `budget`
+     for every goal it touched. A re-cut goal keeps its id and its
+     `## Comments`; every change is a dated comment naming what moved and
+     why. Each proposed change is a row in the same confirm flow as a new
+     goal, and a declined row leaves that goal exactly as it was.
    - **`active` goals are frozen.** Their `covers` and `## Permissions`
      were shown at `next`'s gate and authorized as a set; changing either
-     under an authorization changes what was authorized. New work that belongs to an active goal's
-     outcome becomes a **follow-up goal** with `depends_on` the active one,
-     and a comment on the active goal points at it. The one edit an active
-     goal takes is a dropped feature that went `done` out-of-band — that
-     shrinks what was authorized, never grows it — recorded as a comment.
+     under an authorization changes what was authorized. New work that
+     belongs to an active goal's outcome becomes a **follow-up goal** with
+     `depends_on` the active one, and a comment on the active goal points at
+     it. The one edit an active goal takes is a dropped feature that went
+     `done` out-of-band — that shrinks what was authorized, never grows it —
+     recorded as a comment.
 
    Each proposal goes through the same confirm flow as any other row, and is
    written in **the full goal item format** (*Item formats* below) — not the
@@ -1771,10 +1811,11 @@ So the pass runs across the roadmap:
    approval that grants a goal's `## Permissions` is typed by a person at
    `wayfare next`'s gate, in-session, and is never written to the item; a
    sync that carried it would put into a file exactly the flag *Starting a
-   goal* step 4 forbids. Proposing no goals is a normal outcome — features
-   that do not add up to one outcome are left to `do`. End the run with the
-   roadmap view; when a goal is runnable, the last line is
-   `Next step: hero-skills:wayfare next`.
+   goal* step 4 forbids. A user may decline a proposed goal; the item it
+   would have covered is then named in the report as uncovered, with the
+   `do N` line that builds it by hand, and the next sync proposes it again.
+   End the run with the roadmap view; when a goal is runnable, the last line
+   is `Next step: hero-skills:wayfare next`.
 
 **This is not a gate on building.** The roadmap does not have to be fully
 planned before the first feature ships — that would be waterfall, and it
@@ -1866,9 +1907,9 @@ walk the goals:
    A `todo` goal whose deps are met but whose `covers` hold an unplanned
    item is reported as blocked on planning: `Next step: wayfare sync`.
 3. Else say why there is nothing to hand out, in one line each: no goals
-   (features ready but ungrouped → `wayfare sync` proposes goals, or `wayfare
-   do N` builds one); every goal blocked on another (name the chain); every
-   goal `done` (the route is complete).
+   (features ready but ungrouped → `wayfare sync`'s goals stage covers
+   them; that stage was skipped or cut short); every goal blocked on another
+   (name the chain); every goal `done` (the route is complete).
 
 Then run *Starting a goal* on the pick. `next` is how a goal starts; `do
 GOAL_ID` is how it turns.
@@ -2727,6 +2768,8 @@ Stamp `origin` with the producer that actually authored the item; never claim
 | Writing items into a sibling repo from the fleet root | Items are a repo's own decision. Fan out and let each repo propose its own; only inbox messages cross. |
 | Calling `harden` or `architecture` by hand in the workflow | `sync` runs both, in order, with the map feeding the audit feeding the roadmap. Run alone they answer a narrower question and leave the roadmap unconverged. |
 | Reorganizing an `active` goal's `covers` | Its set was authorized as shown. New work is a follow-up goal; only an out-of-band `done` may leave. |
+| Leaving a `ready` item outside every goal | `next` walks goals, never items, so it is never handed out. A one-item goal is small; an orphan is unreachable. |
+| Keeping a `todo` goal as written because it exists | Re-derive from scratch, then diff: goals coalesce when their DoDs name one outcome and split when one names two. |
 | Authoring a goal's `depends_on` | It is derived from the features' `depends_on`. A hand-written order that disagrees is a defect, not a preference. |
 | Merging past an ungranted gate | `merge: no` means a person merges. The turn rests at the PR with `stop: awaiting-human`. |
 | Carrying goal state in memory between turns | `/goal` compacts and resumes; the store and `## Turn log` are the state. Every turn reads cold. |
@@ -2741,7 +2784,8 @@ Stamp `origin` with the producer that actually authored the item; never claim
 Pick exactly one, from the store's current state:
 
 - **A goal is runnable** (`active`, or `todo` with its goal deps `done` and its `covers` all planned): `Next step: hero-skills:wayfare next — authorize its permissions and start the loop`; under an active `/goal`, `hero-skills:wayfare do GOAL_ID` is its next turn.
-- **An item is READY or mid-flight and no goal covers it**: `Next step: hero-skills:wayfare do N — build item N` (the active one, else the lowest READY id).
+- **An item is mid-flight and no goal covers it**: `Next step: hero-skills:wayfare do N — build item N` (the active one).
+- **An item is READY and no goal covers it**: `Next step: hero-skills:wayfare sync — item N is ready and no goal covers it; the goals stage groups it`. `do N` builds it by hand and leaves the roadmap as it was.
 - **Features are unplanned (`todo`), no roadmap yet, or the world moved** (target changed, work landed out-of-band, design feedback awaits delivery, features look horizontal, alerts or bot PRs appeared): `Next step: hero-skills:wayfare sync — converges architecture, design, hardening, compliance, dependencies and the roadmap, plans the set, then proposes goals`.
 - **A compliance finding names this repo as the reference for something the template fails**: `Next step: hero-skills:wayfare improve — draft the backport message`.
 - **Everything blocked or done**: print the roadmap view — it names each blocker's unmet deps, or the route is complete.

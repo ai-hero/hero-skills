@@ -685,11 +685,16 @@ hero_item_field() {
 # — yielded an empty value, the readiness loop never ran, and the item was
 # reported READY despite depending on work that does not exist. Silently: there
 # was no `d` for the readiness loop's existence check to flag as missing.
-hero_item_deps() {
-  awk '
+hero_item_deps() { hero_item_list_field "$1" depends_on; }
+
+# Print a goal's `covers` ids, one per line — same parser, same two YAML forms.
+hero_item_covers() { hero_item_list_field "$1" covers; }
+
+hero_item_list_field() {
+  awk -v k="$2" '
     /^---[[:space:]]*$/ { fence++; if (fence >= 2) exit; next }
     fence != 1 { next }
-    /^depends_on:/ {
+    index($0, k ":") == 1 {
       v = $0; sub(/^[^:]*: */, "", v); sub(/ *#.*/, "", v)
       gsub(/[][,]/, " ", v)
       n = split(v, parts, /[[:space:]]+/)
@@ -922,7 +927,7 @@ hero_norm_id() {
 # Runs in a subshell: it cds, and leaking that into a sourced caller's shell
 # silently reroutes every later relative path.
 hero_ready_items() (
-  local store f d raw deps ready title id state kind class enum row all_ids done_ids missing awaiting since
+  local store f d raw deps ready title id state kind class enum row all_ids done_ids covered_ids missing awaiting since
   store="${1:-$(hero_work_store)}" || return 1
   cd "$store" 2>/dev/null || { echo "hero_ready_items: no store at ${store}" >&2; return 1; }
   # zsh errors out on an unmatched glob (bash leaves it literal for the
@@ -939,6 +944,7 @@ hero_ready_items() (
   # hand-written item must not erase or corrupt the whole listing.
   all_ids=" "
   done_ids=" "
+  covered_ids=" "
   for f in *.md; do
     [ -e "$f" ] || continue
     id=$(hero_norm_id "$(hero_item_field "$f" id)")
@@ -971,6 +977,14 @@ hero_ready_items() (
       feedback:*) ;;
       *:done) done_ids="$done_ids$id " ;;
     esac
+    if [ "$class" = goal ] && [ "$state" != "done" ]; then
+      while IFS= read -r raw; do
+        [ -z "$raw" ] && continue
+        covered_ids="$covered_ids$(hero_norm_id "$raw") "
+      done <<EOF
+$(hero_item_covers "$f")
+EOF
+    fi
   done
 
   for f in *.md; do
@@ -1104,6 +1118,18 @@ EOF
     else
       echo "blocked $f — $title${missing:+ [missing dep:$missing]}"
     fi
+    # A planned build item outside every open goal is invisible to `wayfare
+    # next` — it walks goals, never items — so it sits READY forever unless
+    # someone runs `do N` by hand. Sync groups every planned item; an
+    # uncovered one means that pass was skipped or cut short, and nothing
+    # else reports it. Warn on stderr only: the row itself is still correct.
+    case "$class:$state" in
+      build:ready|build:implementing|build:in-progress|build:reviewing)
+        case "$covered_ids" in
+          *" $id "*) ;;
+          *) echo "hero_ready_items: $f is $state and no open goal covers it — wayfare sync groups it into a goal" >&2 ;;
+        esac ;;
+    esac
   done
 )
 

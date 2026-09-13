@@ -657,6 +657,105 @@ printf '%s' "$ERRK" | grep -q "unrecognized status 'ready'.*kind: goal"
 check "kind: goal bad status names the goal enum" "0" "$?"
 printf '%s' "$ERRK" | grep -q "unrecognized status 'ready'.*kind: design-feedback"
 check "kind: feedback bad status names its own enum" "0" "$?"
+
+# ---------- goal coverage ----------------------------------------------------
+#
+# `wayfare next` walks goals, never items, so a planned build item outside every
+# open goal is never handed out — it sits READY until someone runs `do N` by
+# hand. Sync's goals stage groups every planned item; the warning is the only
+# thing that reports the stage having been skipped or cut short.
+mkdir -p "$TMP/cov/.plans"; C="$TMP/cov/.plans"
+cat > "$C/001-in.md" <<'ITEM'
+---
+id: 1
+kind: feature
+title: Covered by open goal
+status: ready
+depends_on: []
+---
+ITEM
+cat > "$C/002-out.md" <<'ITEM'
+---
+id: 2
+kind: feature
+title: Nobody covers me
+status: ready
+depends_on: []
+---
+ITEM
+cat > "$C/003-block.md" <<'ITEM'
+---
+id: 3
+kind: polish
+title: Covered via block-form covers
+status: implementing
+depends_on: []
+---
+ITEM
+cat > "$C/004-donegoal.md" <<'ITEM'
+---
+id: 4
+kind: bug
+title: Only a done goal covers me
+status: ready
+depends_on: []
+---
+ITEM
+cat > "$C/005-todo.md" <<'ITEM'
+---
+id: 5
+kind: feature
+title: Unplanned, so not expected in a goal yet
+status: todo
+depends_on: []
+---
+ITEM
+cat > "$C/010-goal.md" <<'ITEM'
+---
+id: 10
+kind: goal
+title: Open goal
+status: todo
+depends_on: []
+covers: [1]
+---
+ITEM
+cat > "$C/011-goal.md" <<'ITEM'
+---
+id: 11
+kind: goal
+title: Active goal, block-form covers
+status: active
+depends_on: []
+covers:
+  - "3"
+---
+ITEM
+cat > "$C/012-goal.md" <<'ITEM'
+---
+id: 12
+kind: goal
+title: Done goal
+status: done
+depends_on: []
+covers: [4]
+---
+ITEM
+check "covers: inline form parses" "1" "$(hero_item_covers "$C/010-goal.md")"
+check "covers: block form parses, quotes stripped" "3" "$(hero_item_covers "$C/011-goal.md")"
+ERRC="$(hero_ready_items "$C" 2>&1 >/dev/null)"
+printf '%s' "$ERRC" | grep -q "002-out.md is ready and no open goal covers it"
+check "covers: uncovered ready item warns" "0" "$?"
+printf '%s' "$ERRC" | grep -q "004-donegoal.md is ready and no open goal covers it"
+check "covers: a done goal's covers do not count" "0" "$?"
+printf '%s' "$ERRC" | grep -q "001-in.md"
+check "covers: covered item is silent" "1" "$?"
+printf '%s' "$ERRC" | grep -q "003-block.md"
+check "covers: block-form cover is silent" "1" "$?"
+printf '%s' "$ERRC" | grep -q "005-todo.md"
+check "covers: unplanned todo item is not expected covered" "1" "$?"
+OUTC="$(hero_ready_items "$C" 2>/dev/null)"
+check "covers: uncovered item still lists READY" "READY" "$(state_of 002-out.md "$OUTC")"
 # A delivered feedback item is TERMINAL, so dependents on it must unblock —
 # otherwise a feature waiting on an upstream answer blocks forever.
 item 061-waitdf.md 61 "Waits on delivered feedback" "todo" "[56]"
