@@ -279,13 +279,21 @@ def applies(check, repo_name):
     return any(repo_name in GROUP_REPOS[n] for n in groups)
 
 
+# Every git the engine runs must see the repo under `cwd`, not whatever repo
+# the caller is inside: a pre-commit hook exports GIT_DIR / GIT_INDEX_FILE for
+# the repo being committed, and with them inherited every `git ls-files` and
+# `git worktree` here answers about THAT repo — the audit then reports the
+# plugin's tree as every family member's.
+_ENV = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
 def sh(cwd, cmd):
     """Run a shell command, return (rc, stdout). Never raises."""
     try:
         # dev tooling; cmd is a literal in this file (or the fleet's checkers), or interpolates
         # only regex-pinned tokens (ARCH-02: 40 hex chars) — never raw external input
         p = subprocess.run(
-            cmd, cwd=cwd, shell=True, capture_output=True, text=True, timeout=60  # nosemgrep: python.lang.security.audit.subprocess-shell-true.subprocess-shell-true
+            cmd, cwd=cwd, shell=True, capture_output=True, text=True, timeout=60, env=_ENV  # nosemgrep: python.lang.security.audit.subprocess-shell-true.subprocess-shell-true
         )
         return p.returncode, p.stdout.strip()
     except Exception:
@@ -296,7 +304,7 @@ def sh3(cwd, cmd):
     """sh() with stderr. Raises on the failure classes sh() hides (timeout,
     missing cwd) so a caller inside run_matrix reports ERROR, never PASS."""
     p = subprocess.run(
-        cmd, cwd=cwd, shell=True, capture_output=True, text=True, timeout=60  # nosemgrep: python.lang.security.audit.subprocess-shell-true.subprocess-shell-true
+        cmd, cwd=cwd, shell=True, capture_output=True, text=True, timeout=60, env=_ENV  # nosemgrep: python.lang.security.audit.subprocess-shell-true.subprocess-shell-true
     )
     return p.returncode, p.stdout.strip(), p.stderr.strip()
 

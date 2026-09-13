@@ -3,8 +3,9 @@
 How an agent working in one checkout asks something of another — and why,
 once this exists, it may never again reach into that checkout and change it.
 
-`scripts/hero-lib.sh` reads the mailbox, `hero-skills:fleet` sends and
-triages, and every per-repo skill's Step 0 reports what is waiting.
+`scripts/hero-lib.sh` reads the mailbox, `hero-skills:wayfare sync`'s
+`inbox` stage triages, one-shot's Step 2a sends, and wayfare's Step 0
+reports what is waiting (the other per-repo skills still owe that line).
 
 ## The principle
 
@@ -152,7 +153,7 @@ from: hiro
 to: design-system
 sent: 2026-09-13
 about: 27 # the sender's item where it was hit — provenance only
-severity: high # blocks a story | degrades one | cosmetic
+severity: high # high (blocks a story) | medium (degrades one) | low (cosmetic) — the same enum the promoted item carries
 awaited: false # a report rarely suspends the sender; a reply is courtesy
 status: new
 ---
@@ -274,7 +275,7 @@ is built from.
 ## `suspended` in the status enum
 
 `suspended` joins the **build** enum (`feature` / `architecture` / `polish` /
-`security`):
+`security` / `bug`):
 
 ```text
 new | todo | planning | ready | implementing | reviewing | suspended | done
@@ -318,11 +319,18 @@ settled. Two rules that are easy to get backwards:
 
 ## Expiry
 
-`expires:` is evaluated **lazily**, at the sending repo's next Step 0. There
-is no timer and nothing sweeps the fleet.
+`expires:` is evaluated **lazily**, by the sending repo's next `wayfare
+sync` (its **stale waits** finding, proposed for confirmation). There is no
+timer and nothing sweeps the fleet; Step 0 only prints the count. Because
+the sender keeps no copy of the message, the item carries its own
+`expires:` beside `awaiting:`.
 
-An expired await returns its item to a **live** state — `planning` or
-`todo`, whichever it left — with a Comments entry naming which ids lapsed.
+An expired await returns its item to the **live** state it left —
+`suspended_from:`, recorded when it suspended, whatever that was (an item
+suspended from `implementing` has a branch; `ready` would re-hand it out as
+fresh) — with a Comments entry naming which ids lapsed. A reply that
+arrives restores the same field, on confirmation, once the last awaited id
+is answered or declined.
 Never `done`: completing an item because nobody answered silently discards
 the work the question was blocking.
 
@@ -374,7 +382,7 @@ sessions in one repo is ordinary.
 | `skills/fleet/SKILL.md` `sync` | it writes the `## Fleet` section into each fleet repo's `AGENTS.md` and does not commit — the rule's first casualty, and its best argument: today that leaves a dozen dirty working trees nobody reviews. It deposits messages instead, and each repo's own agent lands the section in its own PR |
 | `docs/FLEET-MD.md` fan-out prompt | *"do not read or modify its siblings"* becomes: modify nothing, read only for the dedupe and deadlock probes, and deposit only into `.plans/inbox/` |
 | `skills/handoff/SKILL.md` | its "the store is not a transport" rule is narrowed, not broken — say so there, or the next reader reverts this as a violation |
-| `skills/think-it-through/SKILL.md` | the canonical frontmatter block defines the status enum; `suspended` is added there or the two disagree |
+| `skills/think-it-through/SKILL.md` | DONE: the canonical frontmatter block names `suspended` |
 
 ## Anti-patterns
 

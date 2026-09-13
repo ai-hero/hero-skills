@@ -749,20 +749,58 @@ hero_item_class() {
   esac
 }
 
-# Unread messages in a store's mailbox (docs/MESSAGES.md): inbox/*.md whose
-# `status:` is `new`, or absent — an inbound file with no status line was
-# written by a sender that predates the field and is still unread. Prints the
-# count; a store with no inbox/ is 0. Callers print this at Step 0 so a
-# waiting message is noticed; nothing else surfaces it.
-hero_inbox_count() { # STORE
+# Messages in a store's mailbox (docs/MESSAGES.md) by state. With no second
+# argument, UNREAD: inbox/*.md whose `status:` is `new`, absent (the default
+# for a missing line, as for items), or any word outside the enum — an
+# unrecognized status must count as unread, not as settled, or a sender's
+# typo hides a message. `claimed` counts messages a session took and never
+# released; the standard's takeover rule needs that number visible. A store
+# with no inbox/ is 0; an `inbox` that is a file, not a directory, is a
+# defect named on stderr, since a deposit into it would fail.
+hero_inbox_count() { # STORE [claimed]
   local n=0 f st
+  if [ -e "$1/inbox" ] && [ ! -d "$1/inbox" ]; then
+    echo "hero_inbox_count: $1/inbox is not a directory — no message can land here" >&2
+  fi
   [ -d "$1/inbox" ] || { printf 0; return 0; }
+  # zsh aborts on an unmatched glob; an EMPTY inbox is the normal state after
+  # every message is settled and must read as 0, not as an error.
+  setopt localoptions nullglob 2>/dev/null || true
   for f in "$1"/inbox/*.md; do
     [ -f "$f" ] || continue
     st=$(hero_item_field "$f" status | tr '[:upper:]' '[:lower:]')
-    case "$st" in ''|new) n=$((n + 1)) ;; esac
+    if [ "${2:-}" = claimed ]; then
+      [ "$st" = claimed ] && n=$((n + 1))
+    else
+      case "$st" in claimed|answered|declined) ;; *) n=$((n + 1)) ;; esac
+    fi
   done
   printf '%s' "$n"
+}
+
+# A suspended item's `awaiting:` ids, one per line, in both YAML forms —
+# the same two-form trap hero_item_deps documents: the block form
+# (`awaiting:` then indented `- id` lines) is what a careful author writes,
+# and a single-line reader prints it as empty, which renders a wait as one
+# with nothing to wait for.
+hero_item_awaiting() { # ITEM_FILE
+  awk '
+    /^---[[:space:]]*$/ { fence++; if (fence >= 2) exit; next }
+    fence != 1 { next }
+    /^awaiting:/ {
+      v = $0; sub(/^[^:]*: */, "", v); sub(/ *#.*/, "", v)
+      gsub(/[][,]/, " ", v)
+      n = split(v, parts, /[[:space:]]+/)
+      for (i = 1; i <= n; i++) { p = parts[i]; gsub(/^["'"'"']|["'"'"']$/, "", p); if (p != "") print p }
+      block = 1; next
+    }
+    block && /^[[:space:]]+-[[:space:]]*/ {
+      v = $0; sub(/^[[:space:]]*-[[:space:]]*/, "", v); sub(/ *#.*/, "", v)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", v); gsub(/^["'"'"']|["'"'"']$/, "", v)
+      if (v != "") print v; next
+    }
+    block { block = 0 }
+  ' "$1"
 }
 
 # Repo-local skills that plug into wayfare: every .claude/skills/*/SKILL.md
@@ -772,9 +810,18 @@ hero_inbox_count() { # STORE
 # build that planning may name). Discovery, not configuration: a list of these
 # in HERO.md would be a copy of the directory and would go stale.
 hero_local_skills() { # ROOT [HOOK]
-  local f name hook
+  local f name hook real seen
+  seen=" "
+  # zsh aborts on an unmatched glob, and most repos have no .claude/skills/ —
+  # that must be an empty listing with rc 0, not an error on every Step 0.
+  setopt localoptions nullglob 2>/dev/null || true
   for f in "$1"/.claude/skills/*/SKILL.md; do
     [ -f "$f" ] || continue
+    # A symlinked skill directory would list its target twice, and the local
+    # stage runs what the listing says.
+    real=$(cd "$(dirname "$f")" && pwd -P)
+    case "$seen" in *" $real "*) continue ;; esac
+    seen="$seen$real "
     hook=$(hero_item_field "$f" wayfare | tr '[:upper:]' '[:lower:]')
     [ -n "$hook" ] || continue
     name=$(hero_item_field "$f" name)
@@ -875,7 +922,7 @@ hero_norm_id() {
 # Runs in a subshell: it cds, and leaking that into a sourced caller's shell
 # silently reroutes every later relative path.
 hero_ready_items() (
-  local store f d raw deps ready title id state kind class enum row all_ids done_ids missing
+  local store f d raw deps ready title id state kind class enum row all_ids done_ids missing awaiting since
   store="${1:-$(hero_work_store)}" || return 1
   cd "$store" 2>/dev/null || { echo "hero_ready_items: no store at ${store}" >&2; return 1; }
   # zsh errors out on an unmatched glob (bash leaves it literal for the
@@ -983,9 +1030,18 @@ hero_ready_items() (
       build:reviewing)                  echo "review  $f — $title"; continue ;;
       # Suspended: waiting on a sibling repo's reply (docs/MESSAGES.md). Never
       # READY and never in done_ids — a dependent stays blocked while the
-      # question is open. The annotation names what it waits on, so a row that
-      # has waited past its expiry is visible rather than merely parked.
-      build:suspended)                  echo "suspended $f — $title [awaiting: $(hero_item_field "$store/$f" awaiting)]"; continue ;;
+      # question is open. The row carries the ids and the date it suspended
+      # (`suspended_at:`), because a wait with no age is indistinguishable
+      # from a healthy one; a suspended item with NO awaiting ids can never be
+      # resumed by any reply, so it is invalid, not parked.
+      build:suspended)
+        awaiting=$(hero_item_awaiting "$store/$f" | tr '\n' ' ' | sed 's/ $//')
+        if [ -z "$awaiting" ]; then
+          echo "hero_ready_items: $f is suspended with no awaiting ids — nothing can resume it; restore its status by hand" >&2
+          echo "invalid $f — $title"; continue
+        fi
+        since=$(hero_item_field "$store/$f" suspended_at)
+        echo "suspended $f — $title [awaiting $(printf '%s\n' "$awaiting" | wc -w | tr -d ' '): $awaiting${since:+ — since $since}]"; continue ;;
       plain:planning|build:planning|unknown:planning)
                                         echo "plan    $f — $title"; continue ;;
       build:todo|unknown:todo)          row=backlog ;; # never READY, but falls through to the dep check: dangling refs must still warn, and unmet deps must annotate the row (a goal turn reads them)
@@ -998,7 +1054,7 @@ hero_ready_items() (
         # ready-mark, silently defeating the gate the planning state exists to
         # enforce. Treat it like a rejected id: name it loudly, never READY.
         case "$class" in
-          build)    enum="new/todo/planning/ready/implementing/reviewing/suspended/done (kind: $kind)" ;;
+          build)    enum="new/todo/planning/ready/implementing/reviewing/suspended/done (kind: $kind; suspended needs awaiting:)" ;;
           feedback) enum="new/todo/queued/delivered/rejected (kind: $kind)" ;;
           goal)     enum="new/todo/active/done (kind: goal)" ;;
           *)        enum="new/planning/todo/in-progress/done" ;;

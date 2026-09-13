@@ -49,10 +49,11 @@ argument-hint: [args]
 # Omit for skills meant to be model-invocable / chained by an orchestrator
 # like one-shot — a user-only skill cannot be called via the Skill tool.
 disable-model-invocation: true
-# A repo-local skill that plugs into hero-skills:wayfare declares where:
-# sync (a stage of `wayfare sync`), verify (a Definition-of-Done verifier),
+# Omit unless this skill plugs into hero-skills:wayfare, then say where:
+# sync (a stage of `wayfare sync`), verify (a Definition-of-Done verifier
+# whose last stdout line is `verdict: PASS | FAIL | UNVERIFIED — reason`),
 # or recipe (a way to build that planning may name). Wayfare discovers it —
-# never list it in HERO.md.
+# never list it in HERO.md — and asks once per session before running it.
 wayfare: sync
 ---
 ```

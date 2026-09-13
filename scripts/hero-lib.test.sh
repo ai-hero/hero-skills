@@ -908,20 +908,37 @@ item 090-bug.md 90 "Badge clips at 320px" "ready" "[]" "bug"
 item 091-bugtodo.md 91 "Untriaged bug" "todo" "[]" "bug"
 # Written by hand: item() has no slot for the awaiting field, and the field
 # must sit INSIDE the frontmatter for the reader to see it.
-printf -- '---\nid: 92\nkind: feature\ntitle: Waiting on design-system\nstatus: suspended\nawaiting: [m-7f3a9c]\ndepends_on: []\n---\n' > "$W3/092-susp.md"
+printf -- '---\nid: 92\nkind: feature\ntitle: Waiting on design-system\nstatus: suspended\nsuspended_at: 2026-09-01\nawaiting:\n  - m-7f3a9c\n  - m-c0fbd5\ndepends_on: []\n---\n' > "$W3/092-susp.md"
+printf -- '---\nid: 94\nkind: feature\ntitle: Suspended with nothing to wait for\nstatus: suspended\ndepends_on: []\n---\n' > "$W3/094-noawait.md"
 item 093-dep.md 93 "Blocked on the wait" "ready" "[92]" "feature"
 OUT3="$(hero_ready_items "$W3" 2>/dev/null)"
 check "kind: bug ready is READY"                 "READY"     "$(state_of 090-bug.md "$OUT3")"
 check "kind: bug todo is backlog"                "backlog"   "$(state_of 091-bugtodo.md "$OUT3")"
 check "suspended lists as suspended"             "suspended" "$(state_of 092-susp.md "$OUT3")"
-check "suspended row names what it awaits"       "yes"       "$(printf '%s' "$OUT3" | grep -q 'awaiting: \[m-7f3a9c\]' && echo yes || echo no)"
+# Block-form awaiting, two ids, and the age: the single-line reader printed
+# the block form as empty, which rendered a real wait as one with nothing to
+# wait for.
+check "suspended row names count, ids and age"    "yes"       "$(printf '%s' "$OUT3" | grep -q 'awaiting 2: m-7f3a9c m-c0fbd5 — since 2026-09-01' && echo yes || echo no)"
+check "suspended with no awaiting is invalid"     "invalid"   "$(state_of 094-noawait.md "$OUT3")"
+check "awaiting parser: block form"               "m-7f3a9c m-c0fbd5" "$(hero_item_awaiting "$W3/092-susp.md" | tr '\n' ' ' | sed 's/ $//')"
 check "a dependent of a suspended item is blocked" "blocked" "$(state_of 093-dep.md "$OUT3")"
 
 printf -- '---\nmsg_id: m-1\ntype: bug\nstatus: new\n---\n' > "$W3/inbox/m-1.md"
 printf -- '---\nmsg_id: m-2\ntype: ask\nstatus: answered\n---\n' > "$W3/inbox/m-2.md"
 printf -- '---\nmsg_id: m-3\ntype: ask\n---\n' > "$W3/inbox/m-3.md"
-check "inbox count: new + missing status, not answered" "2" "$(hero_inbox_count "$W3")"
-check "inbox count: no inbox is 0"                     "0" "$(hero_inbox_count "$TMP/w")"
+printf -- '---\nmsg_id: m-4\ntype: ask\nstatus: NEW\n---\n' > "$W3/inbox/m-4.md"
+printf -- '---\nmsg_id: m-5\ntype: ask\nstatus: bogus\n---\n' > "$W3/inbox/m-5.md"
+printf -- '---\nmsg_id: m-6\ntype: ask\nstatus: claimed\n---\n' > "$W3/inbox/m-6.md"
+# new, missing, upper-case NEW, and a typo all count as unread; answered and
+# claimed do not — a typo that read as settled would hide a message forever.
+check "inbox count: unread = new + missing + NEW + typo" "4" "$(hero_inbox_count "$W3")"
+check "inbox count: claimed counted separately"        "1" "$(hero_inbox_count "$W3" claimed)"
+check "inbox count: no inbox is 0"                     "0" "$(hero_inbox_count "$TMP/w/.plans")"
+mkdir -p "$TMP/w4/.plans/inbox"
+check "inbox count: empty inbox is 0"                  "0" "$(hero_inbox_count "$TMP/w4/.plans")"
+if command -v zsh >/dev/null 2>&1; then
+  check "inbox count: empty inbox is 0 under zsh"      "0" "$(zsh -c ". '$LIB'; hero_inbox_count '$TMP/w4/.plans'" 2>/dev/null)"
+fi
 check "inbox files never list as items"                "no" "$(printf '%s' "$OUT3" | grep -q 'm-1' && echo yes || echo no)"
 
 R3="$TMP/r3"
@@ -929,8 +946,15 @@ mkdir -p "$R3/.claude/skills/plan-drift" "$R3/.claude/skills/plain" "$R3/.claude
 printf -- '---\nname: plan-drift\ndescription: d\nwayfare: sync\n---\n' > "$R3/.claude/skills/plan-drift/SKILL.md"
 printf -- '---\nname: plain\ndescription: d\n---\n' > "$R3/.claude/skills/plain/SKILL.md"
 printf -- '---\nname: odd\ndescription: d\nwayfare: deploy\n---\n' > "$R3/.claude/skills/odd/SKILL.md"
-check "local skills: only wayfare-tagged, valid hooks" "plan-drift	sync	$R3/.claude/skills/plan-drift/SKILL.md" "$(hero_local_skills "$R3" 2>/dev/null)"
-check "local skills: hook filter"                     ""  "$(hero_local_skills "$R3" verify 2>/dev/null)"
+mkdir -p "$R3/.claude/skills/noname"
+printf -- '---\ndescription: d\nwayfare: Verify\n---\n' > "$R3/.claude/skills/noname/SKILL.md"
+check "local skills: only wayfare-tagged, valid hooks" "noname	verify	$R3/.claude/skills/noname/SKILL.md
+plan-drift	sync	$R3/.claude/skills/plan-drift/SKILL.md" "$(hero_local_skills "$R3" 2>/dev/null)"
+check "local skills: hook filter (positive)"          "plan-drift	sync	$R3/.claude/skills/plan-drift/SKILL.md" "$(hero_local_skills "$R3" sync 2>/dev/null)"
+check "local skills: hook filter (negative)"          ""  "$(hero_local_skills "$R3" recipe 2>/dev/null)"
+if command -v zsh >/dev/null 2>&1; then
+  check "local skills: no skills dir under zsh is empty, rc 0" "yes" "$(zsh -c ". '$LIB'; hero_local_skills '$TMP/w' >/dev/null 2>&1 && echo yes || echo no")"
+fi
 check "local skills: unknown hook is named on stderr" "yes" "$(hero_local_skills "$R3" 2>&1 >/dev/null | grep -q "wayfare: 'deploy'" && echo yes || echo no)"
 check "local skills: no skills dir is empty, rc 0"    "yes" "$(hero_local_skills "$TMP/w" >/dev/null 2>&1 && echo yes || echo no)"
 W="$TMP/w/.plans"
@@ -945,7 +969,7 @@ fi
 # refactor that silently stops executing 25 cases still reports 0 failures and
 # exits 0. The whole reason these cases exist is that each one could be wrong
 # SILENTLY; the suite must not be able to go quiet the same way.
-MIN_CASES=106
+MIN_CASES=215
 if [ "$PASS" -lt "$MIN_CASES" ]; then
   echo "hero-lib: only $PASS cases ran, expected >= $MIN_CASES — a block stopped executing" >&2
   exit 1
