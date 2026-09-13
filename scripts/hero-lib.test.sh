@@ -969,7 +969,9 @@ fi
 # refactor that silently stops executing 25 cases still reports 0 failures and
 # exits 0. The whole reason these cases exist is that each one could be wrong
 # SILENTLY; the suite must not be able to go quiet the same way.
-MIN_CASES=215
+# Three cases run only where zsh exists (macOS), so the floor is the Linux
+# count: CI has no zsh and must not fail on a guard meant for a silent block.
+MIN_CASES=210
 if [ "$PASS" -lt "$MIN_CASES" ]; then
   echo "hero-lib: only $PASS cases ran, expected >= $MIN_CASES — a block stopped executing" >&2
   exit 1
