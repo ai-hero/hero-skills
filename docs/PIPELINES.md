@@ -154,20 +154,23 @@ field map is `scripts/hero-fields.sh`; the contract is
 ### Pipeline 4: wayfare sync — one round of convergence
 
 ```
-config → architecture → harden → compliance → deps → design → reconcile → plan → goals
+config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals
 ```
 
-Owner: `hero-skills:wayfare sync`. Nine stages: the config gate;
+Owner: `hero-skills:wayfare sync`. Eleven stages: the config gate; the
+mailbox (`docs/MESSAGES.md` — every unread message through the fleet gate
+and the promotion gate, a `type: bug` becoming a proposed `kind: bug`);
 `hero-skills:architecture review` (offering its `sync`);
 `hero-skills:harden all`; the compliance audit
 (`scripts/audit.py --repo THIS`, baseline plus the fleet's register overlay)
-with each failing check proposed as an item; the dependency bots' open PRs
-written as `security` items; the design snapshot refresh; the reconciliation
-lanes; the planning postflight (`hero-skills:think-it-through` in Roadmap
-mode); and goals proposed bottom-up over what was planned, with existing
-`todo` goals re-cut. Stages that do not apply render `(–)` with the reason.
-It ends with the roadmap view and, when a goal is runnable,
-`Next step: hero-skills:wayfare next`.
+with each failing check proposed as an item; the repo's own `wayfare: sync`
+skills (discovered in `.claude/skills/`, run with the harden contract); the
+dependency bots' open PRs written as `security` items; the design snapshot
+refresh; the reconciliation lanes; the planning postflight
+(`hero-skills:think-it-through` in Roadmap mode); and goals proposed
+bottom-up over what was planned, with existing `todo` goals re-cut. Stages
+that do not apply render `(–)` with the reason. It ends with the roadmap
+view and, when a goal is runnable, `Next step: hero-skills:wayfare next`.
 
 `hero-skills:wayfare improve` is the compliance stage on its own, plus the
 backport half sync never does: where this repo is the reference for a check

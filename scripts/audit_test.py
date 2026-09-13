@@ -22,6 +22,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("audit", HERE / "audit.py")
 audit = importlib.util.module_from_spec(spec)
 sys.modules["audit"] = audit  # the fleet's checkers.py does `import audit`
+CLEAN_ENV = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
 spec.loader.exec_module(audit)
 
 
@@ -33,7 +34,10 @@ def write(root, rel, text):
 
 
 def git(cwd, *args):
-    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+    # Strip GIT_* from the environment: under a pre-commit hook (and in a
+    # linked worktree) GIT_DIR/GIT_INDEX_FILE point at the repo being
+    # committed, and every fixture `git init`/`commit` would hit it instead.
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, env=CLEAN_ENV)
 
 
 def git_repo(root, name):
@@ -184,7 +188,7 @@ class Snapshot(unittest.TestCase):
 
     def worktrees(self):
         out = subprocess.run(["git", "worktree", "list"], cwd=self.root / "sub" / "hero-template",
-                             capture_output=True, text=True).stdout
+                             capture_output=True, text=True, env=CLEAN_ENV).stdout
         return out.strip().splitlines()
 
     def test_cleanup_on_exception(self):
@@ -462,7 +466,7 @@ class JsonOutput(unittest.TestCase):
             write(root, ".fleet/CHECKS.yaml", "checks:\n- id: CI-02\n  applies_to: [apps]\n  reference: a\n- id: ZZ-1\n  control: C-ZZ\n  scope: repo\n  title: boom\n")
             git_repo(root, "a")
             p = subprocess.run([sys.executable, str(HERE / "audit.py"), "--fleet", str(root), "--no-snapshot", "--json", "--repo", "a"],
-                               capture_output=True, text=True)
+                               capture_output=True, text=True, env=CLEAN_ENV)
             lines = [json.loads(l) for l in p.stdout.splitlines() if l.strip()]
             self.assertTrue(lines, p.stderr)
             by = {(o["check"], o["status"]): o for o in lines}
@@ -480,10 +484,10 @@ class JsonOutput(unittest.TestCase):
             (root / "services").mkdir()
             r = git_repo(root / "services", "svc")
             p = subprocess.run([sys.executable, str(HERE / "audit.py"), "--fleet", str(root), "--no-snapshot", "--repo", "."],
-                               capture_output=True, text=True, cwd=r)
+                               capture_output=True, text=True, cwd=r, env=CLEAN_ENV)
             self.assertIn("across 1 repos", p.stdout + p.stderr)
             p = subprocess.run([sys.executable, str(HERE / "audit.py"), "--fleet", str(root), "--no-snapshot", "--repo", "svc-typo"],
-                               capture_output=True, text=True, cwd=r)
+                               capture_output=True, text=True, cwd=r, env=CLEAN_ENV)
             self.assertNotEqual(p.returncode, 0)
             self.assertIn("not a FLEET.md row", p.stderr)
 
