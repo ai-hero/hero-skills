@@ -168,8 +168,10 @@ skills (discovered in `.claude/skills/`, run with the harden contract); the
 dependency bots' open PRs written as `security` items; the design snapshot
 refresh; the reconciliation lanes; the planning postflight
 (`hero-skills:think-it-through` in Roadmap mode); and goals proposed
-bottom-up over what was planned, with existing `todo` goals re-cut. Stages
-that do not apply render `(–)` with the reason. It ends with the roadmap
+bottom-up until every planned build item is in exactly one open goal, with
+existing `todo` goals re-cut — coalesced when two name one outcome, split
+when one names two. Stages that do not apply render `(–)` with the reason;
+the goals stage never does. It ends with the roadmap
 view and, when a goal is runnable, `Next step: hero-skills:wayfare next`.
 
 `hero-skills:wayfare improve` is the compliance stage on its own, plus the
