@@ -41,12 +41,12 @@ never touches the files those skills keep:
 | `fleet sync` | `FLEET.md` | converge the map with the folder beside it |
 | `wayfare sync` | `.plans/` and `DESIGN.md` | converge the plan with the world — its architecture stage converges the design record on the way |
 
-`wayfare` has both: `sync` for the plan (and, through its first stage,
+`wayfare` has both: `sync` for the plan (and, through its architecture stage,
 `DESIGN.md`), `recalibrate` for the `HERO.md` fields that tell it and its
 stages — `architecture`, `harden` — how to run. Those two stages carry no
 `recalibrate` of their own.
 
-Three skills read `HERO.md` and deliberately have no `recalibrate`. `fleet`
+Five skills read `HERO.md` and deliberately have no `recalibrate` — the two stages above, and three more. `fleet`
 runs at the fleet root, where there is no `HERO.md` to recalibrate.
 `audit-plugin` reads the file as the *subject* of its audit rather than as its
 own config. `think-it-through` is a dialogue with the user, and stopping it to

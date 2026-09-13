@@ -97,9 +97,9 @@ Three commands. Everything else is run by them.
 hero-skills:init-hero
 
 # 2. Converge the world into a plan — one round, eight stages:
-#    config → architecture → design → harden → deps → reconcile → plan → goals
-#    Reviews DESIGN.md (offers to converge it), refreshes the design snapshot,
-#    audits dependency/container/code hardening, gathers the bots' open PRs,
+#    config → architecture → harden → deps → design → reconcile → plan → goals
+#    Reviews DESIGN.md (offers to converge it), audits dependency/container/
+#    code hardening, gathers the bots' open PRs, refreshes the design snapshot,
 #    reconciles source against design, plans every feature with you, then
 #    proposes goals bottom-up over what was planned — and re-cuts the ones
 #    already there. Writes only what you confirm; your ready-mark is the gate.
@@ -204,7 +204,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:wayfare` | Four verbs. `sync` runs one round of convergence — `config → architecture → design → harden → deps → reconcile → plan → goals` — writing every `.plans/` item (features, architecture, polish, security, feedback, goals) and proposing goals bottom-up while re-cutting the `todo` ones; `next` picks the next runnable goal, reads its `## Permissions` (mark-ready, respond, auto-approve, merge, deploy) for your in-session authorization, and prints the `/goal` line; `do ID` builds one feature via one-shot, carries one Dependabot PR to merged and deployed, or runs one goal turn (up to `concurrency` items in parallel worktrees); `recalibrate` tunes every field the stages read. Features are SLC vertical slices (user stories, never layers) carrying subtasks, a definition of done, comments, design feedback back to the design team, and staleness flags |
+| `hero-skills:wayfare` | Four verbs. `sync` runs one round of convergence — `config → architecture → harden → deps → design → reconcile → plan → goals` — writing every `.plans/` item (features, architecture, polish, security, feedback, goals) and proposing goals bottom-up while re-cutting the `todo` ones; `next` picks the next runnable goal, reads its `## Permissions` (mark-ready, respond, auto-approve, merge, deploy) for your in-session authorization, and prints the `/goal` line; `do ID` builds one feature via one-shot, carries one Dependabot PR to merged and deployed, or runs one goal turn (up to `concurrency` items in parallel worktrees); `recalibrate` tunes every field the stages read. Features are SLC vertical slices (user stories, never layers) carrying subtasks, a definition of done, comments, design feedback back to the design team, and staleness flags |
 
 Two skills are stages of `sync` and hidden from the slash menu (`user-invocable: false`) — you never call them, but they still own their procedures:
 
@@ -217,10 +217,8 @@ Two skills are stages of `sync` and hidden from the slash menu (`user-invocable:
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:harden` | Audit read-only for hardening — dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness — and emit execution-ready plans as `.plans/` items |
 | `hero-skills:think-it-through` | Brainstorm + grill an idea one question at a time into shared understanding and dependency-aware work-items |
 | `hero-skills:my-humanizer` | Strip AI-writing patterns from prose (Wikipedia's "Signs of AI writing"). Runs inline inside the pipeline on everything a person reads: code comments, docs, commit bodies, and the PR body in `push-pr`, review comments in `review-pr`, thread replies in `respond-to-comments`; standalone on any text |
-| `hero-skills:architecture` | Create + converge a single root `DESIGN.md` — tech stack, boundaries, dependency rules, invariants, users, flows, interaction standards, append-only decisions; never restates what the code says. `sync` converges, `review` reports drift read-only, `recalibrate` tunes the HERO.md fields it reads |
 | `hero-skills:fleet` | Create + converge `FLEET.md` — the local, unversioned map of the repos checked out beside each other (group, port). `sync` scans the folder and proposes rows, `review` reports drift read-only. Every repo skill run from the fleet root fans out to the repos you pick (see `docs/FLEET-MD.md`) |
 | `hero-skills:handoff` | Distill the current conversation into one self-contained work-item for a downstream agent (optionally filed to the tracker, or to **another repo** with `--repo OWNER/NAME`) |
 

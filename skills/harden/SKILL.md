@@ -10,7 +10,7 @@ user-invocable: false
 
 Deeply audit the codebase for security and robustness hardening opportunities, then write plans precise enough that a downstream executor — a cheaper model, a fresh session, or `hero-skills:one-shot` — can apply, test, and verify them with **zero context from this session**.
 
-**This is a stage of `hero-skills:wayfare sync`, not a skill a person runs.** Wayfare invokes it with the line `launched by wayfare` after the architecture map is current and before the roadmap is judged; the items it writes are ready-marked in wayfare's planning postflight and grouped into a security goal there. It has no verbs of its own beyond the audit scope, no config to tune (wayfare's `recalibrate` carries the fields it reads), and no fleet fan-out (wayfare already ran in one repo by the time this starts). Run by hand it still audits — but the roadmap is not converged until `wayfare sync` runs.
+**This is a stage of `hero-skills:wayfare sync`, not a skill a person runs.** Wayfare invokes it with the line `launched by wayfare` after the architecture map is current and before the roadmap is judged; the items it writes are ready-marked in wayfare's planning postflight and grouped into a security goal there. It has no verbs of its own beyond the audit scope, no config to tune (wayfare's `recalibrate` carries the fields it reads), and no fleet fan-out (wayfare already ran in one repo by the time this starts). Every path into it is a Skill-tool chain from a skill that already ran the fleet-root test, which is why Step 0 has none.
 
 Inspired by [shadcn/improve](https://github.com/shadcn/improve): the expensive, high-ceiling model does the part where intelligence compounds (understanding, judging, specifying); cheaper models do the execution. **The plan is the product.** This skill absorbed the former `hero-skills:scan-vulns` — its Dependabot and Docker CVE-scanning mechanics live in Parts A and B, but the *apply-and-commit* half now lands in the plan's execution recipe instead of this session's working tree.
 
@@ -75,7 +75,7 @@ gh api repos/{owner}/{repo}/dependabot/alerts \
   }' || echo "DEPENDABOT_ALERTS_UNAVAILABLE — check that alerts are enabled for this repo and the token has the security_events/repo scope"
 ```
 
-A failed call (alerts disabled, insufficient token scope) prints nothing to stdout — indistinguishable from "zero open alerts" unless the failure is caught explicitly. If `DEPENDABOT_ALERTS_UNAVAILABLE` fires, report that in the summary rather than "0 alerts, clean."
+A failed call (alerts disabled, insufficient token scope) prints nothing to stdout — indistinguishable from "zero open alerts" unless the failure is caught explicitly. If `DEPENDABOT_ALERTS_UNAVAILABLE` fires, the summary's Dependabot line is exactly `Dependabot alerts: skipped (unavailable) — REASON` rather than "0 alerts, clean." — wayfare reads that spelling back as an `unverified` row.
 
 Prioritize by severity: **critical > high > medium > low**.
 
@@ -281,6 +281,8 @@ Dependabot:   5 alerts (2 critical, 2 high, 1 medium) → 2 plan items
   Original PRs to close after merge (do NOT wait on GitHub auto-close): #123, #124
 Docker:       3 images scanned (Scout + Trivy), 10 fixable CVEs → 1 plan item
   # or, if docker is unavailable: "Docker/Scout: skipped (unavailable) — container CVE audit not performed"
+  # or, if only trivy is missing: "Trivy: skipped (unavailable), Scout ran" — partial, and wayfare reads it as unverified
+  # and when alerts could not be read: "Dependabot alerts: skipped (unavailable) — REASON"
   Deferred: CVE-XXXX-XXXXX — axes checked: tag refresh (same), runtime major
             (same), OS generation debian13 (same), variant (n/a) → no fix upstream
 Code audit:   4 findings (2 important) → 2 plan items

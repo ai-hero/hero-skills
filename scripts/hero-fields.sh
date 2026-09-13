@@ -56,6 +56,11 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # here-doc nested in a command substitution makes bash scan the body for shell
 # quotes, and the first apostrophe in a prose cell ("the bot's") becomes an
 # unterminated string that fails the whole script at parse time.
+# The wayfare rows for Repository/type, Deployment/platform+registry, Code
+# Quality/linters and Projects belong to its stage skills (architecture,
+# harden), which carry no recalibrate of their own — a row under either name
+# fails hero-fields.test.sh's "every mapped skill offers recalibrate", so they
+# sit under wayfare even though wayfare never reads registry or linters itself.
 rows() {
   cat <<'ROWS'
 init-hero|*|*|every section — the only whole-file pass

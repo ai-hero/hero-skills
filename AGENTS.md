@@ -71,7 +71,8 @@ other repos (the auto-approve caller, the design-system rule and hook, the
   Both are `user-invocable: false` and chained (`CHAINED_SKILLS` in
   `scripts/validate.sh`), and neither carries `recalibrate` — wayfare's rows
   in `scripts/hero-fields.sh` cover their fields. A verb added to either is a
-  verb nobody reaches unless `wayfare sync` calls it.
+  verb nobody reaches unless `wayfare sync` (or, for architecture,
+  think-it-through's `arch` dispatch) calls it.
 - **Assets are vendored downstream, not authored there.** Fix a bug here, then
   re-vendor. A consuming repo's copy is output.
 - **Tests are `scripts/*.test.sh` and both runners glob.** Add a suite and it

@@ -15,8 +15,8 @@ behave toward them, and why the one-way doors were walked through. This skill
 maintains that single file — `sync` converges it with the codebase, `review`
 reports drift without writing.
 
-**This is the first stage of `hero-skills:wayfare sync`, not a skill a person
-runs.** Wayfare invokes `review` with the line `launched by wayfare` before it
+**This is the first stage after the config gate of `hero-skills:wayfare
+sync`, not a skill a person runs.** Wayfare invokes `review` with the line `launched by wayfare` before it
 judges anything, and offers `sync` when the review reports `MISSING` or stale
 rows; the map this file holds is what orders every feature's subtasks. It has
 no config verb of its own (wayfare's `recalibrate` carries the three fields it
@@ -304,7 +304,7 @@ table, no writes — end with `Next step: hero-skills:architecture sync` when
 any row needs applying, or "holds" when none do. **A missing DESIGN.md
 is itself the finding**: report `MISSING` — never "holds" — and point at
 `sync` to bootstrap; an absent file must never produce the healthy verdict.
-This is what `hero-skills:wayfare` runs as the first stage of its sync (both
+This is what `hero-skills:wayfare` runs as its `architecture` stage (both
 modes).
 
 ## Who else touches the file

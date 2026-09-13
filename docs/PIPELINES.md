@@ -89,7 +89,7 @@ Because nothing else observes the codebase on the store's behalf, Step 1 also
 re-checks a resolved item's `success` criteria against reality — `status: todo`
 only means nobody edited the file, not that the work is still outstanding.
 
-**Architecture and harden chain.** `wayfare sync`'s first stage runs
+**Architecture and harden chain.** `wayfare sync`'s architecture stage runs
 `hero-skills:architecture review` — and offers its `sync` — before judging
 the roadmap, its `harden` stage runs `hero-skills:harden all`, and
 `think-it-through` delegates a leading `arch` argument to the architecture
@@ -154,13 +154,13 @@ field map is `scripts/hero-fields.sh`; the contract is
 ### Pipeline 4: wayfare sync — one round of convergence
 
 ```
-config → architecture → design → harden → deps → reconcile → plan → goals
+config → architecture → harden → deps → design → reconcile → plan → goals
 ```
 
 Owner: `hero-skills:wayfare sync`. Eight stages: the config gate;
-`hero-skills:architecture review` (offering its `sync`); the design snapshot
-refresh; `hero-skills:harden all`; the dependency bots' open PRs written as
-`security` items; the reconciliation lanes; the planning postflight
+`hero-skills:architecture review` (offering its `sync`);
+`hero-skills:harden all`; the dependency bots' open PRs written as
+`security` items; the design snapshot refresh; the reconciliation lanes; the planning postflight
 (`hero-skills:think-it-through` in Roadmap mode); and goals proposed bottom-up
 over what was planned, with existing `todo` goals re-cut. Stages that do not
 apply render `(–)` with the reason. It ends with the roadmap view and, when a

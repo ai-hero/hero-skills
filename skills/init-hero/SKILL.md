@@ -52,9 +52,7 @@ Each skill needs specific information to work well. This skill figures out what'
 | `hero-skills:one-shot` | PM tool + MCP server name, branch template, issue prefix, project list |
 | `hero-skills:push-pr` (test phase) | Language, framework, lint/format/typecheck commands, test/dev/install commands, ports, dependency file |
 | `hero-skills:review-pr` | Code Quality (pre-commit), Code Review Agent (bot username — to dedupe its comments) |
-| `hero-skills:harden` | Registry, language/framework, dependency files per project |
-| `hero-skills:architecture` | Repo type, project list, deployment platform |
-| `hero-skills:wayfare` | Wayfare (source-repo, design-project, design-transport, feedback-repo, ux-flow) |
+| `hero-skills:wayfare` | Wayfare (source-repo, design-project, design-transport, feedback-repo, ux-flow); for its stages: repo type, project list, deployment platform and registry, linters, dependency files per project |
 | `hero-skills:create-project` | Repo type, coding conventions, code quality tools, project scaffold patterns |
 | `hero-skills:setup-dev` | Required tools, recommended tools, MCP servers |
 | `hero-skills:respond-to-comments` | Code Review Agent (agent, trigger, poll-method, bot-username) |

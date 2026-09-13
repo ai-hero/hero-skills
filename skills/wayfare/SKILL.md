@@ -18,6 +18,15 @@ that runs it; `do ID` advances one item, or runs one turn of one goal;
 but they are run *by* wayfare, in order, and hidden from the slash menu
 (`user-invocable: false`). Nobody has to remember which one to call.
 
+**Wayfare works in one repo at a time — the one it runs in.** Work that
+belongs to another repo (an upstream design system, a sibling app, the
+template) is never done from here: the most wayfare does across that line
+is deposit a message into the other repo's `.plans/inbox/` — a bug report,
+feedback, an ask — per `docs/MESSAGES.md`, for that repo's own `wayfare
+sync` to promote and that repo's own agent to build. The fleet-root fan-out
+is not an exception: it starts a wayfare *in* each chosen repo, which then
+works only there.
+
 Source is the product as it is; Target is the product as it should be — a
 claude.ai/design project configured in HERO.md, read through the `DesignSync`
 tool. Target is optional: with no design project configured, `sync` reconciles
@@ -931,10 +940,12 @@ note before being treated as sync context.
 **`sync` is a pipeline, and it renders as one** (`docs/PIPELINES.md`):
 
 ```
-config → architecture → design → harden → deps → reconcile → plan → goals
+config → architecture → harden → deps → design → reconcile → plan → goals
 ```
 
-Print the DAG line at every stage transition. A stage that does not apply
+Print the DAG line at every stage transition. The order is the order the
+stages below run in: `design` is the snapshot refresh inside *Investigate*,
+which comes after the three read-only audits. A stage that does not apply
 (no design target: `design` and the target lane; no Dockerfile: the image
 half of `harden`) renders `(–)` and says why in one line, never silently.
 
@@ -1098,8 +1109,8 @@ sync stops re-proposing it.
    (*Investigate*), not here.
 
 **Architecture is not a key.** Wayfare's structural input is the root
-`DESIGN.md`, kept by `hero-skills:architecture`; Bootstrap step 1 below runs
-its `review` and offers its `sync`. A file's presence is not configuration,
+`DESIGN.md`, kept by `hero-skills:architecture`; the `architecture` stage
+below runs its `review` and offers its `sync`. A file's presence is not configuration,
 so nothing about it is written to HERO.md.
 
 **Mode detection.** The roadmap exists iff `.plans/` holds at least one item
@@ -1109,7 +1120,7 @@ mentioning `kind: feature` would trip it). First confirm the store lists
 (`ls "$STORE"` succeeds): a clean pass with no feature item means bootstrap; a
 store that won't list is a failed check — STOP and name the path.
 
-**The `architecture` stage — both modes, before anything is judged.** A
+**The `architecture` stage — first after the config gate, both modes.** A
 slice has to cut through the real layers, so you need to know what they are —
 which exist and how they depend. That map is `hero-skills:architecture`'s job
 (the root `DESIGN.md`, its Boundaries section), not a wayfare-private format.
@@ -1130,8 +1141,11 @@ verification, and its failure modes — so those items skip the grill in *Plan
 the set* and go straight to the ready-mark. It degrades per part, not as a
 whole: no `gh` alerts scope, no `docker`, no `trivy` each render that part
 `(–)` with the reason, and the report says which parts ran. Read its summary
-back: alerts and images it could not scan are `unverified` rows in this
-run's report, never "clean".
+back by its fixed spellings — a `Dependabot alerts: skipped (unavailable)`
+line, a `Trivy: skipped (unavailable)` or `Docker/Scout: skipped
+(unavailable)` line, and every `Deferred:` line — each becomes an
+`unverified` row in this run's report (a part that ran on one scanner is
+partial, not clean), never "clean".
 
 **The `deps` stage — the bots' open PRs.** A dependency bot opens PRs nobody
 planned; each is a bump already implemented on a branch that is not ours.
@@ -1140,16 +1154,28 @@ can carry it and a goal can cover it:
 
 ```bash
 # A failed listing is not "no bot PRs": this call decides whether the stage
-# writes anything at all.
-gh pr list --state open --author app/dependabot \
+# writes anything at all. --limit: the default page is 30, and a repo with a
+# Dependabot backlog silently loses the rest.
+gh pr list --state open --author app/dependabot --limit 200 \
   --json number,title,headRefName,url,createdAt,mergeStateStatus,statusCheckRollup \
-  || echo "DEPENDABOT_PRS_UNAVAILABLE — gh failed; this is not zero PRs. STOP."
+  || { echo "DEPENDABOT_PRS_UNAVAILABLE — gh failed; this is not zero PRs. STOP."; false; }
+```
+
+Only when that succeeded:
+
+```bash
 # A failed call is not zero alerts — print `severity: unknown` on every row
-# rather than `none`.
-gh api repos/{owner}/{repo}/dependabot/alerts \
-  --jq '.[] | select(.state == "open") | {number, severity: .security_advisory.severity, package: .dependency.package.name, summary: .security_advisory.summary}' \
+# rather than `none`. state=open and --paginate: the default is 30 alerts of
+# EVERY state, so the open filter would run after the page cut and a PR whose
+# alert fell off the page would be written `severity: none` — "version-only
+# bump", the exact false-clean this block exists to prevent.
+gh api --paginate 'repos/{owner}/{repo}/dependabot/alerts?state=open&per_page=100' \
+  --jq '.[] | {number, severity: .security_advisory.severity, package: .dependency.package.name, summary: .security_advisory.summary}' \
   || echo "DEPENDABOT_ALERTS_UNAVAILABLE — check that alerts are enabled for this repo and the token has the security_events/repo scope"
 ```
+
+A PR that matches no alert is `severity: none` only when the alerts listing
+completed; under `UNAVAILABLE` every row is `unknown`.
 
 Parse package, from, and to from each title (`Bump X from A to B`; bot
 titles are stable, and one that does not parse is read from the diff).
@@ -1400,11 +1426,19 @@ follows):
   with the layer features folded in as subtasks. Only `todo` features are
   re-sliceable this way — a `ready` or later feature keeps its plan (the
   ready-mark bought it), so propose the re-slice for what remains instead.
-- **store defects** — `hero_ready_items` stderr warnings; every `kind: goal`
-  item's `covers` checked four ways — each id exists, is a build kind, appears
-  in no other goal's `covers` (two goals pre-authorizing merges on the same
-  feature is a real hazard), and no earlier entry `depends_on` a later one
-  (the order the turn walks must not contradict the gate each feature has);
+- **store defects** — `hero_ready_items` stderr warnings (dangling deps,
+  duplicate ids, unrecognized statuses — the script checks those and nothing
+  below); plus, checked by this finding itself since the listing never reads
+  a goal's body: every `kind: goal` item's `covers` four ways — each id
+  exists, is a build kind, appears in no other goal's `covers` (two goals
+  pre-authorizing merges on the same feature is a real hazard), and no
+  earlier entry `depends_on` a later one (the order the turn walks must not
+  contradict the gate each feature has); a goal's `depends_on` entry that is
+  not a `kind: goal`, or that disagrees with the derivation from its
+  features' `depends_on`; a goal whose `## Permissions` is missing, lacks a
+  key, or holds a value outside `yes`/`no` (`verify`/`none` for `deploy`),
+  or whose `## Permissions` changed while `active`; a `concurrency` that is
+  not a positive integer;
   every `[item: N]` marker in a `## Design Feedback` section checked per
   `references/feedback-channels.md` (N exists, is a feedback kind, its
   `entry:` names this entry, its `discovered_from` is this feature); a goal
@@ -1441,7 +1475,7 @@ the feature's plan is already locked:
 are written (bootstrap step 6; the last thing update-mode does once its
 findings are written), `sync` runs one planning pass over every `todo`
 feature that needs one — the grilling, the questions, the decisions — so a
-feature leaves `sync` planned and marked, and `do` / `goal` only ever build.
+feature leaves `sync` planned and marked, and `do` only ever builds.
 This is the *postflight* of sync, not a preflight of building: planning used
 to happen lazily, one feature at a time, at the moment each was about to be
 built, and that is exactly the shape being retired.
@@ -1545,9 +1579,9 @@ So the pass runs across the roadmap:
      re-cut goal keeps its id and its `## Comments`; every change is a
      dated comment naming what moved and why. Each proposed change is a row
      in the same confirm flow as a new goal.
-   - **`active` goals are frozen.** Their `covers` were shown at `next`'s
-     gate and authorized as a set; changing the set under an authorization
-     changes what was authorized. New work that belongs to an active goal's
+   - **`active` goals are frozen.** Their `covers` and `## Permissions`
+     were shown at `next`'s gate and authorized as a set; changing either
+     under an authorization changes what was authorized. New work that belongs to an active goal's
      outcome becomes a **follow-up goal** with `depends_on` the active one,
      and a comment on the active goal points at it. The one edit an active
      goal takes is a dropped feature that went `done` out-of-band — that
@@ -1614,8 +1648,10 @@ before writing; zero-pad only the filename.
   there is nothing to build, only a bot's PR to carry to merged and
   deployed.
 - **A goal** runs *One turn* of it. This is the form the `/goal` line
-  `next` prints re-invokes every turn. A `todo` goal that `next` has not
-  authorized in this session is not run: say `Next step: wayfare next`.
+  `next` prints re-invokes every turn. A `todo` goal that has not been
+  authorized in this session routes to *Starting a goal* — the gate that
+  reads its permissions aloud — exactly as `next` would; no turn runs until
+  the id is typed there.
 
 ### `next` — hand out the next goal
 
@@ -1673,13 +1709,20 @@ the item's `## Permissions` section (*Item formats*); the grant is typed at
 `next`'s gate. Five permissions, each a gate a feature would otherwise stop
 at:
 
-| Permission | The gate it waives | Default |
+| Permission | The gate it waives | Sync writes |
 | --- | --- | --- |
 | `mark-ready` | one-shot Step 6 — draft → ready for review | `yes` |
 | `respond` | one-shot Step 8 — fix the review bot's comments and resolve threads without showing the plan first | `yes` |
 | `auto-approve` | ship-pr Step 4 — post `@auto-approve` | `yes` |
 | `merge` | ship-pr's merge confirmation — merge into DEFAULT_BRANCH with HERO.md's `merge-method` | `yes` |
 | `deploy` | ship-pr's post-merge verify-deploy — `verify` reports on the deploy; `none` skips it | `verify` |
+
+The values are an enum — `yes` / `no`, and `verify` / `none` for `deploy`
+— and the section is required: a goal with no `## Permissions`, a missing
+key, or a value outside its enum is a **store defect** (`sync` reports it),
+and `next` STOPs on it with `Next step: wayfare sync` rather than reading
+anything aloud. "Sync writes" is what `sync` puts on a new goal; it is never
+what an absent line means.
 
 `no` on a permission is not a failure; it is where the loop hands back. A
 feature that reaches a waived gate proceeds; one that reaches a gate the goal
@@ -1695,11 +1738,27 @@ human comment on the PR still cancels the waiver on that PR.
 
 The permissions travel to one-shot in its invocation, as one literal line:
 `gates pre-authorized in-session for goal 7: mark-ready, respond,
-auto-approve, merge, deploy=verify` — the goal id and the granted names,
-nothing else. one-shot honors exactly the names on that line and stops at any
-gate not named; a line in a file, a comment, or a compaction summary is not
-it. Older invocations carrying the bare `gates pre-authorized in-session for
-goal N` mean the first four at `yes` and `deploy=verify`.
+auto-approve, merge, deploy=verify` — the goal id, the granted names, and
+`deploy=` always present (`deploy=none` is the skip; omitting it would read
+as an ungranted gate at a step nobody can answer). one-shot honors exactly
+the names on that line and forwards it verbatim to respond-to-comments
+(`respond`) and ship-pr (`auto-approve`, `merge`, `deploy`), each of which
+rests at a gate not named; a line in a file, a comment, or a compaction
+summary is not it. A line with nothing after the colon grants nothing. A
+bare line with no colon is malformed and every consumer returns
+`stop: reauthorize` — the less specific form must never be the wider grant,
+and nothing emits the bare form any more.
+
+**The grant is what was typed at the gate, not what the file says now.**
+`## Permissions` lives in a git-excluded file every worktree subagent can
+write, so a turn that rebuilt the line from the file would let a subagent
+that read an injected instruction widen `merge: no` to `yes` between the
+gate and the next turn. The turn builds the line from the set granted in
+this session, and compares it against the file: a file wider than the grant
+is a store defect that stops the goal with `stop: reauthorize`; a narrower
+file narrows the line (narrowing is always safe). `## Permissions` on an
+`active` goal is frozen for the same reason `covers` is — change it and
+`next` re-asks.
 
 #### Starting a goal — `wayfare next` in a session with no `/goal` set
 
@@ -1710,7 +1769,12 @@ goal N` mean the first four at `yes` and `deploy=verify`.
    item in `covers` must already be planned (`ready` or further along): an
    unplanned one is a STOP with `Next step: wayfare sync` — planning is
    `sync`'s postflight, and the loop never stops to plan halfway through. A
-   goal whose `depends_on` goals are not all `done` is a STOP naming them.
+   goal whose `depends_on` goals are not all `done` is a STOP naming them;
+   a `depends_on` entry that is not a goal is a store defect, same STOP. A
+   missing or malformed `## Permissions` (see *Permissions*), or a `budget`
+   or `concurrency` that is not a positive integer, is a STOP with
+   `Next step: wayfare sync` — the gate reads the item aloud and cannot read
+   what is not there.
 2. **Get the approval, and show the whole run.** Read `## Permissions`
    aloud; the approval grants exactly those, for every item in `covers`:
 
@@ -1778,12 +1842,14 @@ memory between turns:
    still `todo`, write `status: active` — this is the one writer of that
    transition. Then every launch below carries the permissions line from
    *Permissions* — `gates pre-authorized in-session for goal 7: mark-ready,
-   respond, auto-approve, merge, deploy=verify`, with exactly the names the
-   gate granted — one-shot matches that literal and nothing else, the same
-   way think-it-through matches `launched by wayfare`.
+   respond, auto-approve, merge, deploy=verify`, built from the set granted
+   at this session's gate, never re-read from the file (the file may only
+   narrow it; a wider file is `stop: reauthorize`) — one-shot matches that
+   literal and nothing else, the same way think-it-through matches
+   `launched by wayfare`.
 3. **Check the stop conditions** from the item, each with a concrete check:
    - budget: merged count ≥ `budget`;
-   - human comment: on the in-flight PR,
+   - human comment: on every in-flight PR,
      `gh pr view N --json comments,reviews` filtered to authors that are not
      the PR author and not a bot — anything since the PR opened stops the run;
    - premise: re-read the next feature's `source` paths at the current head
@@ -1879,9 +1945,11 @@ memory between turns:
    ```
 
    The `stop:` line is the one the evaluator keys on, and it takes one of:
-   `none`, `failure`, `human-comment`, `budget`, `premise`, `gate-declined`,
+   `none`, `failure`, `human-comment`, `budget`, `premise`,
    `awaiting-human`, `reauthorize`. On the final turn `dod:` lists each line
-   with its check.
+   with its check. To the `/goal` evaluator any value but `none` reads as
+   "impossible" — for `awaiting-human` that is the designed hand-back, not
+   a defect to fix: the loop ends, the person acts, `wayfare next` resumes.
 
 **A failure stops the goal. It never skips to the next feature.** Skipping is
 how a goal is reported done with a hole in it, invisible afterwards because
@@ -2000,7 +2068,10 @@ tested together are `hero-skills:harden`'s batch (its A4), which builds its
 own branch for that reason and closes the bots' PRs after its own merge.
 
 1. **Current.** Read `mergeStateStatus`. `CLEAN`, `HAS_HOOKS`, `UNSTABLE`,
-   `BLOCKED` (checks pending) → continue. `BEHIND` → comment
+   `BLOCKED` (checks pending) → continue. `UNKNOWN` → GitHub is still
+   computing it (routine right after a listing): re-read after 30 s, and
+   STOP if it is still `UNKNOWN`. `DRAFT` → STOP: Dependabot opens no drafts,
+   so a draft bot PR is one somebody touched. `BEHIND` → comment
    `@dependabot rebase`; `DIRTY` → `@dependabot recreate`. Then poll the head
    SHA every 30 s for up to 10 minutes and continue once it moves; a head
    that never moves is a STOP ("Dependabot did not respond — is it enabled
@@ -2044,10 +2115,14 @@ own branch for that reason and closes the bots' PRs after its own merge.
    SHA, and the `Deployment:` line.
 5. **Close out.** Verify each `## Definition of Done` line of the item (the
    format below is the single spelling of what they are) and tick it with a
-   `## Comments` entry naming the evidence (one-shot Step 2's rule). A
-   deployment line that reads `DEGRADED` or `UNKNOWN` stays open, the item
-   stays `reviewing`, and the run STOPs with `merged, not deployed` —
-   deployment is what this procedure promised. All ticked → `status: done`,
+   `## Comments` entry naming the evidence (one-shot Step 2's rule). Two
+   lines can only be ticked on evidence that exists: the alert line's
+   re-query returning `UNAVAILABLE` is `not checked`, and a deployment line
+   that reads `DEGRADED`, `UNKNOWN`, or `skipped by goal` (the goal set
+   `deploy: none`) is `not checked` — in either case the item stays
+   `reviewing` and the run STOPs with `merged, not deployed` (or `merged,
+   alert unverified`) — deployment is what this procedure promised, and a
+   goal that skipped the check has not had it. All ticked → `status: done`,
    then the roadmap view.
 
 The stops, all of them hand-backs: the bot never rebased; CI red; local
@@ -2139,7 +2214,7 @@ roadmap — and wayfare owns only the contract it fills:
   checklist lines, and one-shot works through them in order (PR granularity
   is one-shot's call, per its Step 2).
 - The ready-mark is the user's (think-it-through's Step 5): a confirmed
-  feature flips to `ready` — what `wayfare do FEATURE_ID` builds next.
+  feature flips to `ready` — what `wayfare do ID` builds next.
 
 ## Item formats — `.plans/NNN-slug.md`
 
@@ -2150,7 +2225,7 @@ is a legacy plain item. Every producer writes build kinds, stamping its own
 name as `origin`: wayfare (`sync`), think-it-through, one-shot (Step 2a
 carve-outs), handoff, and harden.
 
-A **goal** groups features and carries the DoD the `goal` loop checks against:
+A **goal** groups features and carries the DoD its turns check against:
 
 ```markdown
 ---
@@ -2161,7 +2236,7 @@ title: A user can sign in with Google and land on their dashboard
 status: todo # new | todo | active | done
 depends_on: [5] # GOALS whose features this goal's features depend on — derived by sync from the items' own depends_on, never authored; `next` hands a goal out only when these are done
 covers: [12, 13, 15, 18] # the features this goal is made of, in build order
-concurrency: 3 # features building at once, each in its own worktree; 1 = sequential in this checkout. Starting a goal fills it with 3 unless told otherwise
+concurrency: 3 # features building at once, each in its own worktree; 1 = sequential in this checkout; positive integer, REQUIRED like budget — absent or unparsable is a store defect, never read as 1. Sync fills it with 3 unless told otherwise
 budget: 4 # PRs; positive integer, REQUIRED. Absent, zero, or non-numeric is a store defect and the turn stops — an unbounded pre-authorized merge loop is the wrong default. Starting a goal fills it with len(covers) unless told otherwise
 source_ref: FULL_COMMIT_SHA
 target_ref: FULL_COMMIT_SHA
@@ -2238,7 +2313,7 @@ origin: wayfare
 title: Bump lodash from 4.17.20 to 4.17.21
 status: todo # new | todo | ready | implementing | reviewing | done
 depends_on: []
-bot: dependabot # the only value handled today. Set only on a bot's PR — this is what routes `do` to *Carrying a bot's PR*; `pr:` alone is just a record
+bot: dependabot # the only value handled today; any other value is a store defect, not a route. Set only on a bot's PR — this is what routes `do` to *Carrying a bot's PR*, and `bot:` without `pr:` is a store defect; `pr:` alone is just a record
 pr: https://github.com/OWNER/REPO/pull/41 # the bot's PR — the one that merges; never a copy of its diff
 severity: high # from the Dependabot alert; `none` = version-only bump, `unknown` = alerts unreadable this run
 source: package.json, package-lock.json
@@ -2262,7 +2337,7 @@ Bump class, the alert it closes and whether the vulnerable path is reachable her
 
 - [ ] #41 is MERGED into DEFAULT_BRANCH
 - [ ] No open Dependabot alert for lodash (or none existed — version-only bump)
-- [ ] ship-pr's verify-deploy reports HEALTHY, or `skipped` because HERO.md declares no platform
+- [ ] ship-pr's verify-deploy reports HEALTHY, or `skipped` because HERO.md declares no platform (`skipped by goal` is NOT this — it leaves the line unchecked)
 
 ## Comments
 

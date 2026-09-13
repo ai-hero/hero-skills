@@ -938,7 +938,7 @@ hero_ready_items() (
       feedback:todo|feedback:queued)    echo "feedback $f — $title"; continue ;;
       # A goal is a container for features, not a unit of work. It is never
       # READY, because READY means "hand this to one-shot" and one-shot builds
-      # features. `wayfare next` takes a goal by id, never off the READY tier.
+      # features. `wayfare next` selects goals by kind and `do GOAL_ID` takes one by id — never off the READY tier.
       goal:todo)                        echo "goal    $f — $title"; continue ;;
       goal:active|build:implementing|build:in-progress|plain:in-progress|unknown:in-progress)
                                         echo "active  $f — $title"; continue ;;
@@ -989,10 +989,11 @@ hero_ready_items() (
     done <<EOF
 $deps
 EOF
-    # backlog rows report dep state without ever becoming READY: `[deps unmet]`
-    # is what a goal turn's "backlog whose deps are all done" tier reads, and the
-    # missing-dep annotation keeps a bootstrap-time typo'd id loud instead of
-    # a feature that silently never becomes selectable.
+    # backlog rows report dep state without ever becoming READY: the
+    # annotation is what wayfare's "none of the above" report prints (blocked
+    # rows and their unmet deps), and the missing-dep warning keeps a
+    # bootstrap-time typo'd id loud instead of a feature that silently never
+    # becomes selectable.
     if [ "$row" = backlog ]; then
       if [ "$ready" = 1 ]; then
         echo "backlog $f — $title"

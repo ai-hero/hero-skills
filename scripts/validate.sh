@@ -310,14 +310,14 @@ fi
 # design-feedback delivery files its issue directly rather than routing
 # through handoff, because handoff distills the *current conversation* and
 # would carry this repo's session state into a third party's tracker.
-# `harden` is chained by wayfare sync's harden stage, so its former
-# `disable-model-invocation: true` would now break every sync at that stage.
+# `harden` is here because re-adding `disable-model-invocation: true` would
+# break every sync at its harden stage.
 # `preflight` is intentionally absent — one-shot runs
 # it via scripts/preflight.sh, not the Skill tool, so it may stay user-only.
 CHAINED_SKILLS="think-it-through push-pr review-pr respond-to-comments ship-pr one-shot architecture harden"
 for chained in $CHAINED_SKILLS; do
   chained_file="$SKILLS_DIR/$chained/SKILL.md"
-  # A missing chained skill silently breaks one-shot at that step, so error
+  # A missing chained skill silently breaks the calling pipeline at that step, so error
   # rather than skip — the list above must always resolve to real skills.
   if [[ ! -f "$chained_file" ]]; then
     error "the pipelines chain '$chained' but skills/$chained/SKILL.md is missing" \
@@ -495,14 +495,16 @@ fi
 # the executable test, not the word FLEET_ROOT in prose.
 # audit-plugin reads HERO.md to audit this plugin's own field coverage, not
 # as a project's config, and never runs in another repo. A `user-invocable:
-# false` skill is a stage of wayfare sync, which already stopped at the fleet
-# root before invoking it — a second test there would be dead code that reads
-# as a promise, and dropping the exemption would re-add fleet handling to
-# skills that can no longer be reached from a fleet folder.
+# false` skill is reached only by a Skill-tool chain from a skill that already
+# ran the fleet test (wayfare Step 0, think-it-through Step 0) — a second test
+# there would be dead code that reads as a promise, and dropping the exemption
+# would re-add fleet handling to skills that have no user path to a fleet
+# folder. A hand-typed run at a fleet root is unguarded and fails loudly on
+# NO_HERO_CONFIG instead; that is accepted.
 FLEET_GATE_ERRORS=0
 for f in "$SKILLS_DIR"/*/SKILL.md; do
   case "$f" in */audit-plugin/SKILL.md) continue ;; esac
-  FLEET_FM=$(awk '/^---$/{n++; next} n==1{print} n>=2{exit}' "$f")
+  FLEET_FM=$(awk '/^---[[:space:]]*$/{n++; next} n==1{print} n>=2{exit}' "$f")
   grep -qE '^[[:space:]]*user-invocable:[[:space:]]*false' <<< "$FLEET_FM" && continue
   grep -qE 'HERO\.md|hero_field|hero_md_field' "$f" || continue
   grep -qE 'hero_at_fleet_root|hero_fleet_root|-f "\$(PWD|ROOT)/FLEET\.md" \]' "$f" && continue
