@@ -1108,8 +1108,7 @@ How your hero skills will use this:
   hero-skills:one-shot      → fetch from Linear (mcp__linear), branch as feature/LIN-###-DESC
   hero-skills:push-pr (test)    → uv sync, then ruff check + mypy + pytest, smoke at :8000
   hero-skills:ship-pr       → k8s namespaces: staging, production
-  hero-skills:harden        → audit pyproject.toml deps, check ghcr.io registry
-  hero-skills:think-it-through arch → single repo, Python + FastAPI, k8s deployment
+  hero-skills:wayfare sync  → architecture (single repo, Python + FastAPI, k8s), harden (pyproject.toml deps, ghcr.io registry), roadmap, goals
   hero-skills:setup-dev     → require node, uv, gh, docker; recommend pre-commit, linear CLI
   hero-skills:init-hero recalibrate → re-investigate and refresh HERO.md on demand (run when project config changes)
 

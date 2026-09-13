@@ -297,22 +297,24 @@ fi
 
 # ── chained-skill invocability guard ───────────────────────────────
 # one-shot (skills/one-shot/SKILL.md) delegates its steps to child skills via
-# the Skill tool, and wayfare goal chains into think-it-through and
+# the Skill tool, and a wayfare goal turn chains into think-it-through and
 # one-shot the same way. A chained skill carrying
 # `disable-model-invocation: true` cannot be invoked by the model, so the
 # calling pipeline breaks at that step (there is no per-caller allowlist).
 # Keep this list in sync with one-shot's step→skill mapping AND
-# wayfare goal's tiers — `one-shot` is here because re-adding its flag
-# would silently break `wayfare goal`. `architecture` is chained three
+# a goal turn's tiers — `one-shot` is here because re-adding its flag
+# would silently break every goal turn. `architecture` is chained three
 # ways: wayfare sync runs its review/sync in both modes, and
 # think-it-through's `arch` dispatch
 # delegates to it. `handoff` is deliberately NOT here: wayfare's
 # design-feedback delivery files its issue directly rather than routing
 # through handoff, because handoff distills the *current conversation* and
 # would carry this repo's session state into a third party's tracker.
+# `harden` is chained by wayfare sync's harden stage, so its former
+# `disable-model-invocation: true` would now break every sync at that stage.
 # `preflight` is intentionally absent — one-shot runs
 # it via scripts/preflight.sh, not the Skill tool, so it may stay user-only.
-CHAINED_SKILLS="think-it-through push-pr review-pr respond-to-comments ship-pr one-shot architecture"
+CHAINED_SKILLS="think-it-through push-pr review-pr respond-to-comments ship-pr one-shot architecture harden"
 for chained in $CHAINED_SKILLS; do
   chained_file="$SKILLS_DIR/$chained/SKILL.md"
   # A missing chained skill silently breaks one-shot at that step, so error
@@ -492,10 +494,16 @@ fi
 # that for any skill that reads HERO.md by any spelling. The check must be
 # the executable test, not the word FLEET_ROOT in prose.
 # audit-plugin reads HERO.md to audit this plugin's own field coverage, not
-# as a project's config, and never runs in another repo.
+# as a project's config, and never runs in another repo. A `user-invocable:
+# false` skill is a stage of wayfare sync, which already stopped at the fleet
+# root before invoking it — a second test there would be dead code that reads
+# as a promise, and dropping the exemption would re-add fleet handling to
+# skills that can no longer be reached from a fleet folder.
 FLEET_GATE_ERRORS=0
 for f in "$SKILLS_DIR"/*/SKILL.md; do
   case "$f" in */audit-plugin/SKILL.md) continue ;; esac
+  FLEET_FM=$(awk '/^---$/{n++; next} n==1{print} n>=2{exit}' "$f")
+  grep -qE '^[[:space:]]*user-invocable:[[:space:]]*false' <<< "$FLEET_FM" && continue
   grep -qE 'HERO\.md|hero_field|hero_md_field' "$f" || continue
   grep -qE 'hero_at_fleet_root|hero_fleet_root|-f "\$(PWD|ROOT)/FLEET\.md" \]' "$f" && continue
   FLEET_GATE_ERRORS=$((FLEET_GATE_ERRORS + 1))

@@ -1,8 +1,9 @@
 ---
 name: architecture
 # prettier-ignore
-description: Create and converge a single root DESIGN.md — boundaries, invariants, users, flows, decisions the code cannot state. sync converges; review reports drift; recalibrate tunes its HERO.md fields.
-argument-hint: "[sync | review | recalibrate]"
+description: Run by wayfare sync. Creates and converges a single root DESIGN.md — boundaries, invariants, users, flows, decisions the code cannot state. sync converges; review reports drift.
+argument-hint: "[sync | review]"
+user-invocable: false
 ---
 
 # Design — The One File the Code Cannot Tell You
@@ -13,6 +14,15 @@ point, what must stay true everywhere, who the system is for, how it must
 behave toward them, and why the one-way doors were walked through. This skill
 maintains that single file — `sync` converges it with the codebase, `review`
 reports drift without writing.
+
+**This is the first stage of `hero-skills:wayfare sync`, not a skill a person
+runs.** Wayfare invokes `review` with the line `launched by wayfare` before it
+judges anything, and offers `sync` when the review reports `MISSING` or stale
+rows; the map this file holds is what orders every feature's subtasks. It has
+no config verb of its own (wayfare's `recalibrate` carries the three fields it
+reads) and no fleet fan-out (wayfare already ran in one repo by the time this
+starts). `hero-skills:think-it-through` also reaches it, to append a decision
+settled in a grill.
 
 It absorbed think-it-through's former Arch Mode (the `specs/` folder of
 per-aspect documents). The folder is gone on purpose: a spec tree mostly
@@ -146,7 +156,6 @@ if [ "$rc" = 0 ]; then ROOT=$GIT_OUT
 elif printf '%s' "$GIT_OUT" | grep -qi 'not a git repository'; then ROOT=$(pwd)
 else echo "STOP: git failed, not a missing repo: $GIT_OUT"; ROOT=GIT_ERROR
 fi
-[ -f "$PWD/FLEET.md" ] && [ ! -f "$PWD/HERO.md" ] && echo "FLEET_ROOT" || true
 
 # NO_GIT covers both "not a repo" and "empty repo, no commits yet" — the
 # write gates below must distinguish and say which; the sentinel itself must
@@ -184,8 +193,6 @@ HERO_SECTIONS=$(awk '/^## (Repository|Projects|Deployment)[[:space:]]*$/{f=1;pri
 [ -n "$HERO_SECTIONS" ] && printf '%s\n' "$HERO_SECTIONS" || echo "NO_HERO_SECTIONS"
 ```
 
-If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
-
 **If any line above printed STOP, stop** — `ROOT=GIT_ERROR` is a sentinel
 that must never reach a read or write below; an unreadable DESIGN.md
 is a permissions problem to surface, not an absent file.
@@ -198,31 +205,11 @@ covers both a missing HERO.md and one without these sections: suggest
 `hero-skills:init-hero` but proceed from a direct read.
 
 Then dispatch — and **announce the dispatched verb first** (`architecture:
-running sync` / `running review` / `running recalibrate`), so a typo'd
-`review` never lands in the write verb silently: `review` and `recalibrate`
-run the verbs below of those names; anything else — including no arguments —
-is `sync`, with any trailing text carried in as context (an area to focus on,
-or a decision to record).
-
-`recalibrate` is not `sync`. It writes `HERO.md`, never `DESIGN.md`: the three
-fields above are what tell this skill _how_ to run, and converging the design
-record with the codebase is `sync`'s job. See
-[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md).
-
-### `recalibrate` — tune the HERO.md fields this skill reads
-
-Follow the four phases in [docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) —
-report, ask, write, commit — using this table as the report, then stop. Do not
-go on to `sync`.
-
-```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" architecture
-```
-
-Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
-`(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
-the user says is wrong. A row that already holds the right value is not a
-question.
+running sync` / `running review`), so a typo'd `review` never lands in the
+write verb silently: `review` runs the verb below of that name; anything
+else — including no arguments — is `sync`, with any trailing text carried in
+as context (an area to focus on, or a decision to record). The three fields
+above are tuned by `hero-skills:wayfare recalibrate`, never here.
 
 ### `sync` — converge DESIGN.md with the codebase
 
@@ -317,7 +304,7 @@ table, no writes — end with `Next step: hero-skills:architecture sync` when
 any row needs applying, or "holds" when none do. **A missing DESIGN.md
 is itself the finding**: report `MISSING` — never "holds" — and point at
 `sync` to bootstrap; an absent file must never produce the healthy verdict.
-This is what `hero-skills:wayfare` runs at the top of its own sync (both
+This is what `hero-skills:wayfare` runs as the first stage of its sync (both
 modes).
 
 ## Who else touches the file
@@ -353,10 +340,9 @@ modes).
 
 ## Next steps
 
-- **Rows confirmed and applied, or file freshly bootstrapped**: suggest
-  `hero-skills:wayfare sync` if a roadmap exists — a changed map changes how
-  each feature's slice cuts through the layers, so planned subtask order can
-  need revisiting even though the feature order (the user journey) does not.
-- **Findings reported but not applied**: `Next step: hero-skills:architecture
-  sync — apply the confirmed rows`.
-- **File holds**: nothing to do until the code moves.
+When wayfare launched this run (`launched by wayfare` in the invocation),
+print nothing terminal: return the findings table (or "holds", or the
+bootstrap result) to wayfare, which offers `sync` after a `review` with rows
+and then continues its own stages. Run standalone, the next step is always
+`hero-skills:wayfare sync` — a changed map changes how each feature's slice
+cuts through the layers, and that is where the map is consumed.

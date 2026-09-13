@@ -784,7 +784,7 @@ hero_norm_id() {
 #            is DELIVERED, never built, so handing one to one-shot is wrong
 #   goal     kind: goal only — status is todo: approved, waiting to run. Never
 #            READY: a goal is a container for features, and one-shot builds
-#            features. `wayfare goal` selects goals by kind instead
+#            features. `wayfare next` selects goals by kind instead
 #   invalid  no usable id, OR an unrecognized status — either way the item
 #            cannot participate in dependency order and is never handed out READY
 #
@@ -921,7 +921,7 @@ hero_ready_items() (
     row=READY
     # Every arm names its classes. A `*:` wildcard here would let a feedback
     # item at `in-progress` print `active` — byte-identical to a feature
-    # mid-build, and the row carries no kind, so `wayfare goal` tier 1 would
+    # mid-build, and the row carries no kind, so a goal turn's tier 1 would
     # hand it to one-shot. `*:new` is the one exception: new is in every enum.
     case "$class:$state" in
       *:new)                            echo "new     $f — $title"; continue ;;
@@ -938,14 +938,14 @@ hero_ready_items() (
       feedback:todo|feedback:queued)    echo "feedback $f — $title"; continue ;;
       # A goal is a container for features, not a unit of work. It is never
       # READY, because READY means "hand this to one-shot" and one-shot builds
-      # features. `wayfare goal` takes a goal by id, never off the READY tier.
+      # features. `wayfare next` takes a goal by id, never off the READY tier.
       goal:todo)                        echo "goal    $f — $title"; continue ;;
       goal:active|build:implementing|build:in-progress|plain:in-progress|unknown:in-progress)
                                         echo "active  $f — $title"; continue ;;
       build:reviewing)                  echo "review  $f — $title"; continue ;;
       plain:planning|build:planning|unknown:planning)
                                         echo "plan    $f — $title"; continue ;;
-      build:todo|unknown:todo)          row=backlog ;; # never READY, but falls through to the dep check: dangling refs must still warn, and unmet deps must annotate the row (`wayfare goal` reads them)
+      build:todo|unknown:todo)          row=backlog ;; # never READY, but falls through to the dep check: dangling refs must still warn, and unmet deps must annotate the row (a goal turn reads them)
       build:ready|plain:todo) ;;  # the only READY-eligible arms — dep check below
       *)
         # An UNRECOGNIZED status must never fall through to the READY path. The
@@ -990,7 +990,7 @@ hero_ready_items() (
 $deps
 EOF
     # backlog rows report dep state without ever becoming READY: `[deps unmet]`
-    # is what `wayfare goal`'s "backlog whose deps are all done" tier reads, and the
+    # is what a goal turn's "backlog whose deps are all done" tier reads, and the
     # missing-dep annotation keeps a bootstrap-time typo'd id loud instead of
     # a feature that silently never becomes selectable.
     if [ "$row" = backlog ]; then

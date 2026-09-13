@@ -1,11 +1,22 @@
 ---
 name: wayfare
 # prettier-ignore
-description: Reconcile the source repo against its app design (optional) and design system into SLC feature slices, architecture work, visual polish, goals under /goal, and feedback; deps ships one Dependabot PR.
-argument-hint: "[sync | do FEATURE_ID | goal [GOAL] | deps [PR_NUMBER] | recalibrate]"
+description: The front door. sync converges architecture, design, hardening, dependencies and the roadmap into .plans and proposes goals bottom-up; next hands you the next goal to run under /goal; do advances one item or one goal turn.
+argument-hint: "[sync [CONTEXT] | next | do ID | recalibrate]"
 ---
 
 # Wayfare — The Route from Source to Target
+
+**Wayfare is the one skill a person runs.** Four verbs: `sync` reads the
+world and converges everything into `.plans/` — the architecture record, the
+design snapshot, the hardening audit, the dependency bots' PRs, the roadmap,
+and the goals over it; `next` hands out the next goal and the `/goal` line
+that runs it; `do ID` advances one item, or runs one turn of one goal;
+`recalibrate` tunes the config. The skills `sync` stitches together —
+`hero-skills:architecture`, `hero-skills:harden`,
+`hero-skills:think-it-through` — still exist and still own their procedures,
+but they are run *by* wayfare, in order, and hidden from the slash menu
+(`user-invocable: false`). Nobody has to remember which one to call.
 
 Source is the product as it is; Target is the product as it should be — a
 claude.ai/design project configured in HERO.md, read through the `DesignSync`
@@ -41,9 +52,9 @@ absence as a defect unless a design project is configured. Items without a
 The source repo sits between two things it does not own — the **design
 system** it consumes upstream, and the **app design** it is built toward. A
 sync is one round of reconciliation across all three. Wayfare's items come in
-eight kinds — `sync` writes the first six and proposes the seventh over
-them, the `goal` verb also writes the seventh when the user names one
-directly, and `deps` the eighth:
+eight kinds, and `sync` writes every one of them — the first six from the
+reconciliation lanes, the seventh proposed over what it planned, the eighth
+from the hardening audit and the dependency bots' open PRs:
 
 | `kind` | What it is | Class | Ends at |
 | --- | --- | --- | --- |
@@ -54,13 +65,14 @@ directly, and `deps` the eighth:
 | `architecture-feedback` | a boundary or invariant the design assumes and the code disproves | feedback | `delivered` / `rejected` |
 | `design-system-feedback` | a token, component API, or specimen divergence to carry to the design system | feedback | `delivered` / `rejected` |
 | `goal` | several features that add up to one outcome, with a Definition of Done spanning them | goal | `done` |
-| `security` | a dependency bump or hardening fix; with `bot:`, a dependency bot's PR that the `deps` verb carries to merged and deployed | build | `done` |
+| `security` | a dependency bump or hardening fix; with `bot:`, a dependency bot's PR that `do` carries to merged and deployed | build | `done` |
 
 A **goal** is the same idea as a feature, one level up: an outcome that is
 Simple, Lovable and Complete but too big for one PR. It holds the features that
 make it up and a Definition of Done written across them, and that DoD is what
-the `goal` verb loops against. A goal is never built directly — one-shot builds
-features — so it is never handed out READY.
+a goal's turns loop against. A goal is never built directly — one-shot builds
+features — so it is never handed out READY. `next` hands out goals; `do
+GOAL_ID` runs one turn of one.
 
 **Build kinds are built; feedback kinds are delivered.** They share the store
 and the id sequence, and `hero_ready_items` never hands a feedback item out as
@@ -426,6 +438,12 @@ Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
 `(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
 the user says is wrong. A row that already holds the right value is not a
 question.
+
+The table covers more than the `## Wayfare` block: because `sync` runs
+`hero-skills:architecture` and `hero-skills:harden`, the fields those two read
+— repository type, deployment platform and registry, the linters already in
+the gate, the project list — are wayfare's rows too. A person who never calls
+those skills directly still has one place to fix their config.
 
 ## Instructions
 
@@ -883,28 +901,42 @@ never reach a `DesignSync` call as a project id. Only a value that passes its
 own test is a path (or a project id), and only then may it reach git (or the
 tool).
 
-Then dispatch. Five verbs: **`sync`**, **`do`**, **`goal`**, **`deps`**, and
+Then dispatch. Four verbs: **`sync`**, **`next`**, **`do`**, and
 **`recalibrate`**.
 
-- `recalibrate` tunes the `## Wayfare` block, plus the Repository field
-  this skill reads, and stops — it is matched before
-  everything else, because the catch-all below would otherwise read it as sync
-  context. See the `recalibrate` section above.
-- `do FEATURE_ID` builds that one planned feature and stops. This is the
-  single-step mode. `do` without an id prints the roadmap view and asks which.
-- `goal` followed by text runs the loop: the text is a goal id, or a goal to
-  create. `goal` alone lists the goals. See the `goal` verb below.
-- `deps` takes one Dependabot PR to merged and deployed — the given
-  `PR_NUMBER`, or the most severe open one. See the `deps` verb below.
-- `next` / `do-next` (retired names for the old select-and-advance) get a
-  one-line note — planning is now `sync`'s postflight and building is
-  `do FEATURE_ID` — then the roadmap view, so the user can pick the id.
+- `recalibrate` tunes the `## Wayfare` block plus every other field `sync`'s
+  stages read, and stops — it is matched before everything else, because the
+  catch-all below would otherwise read it as sync context. See the
+  `recalibrate` section above.
+- `next` picks the next goal, gets its permissions authorized in-session, and
+  prints the `/goal` line that runs it. It never builds. See `next` below.
+- `do ID` advances one thing and stops. A build-kind id (feature,
+  architecture, polish, security) runs *Advancing one item* on it; a
+  `security` id with `bot:` runs *Carrying a bot's PR*; a goal id runs *One
+  turn* of that goal — the verb `/goal` re-invokes. `do` without an id prints
+  the roadmap view and asks which.
 - Anything else is `sync`, with the trailing text carried in as context for its
   proposals (a feature idea to add, an area to focus on).
 
-A former verb name (`status`, `feature`, `plan`, `comment`, `pin`, `gate`,
-`order`, `ready`, `drift`) in `$ARGUMENTS` gets a one-line "the surface is now
-sync | do | goal" note before being treated as sync context.
+Retired verbs get a one-line note, then the roadmap view: `goal GOAL` is now
+`next` (to start or resume) and `do GOAL_ID` (one turn); `deps [N]` is now
+`sync` (which gathers the bots' PRs into `security` items) and `do ID` on the
+item. `hero-skills:harden` and `hero-skills:architecture` run inside `sync`;
+a user who types either by hand still gets that skill, but nothing in the
+workflow needs them named. A former verb name (`status`, `feature`, `plan`,
+`comment`, `pin`, `gate`, `order`, `ready`, `drift`, `do-next`) in
+`$ARGUMENTS` gets the same one-line "the surface is now sync | next | do"
+note before being treated as sync context.
+
+**`sync` is a pipeline, and it renders as one** (`docs/PIPELINES.md`):
+
+```
+config → architecture → design → harden → deps → reconcile → plan → goals
+```
+
+Print the DAG line at every stage transition. A stage that does not apply
+(no design target: `design` and the target lane; no Dockerfile: the image
+half of `harden`) renders `(–)` and says why in one line, never silently.
 
 **The roadmap view** — how every verb reports. Run `hero_ready_items "$STORE"`
 and print the items grouped by row state (new → backlog → plan →
@@ -933,9 +965,11 @@ READY/blocked → active → review → done, then goal, then feedback), each wi
   (see `references/feedback-channels.md`). Count the markers and the rows, not
   the prose: this is the return channel's only backlog surface, so a miscount
   of zero is indistinguishable from "no feedback exists",
-- the single next action: `wayfare do N` for the feature it would pick
-  (the active one, else the lowest READY id), `wayfare sync` for unplanned
-  features, stale rows, defects, and undelivered design feedback.
+- the single next action: `wayfare next` when a goal is runnable (see
+  `next` — an `active` goal, else the first `todo` goal in bottom-up order
+  whose `covers` are all planned), `wayfare do N` for a READY or mid-flight
+  item no goal covers, `wayfare sync` for unplanned features, stale rows,
+  defects, and undelivered design feedback.
 
 Print one banner line above the groups when `UX_FLOW` is `UNSET`, or when it
 holds a path that does not resolve at the target head:
@@ -962,8 +996,10 @@ to `todo` to put it on the roadmap, or delete it." A view that folds them into
 backlog reports untriaged jottings as roadmap; one that drops them repeats the
 invisibility the `new` default was added to end.
 
-**`goal` rows are their own group**, listing each goal's `covers` progress
-(done / total) and its next command (`wayfare goal ID`).
+**`goal` rows are their own group**, in bottom-up order (see *Goals* under
+`sync`), listing each goal's `covers` progress (done / total), its unmet goal
+dependencies, and its next command (`wayfare next` for the first runnable
+one, `wayfare do ID` for an `active` one mid-run).
 
 **Print the open feedback rows as their own group**, after the build groups.
 They are not blocked work and they are not done work; folding them into either
@@ -1073,18 +1109,66 @@ mentioning `kind: feature` would trip it). First confirm the store lists
 (`ls "$STORE"` succeeds): a clean pass with no feature item means bootstrap; a
 store that won't list is a failed check — STOP and name the path.
 
+**The `architecture` stage — both modes, before anything is judged.** A
+slice has to cut through the real layers, so you need to know what they are —
+which exist and how they depend. That map is `hero-skills:architecture`'s job
+(the root `DESIGN.md`, its Boundaries section), not a wayfare-private format.
+Invoke `hero-skills:architecture review` via the Skill tool with the line
+`launched by wayfare` (staleness is its call, never a `Source ref` comparison
+done here). When it reports `MISSING` or stale rows, offer its `sync` — the
+same skill, same launch line — before going on. If the user declines, derive
+the layering from a direct read of the source instead, say it is unverified,
+and carry the review's findings into this run's report: a declined refresh
+must never make the staleness disappear. **This map orders subtasks, never
+features** — feature order comes from the journey.
+
+**The `harden` stage — both modes, after the map.** Invoke
+`hero-skills:harden all` via the Skill tool with the line `launched by
+wayfare`. It is read-only and writes `kind: security` (or `architecture`)
+items at `status: planning`, each carrying an execution recipe, a
+verification, and its failure modes — so those items skip the grill in *Plan
+the set* and go straight to the ready-mark. It degrades per part, not as a
+whole: no `gh` alerts scope, no `docker`, no `trivy` each render that part
+`(–)` with the reason, and the report says which parts ran. Read its summary
+back: alerts and images it could not scan are `unverified` rows in this
+run's report, never "clean".
+
+**The `deps` stage — the bots' open PRs.** A dependency bot opens PRs nobody
+planned; each is a bump already implemented on a branch that is not ours.
+This stage turns each into a `security` item with `bot:` so that `do ID`
+can carry it and a goal can cover it:
+
+```bash
+# A failed listing is not "no bot PRs": this call decides whether the stage
+# writes anything at all.
+gh pr list --state open --author app/dependabot \
+  --json number,title,headRefName,url,createdAt,mergeStateStatus,statusCheckRollup \
+  || echo "DEPENDABOT_PRS_UNAVAILABLE — gh failed; this is not zero PRs. STOP."
+# A failed call is not zero alerts — print `severity: unknown` on every row
+# rather than `none`.
+gh api repos/{owner}/{repo}/dependabot/alerts \
+  --jq '.[] | select(.state == "open") | {number, severity: .security_advisory.severity, package: .dependency.package.name, summary: .security_advisory.summary}' \
+  || echo "DEPENDABOT_ALERTS_UNAVAILABLE — check that alerts are enabled for this repo and the token has the security_events/repo scope"
+```
+
+Parse package, from, and to from each title (`Bump X from A to B`; bot
+titles are stable, and one that does not parse is read from the diff).
+Classify the bump `patch` / `minor` / `major`, match it to an alert for
+severity, and find an existing item whose `pr:` is this PR. Print one table:
+`#N  package  from → to  class  severity  CI  mergeState  age  item`. Propose
+one item per PR that has none (the security-with-`bot:` format under *Item
+formats*, `status: todo`, `severity` from the alert or `none` / `unknown`),
+reuse the existing one otherwise with its `## Comments` intact, and write on
+confirmation. A PR harden's batch (its A4) supersedes is noted on the item
+and left `todo` with a comment naming the batch item — the batch's recipe
+closes the bot's PR after its own merge, so the two never race. No open bot
+PRs → `(–)` and one line saying so.
+
 **Bootstrap — no roadmap yet.**
 
-1. **Map the source.** A slice has to cut through the real layers, so you
-   need to know what they are — which exist and how they depend. That map is
-   `hero-skills:architecture`'s job (the root `DESIGN.md`, its
-   Boundaries section), not a wayfare-private format: run
-   `hero-skills:architecture review` first (via the Skill tool — staleness is
-   its call, never a `Source ref` comparison done here), and when it reports
-   `MISSING` or stale rows, offer its `sync` before roadmapping. If the user
-   declines, derive the layering from a direct read of the source instead —
-   but say it is unverified. **This map orders subtasks, never features** —
-   feature order comes from step 3's journey.
+1. **Map the source.** Already done by the `architecture` stage above; the
+   map it produced (or the unverified one) is what the rows below cut
+   through.
 2. **Investigate.** Two paths, chosen by whether `design-project` is
    configured (per the config gate above).
 
@@ -1172,14 +1256,9 @@ clean. The Upstream lane is a separate question, gated on `design-system-repo`
 rather than `design-project`, and still runs from `$DS_SNAP` when that key is
 configured — see its own header below for exactly which source it reads and
 when it, too, is skipped. Shipped features change the source, so `DESIGN.md` can
-trail reality: run `hero-skills:architecture review` first and offer its
-`sync` for anything it reports stale — or to bootstrap the file when it
-reports `MISSING` (the same offer bootstrap-mode makes). The refreshed map
-is what the rows below are judged against; if the user declines the offered
-`sync`, say the rows are judged against a stale (or absent) map and carry
-the review's findings into the report below — a declined refresh must never
-make the staleness disappear, and an unverified judgment must never look
-verified.
+trail reality: the `architecture` stage above already ran its review and
+offered its `sync`; the refreshed map (or, if declined, the stale one, said
+so) is what the rows below are judged against.
 
 **Findings are reported in three lanes, and every finding carries its status
 from `references/reconciliation.md`'s vocabulary and satisfies its evidence
@@ -1405,48 +1484,105 @@ So the pass runs across the roadmap:
    restate that procedure; it is defined once, there. Features that do not
    need planning (per *Lifecycle*) get a one-line approach and skip the
    grill; say which ones and why.
+
+   **Security items are planned differently, and both ways skip the grill.**
+   A harden item arrives `planning` with its recipe already written — the
+   audit was the planning — so it goes to the ready-mark directly: show its
+   title, `success`, and the recipe's first lines, and the user's yes flips
+   it `ready`. A bot item arrives `todo` and the bot's PR is the plan: show
+   package, bump, class, severity, CI state, and — for a `major` — the
+   breaking-change lines from the PR's release notes and the repo call sites
+   they name; the user's yes flips it `ready`. Wayfare never self-flips
+   either. A no leaves the item where it was, named in the report.
 3. **Report what is left.** The user can stop the pass at any feature. What
    was not planned stays `todo` and is named in the report; `do` refuses it
    until the next `sync` plans it. Nothing is silently deferred.
 
-4. **Propose goals over what was planned.** A goal is the unit `/goal` loops
-   against, and every feature in its `covers` must already be `ready`
-   (*Starting a goal*, step 1) — so the end of this pass is the one moment in
-   the workflow where a goal can be formed *from* the set instead of
-   reassembled by hand afterwards. Roadmap mode has just settled the
-   cross-cutting decisions and the dependency order across these features. A
-   goal written later has to re-derive that grouping from the items alone,
-   without the reasoning that produced it.
+4. **Goals — propose bottom-up, and reorganize what is already there.** A
+   goal is the unit `next` hands out and `/goal` loops against, and every
+   item in its `covers` must already be `ready` (*Starting a goal*, step 1)
+   — so the end of this pass is the one moment in the workflow where a goal
+   can be formed *from* the set instead of reassembled by hand afterwards.
+   Roadmap mode has just settled the cross-cutting decisions and the
+   dependency order across these features. A goal written later has to
+   re-derive that grouping from the items alone, without the reasoning that
+   produced it.
+
+   **Bottom-up means the order is derived from the items, not imposed on
+   them.** Build the groups from the leaves of the `depends_on` graph
+   upward: the first goal is the smallest outcome whose features depend on
+   nothing outside the group; the next is the smallest outcome whose
+   remaining dependencies are all inside goals already formed; and so on
+   until every `ready` build item is either in a goal or left to `do`. A
+   goal's own `depends_on` names the **goals** its features' dependencies
+   fall in — derived, never authored: if any feature in goal B `depends_on`
+   a feature in goal A, then B `depends_on: [A]`. That derived order is what
+   `next` walks, so a goal whose dependencies are not `done` is never handed
+   out, and two goals with no edge between them are independent and may run
+   in either order. A cycle between goals means the grouping is wrong — say
+   so and re-cut rather than write it.
 
    Group by **outcome** — what a person can do once the whole group ships —
    never by area or layer. A group whose Definition of Done cannot be stated
    as one user-visible outcome is not a goal; it is a filter over the
    roadmap, and it will report `done` without anything having shipped that a
-   person would notice. Each proposal goes through the same confirm flow as
-   any other row, and is written in **the full goal item format** (*Item
-   formats* below) — not the subset this paragraph happens to discuss. Sync
-   decides four of its values: `status: todo`, `covers` in dependency order,
-   `budget` = `len(covers)`, `concurrency: 3`. The rest of the format is not
-   optional. `source_ref` and `target_ref` are anchored here, from the heads
-   this run already resolved: a non-`done` item with no `target_ref` is a
-   store defect the *next* sync reports **when `$DESIGN_PROJECT` is a project
-   id** — the same carve-out the store-defects finding uses, since self-review
-   mode resolves no target head to anchor. So a pass that omits `target_ref`
-   while a design project is configured writes defects it had the values to
-   prevent. `## Stop conditions` gets the
-   documented defaults; it is the one per-goal brake on a loop that
-   pre-authorizes merges, and a turn reads it every time. The `## Definition
-   of Done` spans the group. Concatenating the features' own DoDs is not that:
-   it asserts only what each feature already asserts alone. Exclude any
-   feature already in another goal's `covers` — overlapping `covers` is a
-   store defect, two goals pre-authorizing merges on one feature.
+   person would notice. Security items are the one exception, because their
+   outcome is stated on the item already: `ready` bot items and harden items
+   group into one goal per round whose DoD is "no open alert this round
+   found, every bump merged and deployed" — they never mix into a product
+   goal, because their turns run a different pipeline (*Carrying a bot's
+   PR*), and because a person authorizing a feature goal should not be
+   authorizing dependency merges in the same breath.
+
+   **Reorganize before proposing.** Existing goals are input, not fixed
+   points, and there are two kinds:
+   - **`todo` goals are re-cut freely.** Re-derive the grouping over the
+     current `ready` set as if from scratch, then diff it against each
+     `todo` goal: a feature planned this round that serves an existing
+     goal's outcome joins its `covers` (`budget` grows with it); a feature
+     that went `done` out-of-band or `obsolete` leaves; two goals that name
+     one outcome merge; a goal whose DoD has become two outcomes splits. A
+     re-cut goal keeps its id and its `## Comments`; every change is a
+     dated comment naming what moved and why. Each proposed change is a row
+     in the same confirm flow as a new goal.
+   - **`active` goals are frozen.** Their `covers` were shown at `next`'s
+     gate and authorized as a set; changing the set under an authorization
+     changes what was authorized. New work that belongs to an active goal's
+     outcome becomes a **follow-up goal** with `depends_on` the active one,
+     and a comment on the active goal points at it. The one edit an active
+     goal takes is a dropped feature that went `done` out-of-band — that
+     shrinks what was authorized, never grows it — recorded as a comment.
+
+   Each proposal goes through the same confirm flow as any other row, and is
+   written in **the full goal item format** (*Item formats* below) — not the
+   subset this paragraph happens to discuss. Sync decides five of its
+   values: `status: todo`, `covers` in dependency order, `depends_on` as
+   derived above, `budget` = `len(covers)`, `concurrency: 3`. The rest of
+   the format is not optional. `source_ref` and `target_ref` are anchored
+   here, from the heads this run already resolved: a non-`done` item with no
+   `target_ref` is a store defect the *next* sync reports **when
+   `$DESIGN_PROJECT` is a project id** — the same carve-out the store-defects
+   finding uses, since self-review mode resolves no target head to anchor.
+   So a pass that omits `target_ref` while a design project is configured
+   writes defects it had the values to prevent. `## Stop conditions` gets
+   the documented defaults; it is the one per-goal brake on a loop that
+   pre-authorizes merges, and a turn reads it every time. `## Permissions`
+   gets the documented defaults too — it is what `next`'s gate reads aloud
+   and the user authorizes, and a goal with none is a goal whose gate cannot
+   say what it is asking for. The `## Definition of Done` spans the group.
+   Concatenating the features' own DoDs is not that: it asserts only what
+   each feature already asserts alone. Exclude any feature already in
+   another goal's `covers` — overlapping `covers` is a store defect, two
+   goals pre-authorizing merges on one feature.
 
    **Sync writes the item and stops there — it never authorizes.** The
-   approval that pre-authorizes mark-ready and merge is typed by a person at
-   `wayfare goal ID`'s gate, in-session, and is never written to the item; a
+   approval that grants a goal's `## Permissions` is typed by a person at
+   `wayfare next`'s gate, in-session, and is never written to the item; a
    sync that carried it would put into a file exactly the flag *Starting a
    goal* step 4 forbids. Proposing no goals is a normal outcome — features
-   that do not add up to one outcome are left to `do`.
+   that do not add up to one outcome are left to `do`. End the run with the
+   roadmap view; when a goal is runnable, the last line is
+   `Next step: hero-skills:wayfare next`.
 
 **This is not a gate on building.** The roadmap does not have to be fully
 planned before the first feature ships — that would be waterfall, and it
@@ -1463,32 +1599,59 @@ confirm flow, same format, same `status: todo`. Ids continue the store's
 sequence per think-it-through's numbering rules, re-checked immediately
 before writing; zero-pad only the filename.
 
-### `do FEATURE_ID` — build one planned feature
+### `do ID` — advance one item, or run one goal turn
 
-`do` takes exactly one feature id and runs *Advancing one item* below on it,
-with the feature given rather than selected. It is the single-step verb: one
-feature, as far as the gates allow, then stop. It never plans — a feature
-that is not `ready` (or further along) is refused with
-`Next step: wayfare sync`, whose postflight plans the set; a feature with
-unmet deps is refused naming them. `do` is unaffected by an active `/goal`;
-the goal's own turn is `goal GOAL`. A `kind: security` id with `bot:` set routes to the `deps` verb — there is
-nothing to build, only a bot's PR to carry.
+`do` takes exactly one id and dispatches on the item's kind:
 
-### `goal` — one turn of a goal, driven by Claude Code's `/goal`
+- **A build kind** (`feature`, `architecture`, `polish`, or a `security`
+  item without `bot:`) runs *Advancing one item* below on it, with the item
+  given rather than selected: one item, as far as the gates allow, then
+  stop. It never plans — an item that is not `ready` (or further along) is
+  refused with `Next step: wayfare sync`, whose postflight plans the set; an
+  item with unmet deps is refused naming them. `do` on a feature is
+  unaffected by an active `/goal`.
+- **A `security` item with `bot:`** runs *Carrying a bot's PR* below —
+  there is nothing to build, only a bot's PR to carry to merged and
+  deployed.
+- **A goal** runs *One turn* of it. This is the form the `/goal` line
+  `next` prints re-invokes every turn. A `todo` goal that `next` has not
+  authorized in this session is not run: say `Next step: wayfare next`.
 
-`goal` takes a goal id or a title. With no argument it lists the store's
-`kind: goal` items with their state and stops — building one feature is
-`do FEATURE_ID`, not `goal`.
+### `next` — hand out the next goal
 
-With a goal id, it runs **one turn** of that goal. The looping is Claude
-Code's built-in **`/goal`**: it sets a completion condition, and after each
-turn a small fast model judges it — met, not yet, or impossible — and starts
-another turn if not. Wayfare does not implement a loop of its own.
+`next` takes no argument. It picks the next goal, gets its permissions
+authorized in-session, and prints the `/goal` line — then stops. It never
+builds, and it never plans.
+
+**Selection is deterministic, from the store.** Run `hero_ready_items` and
+walk the goals:
+
+1. An `active` goal — a run already under way (its worktrees may still be
+   there). Resume it: re-authorize per *Starting a goal* and print its
+   `/goal` line. Two active goals is a store defect to report, not a choice.
+2. Else the first `todo` goal in bottom-up order (its `depends_on` goals all
+   `done`, lowest id among those) whose `covers` are all `ready` or further.
+   A `todo` goal whose deps are met but whose `covers` hold an unplanned
+   item is reported as blocked on planning: `Next step: wayfare sync`.
+3. Else say why there is nothing to hand out, in one line each: no goals
+   (features ready but ungrouped → `wayfare sync` proposes goals, or `wayfare
+   do N` builds one); every goal blocked on another (name the chain); every
+   goal `done` (the route is complete).
+
+Then run *Starting a goal* on the pick. `next` is how a goal starts; `do
+GOAL_ID` is how it turns.
+
+### A goal's turns — driven by Claude Code's `/goal`
+
+The looping is Claude Code's built-in **`/goal`**: it sets a completion
+condition, and after each turn a small fast model judges it — met, not yet,
+or impossible — and starts another turn if not. Wayfare does not implement a
+loop of its own.
 
 | | Owns |
 | --- | --- |
 | `/goal` | when the next turn starts, and when to stop |
-| the goal item | the rules — features, DoD, budget, stop conditions |
+| the goal item | the rules — features, DoD, budget, permissions, stop conditions |
 | wayfare | what one turn does, and the report the evaluator reads |
 
 Three facts about `/goal` shape everything below:
@@ -1502,33 +1665,72 @@ Three facts about `/goal` shape everything below:
 - **It keeps nothing but the condition.** Turn count, budget and merge
   authorization are not restored on resume; the condition is.
 
-#### Starting a goal — `wayfare goal GOAL` in a session with no `/goal` set
+#### Permissions — what a goal may do without asking again
 
-1. **Resolve or create the goal item.** An id or title matching a `kind: goal`
-   item resumes it — including one `sync` proposed, which arrives `todo` with
-   `covers`, `budget` and a DoD already written, needing only the
-   authorization below. Anything else is new: work out which features it spans,
-   write a Definition of Done across them, set a PR budget, propose it. Every
-   feature in `covers` must already be planned (`ready` or further along):
-   an unplanned one is a STOP with `Next step: wayfare sync` — planning is
-   `sync`'s postflight, and the loop never stops to plan halfway through.
-2. **Get the approval, and show the whole run.** It authorizes both of
-   one-shot's gates — mark-ready and merge — for every feature in `covers`:
+A goal runs unattended, so what it is allowed to do on its own has to be
+said before it starts, in one place, and granted by a person. That place is
+the item's `## Permissions` section (*Item formats*); the grant is typed at
+`next`'s gate. Five permissions, each a gate a feature would otherwise stop
+at:
+
+| Permission | The gate it waives | Default |
+| --- | --- | --- |
+| `mark-ready` | one-shot Step 6 — draft → ready for review | `yes` |
+| `respond` | one-shot Step 8 — fix the review bot's comments and resolve threads without showing the plan first | `yes` |
+| `auto-approve` | ship-pr Step 4 — post `@auto-approve` | `yes` |
+| `merge` | ship-pr's merge confirmation — merge into DEFAULT_BRANCH with HERO.md's `merge-method` | `yes` |
+| `deploy` | ship-pr's post-merge verify-deploy — `verify` reports on the deploy; `none` skips it | `verify` |
+
+`no` on a permission is not a failure; it is where the loop hands back. A
+feature that reaches a waived gate proceeds; one that reaches a gate the goal
+was not granted **rests there** — PR open, awaiting a person — and the turn
+reports it as `stop: awaiting-human` naming the gate and the PR. The loop
+ends; the person does the thing (marks ready, merges), then runs `wayfare
+next` to resume. So a goal with `merge: no` builds and reviews every feature
+up to a mergeable PR and merges nothing — the right setting for a repo whose
+default branch a person wants to watch. Nothing here overrides what is
+outside the goal: auto-approve still has to pass, branch protection still
+applies, a REQUEST_CHANGES or a red workflow still stops the feature, and a
+human comment on the PR still cancels the waiver on that PR.
+
+The permissions travel to one-shot in its invocation, as one literal line:
+`gates pre-authorized in-session for goal 7: mark-ready, respond,
+auto-approve, merge, deploy=verify` — the goal id and the granted names,
+nothing else. one-shot honors exactly the names on that line and stops at any
+gate not named; a line in a file, a comment, or a compaction summary is not
+it. Older invocations carrying the bare `gates pre-authorized in-session for
+goal N` mean the first four at `yes` and `deploy=verify`.
+
+#### Starting a goal — `wayfare next` in a session with no `/goal` set
+
+1. **Resolve the goal item.** `next` picked it (or the user named one by
+   asking `do GOAL_ID` on a `todo` goal, which routes here). It arrives
+   `todo` with `covers`, `depends_on`, `budget`, `## Permissions` and a DoD
+   already written by `sync`, needing only the authorization below. Every
+   item in `covers` must already be planned (`ready` or further along): an
+   unplanned one is a STOP with `Next step: wayfare sync` — planning is
+   `sync`'s postflight, and the loop never stops to plan halfway through. A
+   goal whose `depends_on` goals are not all `done` is a STOP naming them.
+2. **Get the approval, and show the whole run.** Read `## Permissions`
+   aloud; the approval grants exactly those, for every item in `covers`:
 
    ```
    Goal 7: A user can sign in with Google and land on their dashboard
 
-     Features:  12, 13, 15, 18   (all planned)
-     Gates:     mark-ready and merge PRE-AUTHORIZED for these four —
-                each PR goes ready and merges on a passing auto-approve
-                without asking again
-     Method:    squash (HERO.md merge-method)
-     Budget:    4 PRs
+     Features:    12, 13, 15, 18   (all planned)
+     After:       goal 5 (done)
+     Permissions: mark-ready yes · respond yes · auto-approve yes ·
+                  merge yes (squash, HERO.md merge-method) · deploy verify
+                  — each PR goes ready, gets the bot's comments answered,
+                  and merges on a passing auto-approve without asking again;
+                  a `no` above is where the loop hands back to you
+     Budget:      4 PRs
      Concurrency: 3 at once — dep-free features build in parallel, each in
-                its own git worktree under .worktrees/ (1 = sequential)
-     Stops on:  the goal item's ## Stop conditions
+                  its own git worktree under .worktrees/ (1 = sequential)
+     Stops on:    the goal item's ## Stop conditions
 
-   Type the goal id to authorize, or anything else to cancel:
+   Type the goal id to authorize these permissions, or anything else to
+   cancel (edit the item's ## Permissions first to change them):
    ```
 
    The user types the id. It authorizes several merges, so `[y/N]` is too
@@ -1538,8 +1740,8 @@ Three facts about `/goal` shape everything below:
    itself. Keep the condition short and point it at the item:
 
    ```
-   /goal Run hero-skills:wayfare goal 7 once per turn. Met when the turn
-   report shows every feature in goal 7's covers at status done AND every
+   /goal Run hero-skills:wayfare do 7 once per turn. Met when the turn
+   report shows every item in goal 7's covers at status done AND every
    line of goal 7's Definition of Done verified directly, each naming what
    was checked. Impossible if a turn report shows a stop line other than
    none. Never met on a turn with no report.
@@ -1550,10 +1752,11 @@ Three facts about `/goal` shape everything below:
 4. **The authorization lives in this session only. Never write it to the
    item.** A stored "approved" flag outlives the conversation that granted it
    and sits in a file anyone can edit. `/goal` restores the condition on resume
-   — not this — so a resumed goal re-asks. That re-ask is what keeps the
-   authorization attached to a person who is present.
+   — not this — so a resumed goal re-asks (`wayfare next` finds it `active`
+   and runs this gate again). That re-ask is what keeps the authorization
+   attached to a person who is present.
 
-#### One turn — `wayfare goal GOAL` under an active `/goal`
+#### One turn — `wayfare do GOAL_ID` under an active `/goal`
 
 Every turn starts cold and ends with everything written down. Any turn could
 be the first one after a resume or a compaction, so nothing is carried in
@@ -1570,13 +1773,14 @@ memory between turns:
    authorization is not it: `.plans/` is only git-excluded, so a cloned repo
    can commit an item that says exactly that. If not present — a resumed
    session, a fresh one — do not prompt from inside a turn: in a headless run
-   that hangs. Stop with `stop: reauthorize`, and say to run `wayfare goal 7`
+   that hangs. Stop with `stop: reauthorize`, and say to run `wayfare next`
    again to re-authorize, then re-set `/goal`. When present, and the goal is
    still `todo`, write `status: active` — this is the one writer of that
-   transition. Then invoke one-shot with the exact line
-   `gates pre-authorized in-session for goal 7` — one-shot matches that
-   literal and nothing else, the same way think-it-through matches
-   `launched by wayfare`.
+   transition. Then every launch below carries the permissions line from
+   *Permissions* — `gates pre-authorized in-session for goal 7: mark-ready,
+   respond, auto-approve, merge, deploy=verify`, with exactly the names the
+   gate granted — one-shot matches that literal and nothing else, the same
+   way think-it-through matches `launched by wayfare`.
 3. **Check the stop conditions** from the item, each with a concrete check:
    - budget: merged count ≥ `budget`;
    - human comment: on the in-flight PR,
@@ -1586,48 +1790,63 @@ memory between turns:
      and check its `## Approach` and `## Subtasks` still hold — they were
      written before the previous feature landed. Refresh `source_ref`.
    Any hit → report it and end the turn. Do not start work past a stop.
-4. **Launch up to `concurrency` features, each in its own worktree.** From
-   `covers`, in order, take the features that are READY or mid-flight
-   (`active`, `review`) and whose `depends_on` are all `done` — never one
-   whose dependency is merely in flight — up to
+4. **Launch up to `concurrency` items, each in its own worktree — this is
+   the parallel step.** From `covers`, in order, take the items that are
+   READY or mid-flight (`active`, `review`) and whose `depends_on` are all
+   `done` — never one whose dependency is merely in flight — up to
    `min(concurrency, budget − merged)`, counting what is already in flight
-   against that number. `concurrency: 1` (or a single candidate) is the
-   sequential turn: *Advancing one item* below, in this checkout, no
-   worktree. Otherwise, for each feature:
-   - **A worktree of its own.** New: `git worktree add
+   against that number. The dependency graph decides how wide a turn is:
+   four dep-free features and `concurrency: 3` is three worktrees now and
+   one next turn; a chain of four is one at a time whatever `concurrency`
+   says. `concurrency: 1` (or a single candidate) is the sequential turn:
+   *Advancing one item* (or *Carrying a bot's PR*) below, in this checkout,
+   no worktree. Otherwise, for each item:
+   - **A worktree of its own.** New feature: `git worktree add
      "$ROOT/.worktrees/feature-N" -b FEATURE_BRANCH "origin/$BASE"`
      (`hero_branch_policy` names the branch). Resuming: `git worktree add
      "$ROOT/.worktrees/feature-N" FEATURE_BRANCH` on the branch recorded in
-     its `## Comments`, unless the worktree already exists. Exclude the
-     folder once: `hero_exclude_add .worktrees/`. The store stays in this
-     checkout — `hero_work_store` resolves a worktree to its primary — so
-     every subagent reads and writes the same items.
-   - **One subagent per feature**, all in one message so they run
-     concurrently (Agent tool, `general-purpose`), with this prompt shape:
+     its `## Comments`, unless the worktree already exists. A bot item
+     checks out the **bot's** branch instead — `git worktree add
+     "$ROOT/.worktrees/feature-N" "origin/BOT_HEAD_REF"` — and never commits
+     there (*Carrying a bot's PR*). Exclude the folder once:
+     `hero_exclude_add .worktrees/`. The store stays in this checkout —
+     `hero_work_store` resolves a worktree to its primary — so every
+     subagent reads and writes the same items.
+   - **One subagent per item**, all in one message so they run concurrently
+     (Agent tool, `general-purpose`). For a feature:
 
      ```
      cd WORKTREE_PATH — a linked git worktree of REPO_PATH on branch
      FEATURE_BRANCH, for feature N of goal G. Every command runs here; do
      not touch the primary checkout or any other worktree. Invoke
      hero-skills:one-shot N with the exact line
-     `gates pre-authorized in-session for goal G`, via the Skill tool, and
-     let it drive every step; push-pr, review-pr, and ship-pr are its calls,
-     not yours to run by hand. Report: the final DAG line, the PR URL, the URL
-     of the `ai-hero:self-review` comment, the auto-approve run URL, and
-     the merged SHA — or the STOP reason with whichever of those exist.
+     `gates pre-authorized in-session for goal G: PERMISSIONS`, via the
+     Skill tool, and let it drive every step; push-pr, review-pr, and
+     ship-pr are its calls, not yours to run by hand. Report: the final DAG
+     line, the PR URL, the URL of the `ai-hero:self-review` comment, the
+     auto-approve run URL, and the merged SHA — or the STOP reason with
+     whichever of those exist.
      ```
 
-     The authorization literal travels in the invocation, as always — the
-     subagent cannot ask, and the goal's approval (step 2 of *Starting a
-     goal*) is what makes that acceptable.
+     For a bot item the subagent runs *Carrying a bot's PR* from its
+     `current` step with the same permissions line, and reports the same
+     artifacts (review URL in place of the self-review comment). The
+     permissions literal travels in the invocation, as always — the subagent
+     cannot ask, and the goal's approval (step 2 of *Starting a goal*) is
+     what makes that acceptable.
    - **Wait for every subagent**, then remove each worktree whose PR merged
      (`git worktree remove "$ROOT/.worktrees/feature-N"` and
-     `git branch -d FEATURE_BRANCH`; ship-pr leaves the branch checked out
-     there on purpose) and keep the rest for the next turn's resume.
+     `git branch -d FEATURE_BRANCH` for our branches; a bot's branch is
+     deleted by its merge, never by us) and keep the rest for the next
+     turn's resume.
 
-   A report missing the self-review comment URL or the auto-approve run
-   URL is `stop: failure` naming the skipped step (one-shot's contract item
-   5); the URLs go in the turn report's `verified:` line.
+   A report missing the self-review comment URL (or the posted review, for
+   a bot item) or the auto-approve run URL is `stop: failure` naming the
+   skipped step (one-shot's contract item 5); the URLs go in the turn
+   report's `verified:` line. A report ending at a gate the goal was not
+   granted is `stop: awaiting-human` naming the gate and the PR — the loop
+   ends there by design, and the other items in flight still finish their
+   own reports first.
 
    one-shot's own resume detection makes every launch safe to re-enter: a
    feature that died mid-build is picked up where it stopped, not restarted.
@@ -1661,7 +1880,8 @@ memory between turns:
 
    The `stop:` line is the one the evaluator keys on, and it takes one of:
    `none`, `failure`, `human-comment`, `budget`, `premise`, `gate-declined`,
-   `reauthorize`. On the final turn `dod:` lists each line with its check.
+   `awaiting-human`, `reauthorize`. On the final turn `dod:` lists each line
+   with its check.
 
 **A failure stops the goal. It never skips to the next feature.** Skipping is
 how a goal is reported done with a hole in it, invisible afterwards because
@@ -1678,8 +1898,9 @@ treats that as not yet met, which is the correct answer.
 
 ### Advancing one item
 
-One procedure, two callers: `do FEATURE_ID` names the feature; a goal turn
-selects the next one in its `covers`. It takes a **planned** feature as far
+One procedure, two callers: `do ID` names the item; a goal turn selects
+the next one in its `covers` (a bot item in `covers` goes to *Carrying a
+bot's PR* instead). It takes a **planned** feature as far
 as the gates allow in a single run (one-shot). It never plans — planning is
 `sync`'s postflight, and the ready-mark was given there.
 
@@ -1727,8 +1948,10 @@ as the gates allow in a single run (one-shot). It never plans — planning is
    ```
 
    No second permission prompt belongs here: the ready-mark *is* the
-   go-ahead, and one-shot still stops twice more on its own — the mark-ready
-   gate and the merge confirmation — before anything merges.
+   go-ahead, and one-shot still stops on its own at every gate — mark-ready,
+   respond, auto-approve, merge — before anything merges. Under a goal, the
+   goal's granted `## Permissions` are what waive those stops, and only
+   those.
 3. **One feature per run — not one half of one.** A run takes its feature as
    far as the gates allow: build it, then stop. It never
    starts a *second* feature. Single-step mode chains launches but never skips gates —
@@ -1739,22 +1962,24 @@ as the gates allow in a single run (one-shot). It never plans — planning is
    merge that returned it to `implementing`. That last one is a resting state
    too: the next PR is the next run, not a continuation of this one.
 
-### `deps [PR_NUMBER]` — take one Dependabot PR to deployment
+### Carrying a bot's PR — a `security` item with `bot:`
 
 A dependency bot opens PRs nobody planned. Each is a bump already implemented,
 on a branch that is not ours, waiting for a review, a merge, and a deploy.
-`deps` takes exactly one of them the rest of the way and stops. It is the one
-verb that ends past the merge: the item's Definition of Done names the
-deployment, and a merged bump whose deploy is degraded stays open.
+`sync`'s `deps` stage wrote the item and its postflight ready-marked it; this
+procedure — `do ID` on the item, or a goal turn that covers it — takes it the
+rest of the way and stops. It is the one procedure that ends past the merge:
+the item's Definition of Done names the deployment, and a merged bump whose
+deploy is degraded stays open.
 
 ```
-gather → select → ready-mark → current → review → test → ship → close-out
+current → test → review → ship → close-out
 ```
 
 Render the line at every step, per `PIPELINES.md`:
 
 ```
-[5/8] (✓) gather → (✓) select → (✓) ready-mark → (✓) current → (▶) review → ( ) test → ( ) ship → ( ) close-out
+[3/5] (✓) current → (✓) test → (▶) review → ( ) ship → ( ) close-out
 ```
 
 **Never commit on the bot's branch.** Two mechanisms depend on every commit
@@ -1766,55 +1991,28 @@ it. A rebase by hand keeps the author but still trips the second; a fix pushed
 and reviewed; nothing here writes to it. Something that needs a change is a
 finding for the review and the user's call.
 
-1. **Gather.** Open bot PRs, the alerts behind them, and what the store
-   already knows:
+**One PR per item, as the bot wrote it.** An item is refused when it is not
+`ready` or further (`Next step: wayfare sync`), or when its `pr:` is not an
+open bot PR any more (closed or merged out-of-band → propose `done` or
+deletion with the evidence). A PR that is not a bot's is
+`hero-skills:ship-pr`'s directly, never this procedure's. Bumps that must be
+tested together are `hero-skills:harden`'s batch (its A4), which builds its
+own branch for that reason and closes the bots' PRs after its own merge.
 
-   ```bash
-   # A failed listing is not "no bot PRs": this call decides whether the verb
-   # does anything at all.
-   gh pr list --state open --author app/dependabot \
-     --json number,title,headRefName,url,createdAt,mergeStateStatus,statusCheckRollup \
-     || echo "DEPENDABOT_PRS_UNAVAILABLE — gh failed; this is not zero PRs. STOP."
-   # harden A1's sentinel: a failed call is not zero alerts — print
-   # `severity: unknown` on every row rather than `none`.
-   gh api repos/{owner}/{repo}/dependabot/alerts \
-     --jq '.[] | select(.state == "open") | {number, severity: .security_advisory.severity, package: .dependency.package.name, summary: .security_advisory.summary}' \
-     || echo "DEPENDABOT_ALERTS_UNAVAILABLE — check that alerts are enabled for this repo and the token has the security_events/repo scope"
-   ```
-
-   Parse package, from, and to from each title (`Bump X from A to B`; bot
-   titles are stable, and one that does not parse is read from the diff).
-   Classify the bump `patch` / `minor` / `major`, match it to an alert for
-   severity, and find an existing item whose `pr:` is this PR. Print one table: `#N  package  from → to  class  severity  CI
-   mergeState  age  item`. No open bot PRs → say so and stop; the roadmap
-   view is the report.
-2. **Select.** `PR_NUMBER` given: it must be in that table — a PR that is not
-   a bot's is `hero-skills:ship-pr`'s directly, not this verb's. Not given:
-   highest severity first (`critical` > `high` > `medium` > `low` > `none`;
-   `unknown` sorts with `none` and says so), oldest first within a severity.
-   Say which and why. **One PR per run.** Bumps that must be tested together
-   are `hero-skills:harden deps`'s job, which builds its own branch for that
-   reason.
-3. **Ready-mark.** Write the item (format below; reuse the existing one, its
-   `## Comments` intact) at `status: todo`, then ask, showing package, bump,
-   class, severity, CI state, and — for a `major` — the breaking-change lines
-   from the PR's release notes and the repo call sites they name. The user's
-   yes flips it to `ready`; wayfare never self-flips. `planning` is skipped:
-   the bot's PR is the plan, which is the Lifecycle's "skip it" case. A no
-   leaves the item `todo` and stops.
-4. **Current.** Read `mergeStateStatus`. `CLEAN`, `HAS_HOOKS`, `UNSTABLE`,
+1. **Current.** Read `mergeStateStatus`. `CLEAN`, `HAS_HOOKS`, `UNSTABLE`,
    `BLOCKED` (checks pending) → continue. `BEHIND` → comment
    `@dependabot rebase`; `DIRTY` → `@dependabot recreate`. Then poll the head
    SHA every 30 s for up to 10 minutes and continue once it moves; a head
    that never moves is a STOP ("Dependabot did not respond — is it enabled
    for this repo?"), never a local rebase. Flip the item to `implementing`
    here — this is the first act on the PR.
-5. **Test.** `gh pr checkout N`, then `hero-skills:push-pr test` — the test
-   phase alone: lint, typecheck, unit, UI smoke, no commit, no push. This
-   runs before the review because `gh pr review` cannot be amended: an
-   APPROVE posted before the tests would stand on an untested bump if the
-   run died in between, and both gates would accept it.
-6. **Review.** The generic review agents have nothing to find in a lockfile
+2. **Test.** `gh pr checkout N` (in a goal turn, the worktree is already on
+   the bot's branch), then `hero-skills:push-pr test` — the test phase
+   alone: lint, typecheck, unit, UI smoke, no commit, no push. This runs
+   before the review because `gh pr review` cannot be amended: an APPROVE
+   posted before the tests would stand on an untested bump if the run died
+   in between, and both gates would accept it.
+3. **Review.** The generic review agents have nothing to find in a lockfile
    and a bot description to be pedantic about — the same reason the workflow
    keeps the model off these PRs — so the review is a dependency judgment,
    made here and posted from this account:
@@ -1824,36 +2022,40 @@ finding for the review and the user's call.
    - the repo's call sites of the package (`grep` its import/require across
      `source` paths) and whether any touches a changed API;
    - the alert it closes, if any, and whether the vulnerable path is
-     reachable here (harden A3's questions);
+     reachable here (harden's reachability questions);
    - CI on the head.
 
    Humanize it (`hero-skills:my-humanizer inline`), then post **one** review:
    `gh pr review N --approve --body …` when the class is patch/minor, or a
-   major whose call sites are clean, CI is green, and Step 5 was green;
+   major whose call sites are clean, CI is green, and step 2 was green;
    otherwise `--request-changes` naming what fails (the local test failure
-   included), and STOP — the fix is a person's
-   change, not this verb's. Either state satisfies the "prior review" gate
-   that ship-pr and `auto-approve.yaml` both check (a non-author review that
-   is not `PENDING`); a `--comment` review would too, but says nothing.
-7. **Ship.** Flip the item to `reviewing`, append the PR URL to
+   included), and STOP — the fix is a person's change, not this
+   procedure's. Either state satisfies the "prior review" gate that ship-pr
+   and `auto-approve.yaml` both check (a non-author review that is not
+   `PENDING`); a `--comment` review would too, but says nothing.
+4. **Ship.** Flip the item to `reviewing`, append the PR URL to
    `## Comments`, and invoke `hero-skills:ship-pr N`: gates, `@auto-approve`,
-   verdict, the user's merge confirmation, merge, reset, verify-deploy. Its
-   Step 3b rebase is a no-op when Step 4 held (if the base moved in between
-   and it pushed a rebase, say so — see the rule above). Read back the
-   verdict, the merge SHA, and the `Deployment:` line.
-8. **Close out.** Verify each `## Definition of Done` line of the item
-   (the format below is the single spelling of what they are) and tick it
-   with a `## Comments` entry naming the evidence (one-shot Step 2's rule).
-   A deployment line that reads `DEGRADED` or `UNKNOWN` stays open, the item
+   verdict, the merge confirmation, merge, reset, verify-deploy. Under a
+   goal the permissions line travels in the invocation and waives
+   `auto-approve`, `merge` and `deploy` exactly as it does for one-shot;
+   standalone `do` asks at each, as ship-pr always has. Its Step 3b rebase
+   is a no-op when step 1 held (if the base moved in between and it pushed a
+   rebase, say so — see the rule above). Read back the verdict, the merge
+   SHA, and the `Deployment:` line.
+5. **Close out.** Verify each `## Definition of Done` line of the item (the
+   format below is the single spelling of what they are) and tick it with a
+   `## Comments` entry naming the evidence (one-shot Step 2's rule). A
+   deployment line that reads `DEGRADED` or `UNKNOWN` stays open, the item
    stays `reviewing`, and the run STOPs with `merged, not deployed` —
-   deployment is what this verb promised. All ticked → `status: done`, then
-   the roadmap view. Another open bot PR → `Next step: hero-skills:wayfare
-   deps`.
+   deployment is what this procedure promised. All ticked → `status: done`,
+   then the roadmap view.
 
-A goal never covers one of these. The stops, all of them hand-backs: not a
-bot PR; the bot never rebased; CI red; local tests red; a major whose call
-sites hit a changed API; ship-pr's `REQUEST_CHANGES`, `WORKFLOW_FAILED`, or
-declined merge; deployment `DEGRADED` or `UNKNOWN`.
+The stops, all of them hand-backs: the bot never rebased; CI red; local
+tests red; a major whose call sites hit a changed API; ship-pr's
+`REQUEST_CHANGES`, `WORKFLOW_FAILED`, or a declined (or ungranted) merge;
+deployment `DEGRADED` or `UNKNOWN`. In a goal turn each is `stop: failure`
+(or `awaiting-human` for the ungranted gate) on the turn report, and the
+goal does not skip past it.
 
 ### Feedback — the three return channels
 
@@ -1957,7 +2159,7 @@ kind: goal
 origin: wayfare
 title: A user can sign in with Google and land on their dashboard
 status: todo # new | todo | active | done
-depends_on: []
+depends_on: [5] # GOALS whose features this goal's features depend on — derived by sync from the items' own depends_on, never authored; `next` hands a goal out only when these are done
 covers: [12, 13, 15, 18] # the features this goal is made of, in build order
 concurrency: 3 # features building at once, each in its own worktree; 1 = sequential in this checkout. Starting a goal fills it with 3 unless told otherwise
 budget: 4 # PRs; positive integer, REQUIRED. Absent, zero, or non-numeric is a store defect and the turn stops — an unbounded pre-authorized merge loop is the wrong default. Starting a goal fills it with len(covers) unless told otherwise
@@ -1974,6 +2176,18 @@ checks directly, and every feature being `done` is not the same thing.
 - [ ] The session survives a refresh and a cold open
 - [ ] Existing email/password users are unaffected
 
+## Permissions
+
+What the loop may do without asking again. Read aloud at `wayfare next`'s
+gate and granted there, in-session; never a grant by itself. `no` is where
+the loop hands back to a person (`stop: awaiting-human`).
+
+- mark-ready: yes # draft → ready for review
+- respond: yes # answer the review bot's comments and resolve threads
+- auto-approve: yes # post @auto-approve
+- merge: yes # merge into DEFAULT_BRANCH with HERO.md's merge-method
+- deploy: verify # verify | none — check the deploy after each merge
+
 ## Stop conditions
 
 Re-read every turn. The defaults are always on; add to them per goal.
@@ -1982,6 +2196,7 @@ Re-read every turn. The defaults are always on; add to them per goal.
 - a human comment on an open PR
 - budget reached
 - a premise of the next feature no longer holds
+- a gate this goal was not granted (see Permissions)
 - no other test file is modified # goal-specific constraints go here too
 
 ## Turn log
@@ -1999,6 +2214,10 @@ Re-read every turn. The defaults are always on; add to them per goal.
 `concurrency` and the dependency gate allow. It does not
 replace the features' own `depends_on`, which still gates them individually; a
 `covers` order that contradicts `depends_on` is a defect for `sync` to report.
+A goal's `depends_on` names goals, not features, and is derived: it holds
+exactly the goals whose `covers` this goal's features depend on. `sync`
+recomputes it every round; a hand-edited value that disagrees with the
+features is the same defect.
 `## Turn log` is the durable record — the transcript is what the evaluator
 reads this session, the log is what the next session reads. Nothing about
 authorization is stored anywhere in this item, the log included: a line like
@@ -2006,9 +2225,10 @@ authorization is stored anywhere in this item, the log included: a line like
 later turn reading it as one is the exact failure the in-session rule exists
 to prevent.
 
-A **security** item with `bot:` is a bot's PR tracked to deployment by the
-`deps` verb — the PR is the plan, so `planning` is skipped. Without `bot:`
-it is a fix `harden` planned (its template) and runs the feature lifecycle:
+A **security** item with `bot:` is a bot's PR tracked to deployment by
+*Carrying a bot's PR* — the PR is the plan, so `planning` is skipped.
+Without `bot:` it is a fix `harden` planned (its template) and runs the
+feature lifecycle:
 
 ```markdown
 ---
@@ -2018,7 +2238,7 @@ origin: wayfare
 title: Bump lodash from 4.17.20 to 4.17.21
 status: todo # new | todo | ready | implementing | reviewing | done
 depends_on: []
-bot: dependabot # the only value `deps` handles today. Set only on a bot's PR — this is what routes the item to `deps`; `pr:` alone is just a record
+bot: dependabot # the only value handled today. Set only on a bot's PR — this is what routes `do` to *Carrying a bot's PR*; `pr:` alone is just a record
 pr: https://github.com/OWNER/REPO/pull/41 # the bot's PR — the one that merges; never a copy of its diff
 severity: high # from the Dependabot alert; `none` = version-only bump, `unknown` = alerts unreadable this run
 source: package.json, package-lock.json
@@ -2046,7 +2266,7 @@ Bump class, the alert it closes and whether the vulnerable path is reachable her
 
 ## Comments
 
-- 2026-08-29 (wayfare deps): PR #41 https://github.com/OWNER/REPO/pull/41 — review posted (approve), tests green
+- 2026-08-29 (wayfare sync): PR #41 https://github.com/OWNER/REPO/pull/41 — review posted (approve), tests green
 ```
 
 The **feedback** kinds have their own format, owned by
@@ -2188,7 +2408,7 @@ Stamp `origin` with the producer that actually authored the item; never claim
 | Editing another producer's items | Sync notes overlaps in the feature; the other item keeps its lifecycle. |
 | Writing a plain item | Every item is a wayfare item — `kind: feature`, `architecture`, `polish`, or `security`, with Subtasks, DoD, Comments. |
 | Pushing to a Dependabot branch | One non-bot commit routes the PR to the model lane and Dependabot stops maintaining it. Ask `@dependabot rebase`; the branch is read, never written. |
-| Batching bumps through `deps` | `deps` is one PR as the bot wrote it. Bumps that must be tested together are `harden deps`'s branch. |
+| Batching bumps through a bot item | A bot item is one PR as the bot wrote it. Bumps that must be tested together are harden's batch branch. |
 | Calling a dependency done at merge | Its DoD names the deployment. `DEGRADED` after the merge is `merged, not deployed`, and the item stays open. |
 | Calling a screen done on coverage alone | Coverage says the story ships; only the rendered comparison says it matches. |
 | A polish row that reads "feels tight" | Unmeasurable rows never converge. A number and the token it should have been, or `unverified`. |
@@ -2207,7 +2427,11 @@ Stamp `origin` with the producer that actually authored the item; never claim
 | Building a feedback item | Feedback is delivered, never built — `hero_ready_items` never hands one out READY. |
 | Planning an item already satisfied | Check the codebase before think-it-through; finished work must not be grilled. |
 | A claim with no file | An opinion. It belongs in a feedback item, not a coverage verdict. |
-| Storing merge authorization on a goal | A file that grants a gate. It outlives the session that approved it — keep it in-session. |
+| Storing merge authorization on a goal | A file that grants a gate. It outlives the session that approved it — `## Permissions` says what to ask for; the grant is typed at `next`. |
+| Calling `harden` or `architecture` by hand in the workflow | `sync` runs both, in order, with the map feeding the audit feeding the roadmap. Run alone they answer a narrower question and leave the roadmap unconverged. |
+| Reorganizing an `active` goal's `covers` | Its set was authorized as shown. New work is a follow-up goal; only an out-of-band `done` may leave. |
+| Authoring a goal's `depends_on` | It is derived from the features' `depends_on`. A hand-written order that disagrees is a defect, not a preference. |
+| Merging past an ungranted gate | `merge: no` means a person merges. The turn rests at the PR with `stop: awaiting-human`. |
 | Carrying goal state in memory between turns | `/goal` compacts and resumes; the store and `## Turn log` are the state. Every turn reads cold. |
 | Prompting from inside a goal turn | A headless run hangs on it. Stop with `stop: reauthorize` instead. |
 | A turn report that rounds up | The evaluator believes it. Say `not checked` and let it judge not-yet. |
@@ -2219,8 +2443,7 @@ Stamp `origin` with the producer that actually authored the item; never claim
 
 Pick exactly one, from the store's current state:
 
-- **A `todo` goal whose `covers` are all `ready` or further**: `Next step: hero-skills:wayfare goal N — authorize the run and start the loop`.
-- **A feature is READY or mid-flight**: `Next step: hero-skills:wayfare do N — build feature N` (the active one, else the lowest READY id); under a goal, `hero-skills:wayfare goal GOAL` runs its next turn.
-- **Features are unplanned (`todo`), no roadmap yet, or the world moved** (target changed, work landed out-of-band, design feedback awaits delivery, features look horizontal): `Next step: hero-skills:wayfare sync — bootstraps or converges the roadmap, then plans the set`.
-- **Open Dependabot PRs**: `Next step: hero-skills:wayfare deps — takes the most severe one to merged and deployed`.
+- **A goal is runnable** (`active`, or `todo` with its goal deps `done` and its `covers` all planned): `Next step: hero-skills:wayfare next — authorize its permissions and start the loop`; under an active `/goal`, `hero-skills:wayfare do GOAL_ID` is its next turn.
+- **An item is READY or mid-flight and no goal covers it**: `Next step: hero-skills:wayfare do N — build item N` (the active one, else the lowest READY id).
+- **Features are unplanned (`todo`), no roadmap yet, or the world moved** (target changed, work landed out-of-band, design feedback awaits delivery, features look horizontal, alerts or bot PRs appeared): `Next step: hero-skills:wayfare sync — converges architecture, design, hardening, dependencies and the roadmap, plans the set, then proposes goals`.
 - **Everything blocked or done**: print the roadmap view — it names each blocker's unmet deps, or the route is complete.

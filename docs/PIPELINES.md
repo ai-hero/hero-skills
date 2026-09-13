@@ -89,11 +89,13 @@ Because nothing else observes the codebase on the store's behalf, Step 1 also
 re-checks a resolved item's `success` criteria against reality — `status: todo`
 only means nobody edited the file, not that the work is still outstanding.
 
-**Architecture chains.** `wayfare sync` (both modes) runs
+**Architecture and harden chain.** `wayfare sync`'s first stage runs
 `hero-skills:architecture review` — and offers its `sync` — before judging
-the roadmap, and `think-it-through` delegates a leading `arch` argument to
-the same skill. Both edges require `architecture` to stay model-invocable
-(guarded by validate.sh's `CHAINED_SKILLS`).
+the roadmap, its `harden` stage runs `hero-skills:harden all`, and
+`think-it-through` delegates a leading `arch` argument to the architecture
+skill. Every edge requires the child to stay model-invocable (guarded by
+validate.sh's `CHAINED_SKILLS`); both children are `user-invocable: false`,
+so wayfare is the only way a person reaches them.
 
 **The design return channel.** Every other edge flows target → source. One
 flows back: one-shot logs a divergence it found while building into the
@@ -141,7 +143,7 @@ Owner: `hero-skills:init-hero`. Four steps:
 Run by itself (`hero-skills:init-hero` or `hero-skills:init-hero recalibrate`) or
 as the third step of Pipeline 1.
 
-Fifteen other skills carry a scoped slice of this pipeline as their own
+Thirteen other skills carry a scoped slice of this pipeline as their own
 `recalibrate` verb. RECALIBRATE.md names its phases `report → ask → write →
 commit` — `report` is this pipeline's `investigate` narrowed to the fields
 that skill reads, and the verb ends at `commit` without going on to do the
@@ -149,14 +151,42 @@ skill's work. The
 field map is `scripts/hero-fields.sh`; the contract is
 [RECALIBRATE.md](./RECALIBRATE.md).
 
-### Pipeline 4: wayfare deps — one Dependabot PR to merged and deployed
+### Pipeline 4: wayfare sync — one round of convergence
 
 ```
-gather → select → ready-mark → current → review → test → ship → close-out
+config → architecture → design → harden → deps → reconcile → plan → goals
 ```
 
-Owner: `hero-skills:wayfare deps [PR_NUMBER]` — see its `deps` verb for the
-steps. The bot already implemented the bump, so there is no `implement` and
+Owner: `hero-skills:wayfare sync`. Eight stages: the config gate;
+`hero-skills:architecture review` (offering its `sync`); the design snapshot
+refresh; `hero-skills:harden all`; the dependency bots' open PRs written as
+`security` items; the reconciliation lanes; the planning postflight
+(`hero-skills:think-it-through` in Roadmap mode); and goals proposed bottom-up
+over what was planned, with existing `todo` goals re-cut. Stages that do not
+apply render `(–)` with the reason. It ends with the roadmap view and, when a
+goal is runnable, `Next step: hero-skills:wayfare next`.
+
+### Pipeline 5: wayfare do — a bot's PR to merged and deployed
+
+```
+current → test → review → ship → close-out
+```
+
+Owner: `hero-skills:wayfare do ITEM_ID` on a `security` item with `bot:`
+(written and ready-marked by Pipeline 4) — see *Carrying a bot's PR* in the
+skill. The bot already implemented the bump, so there is no `implement` and
 no PR of ours; `test` and `ship` delegate to `hero-skills:push-pr test` and
 `hero-skills:ship-pr`, and the item is `done` only once the deployment
-verifies.
+verifies. A goal turn runs the same steps for each bot item it covers, in a
+worktree on the bot's branch.
+
+### Goals: `wayfare next`, then `/goal`
+
+`hero-skills:wayfare next` picks the next goal in bottom-up order, reads its
+`## Permissions` aloud (`mark-ready`, `respond`, `auto-approve`, `merge`,
+`deploy`), takes the user's in-session authorization, and prints the `/goal`
+line whose turn is `hero-skills:wayfare do GOAL_ID`. Each turn launches up to
+`concurrency` dep-free items in parallel, one worktree and one subagent each,
+and every one-shot invocation carries the granted permissions as one literal
+line. A gate the goal was not granted rests the item at its PR and ends the
+loop with `stop: awaiting-human`.

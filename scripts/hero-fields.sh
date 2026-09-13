@@ -59,9 +59,6 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 rows() {
   cat <<'ROWS'
 init-hero|*|*|every section — the only whole-file pass
-architecture|Repository|type|single or monorepo, which decides whether one DESIGN.md covers the repo
-architecture|Deployment|platform|the deploy shape the boundaries and invariants must hold under
-architecture|Projects|*|the project list, and in a monorepo which one the file describes
 push-pr|Repository|default-branch|the branch to cut from and the PR base
 push-pr|Repository|branch-convention|the shape of the branch name it creates
 push-pr|Repository|commit-convention|the shape of the commit message it writes
@@ -106,10 +103,11 @@ wayfare|Wayfare|ux-flow|the authoritative journey the codebase is reconciled aga
 wayfare|Wayfare|design-system-repo|the registry the UI work sources primitives from
 wayfare|Wayfare|reconciliation|how far a sync is allowed to go on its own
 wayfare|Repository|default-branch|the base for every PR the goal turns open
-harden|Deployment|platform|whether there are images and manifests to scan
-harden|Deployment|registry|where the image being scanned is pulled from
-harden|Code Quality|linters|the security checks already in the gate, which the audit must not duplicate
-harden|Projects|*|per project: language and dependency file, which decide the CVE scanners
+wayfare|Repository|type|single or monorepo, which decides whether one DESIGN.md covers the repo (the architecture stage)
+wayfare|Deployment|platform|the deploy shape DESIGN.md's invariants hold under, and whether the harden stage has images to scan
+wayfare|Deployment|registry|where the image the harden stage scans is pulled from
+wayfare|Code Quality|linters|the security checks already in the gate, which the harden stage must not re-propose
+wayfare|Projects|*|per project: language and dependency file (the CVE scanners), and in a monorepo which project DESIGN.md describes
 recomponentize-ui|Design System|role|producer refuses the run; consumer is what the pass is for
 recomponentize-ui|Design System|namespace|the registry prefix components are sourced under
 recomponentize-ui|Design System|registry-url|where the registry is fetched from

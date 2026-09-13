@@ -233,7 +233,7 @@ fi
 # script is read-only.
 #
 # Which active item is THIS branch's: the one whose `branch:` matches (one-shot
-# Step 2 writes it at the first edit). Under `wayfare goal` every worktree's
+# Step 2 writes it at the first edit). Under a wayfare goal turn every worktree's
 # feature is `implementing` in the shared store, so "the single active item"
 # is not a rule that holds there. Items without `branch:` predate the field;
 # for those, a single one is taken and two is a claim conflict.
@@ -257,7 +257,7 @@ invalid"*) fail_source "store-invalid-item" ;; esac
       # hero_ready_items owns the status enum; `active` is its word for
       # in-progress (plain) and implementing (build). A goal at active is a
       # set of features, not the item on this branch; a `bot:` item is a
-      # dependency bot's PR that wayfare deps carries, never one-shot's.
+      # dependency bot's PR that wayfare's bot-PR procedure carries, never one-shot's.
       kind=$(hero_item_field "$STORE/$f" kind | tr '[:upper:]' '[:lower:]')
       [ "$(hero_item_class "$kind" "$f" 2>/dev/null)" = goal ] && continue
       [ -n "$(hero_item_field "$STORE/$f" bot)" ] && continue
