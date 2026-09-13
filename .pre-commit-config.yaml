@@ -153,7 +153,7 @@ repos:
         pass_filenames: false
         # docs/AGENTS-MD.md is the spec check-agents-md.test.sh reads its R5/R6
         # lists from, so an edit there must re-run the suite.
-        files: ^(scripts/.*\.sh|docs/AGENTS-MD\.md)$
+        files: ^(scripts/.*\.(sh|py)|assets/compliance/.*\.yaml|docs/AGENTS-MD\.md)$
 
       - id: agents-md
         name: "AGENTS.md meets docs/AGENTS-MD.md"

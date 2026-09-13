@@ -38,6 +38,7 @@ Three things it is for:
 - template: hero-template
 - port-range: 33000-33099
 - template-port: 33099   # the template's parking slot; a clone still on it is a bug
+- register: .fleet/      # the compliance register overlay + generated CONSISTENCY.md; a private checkout
 
 ## Groups
 

@@ -1,0 +1,63 @@
+# The generic compliance CONTROLS — what any repo on this workflow is held
+# to. Objectives only: a control names what must be true and why it matters
+# in general, never how it is tested (CHECKS.yaml) and never which repo in a
+# particular fleet is the reference for it. That last fact, and the incident
+# history behind each control, belong to a fleet and live in its register
+# overlay (FLEET.md `register:`, default .fleet/), which scripts/audit.py
+# merges over this file by id. A fleet may also add controls of its own.
+#
+# SEVERITY:
+#   high   — security, or a gate that silently does not run
+#   medium — a real bug that has not bitten yet
+#   low    — cosmetic
+
+version: 1
+
+controls:
+
+- id: C-SUPPLY
+  title: Third-party code cannot change under us
+  severity: high
+  intent: >
+    Everything we did not write is pinned to an immutable identifier, and
+    something keeps those pins moving.
+  why: >
+    A mutable reference — a repointed action tag, a `:latest` image — silently
+    changes what runs in a pipeline holding registry and deploy credentials;
+    the trivy-action and kics-github-action compromises worked exactly that
+    way. Pinning without an updater is the opposite failure: the pin freezes
+    and the repo quietly stops receiving security fixes. Both halves are
+    required; either alone is a false sense of safety.
+
+- id: C-APPROVAL
+  title: Automated approval cannot be subverted
+  severity: high
+  intent: >
+    A bot that can approve a PR runs only for people with write access, and
+    refuses to approve when it cannot obtain a real verdict.
+  why: >
+    The bot posts a genuine APPROVE review and spends an API key. Without an
+    author gate the only condition is that a comment contains a magic string,
+    so any commenter can approve a PR and burn the key. Without failing
+    closed, an outage becomes a blanket approval.
+
+- id: C-SECRETS
+  title: Secret scanning has an audit trail
+  severity: medium
+  intent: >
+    A repo running detect-secrets commits a .secrets.baseline.
+  why: >
+    Without a baseline there is no record of what was reviewed and dismissed,
+    so every finding must be silenced with an exclude pattern — which is
+    indistinguishable from never having looked.
+
+- id: C-AGENT
+  title: A clone inherits working agent config
+  severity: low
+  intent: >
+    Session scratch is ignored narrowly, so committed agent config survives,
+    and the agent workflow the config feeds still runs end to end.
+  why: >
+    A blanket-ignored .claude/ seeds no agent config at all, and a HERO.md
+    that no longer drives its tools is a gate that reads as present and does
+    nothing.

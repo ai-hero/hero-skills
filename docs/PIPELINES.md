@@ -154,17 +154,26 @@ field map is `scripts/hero-fields.sh`; the contract is
 ### Pipeline 4: wayfare sync — one round of convergence
 
 ```
-config → architecture → harden → deps → design → reconcile → plan → goals
+config → architecture → harden → compliance → deps → design → reconcile → plan → goals
 ```
 
-Owner: `hero-skills:wayfare sync`. Eight stages: the config gate;
+Owner: `hero-skills:wayfare sync`. Nine stages: the config gate;
 `hero-skills:architecture review` (offering its `sync`);
-`hero-skills:harden all`; the dependency bots' open PRs written as
-`security` items; the design snapshot refresh; the reconciliation lanes; the planning postflight
-(`hero-skills:think-it-through` in Roadmap mode); and goals proposed bottom-up
-over what was planned, with existing `todo` goals re-cut. Stages that do not
-apply render `(–)` with the reason. It ends with the roadmap view and, when a
-goal is runnable, `Next step: hero-skills:wayfare next`.
+`hero-skills:harden all`; the compliance audit
+(`scripts/audit.py --repo THIS`, baseline plus the fleet's register overlay)
+with each failing check proposed as an item; the dependency bots' open PRs
+written as `security` items; the design snapshot refresh; the reconciliation
+lanes; the planning postflight (`hero-skills:think-it-through` in Roadmap
+mode); and goals proposed bottom-up over what was planned, with existing
+`todo` goals re-cut. Stages that do not apply render `(–)` with the reason.
+It ends with the roadmap view and, when a goal is runnable,
+`Next step: hero-skills:wayfare next`.
+
+`hero-skills:wayfare improve` is the compliance stage on its own, plus the
+backport half sync never does: where this repo is the reference for a check
+the template fails, it drafts the message to the template's inbox. At a
+fleet root it runs the whole family, regenerates the register's
+CONSISTENCY.md, and offers the per-repo fan-out.
 
 ### Pipeline 5: wayfare do — a bot's PR to merged and deployed
 
