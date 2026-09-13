@@ -173,7 +173,8 @@ It ends with the roadmap view and, when a goal is runnable,
 backport half sync never does: where this repo is the reference for a check
 the template fails, it drafts the message to the template's inbox. At a
 fleet root it runs the whole family, regenerates the register's
-CONSISTENCY.md, and offers the per-repo fan-out.
+CONSISTENCY.md (fleet-root form only; consistency.py refuses to run outside
+a fleet), and offers the per-repo fan-out.
 
 ### Pipeline 5: wayfare do — a bot's PR to merged and deployed
 

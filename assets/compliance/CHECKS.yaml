@@ -1,14 +1,19 @@
 # The generic compliance CHECKS — the checklist items that test the controls
-# in CONTROLS.yaml. Only a check carries a `detect`; scripts/audit.py holds
-# the checker for each id and reports MANUAL for any check nothing verifies.
+# in CONTROLS.yaml. The checker for each id lives in scripts/audit.py (or the
+# fleet's own checkers.py) and is authoritative; `detect:` is a human
+# description of it, never executed. The one `detect:` value the engine reads
+# is `method: manual`, which declares that no checker exists on purpose — any
+# other id without a checker fails to load, so a typo cannot report MANUAL
+# forever.
 #
 # What is deliberately NOT here: `reference:` (which repo in a fleet is
 # correct today), `known_violations` (a fleet's snapshot of who was broken
-# when the check was written), the incident `why:` history, and
-# `applies_to_groups`. Those are one fleet's facts and live in its register
-# overlay, merged over this file by id. A fleet may also add checks.
+# when the check was written), and the incident `why:` history. Those are
+# one fleet's facts and live in its register overlay, merged over this file
+# by id. A fleet may also add checks, and may narrow a check with
+# `applies_to: [GROUP, ...]` naming its FLEET.md groups.
 #
-# LAYERS run in order; a check's layer says when it is checked.
+# LAYERS are a taxonomy — the engine runs checks in control order:
 #   structure — does the file exist? (no reading)
 #   placement — is it in the right place, under the right name? (no reading)
 #   content   — is what's inside it right?
@@ -40,8 +45,7 @@ checks:
     callee gates its default branch on review.
   detect:
     method: script
-    command: grep -rn 'uses:' .github/workflows/ | grep -v '@[0-9a-f]\{40\}' | grep -vE 'ai-hero/[^/]+/\.github/workflows/[^@]+@(main|v[0-9])'
-    pass_when: no_output
+    description: every `uses:` in .github/workflows/ carries a 40-hex SHA, except a first-party reusable workflow under the plugin's org (`ai-hero/`, the owner of the shared auto-approve workflow) at `@main` or a v-tag
 
 - id: CI-02
   control: C-SUPPLY
@@ -78,7 +82,8 @@ checks:
     MANUAL here, not PASS: it holds no API call, so the property cannot be
     read from it.
   detect:
-    method: manual
+    method: script
+    description: the checker reads the workflow for the fail-open string; a thin caller returns MANUAL
 
 - id: STRUCT-04
   control: C-SECRETS

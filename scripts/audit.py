@@ -42,6 +42,7 @@ checkouts as they sit.
 
 import argparse
 import contextlib
+import importlib.util
 import json
 from datetime import datetime
 import os
@@ -67,6 +68,7 @@ ROOT = None
 REGISTER = None
 TEMPLATE = None
 REPO_DIR = {}
+_OVERLAY_LOADED = set()
 GROUP_REPOS = {}    # FLEET.md group -> set of family repo names; see applies()
 
 PASS, FAIL, NA, MANUAL, ERROR = "PASS", "FAIL", "n/a", "MANUAL", "ERROR"
@@ -77,25 +79,19 @@ STATUSES = {PASS, FAIL, NA, MANUAL, ERROR}
 # in, and configure() fills FAMILY from it. Outside a fleet the family is the
 # one repo this runs in.
 #
-# The old rule was "every sibling checkout with a CLAUDE.md", which answers a
-# different question: plenty of repos in this workspace have one and are not
-# part of the family. saga is the proof — it has a CLAUDE.md and its own
-# client-side OAuth, so under the heuristic its OAuth env names counted as
-# fleet evidence in AUTH-01's cross-repo comparison. AUTH-01 could then never
-# go green no matter what these five repos did, because a repo nobody here
-# governs disagreed. A check that cannot be satisfied is a check people learn
-# to ignore, which kills a register the same way a false PASS does — just from
-# the other end.
-#
-# Membership is a decision, not something to sniff for. Adding a repo here
-# means committing to hold it to every check in CHECKS.yaml.
-# hero-skills earns membership by a different route than the rest: it ships no
-# product, but CI-03 and CI-04 name it as `reference`, so the register asserts
-# the fleet's approval gate is enforced THERE. Leaving it outside FAMILY took
-# the benefit of that claim without the commitment — if its shared workflow
-# dropped the author gate, every caller would still report PASS. It is also
-# the one repo whose default branch publishes to all the others.
+# Membership is a decision, not something to sniff for: a heuristic ("every
+# sibling with a CLAUDE.md") once pulled an ungoverned checkout into a
+# cross-repo comparison and made that check unsatisfiable, which kills a
+# register the same way a false PASS does — just from the other end.
 FAMILY = ()
+
+# Capability names a check's applies_to may use besides FLEET.md groups. A
+# capability is DETECTED by the checker (has_go, has_ui, …), never resolved to
+# a repo list here; the closed set exists so a misspelt group name cannot fall
+# through as "a capability the checker will handle" and silently reach every
+# repo — the inverse of the stale-list failure applies() describes.
+CAPABILITIES = {"go", "node", "node-ssr", "python", "ui", "backend",
+                "dev-stack", "ships-image", "schema", "container", "ci", "repo"}
 
 # The register's own files, repo-relative. A content check that greps for a
 # banned string finds these first: they have to spell what they ban. Excluding
@@ -133,7 +129,12 @@ def read_fleet(root):
     hero_fleet_field / hero_fleet_repos. Fenced blocks are skipped and a
     trailing `# comment` is stripped from every value."""
     fields, repos, sec, cur, fence = {}, [], None, None, False
-    for line in (root / "FLEET.md").read_text().splitlines():
+    seen = set()
+    try:
+        text = (root / "FLEET.md").read_text()
+    except (OSError, UnicodeDecodeError) as e:
+        sys.exit(f"{root / 'FLEET.md'}: cannot read: {e}")
+    for line in text.splitlines():
         if line.startswith("```"):
             fence = not fence
             continue
@@ -143,17 +144,32 @@ def read_fleet(root):
             sec, cur = line[3:].strip(), None
             continue
         if sec == "Repos" and line.startswith("### "):
-            cur = {"name": line[4:].strip(), "group": "none", "path": "", "port": ""}
+            name = line[4:].strip()
+            # Same rejections as hero_fleet_repos, and said out loud the same
+            # way: a row this parser drops and the shell keeps (or the reverse)
+            # is a family that differs between the two tools with no message.
+            if not re.fullmatch(r"[A-Za-z0-9._-]+", name) or name in (".", ".."):
+                print(f"read_fleet: skipping '{name}' — a repo name is [A-Za-z0-9._-] only", file=sys.stderr)
+                cur = None
+                continue
+            if name in seen:
+                print(f"read_fleet: skipping '{name}' — duplicate row", file=sys.stderr)
+                cur = None
+                continue
+            seen.add(name)
+            cur = {"name": name, "group": "none", "path": "", "port": ""}
             repos.append(cur)
             continue
         m = re.match(r"^- ([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$", line)
         if not m:
             continue
-        key, val = m.group(1), re.sub(r"\s+#.*$", "", m.group(2)).strip().strip("\"'")
+        key, val = m.group(1), re.sub(r" *#.*$", "", m.group(2)).strip().strip("\"'")
         if sec == "Fleet":
             fields[key] = val
-        elif sec == "Repos" and cur is not None and key in cur:
-            cur[key] = val.lower() if key == "group" else val
+        elif sec == "Repos" and cur is not None and key in ("path", "group", "port"):
+            # An empty group is `none`, as hero_fleet_repos reads it: a
+            # half-filled row must not join the family by accident.
+            cur[key] = (val.lower() or "none") if key == "group" else val
     return fields, repos
 
 
@@ -163,7 +179,12 @@ def configure(root=None):
     consistency.py; the import-time call below makes the module usable from
     tests without one."""
     global ROOT, FAMILY, REGISTER, TEMPLATE
-    root = pathlib.Path(root).resolve() if root else fleet_root()
+    if root:
+        root = pathlib.Path(root).resolve()
+        if not (root / "FLEET.md").is_file():
+            sys.exit(f"--fleet {root}: no FLEET.md there")
+    else:
+        root = fleet_root()
     REPO_DIR.clear()
     GROUP_REPOS.clear()
     if root is None:
@@ -176,6 +197,16 @@ def configure(root=None):
     ROOT = root
     reg = fields.get("register") or ".fleet/"
     REGISTER = (root / reg.rstrip("/")).resolve()
+    # The register is the fleet's own state and sits inside the fleet, like
+    # every row: an escaping value would make consistency.py write outside it.
+    if root not in REGISTER.parents:
+        sys.exit(f"FLEET.md register: {reg} resolves outside the fleet ({REGISTER})")
+    # A mapped-but-missing register is the one state that must not run: the
+    # audit would proceed baseline-only and report a fleet that got greener
+    # because its overlay — every reference, every known_violations — was
+    # simply not there.
+    if not REGISTER.is_dir():
+        sys.exit(f"register checkout missing: FLEET.md names `register: {reg}` but {REGISTER} does not exist — clone it or fix the key")
     TEMPLATE = fields.get("template") or None
     names = []
     for row in repos:
@@ -185,11 +216,42 @@ def configure(root=None):
         # A row whose path escapes the fleet is not this fleet's repo, whatever
         # its name says; hero_fleet_repos skips it for the same reason.
         if root not in path.parents:
+            print(f"configure: skipping '{row['name']}' — path resolves outside the fleet: {path}", file=sys.stderr)
+            continue
+        if path in REPO_DIR.values():
+            other = next(k for k, v in REPO_DIR.items() if v == path)
+            print(f"configure: skipping '{row['name']}' — same directory as '{other}'", file=sys.stderr)
             continue
         REPO_DIR[row["name"]] = path
         names.append(row["name"])
         GROUP_REPOS.setdefault(row["group"], set()).add(row["name"])
     FAMILY = tuple(names)
+    _load_overlay_checkers()
+
+
+def _load_overlay_checkers():
+    """Import REGISTER/checkers.py, the fleet's own checkers, once. It sees this
+    module as `audit` whatever name it was loaded under (`__main__` from the
+    CLI, `audit` from consistency.py and the tests), so `from audit import
+    check` inside it binds to THIS module's registry rather than a second copy
+    that would register into a table nobody reads."""
+    if REGISTER is None or REGISTER in _OVERLAY_LOADED:
+        return
+    f = REGISTER / "checkers.py"
+    if not f.is_file():
+        return
+    # Loaded under `audit` by consistency.py and the tests, `__main__` by the
+    # CLI; either way the overlay's `import audit` must find THIS module.
+    this = sys.modules.get(__name__)
+    if this is not None:
+        sys.modules.setdefault("audit", this)
+    spec = importlib.util.spec_from_file_location("fleet_checkers", f)
+    mod = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(mod)
+    except Exception as e:  # a broken overlay must not read as "no overlay"
+        sys.exit(f"{f}: could not load the fleet's checkers: {type(e).__name__}: {e}")
+    _OVERLAY_LOADED.add(REGISTER)
 
 
 def applies(check, repo_name):
@@ -208,7 +270,7 @@ def applies(check, repo_name):
     apps]` on an app-shaped convention and the infra rows read n/a instead
     of failing a rule that was never about them."""
     want = check.get("applies_to") or "all"
-    names = [want] if isinstance(want, str) else list(want)
+    names = [str(n).lower() for n in ([want] if isinstance(want, str) else list(want))]
     if "all" in names or not GROUP_REPOS:
         return True
     groups = [n for n in names if n in GROUP_REPOS]
@@ -220,7 +282,7 @@ def applies(check, repo_name):
 def sh(cwd, cmd):
     """Run a shell command, return (rc, stdout). Never raises."""
     try:
-        # dev tooling; cmd is a hardcoded pipeline from CONTROLS.yaml, or interpolates
+        # dev tooling; cmd is a literal in this file (or the fleet's checkers), or interpolates
         # only regex-pinned tokens (ARCH-02: 40 hex chars) — never raw external input
         p = subprocess.run(
             cmd, cwd=cwd, shell=True, capture_output=True, text=True, timeout=60  # nosemgrep: python.lang.security.audit.subprocess-shell-true.subprocess-shell-true
@@ -362,7 +424,7 @@ def own_port(repo):
     return m.group(1) if m else None
 
 
-# Each checker returns (status, detail). Keyed by control id.
+# Each checker returns (status, detail). Keyed by check id.
 CHECKS = {}
 
 
@@ -487,42 +549,6 @@ def registry():
     return out
 
 
-@check("PORT-01")
-def _(r):
-    mine = own_port(r)
-    if not mine:
-        return NA, "no dev stack"
-    # STRICT: any number in the 330xx family range that is not this repo's
-    # own port is a violation. Matching only against the derived registry
-    # was tried and under-reports badly — a repo whose own compose default
-    # is wrong makes its intended port underivable, so its stale family
-    # table slips through unnoticed. It also lets an unallocated family
-    # number sit in an example, which is exactly the confusion the rule
-    # exists to prevent: if a number is meant to be arbitrary, it must not
-    # look like it came from the registry.
-    owner = {p: n for n, p in registry().items()}
-    # `git grep`, not `grep -r`: only TRACKED files are the repo. A plain
-    # recursive grep also reads gitignored session scratch — .playwright-mcp
-    # page dumps, .output, .data — and reported a port that appears inside a
-    # UUID in a browser-automation artifact nobody committed.
-    _rc, out = sh(
-        r,
-        "git grep -nI -E '330[0-9][0-9]' -- "
-        "'*.md' 'Justfile' '*.yml' '*.yaml' '*.ts' 2>/dev/null",
-    )
-    found = {}
-    for line in out.splitlines():
-        # Alphanumeric boundaries, not just digit ones: `330\d\d` alone
-        # matches five digits inside a longer token (a UUID, a git SHA) and
-        # invents findings. Guarding only against digits is not enough —
-        # a hex blob like "…cad33039" has a LETTER on the left.
-        for p in re.findall(r"(?<![0-9A-Za-z])330\d\d(?![0-9A-Za-z])", line):
-            if p != mine:
-                found.setdefault(p, line.split(":")[0])
-    if found:
-        bits = [f"{p}({owner.get(p, 'unallocated')})" for p in sorted(found)]
-        return FAIL, "knows " + ",".join(bits)
-    return PASS, f"own {mine}"
 
 
 @check("PORT-02")
@@ -541,55 +567,8 @@ def _(r):
     return PASS, mine
 
 
-@check("HLT-01")
-def _(r):
-    if not has_backend(r):
-        return NA, "no backend"
-    _rc, out = sh(r, "grep -rl '/livez' lib ui/src src 2>/dev/null")
-    _rc2, out2 = sh(r, "grep -rl '/readyz' lib ui/src src 2>/dev/null")
-    if out and out2:
-        return PASS, "/livez + /readyz"
-    _rc3, legacy = sh(
-        r, "grep -rhoE '/healthz/live|/healthz|/z/health|/api/health' lib ui/src src 2>/dev/null | sort -u"
-    )
-    return FAIL, (legacy.replace("\n", ",") or "no probes found")
 
 
-@check("HLT-02")
-def _(r):
-    f = r / "Dockerfile.prod"
-    if not f.is_file():
-        return NA, "no Dockerfile.prod"
-    # Parse the URL out of the HEALTHCHECK's own CMD, not the surrounding
-    # prose. A looser regex matched "/readyz" from the comment ABOVE the
-    # directive explaining why we do NOT probe it, and failed the one repo
-    # that is correct — the same trap as grepping a config for the bug its
-    # comment warns about.
-    t = uncommented(f.read_text())
-    i = t.find("HEALTHCHECK")
-    if i < 0:
-        return FAIL, "no HEALTHCHECK"
-    # From the directive to the end; a Dockerfile has at most one HEALTHCHECK
-    # and its CMD follows immediately. Matching the line itself is fiddly —
-    # `[^\n]*` eats the trailing backslash, so the continuation never joins.
-    u = re.search(r"https?://[^/\s'\"]+(/[A-Za-z0-9/_-]*)", t[i:])
-    if not u:
-        return MANUAL, "HEALTHCHECK present; could not parse the probed path"
-    probe = u.group(1)
-    if "livez" in probe:
-        return PASS, probe
-    if "readyz" in probe:
-        # Unambiguous: readyz is readiness by definition.
-        return FAIL, f"probes {probe} — readiness drives restarts"
-    # Anything else needs a human. This control is about SEMANTICS — does the
-    # probed endpoint check dependencies? — not about the path's name. Grepping
-    # for "livez" made this a naming check wearing a safety check's clothes,
-    # and it reported four false FAILs: auth's /z/health, hiro's /healthz and
-    # website's + design-system's /api/health all return a static ok and probe
-    # nothing, so none of them can drive a restart storm. Only the template
-    # ever had the bug. A checker cannot read a Go handler, so say MANUAL
-    # rather than guess from the spelling.
-    return MANUAL, f"probes {probe} — verify it checks no dependencies"
 
 
 @check("CI-01")
@@ -829,39 +808,6 @@ def _floating_npm_deps(repo):
     return out
 
 
-@check("TMPL-01")
-def _(r):
-    # Only the template is judged — it is the seed. A consumer being ahead is
-    # the normal, expected state (it is where a bump is proven first); the bug
-    # is the template STAYING behind, so the fix is always a backport into it.
-    if r.name != "hero-template":
-        return NA, "not the template"
-    tg, tn = _go_versions(r), _npm_versions(r)
-    # The seed always has Go modules and a ui/package.json with deps. An empty
-    # map means its OWN manifest did not parse — surface MANUAL rather than
-    # compare consumers against nothing and report a false-green PASS (the very
-    # file whose staleness this check guards is the one that failed to read).
-    if (list(r.glob("*/go.mod")) and not tg) or (
-        (r / "ui" / "package.json").is_file() and not tn
-    ):
-        return MANUAL, "could not read the template's own go.mod / package.json deps"
-    behind = []
-    for name in FAMILY:
-        if name == "hero-template":
-            continue
-        cr = repo_path(name)
-        if not cr.is_dir():
-            continue
-        for dep, cv in _go_versions(cr).items():
-            if dep in tg and cv > tg[dep]:
-                behind.append(f"{dep}<{name}")
-        for dep, cv in _npm_versions(cr).items():
-            if dep in tn and cv > tn[dep]:
-                behind.append(f"{dep}<{name}")
-    if behind:
-        uniq = sorted(set(behind))
-        return FAIL, f"{len(uniq)} shared deps behind a consumer: " + ", ".join(uniq[:6])
-    return PASS, "not behind any consumer on a shared dep"
 
 
 @check("CI-16")
@@ -1129,11 +1075,6 @@ def _(r):
     return (FAIL, "dupe: " + ",".join(sorted(dupes))) if dupes else (PASS, "")
 
 
-@check("DOC-02")
-def _(r):
-    if r.name == "hero-template":
-        return NA, "generated per clone"
-    return (PASS, "") if (r / "HERO.md").is_file() else (FAIL, "missing")
 
 
 @check("JUST-01")
@@ -1524,238 +1465,25 @@ def _(r):
     return PASS, "containerized only"
 
 
-# The one spelling the family converged on, once AUTH-02 settled on the BFF:
-# unprefixed, and never VITE_ — that prefix inlines a value into the client
-# bundle, which is the opposite of what server-side config means.
-_AUTH_VARS = re.compile(r"^[A-Z_]*(AUTH|OAUTH)[A-Z_]*(ISSUER|CLIENT_ID)[A-Z_]*$")
 
 
-@check("AUTH-01")
-def _(r):
-    # auth IS the IdP — it has no OAuth client to configure, so "consumer
-    # reads the same client vars" cannot apply to it. The rule's own carve-out.
-    if r.name == "auth":
-        return NA, "is the IdP, not a consumer"
-    if not has_ui(r):
-        return NA, "no UI to log in from"
-    names = set()
-    for f in list(r.glob(".env*.example")):
-        for line in f.read_text().splitlines():
-            k = line.split("=", 1)[0].strip()
-            if _AUTH_VARS.match(k):
-                names.add(k)
-    if not names:
-        return FAIL, "no OAuth env vars — auth not integrated"
-    # Compare against every sibling IN THE FAMILY: the point is one scheme
-    # fleet-wide, so a repo cannot be judged alone — but "fleet" means the five
-    # repos this register governs, not every checkout that happens to sit in
-    # this directory. See FAMILY.
-    others = {}
-    for name in FAMILY:
-        d = repo_path(name)
-        if not (d / ".git").exists() or d == r:
-            continue
-        for f in d.glob(".env*.example"):
-            for line in f.read_text().splitlines():
-                k = line.split("=", 1)[0].strip()
-                if _AUTH_VARS.match(k):
-                    others.setdefault(k, d.name)
-    foreign = {k: v for k, v in others.items() if k not in names}
-    if foreign:
-        return FAIL, "own: " + ",".join(sorted(names)) + " | elsewhere: " + ",".join(sorted(foreign))
-    return PASS, ",".join(sorted(names))
 
 
-# Where a repo's BFF lives. Two spellings because two layouts: STRUCT-08's
-# ui/ + lib/ + service/ split, and design-system, which is a single Node app
-# with src/ at the root and no backend to front.
-_BFF_PATHS = ("ui/src/lib/server/auth.ts", "src/lib/server/auth.ts")
-
-# Anchored at column 0, which is what keeps this off prose ABOUT an export:
-# a `//`-commented or block-quoted mention is indented or prefixed, so it
-# cannot match. The same trap uncommented() exists for on the YAML side.
-_TS_EXPORT = re.compile(
-    r"^export\s+(?:async\s+)?(?:function|const|class|type|interface)\s+([A-Za-z0-9_$]+)",
-    re.M,
-)
 
 
-def bff_exports(repo):
-    """The exported surface of a repo's hand-rolled BFF, or None if it has no
-    BFF. Returns a set of exported names."""
-    for rel in _BFF_PATHS:
-        f = repo / rel
-        if f.is_file():
-            return set(_TS_EXPORT.findall(f.read_text()))
-    return None
 
 
-def bff_source(repo):
-    """The BFF's server auth.ts text, or None. AUTH-05/06 pin BEHAVIOUR, so they
-    read the source, not just the export names — the same reason AUTH-04 reads
-    the test file: refreshTokens has the same name in every copy and differs
-    only in what it does with a 5xx."""
-    for rel in _BFF_PATHS:
-        f = repo / rel
-        if f.is_file():
-            return f.read_text()
-    return None
 
 
-def bff_test(repo):
-    """The test file next to the BFF, or None."""
-    for rel in _BFF_PATHS:
-        cand = repo / rel.replace(".ts", ".test.ts")
-        if cand.is_file():
-            return cand
-    return None
 
 
-def login_route(repo):
-    """The OAuth login route text, or "". The filename varies across the fleet
-    (routes/auth/login.ts vs routes/auth.login.ts), so match any non-test
-    *login*.ts under a routes dir."""
-    for base in ("ui/src/routes", "src/routes"):
-        d = repo / base
-        if not d.is_dir():
-            continue
-        for f in sorted(d.rglob("*login*.ts")):
-            if not f.name.endswith(".test.ts"):
-                return f.read_text()
-    return ""
 
 
-@check("AUTH-03")
-def _(r):
-    # auth is carved out for the same reason AUTH-01 carves it out: it is the
-    # IdP. Its ui/src/lib/server/auth.ts is a console BFF pointed at ITSELF,
-    # with a multi-surface client model (Surface, clientIdForSurface,
-    # callbackPathForSurface) that no consumer has or should have. Comparing it
-    # to the consumers reports variance as drift, forever — and a check that
-    # cannot go green is one people learn to ignore.
-    #
-    # It is NOT carved out because its copy is safe. auth hand-rolls
-    # pkceChallenge, sanitizeReturnTo and exchangeCode too, so a fix to any of
-    # them has to be hand-carried there as well; this check just cannot be the
-    # thing that tells you. See AUTH-03's `why`.
-    if r.name == "auth":
-        return NA, "is the IdP — its console BFF is a different shape by design"
-    mine = bff_exports(r)
-    if mine is None:
-        return NA, "no BFF"
-    others = {}
-    for name in FAMILY:
-        d = repo_path(name)
-        if d == r or name == "auth" or not (d / ".git").exists():
-            continue
-        got = bff_exports(d)
-        if got is not None:
-            others[name] = got
-    # Nothing to compare against is not a pass. A lone copy cannot be shown to
-    # agree with anything, and reporting PASS here would mean the check goes
-    # green precisely when it has done no work — the failure it exists to catch,
-    # wearing its own uniform.
-    if not others:
-        return MANUAL, f"{len(mine)} exports; no other BFF in the family to compare against"
-    # Outlier detection, not pairwise diffing: an export is only this repo's
-    # problem if NO other copy has it (it gained one) or EVERY other copy has it
-    # (it lost one). Where two copies agree and a third differs, only the third
-    # is reported — otherwise one divergence would paint every repo red and
-    # nobody could tell which one moved.
-    # REPORTS, NEVER FAILS. This check was written to catch "a bug fixed in one
-    # copy silently persists in the others", and it cannot: sanitizeReturnTo has
-    # the same NAME in all four copies and was exploitable in two of them, so a
-    # surface comparison saw agreement over a live open redirect. AUTH-04 owns
-    # that job now, by pinning behaviour instead of names.
-    #
-    # What is left here is real but weaker: the copies' shapes differ, and it is
-    # worth a periodic look. It must not FAIL, because a name cannot distinguish
-    # the two reasons a surface is smaller — "does not need it" from "missing a
-    # fix" — and both are present in this fleet. website and design-system have
-    # no post-login bearer, so they legitimately have no refresh machinery;
-    # design-system is a separate lineage that decomposes the same job under
-    # different names. Failing them taught nobody anything and trained everyone
-    # to skip the report, which is how a register dies.
-    #
-    # MANUAL, on PLACE-01's precedent: a documented difference should not go
-    # green unexamined, but nor should it sit red forever.
-    union = set().union(*others.values())
-    common = set.intersection(*others.values())
-    gained = mine - union
-    lost = common - mine
-    if not gained and not lost:
-        # "no outlier exports vs", not "agrees with": this repo is not the one
-        # whose shape moved. It says nothing about whether the code behind those
-        # names agrees — AUTH-04 is what speaks to that.
-        return PASS, f"{len(mine)} exports, no outlier vs " + ",".join(sorted(others))
-    detail = []
-    if gained:
-        detail.append("only here: " + ",".join(sorted(gained)))
-    if lost:
-        detail.append("missing: " + ",".join(sorted(lost)))
-    return MANUAL, " | ".join(detail) + " — re-verify these are needs, not drift"
 
 
-# The two tells of a browser-side implementation. Either one alone is
-# disqualifying, and they fail differently:
-#
-#   VITE_ on an OAuth var — Vite inlines it into the client bundle at build
-#   time. The value is "server-side config" in name only; it ships to every
-#   visitor.
-#
-#   a token in localStorage/sessionStorage — any script on the page can read
-#   it. That is the whole difference between an XSS that defaces a page and
-#   one that walks off with a live credential.
-#
-# NO \b IN THESE PATTERNS. git grep's engine does not support the GNU \b
-# escape: it matches nothing, silently, with no error and exit 1 — which a
-# checker reads as "clean". `\bVITE_` passed every repo in the fleet including
-# the one whose config is inlined into its bundle today. It is the same trap as
-# `govet: {shadow: true}` and it is why these patterns get probe-tested against
-# a planted violation rather than eyeballed.
-_BROWSER_OAUTH = (
-    r"VITE_[A-Z_]*(AUTH|OAUTH)",
-    r"(localStorage|sessionStorage)\.setItem\([^)]*(token|session)",
-)
 
 
-@check("AUTH-02")
-def _(r):
-    # auth ISSUES the tokens rather than consuming them, so "which client
-    # model does it use" has no answer for it. Same carve-out as AUTH-01.
-    if r.name == "auth":
-        return NA, "is the IdP, not a consumer"
-    if not has_ui(r):
-        return NA, "no UI to log in from"
 
-    # git grep, not grep -r: a recursive grep reads gitignored build output and
-    # node_modules, which has already produced false findings in this register.
-    #
-    # The exclusions are all one idea: prose ABOUT the banned model is not the
-    # banned model — the uncommented() lesson wearing a third hat. Docs explain
-    # the ban, and the register must SPELL the forbidden names in order to ban
-    # them: CHECKS.yaml quotes them in `why`, and this very file carries them as
-    # regex literals. Without this, hero-template fails the rule it is the
-    # reference for, and the failing "evidence" is the rule's own text.
-    scope = "-- . ':(exclude)*.md' " + " ".join(
-        f"':(exclude){p}'" for p in REGISTER_FILES
-    )
-    hits = []
-    for pat in _BROWSER_OAUTH:
-        _, out = sh(r, f"git grep -lEi {shlex.quote(pat)} {scope}")
-        hits += [f for f in out.splitlines() if f]
-
-    # Match the BFF by suffix, never by a fixed path: design-system has no ui/
-    # subdirectory (it IS the UI), so its BFF sits at src/lib/server/auth.ts.
-    # Hardcoding ui/ would fail the repo the fleet took these names FROM.
-    _, tracked = sh(r, "git ls-files")
-    bff = [f for f in tracked.splitlines() if f.endswith("lib/server/auth.ts")]
-
-    if hits:
-        return FAIL, "OAuth runs in the browser: " + ", ".join(sorted(set(hits))[:3])
-    if not bff:
-        return FAIL, "no BFF (lib/server/auth.ts) — auth not integrated"
-    return PASS, f"BFF at {bff[0]}, no client-side OAuth"
 
 
 @check("PLACE-05")
@@ -1887,28 +1615,6 @@ def _(r):
     return PASS, f"{len(out.splitlines())} files, mounted in {used.splitlines()[0]}"
 
 
-# Inputs that must never survive sanitizeReturnTo, and the reason each exists.
-# This is a CORPUS, not a style rule: every entry is a real bypass someone has
-# actually shipped, and it only grows.
-#
-# The backslash entry is why this check exists at all. "/\evil.com" was live in
-# hero-template and hiro: the guard tested startsWith("//"), which it does not
-# match, and browsers normalize "\" to "/" there — so it resolved to
-# https://evil.com/ out of a Location header on the LOGIN SUCCESS path.
-# design-system had the correct check the whole time. Three hand-rolled copies,
-# one right, and nothing said a word for months.
-#
-# AUTH-03 could never have caught it: sanitizeReturnTo has the same NAME in all
-# four copies, so a surface comparison sees agreement. Only the behaviour
-# differed. When the next bypass turns up, add it here and every copy that does
-# not defend against it goes red at once — which is the whole point, because the
-# failure mode is fixing it in the copy you happened to be looking at.
-_RETURNTO_ATTACKS = (
-    (r"//evil", "protocol-relative"),
-    (r"\\evil", "backslash the browser normalizes to protocol-relative"),
-    (r"https://evil", "absolute URL"),
-    (r"javascript:", "scheme"),
-)
 
 
 # A name that IS a credential. Anything matching this belongs in `secrets`.
@@ -2049,219 +1755,18 @@ def _(r):
     return PASS, f"{len(mine)} names, each one namespace fleet-wide"
 
 
-@check("AUTH-04")
-def _(r):
-    if r.name == "auth":
-        return NA, "is the IdP, not a consumer"
-    if bff_exports(r) is None:
-        return NA, "no BFF"
-    # The test file next to the BFF. Read the TEST, not the implementation:
-    # four copies implement this four ways (design-system is a separate lineage
-    # entirely), so comparing code is noise. What must agree is the behaviour.
-    tf = None
-    for rel in _BFF_PATHS:
-        cand = r / rel.replace(".ts", ".test.ts")
-        if cand.is_file():
-            tf = cand
-            break
-    if tf is None:
-        return FAIL, "BFF has no test file — nothing pins the open-redirect guard"
-    src = tf.read_text()
-    if "sanitizeReturnTo" not in src:
-        return FAIL, f"{tf.name} never exercises sanitizeReturnTo"
-    missing = [why for pat, why in _RETURNTO_ATTACKS if not re.search(re.escape(pat), src)]
-    if missing:
-        return FAIL, "open-redirect corpus not asserted: " + "; ".join(missing)
-    # PASS means the vectors are EXERCISED, not that they pass — the repo's own
-    # CI proves that, and it runs these tests on every PR. Same division of
-    # labour as UI-01: this register checks the gate exists and is wired; the
-    # repo's suite proves it works.
-    return PASS, f"{len(_RETURNTO_ATTACKS)} attack vectors asserted in {tf.name}"
 
 
-# ── VNDR-01: the design-token hook's behaviour, pinned by an external corpus ──
-#
-# Why the corpus lives HERE rather than being read from each repo's own
-# vendored test file: see CHECKS.yaml's VNDR-01 `why:` (an early draft did the
-# latter and passed hero-template/hiro for the wrong reason — the AUTH-03
-# blindness one level down, since a corpus vendored in the same PR as its hook
-# necessarily agrees with it).
-#
-# So the corpus lives HERE, external to every consumer, and each repo's
-# COMMITTED hook is executed against it directly. Two cases below
-# (comment_hex, prose_hex) exist because hero-template's copy, as of this
-# check's authoring (2026-07-20), had not yet absorbed a refinement (strip
-# comments; require a quote prefix, since a colour in JSX is always a string
-# and prose is not) that originated in a different consumer's independently-
-# reconstituted copy. Their presence here is what turns "back-port it" from a
-# judgement call into a green checkmark — and, going forward, into a red one
-# the moment any repo's copy regresses on either case, not just hero-template's.
-#
-# case NAME expect(hit|miss|exit:N) SUBSTRING_OR_NONE CONTENT EXT
-_VENDOR_CORPUS = (
-    ("shadow_first", "hit", "Shadow", '<div className="shadow-md rounded" />', "tsx"),
-    ("shadow_none", "miss", "Shadow", '<div className="shadow-none rounded" />', "tsx"),
-    ("shadow_cn", "hit", "Shadow", '<div className={cn("shadow-lg", x)} />', "tsx"),
-    ("cn_margin", "hit", "Margin", '<div className={cn("mb-4", x)} />', "tsx"),
-    ("arb_bracket", "hit", "Arbitrary", '<div className="w-[300px]" />', "tsx"),
-    ("fp_data_variant", "miss", "Arbitrary", '<div className="data-[state=open]:bg-muted" />', "tsx"),
-    ("fp_maxw", "miss", "Margin", '<div className="max-w-md" />', "tsx"),
-    ("zindex", "hit", "z-index", '<div className="z-50" />', "tsx"),
-    ("dark_override", "hit", "dark:", '<div className="dark:bg-muted" />', "tsx"),
-    ("palette", "hit", "Raw palette", '<div className="bg-zinc-100" />', "tsx"),
-    ("component_hex", "hit", "Color literal", '<div style={{color:"#3D4AB8"}} />', "tsx"),
-    ("href_hex", "miss", "Color literal", '<a href="#faq">FAQ</a>', "tsx"),
-    ("css_theme_hex", "miss", "Color literal", "@theme{--color-x:#ff0000;}", "css"),
-    ("css_plain_hex", "hit", "Color literal", "a{color:#ff0000}", "css"),
-    ("clean_file", "miss", "  - ", '<div className="bg-background gap-4" />', "tsx"),
-    # hero-template's copy lacked this refinement as of this check's authoring
-    # (2026-07-20) — see the block comment above.
-    ("prose_hex", "miss", "Color literal", "export const A = () => <p>Visit Ste #1100 downtown.</p>;", "tsx"),
-    ("comment_hex", "miss", "Color literal", '// #aabbcc is the old brand colour, kept for reference\nexport const B = () => <div className="p-4">hi</div>;', "tsx"),
-    ("empty_payload", "exit:2", None, "", "tsx"),
-    ("malformed_payload", "exit:2", None, "not json", "tsx"),
-)
-
-# Fail loudly on a malformed row rather than letting it silently misbehave at
-# check-time: a typo'd expect value ("htt" instead of "hit") previously fell
-# through to `want_hit = expect == "hit"` and degraded to a wrong-but-plausible
-# "miss" expectation with no diagnostic — exactly the class of quiet drift this
-# control exists to catch, reproduced in its own corpus.
-for _name, _expect, _needle, _content, _ext in _VENDOR_CORPUS:
-    assert _expect in ("hit", "miss") or re.match(r"^exit:\d+$", _expect), (
-        f"_VENDOR_CORPUS[{_name!r}]: expect must be 'hit', 'miss', or 'exit:N', got {_expect!r}"
-    )
-del _name, _expect, _needle, _content, _ext
 
 
-def _run_design_hook(hook, content, ext):
-    """Execute a repo's vendored hook against one fixture, exactly as the
-    PostToolUse harness would: content on disk, a JSON payload naming it on
-    stdin. Returns (returncode, stdout+stderr)."""
-    # path is captured, and the write wrapped in its own try, BEFORE the outer
-    # try/finally that owns cleanup: writing after `delete=False` has already
-    # created the file, so a write failure (disk full, I/O error) raised
-    # between the `with` block and `path = tf.name` used to skip the
-    # try/finally entirely, leaking the file with no path ever logged.
-    with tempfile.NamedTemporaryFile(mode="w", suffix=f".{ext}", delete=False) as tf:
-        path = tf.name
-        try:
-            tf.write(content)
-        except Exception:
-            os.unlink(path)
-            raise
-    try:
-        payload = json.dumps({"tool_input": {"file_path": path}})
-        proc = subprocess.run(
-            ["bash", str(hook)], input=payload, capture_output=True, text=True, timeout=10,
-        )
-        return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
-    finally:
-        os.unlink(path)
 
 
-def _run_design_hook_raw_payload(hook, payload):
-    """Same as _run_design_hook, but for the two cases that test malformed
-    input itself rather than a file's content — there is no fixture file."""
-    proc = subprocess.run(
-        ["bash", str(hook)], input=payload, capture_output=True, text=True, timeout=10,
-    )
-    return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
 
-@check("VNDR-01")
-def _(r):
-    if r.name == "design-system":
-        return NA, "producer of the registry, not a consumer of its own hook"
-    hook = r / ".claude" / "hooks" / "check-design-tokens.sh"
-    if not hook.is_file():
-        return NA, "design-system not installed"
-    failed = []
-    for name, expect, needle, content, ext in _VENDOR_CORPUS:
-        try:
-            if expect.startswith("exit:"):
-                want_rc = int(expect.split(":", 1)[1])
-                rc, out = _run_design_hook_raw_payload(hook, content)
-                if rc != want_rc:
-                    failed.append(f"{name} (expected exit {want_rc}, got {rc})")
-                continue
-            # Exit code is part of the behaviour being pinned, not just the
-            # message: the hook's own contract is that exit 2 is the ONLY code
-            # PostToolUse feeds back to the model, so a copy that writes the
-            # right finding but exits 1 is functionally invisible — and would
-            # have scored as a correct "hit" here if only the message text
-            # were checked. want_rc mirrors that contract: 2 when a violation
-            # should be reported, 0 when the file is clean.
-            want_hit = expect == "hit"
-            want_rc = 2 if want_hit else 0
-            rc, out = _run_design_hook(hook, content, ext)
-            got_hit = needle in out
-            if got_hit != want_hit or rc != want_rc:
-                failed.append(
-                    f"{name} (expected {expect}/rc={want_rc}, got "
-                    f"{'hit' if got_hit else 'miss'}/rc={rc})"
-                )
-        except Exception as e:
-            # One fixture's subprocess timing out or erroring must not erase
-            # the other 18 results into a bare "checker error" MANUAL at the
-            # main() level — that would both hide which specific case broke
-            # and (MANUAL doesn't count toward --fail-on) let a real
-            # regression on the other cases go unreported alongside it.
-            failed.append(f"{name} (error running fixture: {e})")
-    if failed:
-        return FAIL, f"{len(failed)}/{len(_VENDOR_CORPUS)} corpus cases wrong: " + "; ".join(failed)
-    return PASS, f"all {len(_VENDOR_CORPUS)} corpus cases correct"
 
 
-@check("AUTH-05")
-def _(r):
-    if r.name == "auth":
-        return NA, "is the IdP, not a consumer"
-    src = bff_source(r)
-    if src is None:
-        return NA, "no BFF"
-    # Architecture gate: only a BFF that refreshes on the request path can hit
-    # this at all. website/design-system seal a clock, not tokens — a transient
-    # 5xx never touches them. Match the DEFINITION, not the name: website's
-    # auth.ts mentions resolveSessionBearer in a comment ("hiro's equivalent"),
-    # which a substring test reads as "has one".
-    if not re.search(r"function\s+resolveSessionBearer", src):
-        return NA, "session-as-clock BFF — no request-path refresh"
-    # The behaviour, not the name: a "dead"/"unavailable" discrimination, and a
-    # clear only on the dead branch. A bare `null` that clears on any failure is
-    # the fleet-wide-logout bug.
-    if "RefreshResult" not in src or '"unavailable"' not in src:
-        return FAIL, "refresh collapses a transient 5xx into a session-clearing null"
-    tf = bff_test(r)
-    if tf is None:
-        return FAIL, "no auth.test.ts pinning that a transient 5xx keeps the session"
-    tsrc = tf.read_text()
-    if not re.search(r"unavailable|transient|5xx|50\d", tsrc, re.IGNORECASE):
-        return FAIL, "auth.test.ts never exercises the transient-5xx-keeps-session case"
-    return PASS, "discriminates dead vs unavailable; 5xx survival pinned in test"
 
 
-@check("AUTH-06")
-def _(r):
-    if r.name == "auth":
-        return NA, "is the IdP, not a consumer"
-    exports = bff_exports(r)
-    if exports is None:
-        return NA, "no BFF"
-    login = login_route(r)
-    # Idiom A (website, hero-template): an exported LoginTx + isLoginTx pair, and
-    # the producer sealed with `satisfies LoginTx` so the two halves cannot drift.
-    if "LoginTx" in exports and "isLoginTx" in exports:
-        if "satisfies LoginTx" not in login:
-            return FAIL, "login route seals the tx bare — not bound to LoginTx"
-        return PASS, "LoginTx/isLoginTx centralised; producer bound via satisfies"
-    # Idiom B (design-system): a typed sealer sealTx(data: TxData) does the same
-    # binding through the parameter type.
-    if "sealTx" in exports:
-        if "sealTx(" not in login:
-            return FAIL, "typed sealTx exported but the login route does not seal through it"
-        return PASS, "typed sealTx(data: TxData) binds the producer"
-    return FAIL, "tx type + validator not centralised in the server auth module"
 
 
 @check("UI-03")
@@ -2710,9 +2215,12 @@ def _(r):
     return (FAIL, detail) if detail else (PASS, "")
 
 
-# Where the register lives: the fleet's register checkout (FLEET.md
-# `register:`), never a repo. So every repo that carries one of these is
-# carrying a copy — including the template the register used to live in.
+# The register has two homes — the engine in the hero-skills plugin, the
+# overlay in the fleet's register checkout (FLEET.md `register:`) — and any
+# other repo carrying one of these is carrying a copy. The template still
+# carries the pre-move copy until its removal PR lands: that is a real FAIL,
+# not a reason to exempt it.
+_PLUGIN_REPO = "hero-skills"
 # Presence list — deliberately NOT REGISTER_FILES, which is the content-grep
 # exclusion set. The two overlap but answer different questions, and merging
 # them would put a file in one job because it belonged in the other.
@@ -2723,21 +2231,23 @@ _REGISTER_ARTIFACTS = ("CONTROLS.yaml", "CHECKS.yaml", "CONSISTENCY.md",
 
 @check("REG-01")
 def _(r):
+    if r.name == _PLUGIN_REPO:
+        return NA, "the engine's home"
     # is_symlink() as well as exists(): a broken symlink is still a copy this
     # repo declares it owns, and exists() alone reads it as clean.
     found = [p for p in _REGISTER_ARTIFACTS
              if (r / p).exists() or (r / p).is_symlink()]
     if not found:
         return PASS, ""
-    home = REGISTER or "hero-skills (engine) and the fleet's register checkout"
+    home = f"{_PLUGIN_REPO} (engine) and {REGISTER or 'the fleet register checkout'} (overlay)"
     return FAIL, f"carries register copy: {', '.join(found)} — the register lives in {home}"
 
 
 # ── The protobuf wire contract ───────────────────────────────────────────────
 # Gated on .proto sources existing, NOT on has_go: the question is whether the
 # repo HAS a generated contract, and a repo could carry one without Go (or Go
-# without protos). CHECKS.yaml's `schema` group says the same thing in the
-# register; audit.py ignores applies_to, so the gate has to live here too.
+# without protos). applies_to only resolves FLEET.md groups; a capability
+# gate has to live in the checker.
 
 
 def _has_protos(repo):
@@ -3262,8 +2772,36 @@ def _(r):
 
 
 def _register_file(base, name):
+    """One register file as a mapping, or {} when absent. Every malformed
+    shape exits naming the FILE: these are edited by hand in a private
+    checkout the engine reads at a computed path, and a bare traceback does
+    not say which of the four files was at fault."""
     f = base / name
-    return yaml.safe_load(f.read_text()) or {} if f.is_file() else {}
+    if not f.is_file():
+        return {}
+    try:
+        doc = yaml.safe_load(f.read_text())
+    except yaml.YAMLError as e:
+        sys.exit(f"{f}: not valid YAML: {e}")
+    if doc is None:
+        return {}
+    if not isinstance(doc, dict):
+        sys.exit(f"{f}: top level must be a mapping with `controls:` or `checks:`")
+    for key in ("controls", "checks"):
+        recs = doc.get(key)
+        if recs is None:
+            continue
+        if not isinstance(recs, list):
+            sys.exit(f"{f}: `{key}:` must be a list")
+        ids = []
+        for i, r in enumerate(recs, 1):
+            if not isinstance(r, dict) or not r.get("id"):
+                sys.exit(f"{f}: {key} record #{i} is not a mapping with an id")
+            ids.append(r["id"])
+        dup = sorted({x for x in ids if ids.count(x) > 1})
+        if dup:
+            sys.exit(f"{f}: duplicate {key} id(s): {dup} — last-wins would hide one silently")
+    return doc
 
 
 def load_register():
@@ -3282,8 +2820,46 @@ def load_register():
         ctrl.setdefault(c["id"], {}).update(c)
     by_id = {k["id"]: dict(k) for k in base_k.get("checks") or []}
     for k in over_k.get("checks") or []:
+        base = by_id.get(k["id"])
+        # Re-parenting a baseline check under another control makes --json's
+        # `control` lie to whoever groups items by it; say so instead.
+        if base and k.get("control") and k["control"] != base.get("control"):
+            sys.exit(f"overlay check {k['id']} moves control {base.get('control')} -> {k['control']}; the overlay may add fields, not re-parent")
         by_id.setdefault(k["id"], {}).update(k)
     checks = list(by_id.values())
+    # The merged result is what runs, so it is what gets validated: a record
+    # missing a field the renderers index would crash AFTER the whole matrix
+    # ran; a severity outside the enum would silently never match --fail-on;
+    # an overlay id that matches no checker and is not declared manual is a
+    # gate that silently does not run — the register's own definition of high.
+    sev_ok = {"high", "medium", "low"}
+    unimplemented = []
+    for c in ctrl.values():
+        for f in ("id", "title", "severity", "intent"):
+            if not c.get(f):
+                sys.exit(f"control {c.get('id', '?')} lacks `{f}`")
+        if c["severity"] not in sev_ok:
+            sys.exit(f"control {c['id']}: severity {c['severity']!r} is not one of high|medium|low")
+    for k in checks:
+        for f in ("id", "control", "title", "scope"):
+            if not k.get(f):
+                sys.exit(f"check {k.get('id', '?')} lacks `{f}`")
+        if k.get("severity") is not None and k["severity"] not in sev_ok:
+            sys.exit(f"check {k['id']}: severity {k['severity']!r} is not one of high|medium|low")
+        manual = ((k.get("detect") or {}).get("method") == "manual")
+        if k["id"] not in CHECKS and not manual:
+            unimplemented.append(k["id"])
+        want = k.get("applies_to") or "all"
+        for n in ([want] if isinstance(want, str) else list(want)):
+            n = str(n).lower()
+            if GROUP_REPOS and n != "all" and n not in GROUP_REPOS and n not in CAPABILITIES:
+                sys.exit(f"check {k['id']}: applies_to names '{n}', which is neither a FLEET.md group ({', '.join(sorted(GROUP_REPOS))}) nor a capability ({', '.join(sorted(CAPABILITIES))})")
+    # A check with no checker reports MANUAL by design (a person verifies it),
+    # but a check that does not SAY so is indistinguishable from a typo'd
+    # overlay id — the gate that silently never runs. Name them every load.
+    if unimplemented:
+        print(f"load_register: {len(unimplemented)} check(s) have no checker and are not declared "
+              f"`detect: method: manual` — reported MANUAL: {', '.join(unimplemented)}", file=sys.stderr)
     if not ctrl or not checks:
         sys.exit(f"no register: baseline {BASELINE} holds no controls or checks"
                  + (f" and overlay {REGISTER} adds none" if REGISTER else ""))
@@ -3310,13 +2886,12 @@ def sev_of(check, ctrl):
     a hole, while GATE-03 under it is cosmetic. The check is the thing being
     reported, so the check's severity is the one that describes the row.
 
-    Reading the control's instead (what this did until 2026-07-25) made
-    --fail-on high wrong in both directions at once: it fired on GATE-03,
-    CI-14, CTR-04, AUTH-03 and PRE-04 — all declared low or medium — and
-    stayed silent on UI-02, SENTRY-03 and SENTRY-04, which declare high
-    under a medium control. Over-firing trains people to ignore the gate;
-    under-firing is the hole it exists to close. Keep the fallback: a check
-    added without a severity must inherit one, never read as unset.
+    Reading the control's instead made --fail-on high wrong in both
+    directions at once — firing on cosmetic checks under a high control and
+    silent on high checks under a medium one. Over-firing trains people to
+    ignore the gate; under-firing is the hole it exists to close. Keep the
+    fallback: a check added without a severity must inherit one, never read
+    as unset.
     """
     return check.get("severity") or ctrl[check["control"]]["severity"]
 
@@ -3339,12 +2914,18 @@ def snapshot_family(ref, repos=()):
     finally:
         for rn, path in list(REPO_PATH.items()):
             home = REPO_DIR.get(rn, ROOT / rn)
-            if path != home:
+            if path == home:
+                continue
+            # sh3 raises on a missing cwd; inside this finally that would skip
+            # every later repo's removal and leave worktrees behind.
+            try:
                 rc, _out, err = sh3(home, f"git worktree remove --force {shlex.quote(str(path))}")
                 if rc:
                     sh3(home, "git worktree prune")
                     print(f"{rn}: worktree remove failed ({err}); ran `git worktree prune` — "
                           f"check `git -C {home} worktree list`", file=sys.stderr)
+            except Exception as e:
+                print(f"{rn}: could not remove worktree {path}: {e} — remove it by hand", file=sys.stderr)
         REPO_PATH.clear()
         _FLEET.clear()
         shutil.rmtree(snap_root, ignore_errors=True)
@@ -3421,13 +3002,33 @@ def main():
     a = ap.parse_args()
 
     configure(a.fleet or None)
+    # --repo is a FLEET.md ROW NAME inside a fleet. `.` (or a path) resolves the
+    # checkout it names to its row, so a skill can say "this repo" without
+    # knowing the row — a basename is not the row when a row carries `path:`.
+    if a.repo:
+        resolved = []
+        for x in a.repo:
+            if x in REPO_DIR:
+                resolved.append(x)
+                continue
+            p = pathlib.Path(x).resolve() if (x == "." or "/" in x) else None
+            hit = next((k for k, v in REPO_DIR.items() if p and v == p), None)
+            if hit:
+                resolved.append(hit)
+            elif REGISTER is not None:
+                sys.exit(f"--repo {x}: not a FLEET.md row (rows: {', '.join(REPO_DIR) or 'none'}); pass the row name or `.`")
+            else:
+                sys.exit(f"--repo {x}: outside a fleet only the current repo ({', '.join(REPO_DIR)}) can be audited")
+        a.repo = resolved
     ctrl, checks = load_register()
     if a.control:
         want = set(a.control)
         checks = [k for k in checks if k["id"] in want or k.get("control") in want]
     repos = [x for x in (a.repo or family_repos()) if repo_path(x).is_dir()]
     if not repos:
-        sys.exit("no repos to audit: not inside a fleet and not inside a git repo")
+        sys.exit("no repos to audit: every FLEET.md row is `group: none` or missing on disk"
+                 if REGISTER is not None else
+                 "no repos to audit: not inside a fleet and not inside a git repo")
 
     if a.no_snapshot:
         rows, fails, errors = run_matrix(checks, repos)
@@ -3437,11 +3038,15 @@ def main():
 
     w = max(len(r) for r in repos) + 2
     if a.json:
-        for c, rn, detail in fails:
-            print(json.dumps({"check": c["id"], "control": c["control"], "repo": rn,
-                              "severity": sev_of(c, ctrl), "title": c["title"],
-                              "reference": c.get("reference") or ctrl[c["control"]].get("reference") or "none",
-                              "detail": detail, "rule": " ".join((c.get("rule") or "").split())}))
+        # ERROR cells go out too, flagged: a consumer that only saw FAILs would
+        # read a broken checker as a passing one.
+        for status, cells in ((FAIL, fails), (ERROR, errors)):
+            for c, rn, detail in cells:
+                ref = c.get("reference") or ctrl[c["control"]].get("reference")
+                print(json.dumps({"status": status, "check": c["id"], "control": c["control"], "repo": rn,
+                                  "severity": sev_of(c, ctrl), "title": c["title"],
+                                  "reference": ref if ref and ref != "none" else None,
+                                  "detail": detail, "rule": " ".join((c.get("rule") or "").split())}))
     elif a.md:
         print("| Control | Check | Sev | " + " | ".join(repos) + " |")
         print("| --- | --- | --- | " + " | ".join("---" for _ in repos) + " |")
@@ -3490,8 +3095,13 @@ def main():
 
 
 # Bind once at import so tests and consistency.py get a usable module; main()
-# re-binds when --fleet is given.
-configure()
+# re-binds when --fleet is given. A broken cwd (unreadable FLEET.md, a mapped
+# register that is not cloned) must not sink `--help` or an explicit --fleet,
+# so the import-time call swallows the exit and leaves the module unbound.
+try:
+    configure()
+except SystemExit as _e:
+    print(f"audit: not configured from cwd ({_e}); pass --fleet or run inside a fleet", file=sys.stderr)
 
 if __name__ == "__main__":
     sys.exit(main())

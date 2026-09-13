@@ -67,8 +67,12 @@ Rules:
 1. **`## Fleet`** — `name` is required. `org` lets `sync` list what you have
    *not* cloned; `port-range` is where `sync` picks the next free port for a
    collision and what lets the scanner pick the app's port over a database's
-   in a multi-service compose file. `template` and `template-port` are
-   recorded for the operator; nothing reads them yet.
+   in a multi-service compose file. `template` names the row the compliance
+   engine compares callers against and the repo `wayfare improve` backports
+   to; `template-port` is recorded for the operator. `register` names the
+   checkout holding the fleet's compliance overlay (default `.fleet/`); a
+   mapped register that is not cloned stops the engine rather than running
+   baseline-only.
 2. **`## Groups`** — names are yours, one line each saying what membership
    means. `none` is reserved and always means not-fleet.
 3. **`## Repos`** — one `### NAME` block per checkout. `NAME` is the folder

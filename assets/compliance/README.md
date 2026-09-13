@@ -6,14 +6,20 @@ halves:
 | Half | Where | Holds |
 | --- | --- | --- |
 | baseline | this directory, shipped with the plugin | controls and checks any repo on this workflow is held to; generic rationale only |
-| overlay | the fleet's register checkout — FLEET.md `register:`, default `.fleet/` | `reference:` per control and check, `known_violations`, `applies_to_groups`, the fleet's incident history, and any controls or checks of its own |
+| overlay | the fleet's register checkout — FLEET.md `register:`, default `.fleet/` | `reference:` per control and check, `known_violations`, the fleet's incident history, `applies_to: [GROUP, …]` narrowings, any controls or checks of its own, and a `checkers.py` holding the checkers that know its repos by name |
 
 Merged by id, overlay fields winning. A check's `applies_to` may name
 FLEET.md groups (`template`, `apps`, `infra`, …) — a repo outside them reads
 n/a, which is how a fleet keeps an infra repo in the family without holding
-it to app-shaped conventions — or a capability the checker detects for
-itself (`go`, `ships-image`). Explicit per-capability repo lists are not a
-thing: they are a copy of what detection answers, and copies go stale. Outside a fleet only the baseline
+it to app-shaped conventions — or a capability name (`go`, `ships-image`,
+the closed set in `audit.py`'s `CAPABILITIES`), which the checker detects
+for itself and the engine ignores. Any other name fails to load. Explicit
+per-capability repo lists are not a thing: they are a copy of what
+detection answers, and copies go stale.
+
+A mapped register that is not cloned is an error, never a baseline-only run:
+the audit would report a fleet that got greener because its overlay was
+missing. Outside a fleet only the baseline
 applies and the family is the current repo. Results are never stored: a
 stored result is a copy, and copies drift. `scripts/consistency.py` writes
 the fleet's human table into the register checkout, never here.

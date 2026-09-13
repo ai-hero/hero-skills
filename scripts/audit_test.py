@@ -12,13 +12,16 @@ import importlib.util
 import io
 import os
 import pathlib
+import json
 import subprocess
+import sys
 import tempfile
 import unittest
 
 HERE = pathlib.Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("audit", HERE / "audit.py")
 audit = importlib.util.module_from_spec(spec)
+sys.modules["audit"] = audit  # the fleet's checkers.py does `import audit`
 spec.loader.exec_module(audit)
 
 
@@ -166,7 +169,12 @@ class Snapshot(unittest.TestCase):
         self.saved = audit.ROOT, audit.FAMILY, dict(audit.REPO_DIR)
         audit.ROOT, audit.FAMILY = self.root, ("hero-template",)
         audit.REPO_DIR.clear()
-        git_repo(self.root, "hero-template")
+        # Mapped under a subdirectory, so cleanup must go through REPO_DIR: a
+        # regression to `ROOT / rn` would leave the worktree behind and the
+        # count below would still read 1 only by accident of the fallback.
+        audit.REPO_DIR["hero-template"] = self.root / "sub" / "hero-template"
+        (self.root / "sub").mkdir()
+        git_repo(self.root / "sub", "hero-template")
 
     def tearDown(self):
         audit.ROOT, audit.FAMILY, saved_dirs = self.saved
@@ -175,7 +183,7 @@ class Snapshot(unittest.TestCase):
         self.tmp.cleanup()
 
     def worktrees(self):
-        out = subprocess.run(["git", "worktree", "list"], cwd=self.root / "hero-template",
+        out = subprocess.run(["git", "worktree", "list"], cwd=self.root / "sub" / "hero-template",
                              capture_output=True, text=True).stdout
         return out.strip().splitlines()
 
@@ -183,7 +191,7 @@ class Snapshot(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(RuntimeError):
                 with audit.snapshot_family("HEAD"):
-                    self.assertNotEqual(audit.repo_path("hero-template"), self.root / "hero-template")
+                    self.assertNotEqual(audit.repo_path("hero-template"), self.root / "sub" / "hero-template")
                     self.assertEqual(audit.repo_path("hero-template").name, "hero-template")
                     raise RuntimeError("boom")
         self.assertEqual(audit.REPO_PATH, {})
@@ -193,7 +201,7 @@ class Snapshot(unittest.TestCase):
     def test_unknown_ref_audits_checkout(self):
         with contextlib.redirect_stderr(io.StringIO()):
             with audit.snapshot_family("no-such-ref"):
-                self.assertEqual(audit.repo_path("hero-template"), self.root / "hero-template")
+                self.assertEqual(audit.repo_path("hero-template"), self.root / "sub" / "hero-template")
         self.assertEqual(len(self.worktrees()), 1)
 
 
@@ -222,6 +230,262 @@ class AppliesTo(unittest.TestCase):
     def test_no_fleet_reaches_everyone(self):
         audit.GROUP_REPOS.clear()
         self.assertTrue(audit.applies({"applies_to": ["apps"]}, "anything"))
+
+
+def fleet_fixture(root, fleet_md, overlay=None, checkers=None):
+    """A fleet folder: FLEET.md, a `.fleet/` register with the given overlay
+    text (or an empty one), and repos named by the caller."""
+    write(root, "FLEET.md", fleet_md)
+    reg = root / ".fleet"
+    reg.mkdir(exist_ok=True)
+    if overlay is not None:
+        write(root, ".fleet/CHECKS.yaml", overlay)
+    if checkers is not None:
+        write(root, ".fleet/checkers.py", checkers)
+    return root
+
+
+class Configured(unittest.TestCase):
+    """configure() binds every module global from FLEET.md; each test rebinds
+    from a fixture and tearDown restores what the import-time call found."""
+    def setUp(self):
+        self.saved = (audit.ROOT, audit.FAMILY, audit.REGISTER, audit.TEMPLATE,
+                      dict(audit.REPO_DIR), {k: set(v) for k, v in audit.GROUP_REPOS.items()})
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = pathlib.Path(self.tmp.name).resolve()
+
+    def tearDown(self):
+        audit.ROOT, audit.FAMILY, audit.REGISTER, audit.TEMPLATE, dirs, groups = self.saved
+        audit.REPO_DIR.clear(); audit.REPO_DIR.update(dirs)
+        audit.GROUP_REPOS.clear(); audit.GROUP_REPOS.update(groups)
+        audit._OVERLAY_LOADED.clear()
+        self.tmp.cleanup()
+
+    FLEET = """# Fleet
+## Fleet
+
+- name: fx
+- org: acme
+- template: tpl
+- register: .fleet/ # a trailing comment must not reach the path
+
+## Groups
+
+- apps: the apps
+- infra: deployments
+
+## Repos
+
+### tpl
+
+- group: template
+- port: 33099
+
+### alpha
+
+- group: apps
+- path: "apps/alpha" # quoted, nested
+
+### tf
+
+- group: infra
+
+### parked
+
+- group: none
+
+### blank
+
+- group:
+
+### escapee
+
+- group: apps
+- path: ../outside
+
+### ../evil
+
+- group: apps
+
+```markdown
+### fenced
+
+- group: apps
+```
+"""
+
+    def test_read_fleet_and_configure(self):
+        fleet_fixture(self.root, self.FLEET)
+        for name in ("tpl", "apps/alpha", "tf", "parked", "blank"):
+            (self.root / name).mkdir(parents=True, exist_ok=True)
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            audit.configure(self.root)
+        self.assertEqual(audit.ROOT, self.root)
+        self.assertEqual(audit.REGISTER, self.root / ".fleet")
+        self.assertEqual(audit.TEMPLATE, "tpl")
+        self.assertEqual(audit.FAMILY, ("tpl", "alpha", "tf"), "none, blank, escapee, ../evil and fenced are out")
+        self.assertEqual(audit.REPO_DIR["alpha"], self.root / "apps" / "alpha", "path: honoured, quotes and comment stripped")
+        self.assertEqual(audit.GROUP_REPOS, {"template": {"tpl"}, "apps": {"alpha"}, "infra": {"tf"}})
+        self.assertIn("skipping 'escapee'", err.getvalue())
+        self.assertIn("skipping '../evil'", err.getvalue())
+        self.assertEqual(audit.repo_path("alpha"), self.root / "apps" / "alpha")
+
+    def test_fleet_root(self):
+        fleet_fixture(self.root, "## Fleet\n- name: fx\n")
+        inner = self.root / "repo" / "sub"
+        inner.mkdir(parents=True)
+        self.assertEqual(audit.fleet_root(inner), self.root)
+        write(self.root, "HERO.md", "# HERO\n")
+        self.assertIsNone(audit.fleet_root(inner), "FLEET.md beside HERO.md is a repo, not a fleet")
+
+    def test_missing_register_is_an_error(self):
+        write(self.root, "FLEET.md", "## Fleet\n- name: fx\n- register: .flet/\n## Repos\n### a\n- group: apps\n")
+        (self.root / "a").mkdir()
+        with self.assertRaises(SystemExit) as cm:
+            audit.configure(self.root)
+        self.assertIn("register checkout missing", str(cm.exception))
+
+    def test_register_must_stay_inside(self):
+        write(self.root, "FLEET.md", "## Fleet\n- name: fx\n- register: ../elsewhere\n")
+        with self.assertRaises(SystemExit) as cm:
+            audit.configure(self.root)
+        self.assertIn("outside the fleet", str(cm.exception))
+
+    def test_explicit_fleet_without_fleet_md(self):
+        with self.assertRaises(SystemExit):
+            audit.configure(self.root)
+
+    def test_lone_repo(self):
+        r = git_repo(self.root, "solo")
+        cwd = os.getcwd()
+        try:
+            os.chdir(r)
+            audit.configure(None)
+        finally:
+            os.chdir(cwd)
+        self.assertIsNone(audit.REGISTER)
+        self.assertEqual(audit.FAMILY, ("solo",))
+        self.assertEqual(audit.REPO_DIR["solo"], r.resolve())
+
+
+class Register(unittest.TestCase):
+    """load_register merges baseline + overlay by id and validates the
+    RESULT: an overlay may add fields and records, never re-parent a check,
+    hide a duplicate, or use a severity --fail-on would never match."""
+    BASE = "\n".join([
+        "controls:", "- id: C-A", "  title: A", "  severity: high", "  intent: a",
+        "checks:", "- id: A-1", "  control: C-A", "  scope: repo", "  title: one", "  severity: low",
+        "  detect: {method: manual}", ""])
+
+    def setUp(self):
+        self.saved = (audit.BASELINE, audit.REGISTER, {k: set(v) for k, v in audit.GROUP_REPOS.items()})
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = pathlib.Path(self.tmp.name)
+        (self.root / "base").mkdir(); (self.root / "over").mkdir()
+        write(self.root, "base/CONTROLS.yaml", self.BASE.split("checks:")[0])
+        write(self.root, "base/CHECKS.yaml", "checks:" + self.BASE.split("checks:")[1])
+        audit.BASELINE = self.root / "base"
+        audit.REGISTER = self.root / "over"
+        audit.GROUP_REPOS.clear()
+
+    def tearDown(self):
+        audit.BASELINE, audit.REGISTER, groups = self.saved
+        audit.GROUP_REPOS.clear(); audit.GROUP_REPOS.update(groups)
+        self.tmp.cleanup()
+
+    def load(self, overlay_checks="", overlay_controls=""):
+        if overlay_checks:
+            write(self.root, "over/CHECKS.yaml", overlay_checks)
+        if overlay_controls:
+            write(self.root, "over/CONTROLS.yaml", overlay_controls)
+        with contextlib.redirect_stderr(io.StringIO()):
+            return audit.load_register()
+
+    def test_overlay_fields_win_and_records_add(self):
+        ctrl, checks = self.load(
+            "checks:\n- id: A-1\n  reference: alpha\n  known_violations: [alpha]\n"
+            "- id: A-2\n  control: C-A\n  scope: ci\n  title: two\n  detect: {method: manual}\n")
+        by = {k["id"]: k for k in checks}
+        self.assertEqual(by["A-1"]["reference"], "alpha")
+        self.assertEqual(by["A-1"]["title"], "one", "baseline field survives an overlay that did not set it")
+        self.assertEqual(by["A-2"]["control"], "C-A")
+
+    def test_no_overlay_files_is_baseline(self):
+        ctrl, checks = self.load()
+        self.assertEqual([k["id"] for k in checks], ["A-1"])
+
+    def test_reparenting_rejected(self):
+        with self.assertRaises(SystemExit) as cm:
+            self.load("checks:\n- id: A-1\n  control: C-B\n", "controls:\n- id: C-B\n  title: B\n  severity: low\n  intent: b\n")
+        self.assertIn("re-parent", str(cm.exception))
+
+    def test_duplicate_id_rejected(self):
+        with self.assertRaises(SystemExit) as cm:
+            self.load("checks:\n- id: A-1\n  title: x\n- id: A-1\n  title: y\n")
+        self.assertIn("duplicate", str(cm.exception))
+
+    def test_bad_severity_rejected(self):
+        with self.assertRaises(SystemExit) as cm:
+            self.load("checks:\n- id: A-1\n  severity: High\n")
+        self.assertIn("severity", str(cm.exception))
+
+    def test_orphan_and_untested(self):
+        with self.assertRaises(SystemExit):
+            self.load("checks:\n- id: A-9\n  control: C-Z\n  scope: repo\n  title: z\n")
+        with self.assertRaises(SystemExit):
+            self.load("", "controls:\n- id: C-Q\n  title: Q\n  severity: low\n  intent: q\n")
+
+    def test_malformed_yaml_names_the_file(self):
+        with self.assertRaises(SystemExit) as cm:
+            self.load("checks: [\n")
+        self.assertIn("CHECKS.yaml", str(cm.exception))
+
+    def test_applies_to_unknown_name_rejected_inside_a_fleet(self):
+        audit.GROUP_REPOS.update({"apps": {"a"}})
+        with self.assertRaises(SystemExit) as cm:
+            self.load("checks:\n- id: A-1\n  applies_to: [aps]\n")
+        self.assertIn("neither a FLEET.md group", str(cm.exception))
+        ctrl, checks = self.load("checks:\n- id: A-1\n  applies_to: [Apps, go]\n")
+        self.assertTrue(audit.applies(checks[0], "a"), "group names are case-insensitive")
+
+
+class JsonOutput(unittest.TestCase):
+    """The --json contract wayfare's compliance stage parses: one object per
+    FAIL or ERROR cell on stdout, nothing else there, summary on stderr."""
+    def test_end_to_end(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d).resolve()
+            fleet_fixture(root, "## Fleet\n- name: fx\n## Repos\n### a\n- group: apps\n",
+                          overlay="checks:\n- id: CI-02\n  applies_to: [apps]\n  reference: a\n",
+                          checkers="from audit import check, FAIL\n@check('ZZ-1')\ndef _(r):\n    raise RuntimeError('boom')\n")
+            write(root, ".fleet/CONTROLS.yaml", "controls:\n- id: C-ZZ\n  title: z\n  severity: low\n  intent: z\n")
+            write(root, ".fleet/CHECKS.yaml", "checks:\n- id: CI-02\n  applies_to: [apps]\n  reference: a\n- id: ZZ-1\n  control: C-ZZ\n  scope: repo\n  title: boom\n")
+            git_repo(root, "a")
+            p = subprocess.run([sys.executable, str(HERE / "audit.py"), "--fleet", str(root), "--no-snapshot", "--json", "--repo", "a"],
+                               capture_output=True, text=True)
+            lines = [json.loads(l) for l in p.stdout.splitlines() if l.strip()]
+            self.assertTrue(lines, p.stderr)
+            by = {(o["check"], o["status"]): o for o in lines}
+            self.assertIn(("CI-02", "FAIL"), by, "no dependabot.yml in the fixture")
+            self.assertEqual(by[("CI-02", "FAIL")]["reference"], "a")
+            self.assertEqual(by[("CI-02", "FAIL")]["repo"], "a")
+            self.assertIn(("ZZ-1", "ERROR"), by, "a raised checker is on stdout, flagged")
+            self.assertIn("failing (check x repo)", p.stderr, "summary went to stderr")
+            self.assertEqual(p.returncode, 2, "a checker error exits 2")
+
+    def test_repo_dot_resolves_the_row(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d).resolve()
+            fleet_fixture(root, "## Fleet\n- name: fx\n## Repos\n### svc\n- group: apps\n- path: services/svc\n", overlay="checks: []\n")
+            (root / "services").mkdir()
+            r = git_repo(root / "services", "svc")
+            p = subprocess.run([sys.executable, str(HERE / "audit.py"), "--fleet", str(root), "--no-snapshot", "--repo", "."],
+                               capture_output=True, text=True, cwd=r)
+            self.assertIn("across 1 repos", p.stdout + p.stderr)
+            p = subprocess.run([sys.executable, str(HERE / "audit.py"), "--fleet", str(root), "--no-snapshot", "--repo", "svc-typo"],
+                               capture_output=True, text=True, cwd=r)
+            self.assertNotEqual(p.returncode, 0)
+            self.assertIn("not a FLEET.md row", p.stderr)
 
 
 class IdeFloor(unittest.TestCase):

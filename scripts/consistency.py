@@ -9,16 +9,16 @@
 
 GENERATED, deliberately. A hand-maintained status table is a stored result,
 and a stored result is a copy — the exact thing this register exists to stamp
-out. The port table was copied into seven places and three of them lied.
+out.
 
 Every column comes from data that already exists:
 
-    "Was broken in"  <- CHECKS.yaml known_violations, the state when the
-                        check was written. This is the BEFORE.
+    "Was broken in"  <- the overlay CHECKS.yaml's known_violations, the
+                        state when the check was written. This is the BEFORE.
     per-repo mark    <- scripts/audit.py, computed live against origin/main
                         of each repo (--ref; --no-snapshot for the checkouts).
                         This is the AFTER.
-    "How it's made   <- CHECKS.yaml rule + reference. The rule IS the
+    "How it's made   <- the merged register's rule + reference. The rule IS the
      consistent"        standard; the reference is the repo that already
                         got it right.
 
@@ -36,18 +36,35 @@ HERE = pathlib.Path(__file__).resolve().parent.parent   # the hero-skills plugin
 # Columns, ordering and results all come from audit.py at run time — never a
 # copy here. A five-repo list once lived in this file and dropped three repos.
 def short(name):
-    """A column header that fits: the org's common prefix dropped, then
-    truncated. Derived, so a new repo needs no entry anywhere."""
-    for pre in ("hero-", "aihero-"):
+    """A column header that fits: the fleet's org prefix (FLEET.md `org`, plus
+    its `hero-`/`aihero-` style variants) dropped, then truncated. Derived, so
+    a new repo needs no entry anywhere; a collision falls back to full names
+    in main()."""
+    for pre in _prefixes():
         if name.startswith(pre) and len(name) > len(pre):
             name = name[len(pre):]
+            break
     return name if len(name) <= 10 else name[:9] + "…"
+
+
+def _prefixes():
+    org = (_ORG or "").lower()
+    out = []
+    for o in ([org, org.replace("-", "")] if org else []) + ["hero"]:
+        out += [o + "-", o + "_"]
+    return [p for p in dict.fromkeys(out) if len(p) > 1]
+
+
+_ORG = None
 
 
 
 def load_audit():
     spec = importlib.util.spec_from_file_location("audit", HERE / "scripts" / "audit.py")
     m = importlib.util.module_from_spec(spec)
+    # Registered BEFORE exec: the engine loads the fleet's checkers.py at
+    # configure time, and that module does `import audit`.
+    sys.modules["audit"] = m
     spec.loader.exec_module(m)
     return m
 
@@ -69,10 +86,14 @@ def main():
     ap.add_argument("--fleet", default="", help="the fleet root (default: found by walking up from cwd)")
     a = ap.parse_args()
 
+    global _ORG
     audit = load_audit()
     audit.configure(a.fleet or None)
+    _ORG = audit.read_fleet(audit.ROOT)[0].get("org") if audit.REGISTER is not None else None
     if audit.REGISTER is None:
         sys.exit("not inside a fleet: CONSISTENCY.md is the fleet's table and lives in its register checkout")
+    if not audit.REGISTER.is_dir():
+        sys.exit(f"register checkout missing: {audit.REGISTER} — clone it before regenerating its table")
     OUT = audit.REGISTER / "CONSISTENCY.md"
     controls, checks = audit.load_register()
     repos = audit.family_repos()
@@ -85,6 +106,10 @@ def main():
         sys.exit(f"{len(errors)} checker errors (printed above) — not writing a table built on them")
     rows = [(c, [st for st, _d in cells]) for c, cells in matrix]
     MARK = audit.MARK
+    # Two repos rendering to one header would read as one repo; use full
+    # names for the whole table rather than let a column lie.
+    if len({short(r) for r in repos}) != len(repos):
+        globals()["short"] = lambda n: n
 
     L = []
     L.append("# Consistency — what drifted, and what it looks like now")
@@ -98,15 +123,15 @@ def main():
     L.append("Rows are checks. Columns are repos. Regenerate any time:")
     L.append("")
     L.append("```bash")
-    L.append("hero-skills/scripts/consistency.py     # rewrite this file")
-    L.append("hero-skills/scripts/audit.py --md      # the same results, no history")
+    L.append("$HERO_SKILLS/scripts/consistency.py     # rewrite this file  (HERO_SKILLS = the plugin checkout)")
+    L.append("$HERO_SKILLS/scripts/audit.py --md      # the same results, no history")
     L.append("```")
     L.append("")
     L.append("| | Meaning |")
     L.append("| --- | --- |")
     L.append("| ✅ | complies today |")
     L.append("| ❌ | still drifting |")
-    L.append("| – | doesn't apply (no Go, no UI, no image) |")
+    L.append("| – | doesn't apply (no Go, no UI, no image — or `applies_to` names a group this repo is not in) |")
     L.append("| ? | no automated checker — needs a human, not a guess |")
     L.append("")
     L.append("**Was broken in** is the state when the check was written — the")
@@ -166,10 +191,7 @@ def main():
     L.append("## Reading this honestly")
     L.append("")
     L.append("A `?` is not a pass. It means no checker exists, so the answer is")
-    L.append("unknown — reported as unknown rather than guessed. That distinction")
-    L.append("is the whole point: an earlier version of HLT-02 grepped the probe")
-    L.append("path for `livez` and reported four false failures, which made it a")
-    L.append("naming check wearing a safety check's clothes.")
+    L.append("unknown — reported as unknown rather than guessed.")
     L.append("")
     L.append("**The reference is not always the template.** Where a consumer got")
     L.append("it right first, the row names it, and the fix is a backport INTO")

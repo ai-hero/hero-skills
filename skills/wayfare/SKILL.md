@@ -1160,26 +1160,36 @@ names (`register:`, default `.fleet/`) — reference repos, incident history,
 engine for this repo alone, as it sits:
 
 ```bash
+# --repo . resolves this checkout to its FLEET.md row (a basename is not the
+# row when the row carries `path:`); outside a fleet it is the lone repo.
+# stdout is JSON only; the engine's summary and any failure go to stderr, so
+# a non-zero exit is recorded in a variable rather than printed into the
+# stream a parser is about to read.
 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/audit.py" \
-  --repo "$(basename "$ROOT")" --no-snapshot --json \
-  || echo "COMPLIANCE_AUDIT_FAILED — the engine exited non-zero; this is not a clean audit. Render (–) and say why."
+  --repo . --no-snapshot --json > "$SCRATCH/compliance.jsonl" 2> "$SCRATCH/compliance.err"; COMPLIANCE_RC=$?
+[ "$COMPLIANCE_RC" = 0 ] || echo "COMPLIANCE_AUDIT_RC=$COMPLIANCE_RC — read $SCRATCH/compliance.err; rc 2 means a checker raised (its cells are in the JSON with status ERROR), anything else means the engine did not run: render (–) and say why."
 ```
 
-`--json` prints one object per failing (check × repo) cell: `check`,
-`control`, `severity`, `title`, `reference`, `detail`, `rule`. Propose one
-item per **control** that has a failing check, never one per check — a
-control is the outcome ("third-party code cannot change under us"), its
-checks are the Definition of Done lines. `kind: security` when the
-severity is `high`, `kind: architecture` otherwise; `origin: wayfare`;
+`--json` prints one object per failing or erroring (check × repo) cell:
+`status` (`FAIL` | `ERROR`), `check`, `control`, `repo`, `severity`,
+`title`, `reference` (a row name, or null), `detail`, `rule`. MANUAL cells
+are not printed — they are not findings; a check declared manual is the
+register saying a person verifies it. Propose one item per **control**
+that has a failing check, never one per check — a control is the outcome
+("third-party code cannot change under us"), its checks are the Definition
+of Done lines. `kind: security` when the **highest** failing check's
+severity under that control is `high`, `kind: architecture` otherwise;
+`origin: wayfare`;
 `status: planning` with the rule text as the `## Approach` and the
 `detail` per check as the evidence in `## Context`; `source` = the paths
 the checks name. When `reference` names another repo, say so in
 `## Context` — the fix is to match that repo's file, not to invent one —
 and never propose changing the reference. A repo that carries a copy of
 the register (REG-01) is an item like any other: the copy goes, the
-register lives in the fleet's checkout. MANUAL cells are not findings;
-list them once as "unverified by the engine" and move on. A repo outside
-any fleet says so in one line and audits against the baseline only.
+register lives in the fleet's checkout. An `ERROR` cell is `unverified` —
+the checker broke, which is a finding about the engine, not about this
+repo — and never a proposed item. A repo outside any fleet says so in one
+line and audits against the baseline only.
 
 **The `deps` stage — the bots' open PRs.** A dependency bot opens PRs nobody
 planned; each is a bump already implemented on a branch that is not ours.
