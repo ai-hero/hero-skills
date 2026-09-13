@@ -1,7 +1,7 @@
 ---
 name: wayfare
 # prettier-ignore
-description: The front door. sync converges architecture, design, hardening, compliance, dependencies and the roadmap into .plans and proposes goals bottom-up; next hands you the next goal to run under /goal; do advances one item or one goal turn; improve audits this repo or the fleet.
+description: The front door. sync converges architecture, design, hardening, compliance, deps and the roadmap into .plans and proposes goals; next hands out a goal; do advances one item; improve audits the fleet.
 argument-hint: "[sync [CONTEXT] | next | do ID | improve | recalibrate]"
 ---
 
