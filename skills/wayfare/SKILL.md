@@ -1762,8 +1762,10 @@ So the pass runs across the roadmap:
    set from scratch, as if no goal existed, then diff the result against
    every goal in the store. Goals written under an earlier rule — a
    feature left to `do`, a round of bugs never grouped — get no exemption:
-   the diff is what brings them under this one. Two kinds of goal, two
-   rules:
+   the diff is what brings them under this one. A `new` goal is untriaged
+   and covers nothing — the roadmap view already says to move it to `todo`
+   or delete it, and the listing does not credit its `covers`. Two kinds
+   of open goal, two rules:
    - **`todo` goals are re-cut freely.** A feature planned this round that
      serves an existing goal's outcome joins its `covers` (`budget` grows
      with it); a feature that went `done` out-of-band or `obsolete` leaves;

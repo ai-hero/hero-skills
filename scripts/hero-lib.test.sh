@@ -688,7 +688,7 @@ cat > "$C/003-block.md" <<'ITEM'
 id: 3
 kind: polish
 title: Covered via block-form covers
-status: implementing
+status: ready
 depends_on: []
 ---
 ITEM
@@ -708,6 +708,54 @@ kind: feature
 title: Unplanned, so not expected in a goal yet
 status: todo
 depends_on: []
+---
+ITEM
+cat > "$C/006-impl.md" <<'ITEM'
+---
+id: 6
+kind: feature
+title: Mid-flight and uncovered
+status: implementing
+depends_on: []
+---
+ITEM
+cat > "$C/007-rev.md" <<'ITEM'
+---
+id: 7
+kind: feature
+title: In review, covered only by a new goal
+status: reviewing
+depends_on: []
+---
+ITEM
+cat > "$C/008-ws.md" <<'ITEM'
+---
+id: 8
+kind: feature
+title: Named only inside a two-token covers entry
+status: ready
+depends_on: []
+---
+ITEM
+cat > "$C/013-newgoal.md" <<'ITEM'
+---
+id: 13
+kind: goal
+title: Untriaged goal
+status: new
+depends_on: []
+covers: [7]
+---
+ITEM
+cat > "$C/014-wsgoal.md" <<'ITEM'
+---
+id: 14
+kind: goal
+title: Goal with a malformed covers entry
+status: todo
+depends_on: []
+covers:
+  - 8 99
 ---
 ITEM
 cat > "$C/010-goal.md" <<'ITEM'
@@ -754,8 +802,19 @@ printf '%s' "$ERRC" | grep -q "003-block.md"
 check "covers: block-form cover is silent" "1" "$?"
 printf '%s' "$ERRC" | grep -q "005-todo.md"
 check "covers: unplanned todo item is not expected covered" "1" "$?"
+# The mid-flight arms `continue` out of the listing loop; the check has to sit
+# above them or "ready or further" silently means "ready".
+printf '%s' "$ERRC" | grep -q "006-impl.md is implementing and no open goal covers it"
+check "covers: uncovered implementing item warns" "0" "$?"
+printf '%s' "$ERRC" | grep -q "007-rev.md is reviewing and no open goal covers it"
+check "covers: a new goal's covers do not count" "0" "$?"
+printf '%s' "$ERRC" | grep -q "008-ws.md is ready and no open goal covers it"
+check "covers: a two-token covers entry covers nothing" "0" "$?"
+printf '%s' "$ERRC" | grep -q "014-wsgoal.md covers '8 99', which is not one id"
+check "covers: a two-token covers entry warns" "0" "$?"
 OUTC="$(hero_ready_items "$C" 2>/dev/null)"
 check "covers: uncovered item still lists READY" "READY" "$(state_of 002-out.md "$OUTC")"
+check "covers: uncovered implementing item still lists active" "active" "$(state_of 006-impl.md "$OUTC")"
 # A delivered feedback item is TERMINAL, so dependents on it must unblock —
 # otherwise a feature waiting on an upstream answer blocks forever.
 item 061-waitdf.md 61 "Waits on delivered feedback" "todo" "[56]"

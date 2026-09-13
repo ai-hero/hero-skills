@@ -674,7 +674,13 @@ hero_item_field() {
   ' "$1"
 }
 
-# Print an item'"'"'s depends_on ids, one per line.
+# Print an item's depends_on ids, one per line.
+hero_item_deps() { hero_item_list_field "$1" depends_on; }
+
+# Print a goal's `covers` ids, one per line.
+hero_item_covers() { hero_item_list_field "$1" covers; }
+
+# Print a frontmatter list field's entries, one per line.
 #
 # Handles BOTH YAML forms. Only the inline form was parsed before, so a block
 # sequence —
@@ -685,11 +691,6 @@ hero_item_field() {
 # — yielded an empty value, the readiness loop never ran, and the item was
 # reported READY despite depending on work that does not exist. Silently: there
 # was no `d` for the readiness loop's existence check to flag as missing.
-hero_item_deps() { hero_item_list_field "$1" depends_on; }
-
-# Print a goal's `covers` ids, one per line — same parser, same two YAML forms.
-hero_item_covers() { hero_item_list_field "$1" covers; }
-
 hero_item_list_field() {
   awk -v k="$2" '
     /^---[[:space:]]*$/ { fence++; if (fence >= 2) exit; next }
@@ -977,14 +978,25 @@ hero_ready_items() (
       feedback:*) ;;
       *:done) done_ids="$done_ids$id " ;;
     esac
-    if [ "$class" = goal ] && [ "$state" != "done" ]; then
-      while IFS= read -r raw; do
-        [ -z "$raw" ] && continue
-        covered_ids="$covered_ids$(hero_norm_id "$raw") "
-      done <<EOF
+    # Only an OPEN goal counts as cover. `new` is untriaged and an
+    # unrecognized status lists as invalid; crediting either would let a
+    # defective goal silence the orphan warning for every item it names.
+    case "$class:$state" in
+      goal:todo|goal:active)
+        while IFS= read -r raw; do
+          [ -z "$raw" ] && continue
+          d=$(hero_norm_id "$raw")
+          # Same guard as all_ids: a whitespace-containing entry would inject
+          # extra tokens and mark ids covered that no goal names.
+          case "$d" in
+            *[[:space:]]*) echo "hero_ready_items: $f covers '$raw', which is not one id — ignored" >&2; continue ;;
+          esac
+          covered_ids="$covered_ids$d "
+        done <<EOF
 $(hero_item_covers "$f")
 EOF
-    fi
+        ;;
+    esac
   done
 
   for f in *.md; do
@@ -1011,6 +1023,19 @@ EOF
     id=$(hero_norm_id "$(hero_item_field "$f" id)")
     case "$id" in
       ''|*[[:space:]]*) echo "invalid $f — $title"; continue ;;
+    esac
+    # A planned build item outside every open goal is invisible to `wayfare
+    # next` — it walks goals, never items — so it sits READY forever unless
+    # someone runs `do N` by hand. Sync groups every planned item; an
+    # uncovered one means that pass was skipped or cut short, and nothing
+    # else reports it. Warn on stderr only: the row itself is still correct.
+    # Sits ABOVE the status table because the mid-flight arms `continue`.
+    case "$class:$state" in
+      build:ready|build:implementing|build:in-progress|build:reviewing)
+        case "$covered_ids" in
+          *" $id "*) ;;
+          *) echo "hero_ready_items: $f is $state and no open goal covers it — wayfare sync groups it into a goal" >&2 ;;
+        esac ;;
     esac
     # One CLASS-keyed table, not a case block per kind: shared states appear
     # once, and only the genuinely divergent arms name a class (see the state
@@ -1118,18 +1143,6 @@ EOF
     else
       echo "blocked $f — $title${missing:+ [missing dep:$missing]}"
     fi
-    # A planned build item outside every open goal is invisible to `wayfare
-    # next` — it walks goals, never items — so it sits READY forever unless
-    # someone runs `do N` by hand. Sync groups every planned item; an
-    # uncovered one means that pass was skipped or cut short, and nothing
-    # else reports it. Warn on stderr only: the row itself is still correct.
-    case "$class:$state" in
-      build:ready|build:implementing|build:in-progress|build:reviewing)
-        case "$covered_ids" in
-          *" $id "*) ;;
-          *) echo "hero_ready_items: $f is $state and no open goal covers it — wayfare sync groups it into a goal" >&2 ;;
-        esac ;;
-    esac
   done
 )
 
