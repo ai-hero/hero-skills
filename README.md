@@ -90,26 +90,45 @@ Use `--scope user` to share the registration across every project on the machine
 
 ## Quick Start
 
+Three commands. Everything else is run by them.
+
 ```
 # 1. Configure your project (run once per repo)
 hero-skills:init-hero
 
-# 2. Plan and implement from a ticket — think-it-through grills the work into
-#    work-items, you confirm, and Claude implements one in the same conversation
-#                                              # Steps 1–2: plan, implement
+# 2. Converge the world into a plan — one round, eight stages:
+#    config → architecture → harden → deps → design → reconcile → plan → goals
+#    Reviews DESIGN.md (offers to converge it), audits dependency/container/
+#    code hardening, gathers the bots' open PRs, refreshes the design snapshot,
+#    reconciles source against design, plans every feature with you, then
+#    proposes goals bottom-up over what was planned — and re-cuts the ones
+#    already there. Writes only what you confirm; your ready-mark is the gate.
+hero-skills:wayfare sync
 
-# 3. Simplify, then test + push as draft, then review your own PR
-/simplify                                   # Step 3: tidy the dirty diff
-hero-skills:push-pr                         # Step 4: test (lint/typecheck/unit + UI smoke), commit + push, DRAFT PR
-hero-skills:review-pr                       # Steps 5–6: parallel review agents + security pass, fixes, then mark-ready gate
-
-# 4. Wait for the review bot, address its feedback, then ship
-#    (the wait in Step 7 is implicit — respond-to-comments only runs once the bot replies)
-hero-skills:respond-to-comments             # Step 8: address Copilot/CodeRabbit/Greptile inline comments
-hero-skills:ship-pr                         # Step 9: @auto-approve, merge, reset to default branch
+# 3. Take the next goal. It reads the goal's permissions aloud (mark-ready,
+#    respond, auto-approve, merge, deploy), you authorize them in-session,
+#    and it prints a /goal line. Paste that; each turn builds up to
+#    `concurrency` features in parallel worktrees through merge.
+hero-skills:wayfare next
 ```
 
-That's it. Each command reads your `HERO.md` config and adapts to your stack automatically.
+`hero-skills:wayfare do ID` advances one thing on its own — a feature through
+one-shot, a Dependabot PR to merged and deployed, or one goal turn. `recalibrate`
+tunes the config every stage reads.
+
+### Or: one piece at a time
+
+The build pipeline is still there when you want a single step:
+
+```
+/simplify                                   # tidy the dirty diff
+hero-skills:push-pr                         # test (lint/typecheck/unit + UI smoke), commit + push, DRAFT PR
+hero-skills:review-pr                       # parallel review agents + security pass, fixes, then mark-ready gate
+hero-skills:respond-to-comments             # address Copilot/CodeRabbit/Greptile inline comments
+hero-skills:ship-pr                         # @auto-approve, merge, reset to default branch
+```
+
+Each command reads your `HERO.md` config and adapts to your stack automatically.
 
 ### Or: one-shot the whole thing
 
@@ -181,16 +200,26 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 | `hero-skills:one-shot` | Drives a small task end-to-end: plan → implement → simplify → push (tests included) → self-review → mark-ready → await-review → respond → ship. Detects a resume point on re-invocation; with no arguments, drives the current goal to merged + reset branch. Explicit user gates at each destructive step. |
 | `hero-skills:create-project` | Scaffolds a new project, then chains into setup-dev → init-hero → first-commit. |
 
+### The front door
+
+| Command | What it does |
+| --- | --- |
+| `hero-skills:wayfare` | Four verbs. `sync` runs one round of convergence — `config → architecture → harden → deps → design → reconcile → plan → goals` — writing every `.plans/` item (features, architecture, polish, security, feedback, goals) and proposing goals bottom-up while re-cutting the `todo` ones; `next` picks the next runnable goal, reads its `## Permissions` (mark-ready, respond, auto-approve, merge, deploy) for your in-session authorization, and prints the `/goal` line; `do ID` builds one feature via one-shot, carries one Dependabot PR to merged and deployed, or runs one goal turn (up to `concurrency` items in parallel worktrees); `recalibrate` tunes every field the stages read. Features are SLC vertical slices (user stories, never layers) carrying subtasks, a definition of done, comments, design feedback back to the design team, and staleness flags |
+
+Two skills are stages of `sync` and hidden from the slash menu (`user-invocable: false`) — you never call them, but they still own their procedures:
+
+| Stage | Skill | What it does |
+| --- | --- | --- |
+| `architecture` | `hero-skills:architecture` | Create + converge a single root `DESIGN.md` — tech stack, boundaries, dependency rules, invariants, users, flows, interaction standards, append-only decisions; never restates what the code says. `review` reports drift read-only; `sync` converges |
+| `harden` | `hero-skills:harden` | Audit read-only for hardening — dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness — and emit execution-ready plans as `.plans/` security items |
+
 ### Operations
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:harden` | Audit read-only for hardening — dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness — and emit execution-ready plans as `.plans/` items |
 | `hero-skills:think-it-through` | Brainstorm + grill an idea one question at a time into shared understanding and dependency-aware work-items |
 | `hero-skills:my-humanizer` | Strip AI-writing patterns from prose (Wikipedia's "Signs of AI writing"). Runs inline inside the pipeline on everything a person reads: code comments, docs, commit bodies, and the PR body in `push-pr`, review comments in `review-pr`, thread replies in `respond-to-comments`; standalone on any text |
-| `hero-skills:architecture` | Create + converge a single root `DESIGN.md` — tech stack, boundaries, dependency rules, invariants, users, flows, interaction standards, append-only decisions; never restates what the code says. `sync` converges, `review` reports drift read-only, `recalibrate` tunes the HERO.md fields it reads |
 | `hero-skills:fleet` | Create + converge `FLEET.md` — the local, unversioned map of the repos checked out beside each other (group, port). `sync` scans the folder and proposes rows, `review` reports drift read-only. Every repo skill run from the fleet root fans out to the repos you pick (see `docs/FLEET-MD.md`) |
-| `hero-skills:wayfare` | Feature roadmap from source to the claude.ai/design project (HERO.md-configured, read via DesignSync or a manual snapshot drop), five verbs: `sync` reads both ends, converges the `.plans/` roadmap, then plans the set as its postflight (think-it-through per feature, your ready-mark); `do N` builds one planned feature via one-shot; `goal` runs a multi-feature goal under `/goal`, building up to `concurrency` dep-free features at once, each in its own git worktree; `deps [N]` takes one Dependabot PR — review, local tests, `@auto-approve`, merge, deployment check — without ever committing on the bot's branch; `recalibrate` tunes the `## Wayfare` block and the Repository field it reads. Features are SLC vertical slices (user stories, never layers) carrying subtasks, a definition of done, comments, design feedback back to the design team, and staleness flags |
 | `hero-skills:handoff` | Distill the current conversation into one self-contained work-item for a downstream agent (optionally filed to the tracker, or to **another repo** with `--repo OWNER/NAME`) |
 
 ### Utilities
@@ -271,7 +300,7 @@ Every skill reads `HERO.md` from your repo root. It declares your stack so skill
 
 When project config drifts (new deps, CI changes, switched task runner), skills detect the staleness and remind you to run `hero-skills:init-hero recalibrate` to refresh. There is no auto-pre-commit hook for this — it was too slow. Run the refresh on demand.
 
-**`recalibrate` is on sixteen skills.** When a skill does the wrong thing
+**`recalibrate` is on fourteen skills.** When a skill does the wrong thing
 because its config is wrong, you fix it where you noticed:
 `hero-skills:ship-pr recalibrate` asks about the eight fields `ship-pr` reads
 across Repository, CI/CD and Deployment, writes what you confirm, commits, and
@@ -280,9 +309,9 @@ whole-file pass. `scripts/hero-fields.sh SKILL` prints the fields of any skill
 that carries the verb, with their current values. See
 [docs/RECALIBRATE.md](docs/RECALIBRATE.md).
 
-Note that `recalibrate` is not `sync`: `architecture sync` converges
-`DESIGN.md`, `fleet sync` converges `FLEET.md`, and `wayfare sync` converges
-the plan. Those keep their own verbs, and none of them is configuration.
+Note that `recalibrate` is not `sync`: `fleet sync` converges `FLEET.md`,
+and `wayfare sync` converges the plan (and, through its architecture stage,
+`DESIGN.md`). Those keep their own verbs, and none of them is configuration.
 
 Here's what a minimal config looks like:
 

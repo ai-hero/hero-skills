@@ -540,7 +540,7 @@ item 047-notdone.md 47 "Colon done status" "not:done" "[]"
 # one reading safe under both.
 item 048-badkind.md 48 "Typo kind" "todo" "[]" "features"
 # Backlog rows still run the dep check: unmet deps annotate the row
-# (`wayfare goal` reads it) and a dangling ref warns — a bootstrap typo must
+# (wayfare's report prints it) and a dangling ref warns — a bootstrap typo must
 # not be invisible.
 fitem 049-fwait.md 49 "Backlog waiting on dep" "todo" "[30]"
 fitem 050-fdangle.md 50 "Backlog dangling dep" "todo" "[999]"
@@ -599,7 +599,7 @@ item 053-archrev.md 53 "Architecture PR in review" "reviewing" "[]" "architectur
 item 075-pol.md 75 "Dashboard header spacing" "ready" "[]" "polish"
 item 076-poltodo.md 76 "Card grid gutters" "todo" "[]" "polish"
 item 077-polrev.md 77 "Polish PR in review" "reviewing" "[]" "polish"
-# `security` (a bot's bump PR taken to deployment by `wayfare deps`, or a
+# `security` (a bot's bump PR taken to deployment by `wayfare do`, or a
 # harden fix) rides the build enum. Left off the class table it rides the
 # unknown enum instead: ready lists as invalid, todo as backlog — never READY.
 item 078-dep.md 78 "Bump lodash to 4.17.21" "ready" "[]" "security"

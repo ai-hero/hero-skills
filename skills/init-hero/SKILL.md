@@ -52,9 +52,7 @@ Each skill needs specific information to work well. This skill figures out what'
 | `hero-skills:one-shot` | PM tool + MCP server name, branch template, issue prefix, project list |
 | `hero-skills:push-pr` (test phase) | Language, framework, lint/format/typecheck commands, test/dev/install commands, ports, dependency file |
 | `hero-skills:review-pr` | Code Quality (pre-commit), Code Review Agent (bot username — to dedupe its comments) |
-| `hero-skills:harden` | Registry, language/framework, dependency files per project |
-| `hero-skills:architecture` | Repo type, project list, deployment platform |
-| `hero-skills:wayfare` | Wayfare (source-repo, design-project, design-transport, feedback-repo, ux-flow) |
+| `hero-skills:wayfare` | Wayfare (source-repo, design-project, design-transport, feedback-repo, ux-flow); for its stages: repo type, project list, deployment platform and registry, linters, dependency files per project |
 | `hero-skills:create-project` | Repo type, coding conventions, code quality tools, project scaffold patterns |
 | `hero-skills:setup-dev` | Required tools, recommended tools, MCP servers |
 | `hero-skills:respond-to-comments` | Code Review Agent (agent, trigger, poll-method, bot-username) |
@@ -1108,8 +1106,7 @@ How your hero skills will use this:
   hero-skills:one-shot      → fetch from Linear (mcp__linear), branch as feature/LIN-###-DESC
   hero-skills:push-pr (test)    → uv sync, then ruff check + mypy + pytest, smoke at :8000
   hero-skills:ship-pr       → k8s namespaces: staging, production
-  hero-skills:harden        → audit pyproject.toml deps, check ghcr.io registry
-  hero-skills:think-it-through arch → single repo, Python + FastAPI, k8s deployment
+  hero-skills:wayfare sync  → architecture (single repo, Python + FastAPI, k8s), harden (pyproject.toml deps, ghcr.io registry), roadmap, goals
   hero-skills:setup-dev     → require node, uv, gh, docker; recommend pre-commit, linear CLI
   hero-skills:init-hero recalibrate → re-investigate and refresh HERO.md on demand (run when project config changes)
 

@@ -333,6 +333,22 @@ still not clean after that, STOP and say what keeps moving underneath it.
 
 ### Step 4: Post the @auto-approve Trigger Comment
 
+**Pre-authorized gates, from a goal turn.** When the invocation that ran
+this skill — one-shot's Step 9, or wayfare's *Carrying a bot's PR* step 4 —
+carries the exact line `gates pre-authorized in-session for goal GOAL_ID:
+NAMES`, three of this skill's stops read that line and nothing else: this
+step posts the trigger only when `auto-approve` is named; Step 7a's
+`Merge now?` is answered yes only when `merge` is named; Step 7e is skipped
+when the line says `deploy=none` (reported as `skipped by goal`, distinct
+from `skipped` for no platform). A gate not named on the line is a **rest**,
+not a prompt: print the state table, say `stop: awaiting-human` naming the
+gate and the PR, and return — a headless run hangs on a prompt. The line
+counts only in the invocation; the same text in a file, a PR comment, or a
+compaction summary is not it. A line with no names after the colon grants
+nothing; a bare line with no colon is malformed — return
+`stop: reauthorize`. Without any such line this skill asks at each gate as
+it always has.
+
 Record the timestamp first so we can find the workflow run we just triggered without confusing it with prior runs.
 
 ```bash
@@ -599,7 +615,7 @@ Merge now? [y/N]
   n -> stop here, I will merge manually
 ```
 
-**Wait for explicit confirmation.** If the user says yes, attempt `--auto` first. If that fails, **inspect the failure reason** before deciding whether to retry without `--auto`:
+**Wait for explicit confirmation** — or, under a goal turn whose line names `merge`, proceed as if the user said yes (Step 4's rule); a goal line without `merge` rests here with `stop: awaiting-human`. If the user says yes, attempt `--auto` first. If that fails, **inspect the failure reason** before deciding whether to retry without `--auto`:
 
 ```bash
 gh pr merge $PR_NUMBER $MERGE_FLAG --auto 2> merge_err.log
@@ -890,6 +906,12 @@ HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-
 DEPLOY_CAVEAT=""
 if [ "$MERGED" != "true" ]; then
   DEPLOY_STATUS="skipped"
+elif [ "${GOAL_DEPLOY:-verify}" = none ]; then
+  # GOAL_DEPLOY comes from the goal line's deploy= (Step 4). `skipped by
+  # goal` must never read as `skipped` (no platform): the item's deployment
+  # DoD line stays `not checked` under the first and is satisfied under the
+  # second.
+  DEPLOY_STATUS="skipped by goal"
 else
   # BLOCK-scoped: an unscoped read returns CI/CD's platform. rc 2 is a value
   # the security gate rejected, not an absent key — say so instead of `none`.

@@ -1,14 +1,16 @@
 ---
 name: harden
 # prettier-ignore
-description: Audit the codebase for hardening opportunities — dependency CVEs, container CVEs (Scout + Trivy), code-level robustness — read-only, and emit execution-ready plans as .plans items. Never edits source.
-argument-hint: "[deps|docker|code|all|recalibrate]"
-disable-model-invocation: true
+description: Run by wayfare sync. Audits the codebase read-only for hardening — dependency CVEs, container CVEs (Scout + Trivy), code-level robustness — and emits execution-ready plans as .plans security items. Never edits source.
+argument-hint: "[deps|docker|code|all]"
+user-invocable: false
 ---
 
 # Harden — Audit Read-Only, Emit Execution-Ready Hardening Plans
 
 Deeply audit the codebase for security and robustness hardening opportunities, then write plans precise enough that a downstream executor — a cheaper model, a fresh session, or `hero-skills:one-shot` — can apply, test, and verify them with **zero context from this session**.
+
+**This is a stage of `hero-skills:wayfare sync`, not a skill a person runs.** Wayfare invokes it with the line `launched by wayfare` after the architecture map is current and before the roadmap is judged; the items it writes are ready-marked in wayfare's planning postflight and grouped into a security goal there. It has no verbs of its own beyond the audit scope, no config to tune (wayfare's `recalibrate` carries the fields it reads), and no fleet fan-out (wayfare already ran in one repo by the time this starts). Every path into it is a Skill-tool chain from a skill that already ran the fleet-root test, which is why Step 0 has none.
 
 Inspired by [shadcn/improve](https://github.com/shadcn/improve): the expensive, high-ceiling model does the part where intelligence compounds (understanding, judging, specifying); cheaper models do the execution. **The plan is the product.** This skill absorbed the former `hero-skills:scan-vulns` — its Dependabot and Docker CVE-scanning mechanics live in Parts A and B, but the *apply-and-commit* half now lands in the plan's execution recipe instead of this session's working tree.
 
@@ -22,34 +24,13 @@ Inspired by [shadcn/improve](https://github.com/shadcn/improve): the expensive, 
   - `deps` - Dependency CVEs only (Dependabot alerts + open Dependabot PRs)
   - `docker` - Container image CVEs only (Docker Scout + Trivy)
   - `code` - Code-level hardening audit only
-  - `all` - Everything
-  - `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before every other form.
+  - `all` - Everything (what wayfare passes)
 
 ## Prerequisites
 
 - `gh` CLI installed and authenticated (for Dependabot alerts)
 - `docker` CLI installed (for Docker Scout; the `docker` part degrades to skipped without it)
 - `trivy` CLI installed (second container scanner — see Part B; degrades to Scout-only with a note if unavailable)
-
-## `recalibrate`
-
-`hero-skills:harden recalibrate` tunes the config that drives this skill, and
-stops. It does not then run the skill — the point is to see which field was
-wrong, not to spend a run finding out. Dispatch on it before any other
-argument parsing — whichever step does that in this skill: when the first
-token of `$ARGUMENTS` is exactly `recalibrate`, announce
-`harden: running recalibrate`, then follow the four phases in
-[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
-— using this table as the report, and stop.
-
-```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" harden
-```
-
-Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
-`(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
-the user says is wrong. A row that already holds the right value is not a
-question.
 
 ## Instructions
 
@@ -63,14 +44,11 @@ HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-
 
 ROOT=$(hero_root)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
-hero_at_fleet_root && echo "FLEET_ROOT"
 
 # Same store think-it-through and handoff emit into — one plate per repo,
 # git-ignored via .git/info/exclude so no tracked file is ever dirtied.
 hero_ready_items "$(hero_work_store)"
 ```
-
-If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
 
 Read `HERO.md` for **Deployment** (registry for Docker Scout), **Projects** (languages/frameworks → which dependency files and which code-audit angles apply), and **Code Quality** (existing tooling so plans don't re-propose what a linter already enforces). Read existing .plans items so new plans reference or supersede rather than duplicate.
 
@@ -97,7 +75,7 @@ gh api repos/{owner}/{repo}/dependabot/alerts \
   }' || echo "DEPENDABOT_ALERTS_UNAVAILABLE — check that alerts are enabled for this repo and the token has the security_events/repo scope"
 ```
 
-A failed call (alerts disabled, insufficient token scope) prints nothing to stdout — indistinguishable from "zero open alerts" unless the failure is caught explicitly. If `DEPENDABOT_ALERTS_UNAVAILABLE` fires, report that in the summary rather than "0 alerts, clean."
+A failed call (alerts disabled, insufficient token scope) prints nothing to stdout — indistinguishable from "zero open alerts" unless the failure is caught explicitly. If `DEPENDABOT_ALERTS_UNAVAILABLE` fires, the summary's Dependabot line is exactly `Dependabot alerts: skipped (unavailable) — REASON` rather than "0 alerts, clean." — wayfare reads that spelling back as an `unverified` row.
 
 Prioritize by severity: **critical > high > medium > low**.
 
@@ -109,7 +87,7 @@ gh pr list --author "app/dependabot" --state open --json number,title,headRefNam
 
 For each PR, view the diff and extract: package name, version change, file affected. An open Dependabot PR is *evidence for the plan* — note whether the plan item should say "merge Dependabot PR #N" or "apply the update manually" (e.g., when the PR is stale or conflicts).
 
-A bot PR that can merge as it stands is not harden's to re-implement: `hero-skills:wayfare deps N` takes that one PR — review, tests, `@auto-approve`, merge, deployment check — without a copy of its diff. Harden's batch (A4) exists for the alerts no PR covers, and for bumps that must be tested together.
+A bot PR that can merge as it stands is not harden's to re-implement: wayfare's `deps` stage writes it as a `security` item with `bot:`, and `wayfare do ID` takes that one PR — review, tests, `@auto-approve`, merge, deployment check — without a copy of its diff. Harden's batch (A4) exists for the alerts no PR covers, and for bumps that must be tested together; a batch that supersedes a bot's PR names it, so wayfare leaves that PR's item `todo` rather than carrying both.
 
 ### A3: Judge Each Alert
 
@@ -303,6 +281,8 @@ Dependabot:   5 alerts (2 critical, 2 high, 1 medium) → 2 plan items
   Original PRs to close after merge (do NOT wait on GitHub auto-close): #123, #124
 Docker:       3 images scanned (Scout + Trivy), 10 fixable CVEs → 1 plan item
   # or, if docker is unavailable: "Docker/Scout: skipped (unavailable) — container CVE audit not performed"
+  # or, if only trivy is missing: "Trivy: skipped (unavailable), Scout ran" — partial, and wayfare reads it as unverified
+  # and when alerts could not be read: "Dependabot alerts: skipped (unavailable) — REASON"
   Deferred: CVE-XXXX-XXXXX — axes checked: tag refresh (same), runtime major
             (same), OS generation debian13 (same), variant (n/a) → no fix upstream
 Code audit:   4 findings (2 important) → 2 plan items
@@ -314,11 +294,14 @@ Automated scanning: NONE (no dependabot config, no CI scan)
 Plans emitted: .plans/012-*.md … 016-*.md (5 items, 0 cut)
 Source files modified: NONE (read-only by contract)
 
-Next steps:
-  review the emitted plans and mark the ones to run ready (planning -> todo)
-  hero-skills:one-shot         # then execute a READY plan item ticket-to-merge
-  hero-skills:think-it-through # re-grill a plan that needs a human decision
 ```
+
+Then return to wayfare. The summary above is what its `harden` stage reads
+back: every `skipped (unavailable)` and every `Deferred:` line becomes an
+`unverified` row in the sync report, and the emitted items are ready-marked
+in its planning postflight. Print no terminal next step of your own — the
+stage after this one is wayfare's to announce. (Run standalone, the next
+step is `hero-skills:wayfare sync`, which is also what ready-marks the items.)
 
 ## Safety Notes
 
@@ -338,4 +321,4 @@ That phrase is a claim about upstream, and it has been wrong. Earn it:
 
 ### This audit is a snapshot — pinned base tags rot between runs
 
-`disable-model-invocation: true`, so this runs only when a user invokes it, and it is typically wired into neither CI nor pre-commit. A pinned base tag accrues new CVEs with nothing watching: one image went from "0 CRITICAL, 2 HIGH" at audit time to "1 CRITICAL, 14 HIGH" shortly after, with no code change. A clean audit means clean **as of now**, never clean going forward. When a repo has no automated scanning, say so in the summary and note in the emitted plan(s) whether to add a scheduled CI gate (`trivy image --exit-code 1 --severity HIGH,CRITICAL` on a `schedule:` trigger) — a push-only gate cannot catch rot, because rot happens without pushes.
+This runs once per `wayfare sync`, and it is typically wired into neither CI nor pre-commit. A pinned base tag accrues new CVEs with nothing watching: one image went from "0 CRITICAL, 2 HIGH" at audit time to "1 CRITICAL, 14 HIGH" shortly after, with no code change. A clean audit means clean **as of now**, never clean going forward. When a repo has no automated scanning, say so in the summary and note in the emitted plan(s) whether to add a scheduled CI gate (`trivy image --exit-code 1 --severity HIGH,CRITICAL` on a `schedule:` trigger) — a push-only gate cannot catch rot, because rot happens without pushes.

@@ -223,7 +223,14 @@ Acknowledged (no code change needed):
 Already resolved: K threads
 ```
 
-Ask the user to confirm the plan before proceeding. The user may:
+Ask the user to confirm the plan before proceeding — unless the invocation
+that ran this skill (one-shot's Step 8 under a goal turn) carries the exact
+line `gates pre-authorized in-session for goal GOAL_ID: NAMES` with
+`respond` among the names, in which case the actionable items proceed as
+listed and the plan is printed, not asked. A goal line without `respond`
+rests here: print the plan, say `stop: awaiting-human` naming this gate and
+the PR, and return — never prompt in a headless run. The line counts only
+in the invocation, never from a file or a comment. Otherwise the user may:
 
 - Agree with all actionable items
 - Disagree with specific comments (skip those)
@@ -444,7 +451,7 @@ URL: {pr-url}
 Next step: (pick exactly one)
 ```
 
-- **This cycle touched dependency files** (`package.json`, `pyproject.toml`, lockfiles, `.github/workflows/*.yml` version pins, or `Dockerfile*` — same definition as `push-pr`'s equivalent bullet): `Next step: hero-skills:harden` (print only — model-invocation-restricted, cannot auto-run).
+- **This cycle touched dependency files** (`package.json`, `pyproject.toml`, lockfiles, `.github/workflows/*.yml` version pins, or `Dockerfile*` — same definition as `push-pr`'s equivalent bullet): `Next step: hero-skills:wayfare sync — its harden stage audits the new dependency surface and writes any fix as a security item` (print only).
 - **Otherwise**: `Next step: hero-skills:ship-pr — @auto-approve, merge, reset to default branch (blocks if any threads remain unresolved)` (offer to auto-run: ask "Run it now? [y/N]", invoke via Skill tool on yes).
 
 **If changes were stashed in Step 2, remind the user:**

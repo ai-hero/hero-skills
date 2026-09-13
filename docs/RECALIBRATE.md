@@ -1,6 +1,6 @@
 # The recalibrate verb
 
-Sixteen skills accept `recalibrate`: ask me the questions that decide how this
+Fourteen skills accept `recalibrate`: ask me the questions that decide how this
 skill works, and write the answers. `scripts/hero-fields.sh` holds the map of
 which skill reads which fields, and `scripts/hero-fields.test.sh` ties the map
 and the skills to each other in both directions — a skill declaring the verb
@@ -38,14 +38,15 @@ never touches the files those skills keep:
 | Verb | File | What it means |
 | --- | --- | --- |
 | `recalibrate` | `HERO.md` | how this skill should behave |
-| `architecture sync` | `DESIGN.md` | converge the design record with the codebase |
 | `fleet sync` | `FLEET.md` | converge the map with the folder beside it |
-| `wayfare sync` | `.plans/` | converge the plan with the design |
+| `wayfare sync` | `.plans/` and `DESIGN.md` | converge the plan with the world — its architecture stage converges the design record on the way |
 
-`architecture` has both: `sync` for `DESIGN.md`, `recalibrate` for the three
-`HERO.md` fields that tell it how to run.
+`wayfare` has both: `sync` for the plan (and, through its architecture stage,
+`DESIGN.md`), `recalibrate` for the `HERO.md` fields that tell it and its
+stages — `architecture`, `harden` — how to run. Those two stages carry no
+`recalibrate` of their own.
 
-Three skills read `HERO.md` and deliberately have no `recalibrate`. `fleet`
+Five skills read `HERO.md` and deliberately have no `recalibrate` — the two stages above, and three more. `fleet`
 runs at the fleet root, where there is no `HERO.md` to recalibrate.
 `audit-plugin` reads the file as the *subject* of its audit rather than as its
 own config. `think-it-through` is a dialogue with the user, and stopping it to
