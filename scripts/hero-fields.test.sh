@@ -13,7 +13,7 @@
 #
 # The loop assertions at the bottom carry counters. Without them each one
 # compares an empty accumulator against an empty expectation and passes
-# whenever the loop examines nothing at all — including when hero-fields.sh
+# whenever the loop examines nothing at all, including when hero-fields.sh
 # does not exist.
 
 set -uo pipefail
@@ -37,8 +37,8 @@ trap 'rm -rf "$TMP"' EXIT
 R="$(cd "$TMP" && pwd -P)/repo"
 mkdir -p "$R"
 
-# `platform` appears in the map twice — push-pr reads CI/CD's, ship-pr reads
-# Deployment's — so both sections carry one here. hero-lib.sh calls this the
+# `platform` appears in the map twice. push-pr reads CI/CD's, ship-pr reads
+# Deployment's, so both sections carry one here. hero-lib.sh calls this the
 # trap its BLOCK argument exists for; without both sections in the fixture the
 # scoping argument is never exercised and could be dropped with no test failing.
 cat > "$R/HERO.md" <<'EOM'
@@ -94,7 +94,7 @@ check "section row with the heading absent" \
   "(absent)" "$("$FIELDS" setup-dev "$R" | awk -F'\t' '$1 == "Developer Setup" { print $3 }')"
 
 # A field under a heading that does not exist needs a different question than
-# a blank under a heading that does — phase 3 has to create the section.
+# a blank under a heading that does, phase 3 has to create the section.
 check "field under a missing section is no-section" \
   "(no-section)" "$(printf '%s\n' "$OUT" | cell linters 3)"
 
@@ -122,7 +122,7 @@ EOM
 check "a heading inside a code fence is not present" \
   "(absent)" "$("$FIELDS" setup-dev "$TMP/fenced" | awk -F'\t' '$1 == "Developer Setup" { print $3 }')"
 
-# No HERO.md at all: every row says so, and the command still succeeds —
+# No HERO.md at all: every row says so, and the command still succeeds,
 # recalibrate reads the rows and sends the user to init-hero.
 mkdir -p "$TMP/bare"
 BARE=$("$FIELDS" push-pr "$TMP/bare"); check "missing HERO.md exits 0" "0" "$?"
@@ -177,7 +177,7 @@ check "no DECIDES cell contains a pipe" \
 check "--list is non-empty" \
   "yes" "$([ "$("$FIELDS" --list | wc -l | tr -d ' ')" -gt 0 ] && echo yes || echo no)"
 
-# Every listed name is a real skill directory — catches a typo'd skill name in
+# Every listed name is a real skill directory, catches a typo'd skill name in
 # a new map row, which would otherwise surface only when someone runs the verb.
 BAD_NAME=""
 for name in $("$FIELDS" --list); do

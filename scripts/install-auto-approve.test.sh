@@ -45,7 +45,7 @@ check "fresh: file created" "yes" "$([[ -f "$d/.github/workflows/auto-approve.ya
 check "fresh: matches source" "same" "$(cmp -s "$SOURCE" "$d/.github/workflows/auto-approve.yaml" && echo same || echo differs)"
 
 # The regression that matters: SOURCE reverting to the shared logic. Assert on
-# content, not the path — a caller job resolves a `uses:` and cannot carry
+# content, not the path, a caller job resolves a `uses:` and cannot carry
 # `runs-on:`, so that pair distinguishes caller from logic no matter how the
 # file is spelled.
 check "fresh: is the caller" "yes" \
@@ -129,7 +129,7 @@ check "contract: caller secrets declared by callee" "$caller_secrets" \
 # The caller's job permissions are the ceiling on the callee's token. A scope
 # the callee declares but the caller lacks is a startup validation error in
 # every consumer ("The workflow is requesting 'checks: read', but is only
-# allowed 'checks: none'") — no step runs, no verdict posts — with no change
+# allowed 'checks: none'"), no step runs, no verdict posts, with no change
 # on their side. Passing here is necessary, not sufficient: consumers must
 # also have VENDORED the new caller before the callee change merges.
 missing_perms=$(python3 -c "
@@ -143,15 +143,15 @@ check "contract: caller grants every scope the callee declares" "none" "$missing
 
 # Code lines only. The caller carries a comment WARNING against
 # `secrets: inherit`, and a plain grep matches that and reports the file as
-# using it — the same prose-matching trap as init-hero's install probe.
+# using it, the same prose-matching trap as init-hero's install probe.
 check "contract: caller never uses secrets: inherit" "yes" \
   "$(grep -vE '^\s*#' "$SOURCE" | grep -q 'secrets: *inherit' && echo no || echo yes)"
 
 # The caller must track this repo's DEFAULT branch. A tag or SHA here means a
 # fix to the shared workflow is not live until a PR lands in each of ~25
 # consumers; a non-default branch means the fleet runs code that main's branch
-# protection never gated. Both fail silently — consumers keep running the old
-# workflow with nothing red anywhere — so assert the ref explicitly.
+# protection never gated. Both fail silently, consumers keep running the old
+# workflow with nothing red anywhere, so assert the ref explicitly.
 caller_ref=$(grep -oE 'auto-approve\.ya?ml@[A-Za-z0-9._/-]+' "$SOURCE" | head -1 | cut -d@ -f2)
 check "contract: caller tracks main" "main" "$caller_ref"
 
@@ -159,7 +159,7 @@ check "contract: caller tracks main" "main" "$caller_ref"
 # Reads as a style preference; it is not. With `contains`, merely MENTIONING
 # the command in any comment posted a real APPROVE, and review-pr's
 # self-review comment does exactly that while also carrying the marker the
-# prior-review gate accepts — one comment both fired the run and satisfied the
+# prior-review gate accepts, one comment both fired the run and satisfied the
 # gate meant to stop auto-approve being the only review.
 trigger_if=$(python3 -c "
 import yaml
@@ -167,7 +167,7 @@ print(yaml.safe_load(open('$CALLEE'))['jobs']['claude-approve']['if'])
 ")
 check "trigger: anchored with startsWith" "yes" \
   "$(grep -qF 'startsWith(github.event.comment.body' <<<"$trigger_if" && echo yes || echo no)"
-# The exact dangerous form, not just "contains(" — the condition legitimately
+# The exact dangerous form, not just "contains(", the condition legitimately
 # uses !contains(...) to exclude self-review comments.
 UNANCHORED="contains(github.event.comment.body, '@auto-approve')"
 check "trigger: unanchored contains is gone" "yes" \

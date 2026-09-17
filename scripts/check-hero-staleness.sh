@@ -9,7 +9,7 @@
 # configs, task runners). If any of those is newer, prints a hint to stderr
 # suggesting `hero-skills:init-hero recalibrate`.
 #
-# Always exits 0 — this is purely informational.
+# Always exits 0. This is purely informational.
 #
 # Usage: scripts/check-hero-staleness.sh
 #
@@ -19,7 +19,7 @@
 #
 # Note: the daily-flow skills (push-pr / one-shot) call hero_check_staleness
 # in scripts/hero-lib.sh, a deliberately *fast subset* of this check. The two
-# are meant to be roughly aligned but NOT byte-for-byte identical — this script
+# are meant to be roughly aligned but NOT byte-for-byte identical. This script
 # can carry a longer pattern list (Cargo, ruff, biome, agent configs, etc.)
 # without forcing the subset to match. New patterns added here do not
 # automatically need to land there.
@@ -34,13 +34,13 @@ HERO_TIME=$(git -C "$ROOT" log -1 --format=%ct -- HERO.md 2>/dev/null | grep -E 
 # Default-substitute any empty value (corrupt repo, env hijack, no commits) to
 # 0. The `grep -E '^[0-9]+$'` already filters non-numeric output; this
 # default + the grep together ensure the `(( arithmetic ))` compare below
-# always sees a clean integer. Both are needed — `set -u` would error
+# always sees a clean integer. Both are needed, because `set -u` would error
 # on an empty value, and the arithmetic builtin would error on non-numerics.
 HERO_TIME=${HERO_TIME:-0}
 
 # Patterns that affect HERO.md fields. Mirrors the old hero-update-precommit
 # gate so any commit that would have triggered an update is also caught here.
-# `:(glob)**/foo` is git's magic pathspec for recursive matches — `*/foo`
+# `:(glob)**/foo` is git's magic pathspec for recursive matches. `*/foo`
 # only matches one directory level deep, which silently misses nested
 # subprojects in monorepos.
 PATTERNS=(

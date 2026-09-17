@@ -7,7 +7,7 @@
 # Scoped to the two things that broke and could break again silently:
 #   1. Emitted values that must never be a plausible number when their source
 #      failed (the unknown sentinel), and must always set STATE_OK=false.
-#   2. Agreement with one-shot's decision table — two fields were emitted in a
+#   2. Agreement with one-shot's decision table, two fields were emitted in a
 #      shape no table row could ever match, which made six of twelve rows dead
 #      with no error anywhere.
 #
@@ -40,7 +40,7 @@ git init -q "$REPO"
 # Repo-local identity so the fixture does not depend on ambient git config.
 # A CI runner with no global user.name makes the commit below fail and print a
 # `fatal: empty ident name` into the log. Measured: none of the 33 cases
-# currently depend on that commit existing, so the failure is cosmetic today —
+# currently depend on that commit existing, so the failure is cosmetic today,
 # the guard is here so it stays that way. If a future case does start depending
 # on a real HEAD, the `|| exit 1` below makes the setup failure loud instead of
 # letting that case quietly assert against an unborn HEAD.
@@ -84,7 +84,7 @@ val() { # KEY  (from $OUT)
 # ---------- consumer agreement ---------------------------------------------
 
 # `.isDraft // empty` returns empty for BOTH null and false, so PR_IS_DRAFT
-# could never be the string "false" — and all three table rows that test for it
+# could never be the string "false", and all three table rows that test for it
 # (await-review, respond, ship) were unreachable.
 make_gh '[{"number":42,"url":"u","isDraft":false,"reviewDecision":"APPROVED","state":"OPEN"}]' \
         '[{"body":"x","user":{"login":"reviewbot"}}]'
@@ -97,7 +97,7 @@ OUT="$(run)"
 check "draft PR emits the string true" "true" "$(val PR_IS_DRAFT)"
 
 # The marker is a plain string anyone can post. Only the authenticated
-# account's comment counts, and a plain comment counts for nobody — an empty
+# account's comment counts, and a plain comment counts for nobody, an empty
 # marker would make jq's test("") match every comment and route straight to
 # mark-ready.
 make_gh '[{"number":42,"url":"u","isDraft":true,"reviewDecision":null,"state":"OPEN"}]' \
@@ -110,7 +110,7 @@ OUT="$(run)"
 check "self-review: own marker comment counts 1"         "1" "$(val SELF_REVIEW_DONE)"
 
 # `gh pr list` defaults to --state open, so a merged PR returned [] and read as
-# "no PR at all" — killing the rows that stop a merged branch being re-pushed.
+# "no PR at all", killing the rows that stop a merged branch being re-pushed.
 make_gh '[{"number":37,"url":"u","isDraft":false,"reviewDecision":null,"state":"MERGED"}]' '[]'
 OUT="$(run)"
 check "merged PR is visible"        "true"   "$(val PR_EXISTS)"
@@ -129,7 +129,7 @@ check "no PR: self-review count is a real zero" "0" "$(val SELF_REVIEW_DONE)"
 
 # ---------- the unknown sentinel -------------------------------------------
 
-# A broken jq leaves gh succeeding while every parse yields empty — which read
+# A broken jq leaves gh succeeding while every parse yields empty, which read
 # as PR_EXISTS=false on a repo with a live PR, routing to push and opening a
 # duplicate. Probing that jq WORKS (not that it exists) is what catches it.
 make_gh '[{"number":42,"url":"u","isDraft":true,"reviewDecision":null,"state":"OPEN"}]' '[]'
@@ -138,7 +138,7 @@ chmod +x "$TMP/bin/jq"
 OUT="$(run)"
 check "broken jq: PR_EXISTS is unknown"  "unknown" "$(val PR_EXISTS)"
 check "broken jq: STATE_OK is false"     "false"   "$(val STATE_OK)"
-# The scratch repo has no remote, so fetch/default-ref legitimately fail too —
+# The scratch repo has no remote, so fetch/default-ref legitimately fail too,
 # assert jq is AMONG the named sources, not that it is the only one.
 case "$(val STATE_ERRORS)" in
   *jq*) PASS=$((PASS + 1)) ;;
@@ -147,7 +147,7 @@ esac
 rm -f "$TMP/bin/jq"
 
 # A HERO.md value the security gate rejects must not degrade to a silent `main`
-# with a healthy STATE_OK — every later ref measurement would target the wrong
+# with a healthy STATE_OK, every later ref measurement would target the wrong
 # branch while reporting fine.
 printf '# H\n\n- default-branch: --upload-pack=evil\n- bot-username: reviewbot\n' > "$REPO/HERO.md"
 make_gh '[]' '[]'
@@ -159,7 +159,7 @@ case "$(val STATE_ERRORS)" in
   *) FAIL=$((FAIL + 1)); echo "FAIL  rejected default-branch is named in STATE_ERRORS (got: $(val STATE_ERRORS))" ;;
 esac
 
-# A value that is a fine string but not a valid branch — git reads these as
+# A value that is a fine string but not a valid branch, git reads these as
 # something other than the branch they resemble.
 printf '# H\n\n- default-branch: main:refs/heads/evil\n- bot-username: reviewbot\n' > "$REPO/HERO.md"
 OUT="$(run)"
@@ -328,7 +328,7 @@ if [ "$FAIL" -gt 0 ]; then
   exit 1
 fi
 # Floor on the case count. Neither suite runs under `set -e`, so a setup line
-# that starts failing does not fail the run — it just stops incrementing PASS,
+# that starts failing does not fail the run. It just stops incrementing PASS,
 # and a block whose glob went empty runs zero iterations. Without this, a
 # refactor that silently stops executing 25 cases still reports 0 failures and
 # exits 0. The whole reason these cases exist is that each one could be wrong

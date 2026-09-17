@@ -5,7 +5,7 @@
 
 # The map of which skill is driven by which config fields, and what each
 # field decides for that skill. The read-only first phase of every skill's
-# `recalibrate` verb — see docs/RECALIBRATE.md.
+# `recalibrate` verb; see docs/RECALIBRATE.md.
 #
 # Usage:
 #   scripts/hero-fields.sh SKILL [ROOT]   rows for one skill, with values read
@@ -13,7 +13,7 @@
 #   scripts/hero-fields.sh --list         skill names that have a map entry
 #   scripts/hero-fields.sh --all          every row, no values read
 #
-# Output is TSV with a header: SECTION KEY CURRENT DECIDES — the same four
+# Output is TSV with a header: SECTION KEY CURRENT DECIDES, the same four
 # columns in every mode, so one record type describes the whole command.
 # `--all` fills CURRENT with `-` because it reads no file.
 #
@@ -37,7 +37,7 @@
 
 # Deliberately not `set -e`, unlike its six siblings in this directory. An
 # unset field makes `hero_md_field` return non-zero, and that is this script's
-# finding to report, not an error to die on — with `-e` the table stops at the
+# finding to report, not an error to die on. With `-e` the table stops at the
 # first unset field and exits 1, silently, and every recalibrate that reads it
 # then asks about nothing.
 set -uo pipefail
@@ -58,7 +58,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # unterminated string that fails the whole script at parse time.
 # The wayfare rows for Repository/type, Deployment/platform+registry, Code
 # Quality/linters and Projects belong to its stage skills (architecture,
-# harden), which carry no recalibrate of their own — a row under either name
+# harden), which carry no recalibrate of their own. A row under either name
 # fails hero-fields.test.sh's "every mapped skill offers recalibrate", so they
 # sit under wayfare even though wayfare never reads registry or linters itself.
 rows() {
@@ -190,7 +190,7 @@ has_section() { # SECTION FILE
   ' "$2"
 }
 
-# Not `rows | while` — a pipeline puts the loop in a subshell, where a reader
+# Not `rows | while`: a pipeline puts the loop in a subshell, where a reader
 # failure could set no flag the script could exit on. Every row read below
 # reported success no matter how badly hero_md_field broke.
 ERRF=$(mktemp); trap 'rm -f "$ERRF"' EXIT
@@ -209,8 +209,8 @@ while IFS='|' read -r _skill section key decides; do
       current="(absent)"
     fi
   elif ! has_section "$section" "$TARGET"; then
-    # The field cannot be unset when the heading it lives under is missing —
-    # those need different questions, and phase 3 needs to know it is creating
+    # The field cannot be unset when the heading it lives under is missing.
+    # Those need different questions, and phase 3 needs to know it is creating
     # a section rather than filling a blank in one.
     current="(no-section)"
   else
@@ -220,7 +220,7 @@ while IFS='|' read -r _skill section key decides; do
       1) current="(unset)" ;;
       2) current="(refused)" ;;
       # hero_md_field returns only 0, 1 or 2. Anything else means the reader
-      # itself broke — renamed by a refactor, or a stale vendored hero-lib.sh
+      # itself broke, renamed by a refactor, or a stale vendored hero-lib.sh
       # where the function is simply gone (127). Reporting that as `(unset)`
       # is how a field holding `--exec=...` gets read as merely absent.
       *) echo "hero-fields: reader failed rc=$rc on $section/$key: $(cat "$ERRF")" >&2

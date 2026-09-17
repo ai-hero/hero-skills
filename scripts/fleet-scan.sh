@@ -3,7 +3,7 @@
 # All Rights Reserved.
 
 # Enumerate the repos checked out in a fleet folder, and diff them against
-# FLEET.md. The read-only half of hero-skills:fleet — `review` prints this
+# FLEET.md. The read-only half of hero-skills:fleet, where `review` prints this
 # output, `sync` uses it to propose rows.
 #
 # Usage: fleet-scan.sh [FLEET_ROOT] [--list | --review]
@@ -22,7 +22,7 @@
 #   PORT_MISMATCH      row port differs from compose    (detail: row -> compose)
 #   PORT_UNIMPLEMENTED row claims a port, no compose file
 #   PORT_UNPARSED      row claims a port, compose file has no readable one
-#   PORT_COLLISION     two repos on one port — claimed or published, fleet or
+#   PORT_COLLISION     two repos on one port, claimed or published, fleet or
 #                      not: a `none` repo's compose binds the host just the same
 #   NO_HERO            a fleet repo (group != none) without HERO.md
 #   NO_AGENTS          a fleet repo without AGENTS.md or CLAUDE.md

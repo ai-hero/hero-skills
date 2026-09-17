@@ -5,18 +5,18 @@
 # Pre-flight checks for the hero-skills pipeline.
 #
 # Runs the union of every downstream skill's blocking check so a `one-shot`
-# (or any individual skill) can fail fast — before code is edited, before a
+# (or any individual skill) can fail fast, before code is edited, before a
 # branch is created, before a PR is pushed.
 #
 # Buckets:
-#   tooling  — gh + auth, node ≥18, Playwright MCP registered, pr-review-toolkit
+#   tooling , gh + auth, node ≥18, Playwright MCP registered, pr-review-toolkit
 #              installed, pre-commit if .pre-commit-config.yaml exists
-#   repo     — HERO.md present + non-stale, auto-approve.yml on default branch,
+#   repo    , HERO.md present + non-stale, auto-approve.yml on default branch,
 #              no in-progress merge/rebase/cherry-pick
-#   runtime  — per-project .env keys vs .env.example, declared ports free,
+#   runtime , per-project .env keys vs .env.example, declared ports free,
 #              dependency file present. Scoped to projects touched by the diff
 #              when --projects is passed.
-#   pipeline — issue tracker auth (Linear / Jira / GitHub Issues), default
+#   pipeline, issue tracker auth (Linear / Jira / GitHub Issues), default
 #              branch fetch reachability
 #
 # Usage:
@@ -36,7 +36,7 @@
 #
 # Exit code: 0 if no blockers, 1 if blockers found, 2 if preflight could not
 # RUN at all (usage error, or a missing/corrupt hero-lib.sh). 2 means there are
-# no [BLOCKER] lines to read — it is an installation problem, not a repo one.
+# no [BLOCKER] lines to read. It is an installation problem, not a repo one.
 # Warnings never block.
 #
 # This script is read-only. It never edits files, creates branches, or
@@ -44,7 +44,7 @@
 
 set -uo pipefail
 
-# Shared helpers. HERO.md parsing lives in exactly one place — this script
+# Shared helpers. HERO.md parsing lives in exactly one place. This script
 # previously carried two hand-rolled variants that disagreed with hero_field
 # and with each other on a value carrying a trailing `# comment`.
 # Resolve through symlinks: `dirname "$0"` gives the SYMLINK's directory, so
@@ -59,7 +59,7 @@ while [ -L "$SELF" ]; do
 done
 HERO_LIB="$(cd "$(dirname "$SELF")" && pwd)/hero-lib.sh"
 
-# Test the precondition and the RESULT, not `.`'s exit status — `.` returns the
+# Test the precondition and the RESULT, not `.`'s exit status. `.` returns the
 # status of the last command in the sourced file, so one appended statement
 # returning non-zero would read as "cannot source" on a healthy library.
 [ -r "$HERO_LIB" ] || { echo "preflight: hero-lib.sh not readable at $HERO_LIB" >&2; exit 2; }
@@ -116,7 +116,7 @@ if [ "$AUTO_SCOPE" = "true" ]; then
   AS_DEFAULT=$(hero_default_branch_verbose "$AS_ROOT")
 
   # An unresolvable base ref makes `git diff origin/X...HEAD` fail into
-  # 2>/dev/null and contribute NOTHING — indistinguishable from "no committed
+  # 2>/dev/null and contribute NOTHING, indistinguishable from "no committed
   # changes". That reads as a fresh start and skips the runtime bucket entirely,
   # on a repo that may carry real blockers. There must be a third state:
   # "could not determine scope", which falls back to checking everything.
@@ -134,7 +134,7 @@ if [ "$AUTO_SCOPE" = "true" ]; then
     # Top-level directory of every changed path, deduped. Files at the repo root
     # (NF == 1) belong to no project and are intentionally excluded.
     # `ls-files --others` is required: neither diff form lists UNTRACKED paths,
-    # so a newly scaffolded project directory — a first-class flow here — was
+    # so a newly scaffolded project directory, a first-class flow here, was
     # invisible to the scope and silently never runtime-checked.
     PROJECT_SCOPE=$( { git -C "$AS_ROOT" diff --name-only HEAD 2>/dev/null
                        git -C "$AS_ROOT" diff --name-only "origin/$AS_DEFAULT...HEAD" 2>/dev/null
@@ -147,7 +147,7 @@ if [ "$AUTO_SCOPE" = "true" ]; then
   AS_BRANCH=$(git -C "$AS_ROOT" branch --show-current 2>/dev/null)
   AS_DIRTY=$(git -C "$AS_ROOT" status --porcelain 2>/dev/null)
 
-  # A fresh start may only be DECLARED when it can be OBSERVED — hence the
+  # A fresh start may only be DECLARED when it can be OBSERVED, hence the
   # AS_BASE_OK conjunct.
   if [ "$AS_BASE_OK" = "true" ] && [ -z "$PROJECT_SCOPE" ] \
      && [ "$AS_BRANCH" = "$AS_DEFAULT" ] && [ -z "$AS_DIRTY" ]; then
@@ -187,7 +187,7 @@ ROOT=$(hero_root)
 HERO="$ROOT/HERO.md"
 DEFAULT_BRANCH=$(hero_default_branch "$ROOT")
 
-# Lazy gh-auth probe — set on first call, cached for the rest of the run.
+# Lazy gh-auth probe, set on first call, cached for the rest of the run.
 # Used by check_repo / check_pipeline so they don't re-shell `gh auth status`
 # when check_tooling ran (the common case) or when invoked standalone via
 # `--bucket repo|pipeline`.
@@ -264,7 +264,7 @@ check_tooling() {
 
   # 5. pr-review-toolkit plugin. A marketplace install never lands at either
   #    legacy directory (it writes to plugins/cache/MARKETPLACE/PLUGIN/SHA),
-  #    so check installed_plugins.json first — the marketplace's own record —
+  #    so check installed_plugins.json first, the marketplace's own record,
   #    then fall back to the two legacy directories for a hand-placed plugin.
   local plugin_found=false
   local installed_json="$HOME/.claude/plugins/installed_plugins.json"
@@ -295,7 +295,7 @@ check_tooling() {
   #    CLI is installed AND that the git hook is actually wired in
   #    (`.git/hooks/pre-commit` contains the pre-commit shim). A repo with
   #    .pre-commit-config.yaml but no installed hook silently skips every
-  #    check at commit time — exactly the kind of fail-late that preflight
+  #    check at commit time, exactly the kind of fail-late that preflight
   #    is meant to catch upstream.
   if [ -f "$ROOT/.pre-commit-config.yaml" ]; then
     if ! command -v pre-commit >/dev/null 2>&1; then
@@ -338,7 +338,7 @@ check_repo() {
     return 0  # downstream checks read HERO.md; bail this bucket
   fi
 
-  # 2. HERO.md staleness. Fast subset of scripts/check-hero-staleness.sh —
+  # 2. HERO.md staleness. Fast subset of scripts/check-hero-staleness.sh,
   # intentionally diverged: that script carries a longer pattern list
   # (ruff, eslint, biome, Gemfile, requirements*.txt, agent configs, etc.).
   # Keep this list deliberately tight; the standalone script is the one
@@ -365,7 +365,7 @@ check_repo() {
   # GH_AUTH_OK flag set by check_tooling instead of re-shelling gh auth.
   #
   # Both spellings, and this one is a BLOCKER: probing only .yml stopped
-  # one-shot at Step 0.3 — before any work started — against a repo whose
+  # one-shot at Step 0.3, before any work started, against a repo whose
   # workflow was present and active under .yaml, with fix advice telling the
   # user to install a file they already had.
   if [ "${GH_AUTH_OK:-false}" = "true" ]; then
@@ -451,7 +451,7 @@ check_runtime() {
 
   # Build the scope set if --projects was passed. Use a newline-separated
   # list with `grep -F` (fixed-string match) so paths containing regex
-  # metacharacters (`.`, `+`, `*`) match literally — feeding raw user
+  # metacharacters (`.`, `+`, `*`) match literally, feeding raw user
   # input through `tr ',' '|'` into `grep -E` would over-match (e.g.
   # `.test-output` as ERE matches any string containing `test-output`).
   local scope_list=""
@@ -547,7 +547,7 @@ check_pipeline() {
   ensure_gh_auth_probed
 
   # 1. Default branch reachable on origin. Use `git ls-remote --exit-code`
-  # instead of `git fetch` — same network round-trip for reachability but
+  # instead of `git fetch`, same network round-trip for reachability but
   # ~10× faster (single ref query, no objects pulled, no local refs updated).
   if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     if git -C "$ROOT" ls-remote --exit-code --heads origin "$DEFAULT_BRANCH" >/dev/null 2>&1; then

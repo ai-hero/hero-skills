@@ -46,7 +46,7 @@ ROOT=""
 usage() { sed -n '5,20p' "$0" | sed 's/^# \{0,1\}//'; }
 error() { echo "  ERROR: $1"; [[ -n "${2:-}" ]] && echo "         Fix:  $2"; ERRORS=$((ERRORS + 1)); }
 warn()  { echo "  WARN:  $1"; [[ -n "${2:-}" ]] && echo "         Fix:  $2"; WARNINGS=$((WARNINGS + 1)); }
-# finish [CODE] — the one exit for every path after argument parsing, so the
+# finish [CODE]: the one exit for every path after argument parsing, so the
 # summary line is always printed and --warn-only applies only to rule errors.
 finish() {
   echo ""
@@ -95,19 +95,19 @@ done
 # Everything below reads through stdin, never a filename argument: perl's <>
 # treats a name starting with "|" as a command, and a committed file whose
 # name contains a newline can put exactly that on the next line of a file list.
-# normalize — what the loader sees: no BOM, no CR.
+# normalize, what the loader sees: no BOM, no CR.
 normalize()       { perl -0pe 's/\A\xEF\xBB\xBF//; s/\r\n/\n/g' < "$1"; }
-# strip_comments — block HTML comments are removed before the file enters
+# strip_comments, block HTML comments are removed before the file enters
 # context, so they are free and must not count toward R2.
 strip_comments()  { perl -0pe 's/<!--.*?-->//gs'; }
 # blank_* keep line numbers intact so R6 can report the real line.
 blank_comments()  { perl -0pe 's/(<!--.*?-->)/"\n" x ($1 =~ tr|\n||)/gse'; }
 blank_fences()    { awk '/^```/{f=!f; print ""; next} f{print ""; next} {print}'; }
 count_lines()     { grep -c ''; }
-# grep_or_die PATTERN <<< TEXT — sets HITS; grep's exit 2 (bad pattern, I/O)
+# grep_or_die PATTERN <<< TEXT: sets HITS; grep's exit 2 (bad pattern, I/O)
 # is a checker failure, not "no match".
 grep_or_die() { HITS=$(grep -n -E "$@"); local rc=$?; (( rc == 2 )) && die 3 "grep failed on pattern: $*"; return 0; }
-# scoped FILE — true when the frontmatter block carries a paths: value. Only
+# scoped FILE: true when the frontmatter block carries a paths: value. Only
 # frontmatter scopes a rule; a paths: line in the body is prose, and an
 # unclosed frontmatter is no frontmatter.
 scoped() {

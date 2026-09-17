@@ -1176,7 +1176,7 @@ hero_norm_id() {
 #   review   build kinds only, status reviewing: PR open, awaiting merge
 #   feedback feedback kinds only, status todo or queued: a divergence
 #            written but not yet landed upstream. Never READY: a feedback item
-#            is DELIVERED, never built, so handing one to one-shot is wrong
+#            is DELIVERED: never built, so handing one to one-shot is wrong
 #   goal     kind: goal only, status todo: approved, waiting to run. Never
 #            READY: a goal is a container for features, and one-shot builds
 #            features. `wayfare next` selects goals by kind instead
