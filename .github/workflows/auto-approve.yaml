@@ -7,7 +7,7 @@ on:
   # comments.
   workflow_call:
     # Declaring this is what lets callers pass it explicitly instead of
-    # `secrets: inherit` — GitHub rejects a caller that names a secret the
+    # `secrets: inherit`, GitHub rejects a caller that names a secret the
     # reusable workflow never declared, which is why the callers used
     # `inherit` (and tripped semgrep's least-privilege rule) before.
     # GITHUB_TOKEN is deliberately absent: it is provisioned automatically
@@ -30,7 +30,7 @@ permissions:
   # permissions set, any unspecified scope is `none`, so without this
   # the Acknowledge / Post result / React steps would 403.
   # `checks`/`statuses` feed the CI gate. A scope here that a consumer's
-  # caller.yaml lacks is a startup validation error in that repo — no step
+  # caller.yaml lacks is a startup validation error in that repo, no step
   # runs, no verdict. Consumers vendor the new caller BEFORE a new scope
   # lands on main here (see install-auto-approve.test.sh).
   pull-requests: write
@@ -56,15 +56,15 @@ jobs:
     # within this; the ceiling just stops a hung step from pinning a runner.
     timeout-minutes: 20
     # Defense in depth on the trigger:
-    # 1. `author_association` gate — only OWNER/MEMBER/COLLABORATOR (the
+    # 1. `author_association` gate, only OWNER/MEMBER/COLLABORATOR (the
     #    associations that imply write access) can invoke. This is
     #    load-bearing, not decorative: the workflow posts a real APPROVE
-    #    review and spends an API key, so without it any commenter — e.g.
-    #    on a public fork or clone — could trigger an approval and burn
+    #    review and spends an API key, so without it any commenter, e.g.
+    #    on a public fork or clone, could trigger an approval and burn
     #    the key.
     # 2. The command must START the comment, and a hero-skills self-review is
     #    never a command. With `contains`, MENTIONING @auto-approve anywhere in
-    #    any comment ran this and posted a real APPROVE — and review-pr's
+    #    any comment ran this and posted a real APPROVE, and review-pr's
     #    self-review comment both says the string in prose AND carries the
     #    ai-hero:self-review marker that the prior-review gate below accepts,
     #    so a single comment triggered the approval and satisfied the gate
@@ -123,10 +123,10 @@ jobs:
 
           # The author verdict is its own variable rather than the emptiness
           # of a file. It used to be `: > pr_commits.json` for a human PR, read
-          # back as `[ -s ... ]` — which made a zero-byte file mean "not a bot"
+          # back as `[ -s ... ]`, which made a zero-byte file mean "not a bot"
           # and, fatally, made `[]` mean "every commit is the bot's". Anyone
-          # tidying that `: >` into `echo '[]' >` — valid JSON, looks stricter
-          # — would have routed EVERY human PR to the scripted lane with the
+          # tidying that `: >` into `echo '[]' >`, valid JSON, looks stricter
+          #, would have routed EVERY human PR to the scripted lane with the
           # whole suite still green.
           if jq -e --arg re "$BOT_RE" '.user.login | test($re)' pr.json > /dev/null; then
             AUTHOR_IS_BOT=true
@@ -170,8 +170,8 @@ jobs:
             # two, for reasons that cost a live regression to learn:
             #
             # DO NOT add `.committer.login` to this test. Dependabot commits
-            # through GitHub's API, so `.committer` is `web-flow` — GitHub's
-            # own identity — not the bot. Requiring it to match sends every
+            # through GitHub's API, so `.committer` is `web-flow`, GitHub's
+            # own identity, not the bot. Requiring it to match sends every
             # real Dependabot PR to the model lane, which is the lane this
             # block exists to avoid.
             #
@@ -207,7 +207,7 @@ jobs:
 
           # The unified diff is best-effort: GitHub's diff media type 406s on
           # PRs over 300 changed files. Under `bash -e` a hard failure here
-          # kills the whole job before the verifier ever runs — even though the
+          # kills the whole job before the verifier ever runs, even though the
           # per-file post-merge content below (built from the files API, which
           # paginates) is what it actually reads. So tolerate the failure and
           # leave a placeholder rather than aborting.
@@ -233,7 +233,7 @@ jobs:
             --jq '.[] | "\(.filename)\t\(.status)\t\(.additions)\t\(.deletions)"' > files.tsv
           cut -f1 files.tsv > changed_files.txt
 
-          # Recursive repo file tree at HEAD — lets the verifier confirm
+          # Recursive repo file tree at HEAD, lets the verifier confirm
           # claims about files that exist outside the diff (tests,
           # migrations, indexes, etc.) without re-fetching them all.
           # Capped like the diff and the bundle: a monorepo tree with no cap
@@ -257,11 +257,11 @@ jobs:
           classify() {
             case "$1" in
               # Never send the contents of a file whose path typically holds
-              # credentials or keys to the model — even if one slipped past
+              # credentials or keys to the model, even if one slipped past
               # local secret scanning. Data-file shapes ONLY: an unanchored
               # `*credentials*` here classified internal/credentials/store.go
               # as a secret, omitted it, stripped its hunks, and told the model
-              # never to report it — the auth code exempted from auth review.
+              # never to report it, the auth code exempted from auth review.
               .env|.env.*|*/.env|*/.env.*| \
               *.pem|*.key|*.p12|*.pfx|*.jks| \
               id_rsa|id_rsa.pub|id_ed25519|id_ed25519.pub|id_ecdsa|id_ecdsa.pub| \
@@ -297,7 +297,7 @@ jobs:
           # file to judge correctness, dead code, and missing handling.
           # Bundled into a single file with markers so the prompt can
           # ingest it without juggling many --rawfile args.
-          # omitted.tsv: path, class, status, +A/-D — one record, read by the
+          # omitted.tsv: path, class, status, +A/-D, one record, read by the
           # diff filter (column 1), the prompt, and the Go-package heuristic.
           : > full_files.txt
           : > omitted.tsv
@@ -356,7 +356,7 @@ jobs:
           fi
 
           # Drop the omitted files' hunks from the diff the model sees. The
-          # unfiltered pr.diff is kept for the grounding search below — a
+          # unfiltered pr.diff is kept for the grounding search below, a
           # description that mentions `nanoid` is grounded by the lockfile
           # hunk even though the model never reads it.
           # Keyed on the `b/` (post-rename) path, which is what files.tsv
@@ -390,7 +390,7 @@ jobs:
 
           # Go packages whose non-test files changed with no _test.go change
           # in the same package, omitted (generated) files excluded. Advisory
-          # input for the model's test check — it must still confirm in the
+          # input for the model's test check. It must still confirm in the
           # tree, since the package may already be covered by tests that did
           # not need to change.
           # test: begin go-pkgs
@@ -407,7 +407,7 @@ jobs:
           # Grounding: every backticked identifier in the description that a
           # literal search cannot find in the diff, the changed files, the
           # repo tree, or the title. This mechanically catches the drift the
-          # model was catching by luck — a claimed TestConnectPing with no
+          # model was catching by luck, a claimed TestConnectPing with no
           # test file, a described `APP_SENTRY_DSN` when nothing by that name
           # exists anywhere. Handed to the model as a list to adjudicate, not
           # a hard fail: an env var set in the deploy or a CLI name
@@ -466,7 +466,7 @@ jobs:
           gh api "/repos/${{ github.repository }}/pulls/$PR_NUMBER/comments" \
             > pr_review_comments.json
 
-          # Self-review marker — the hidden <!-- ai-hero:self-review -->
+          # Self-review marker, the hidden <!-- ai-hero:self-review -->
           # comment posted by hero-skills:review-pr. Match both the current
           # marker and the older "Hero Self-Review" heading (case-insensitive)
           # so comments posted under the previous convention still count.
@@ -612,7 +612,7 @@ jobs:
           # Legacy statuses have no `status` field; `pending` is their only
           # non-terminal state, so column 2 is `completed` for everything else
           # and column 3 carries the state word. Column 2 is only ever
-          # `completed` or not — the decision below depends on it.
+          # `completed` or not, the decision below depends on it.
           gh api "/repos/${{ github.repository }}/commits/$HEAD_SHA/status" \
             --jq '.statuses[] | [.context, (if .state == "pending" then "in_progress" else "completed" end), .state] | @tsv' \
             >> checks.tsv
@@ -620,7 +620,7 @@ jobs:
 
           # test: begin ci-decision
           # Deny-list on conclusion: `success`, `neutral` and `skipped` pass.
-          # `stale` — GitHub stopped trusting the result — is pending, not a
+          # `stale`, GitHub stopped trusting the result, is pending, not a
           # pass.
           FAILED=$(awk -F'\t' '$2 == "completed" && $3 ~ /^(failure|timed_out|cancelled|action_required|startup_failure|error)$/' checks.tsv)
           PENDING=$(awk -F'\t' '$2 != "completed" || $3 == "stale"' checks.tsv)
@@ -736,7 +736,7 @@ jobs:
 
           # Fail closed early if the key is missing: skip the wasted API call
           # and give a precise reason. (A missing key would otherwise surface
-          # as a generic 401 on the curl below, which also fails closed — this
+          # as a generic 401 on the curl below, which also fails closed. This
           # just states the actual cause.)
           if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
             fail_closed "ANTHROPIC_API_KEY is not set — cannot run verification; failing closed."
@@ -821,7 +821,7 @@ jobs:
 
           # Not `curl -f`: that discards the error body, and the body is the
           # only place "prompt is too long" or "invalid model" ever appears.
-          # Retry once on 5xx/429/529 only — a 4xx is deterministic and comes
+          # Retry once on 5xx/429/529 only, a 4xx is deterministic and comes
           # back identical.
           HTTP=000
           for attempt in 1 2; do
@@ -901,7 +901,7 @@ jobs:
 
           # The gates ran against $HEAD_SHA minutes ago. A push in between
           # would land the approval on a commit whose CI and threads were
-          # never read — and "dismiss stale approvals" does not fire, because
+          # never read, and "dismiss stale approvals" does not fire, because
           # the approval post-dates the push.
           NOW_SHA=$(gh api "/repos/${{ github.repository }}/pulls/$PR_NUMBER" --jq '.head.sha')
           if [ "$NOW_SHA" != "$HEAD_SHA" ]; then
@@ -991,7 +991,7 @@ jobs:
 
       - name: Report a crashed run
         # A step that dies before Post result leaves the PR with nothing but
-        # the 👀 — ship-pr then polls a "failed run with no verdict". Say so
+        # the 👀, ship-pr then polls a "failed run with no verdict". Say so
         # on the PR, with the run URL, so the failure is where the author is
         # looking.
         if: failure()
@@ -1004,7 +1004,7 @@ jobs:
           # A step that failed for a reason it could name leaves it in
           # lane_error.txt. Without this the author reads only "crashed" and
           # has to open the run to learn that, say, the commit list came back
-          # truncated — a fact the failing step already knew.
+          # truncated, a fact the failing step already knew.
           REASON=
           [ -s lane_error.txt ] && REASON="
           $(cat lane_error.txt)"

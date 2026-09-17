@@ -6,14 +6,14 @@ on:
 
 # Least-privilege floor. Without a top-level block, a job with no permissions:
 # of its own inherits this repo's CONFIGURED default (Settings -> Actions ->
-# Workflow permissions), not a platform constant — so a job added later gets
+# Workflow permissions), not a platform constant, so a job added later gets
 # more access than this file appears to grant.
 permissions:
   contents: read
 
 # Supersede in-flight runs: a PR that gets three pushes in a minute should
 # validate the last one, not burn a runner on each. Safe to cancel because
-# this workflow only validates — it publishes nothing.
+# this workflow only validates. It publishes nothing.
 concurrency:
   group: pr-check-${{ github.ref }}
   cancel-in-progress: true
