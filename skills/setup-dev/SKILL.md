@@ -1,12 +1,12 @@
 ---
 name: setup-dev
 # prettier-ignore
-description: Set up a developer's local environment. Reads HERO.md, checks required tools, guides through git config, CLI auth, and missing dependencies. Per-developer — never modifies shared files.
+description: Set up a developer's local environment. Reads HERO.md, checks required tools, guides through git config, CLI auth, and missing dependencies. Per-developer, and never modifies shared files.
 argument-hint: "[--check | recalibrate]"
 disable-model-invocation: true
 ---
 
-# Setup — Developer Environment Setup
+# Setup: get a developer's machine ready
 
 Guide an individual developer through setting up their local environment based on the team's `HERO.md` configuration. This skill handles everything that is per-developer and should NOT be committed to the repo.
 
@@ -14,8 +14,8 @@ Guide an individual developer through setting up their local environment based o
 
 - `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before every other form.
 - `$ARGUMENTS`:
-  - (none) — Full guided setup
-  - `--check` — Just verify current setup, report what's missing
+  - (none) - Full guided setup
+  - `--check` - Only verify the current setup and report what is missing
 
 ## Prerequisites
 
@@ -28,28 +28,28 @@ No HERO.md found. Run hero-skills:init-hero first to configure the project.
 ## `recalibrate`
 
 `hero-skills:setup-dev recalibrate` tunes the config that drives this skill, and
-stops. It does not then run the skill — the point is to see which field was
-wrong, not to spend a run finding out. Dispatch on it before any other
-argument parsing — whichever step does that in this skill: when the first
-token of `$ARGUMENTS` is exactly `recalibrate`, announce
-`setup-dev: running recalibrate`, then follow the four phases in
-[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
-— using this table as the report, and stop.
+stops. It does not go on to run the skill. You want to see which field was
+wrong, not spend a whole run finding out.
+
+Check for it before parsing any other argument. When the first token of
+`$ARGUMENTS` is exactly `recalibrate`, print `setup-dev: running recalibrate`,
+follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) (report, ask, write, commit)
+using the table below as the report, and stop.
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" setup-dev
 ```
 
-Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
-`(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
-the user says is wrong. A row that already holds the right value is not a
-question.
+Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
+`(refused)`, `(absent)`, `(no-file)`. Also ask about any row the user says is
+wrong. A row that already holds the right value is not a question.
 
 ## Instructions
 
 ### Step 1: Read HERO.md
 
-**If the first token of `$ARGUMENTS` is exactly `recalibrate`, run the `recalibrate` section above and stop** — before the missing-HERO.md check below, which would otherwise send the user to `init-hero` for the very file the verb is there to fill in.
+**If the first token of `$ARGUMENTS` is exactly `recalibrate`, run the `recalibrate` section above and stop.** Do this before the missing-HERO.md check below, which would otherwise send the user to `init-hero` for the very file the verb exists to fill in.
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
@@ -102,7 +102,7 @@ git config --local user.name "USER_NAME"
 git config --local user.email "USER_EMAIL"
 ```
 
-Ask the user — never auto-set identity config without confirmation.
+Ask the user. Never set identity config without confirmation.
 
 ### Step 3: Check Required CLI Tools
 
@@ -173,7 +173,7 @@ Only check auth for tools that are actually installed AND relevant to HERO.md.
 
 ### Step 5: Check Recommended Tools
 
-Same as Step 3 but for `## Developer Setup → Recommended Tools`. Use `[--]` instead of `[!!]` for missing recommended tools — they're nice to have, not blockers.
+Same as Step 3 but for `## Developer Setup → Recommended Tools`. Use `[--]` instead of `[!!]` for missing recommended tools. They are nice to have, not blockers.
 
 ```
 RECOMMENDED TOOLS
@@ -197,7 +197,7 @@ MCP SERVERS
      → Is the Slack MCP server configured in your Claude settings?
 ```
 
-MCP server setup is done in Claude's settings, not via CLI — just inform the user what's expected and why.
+MCP server setup happens in the client's settings, not on the command line. Tell the user what is expected and why.
 
 ### Step 7: Summary & Next Steps
 
@@ -228,10 +228,10 @@ Don't also print `hero-skills:one-shot`; `preflight`'s own next-steps lead there
 
 ## Key Principles
 
-- **Never modify shared files.** This skill only touches local git config and suggests installs — it never writes to HERO.md, CLAUDE.md, or any committed file.
-- **Always ask before changing config.** Git identity, signing keys, and auth are personal — confirm before setting.
+- **Never modify shared files.** This skill only touches local git config and suggests installs. It never writes to HERO.md, CLAUDE.md, or any committed file.
+- **Always ask before changing config.** Git identity, signing keys, and auth are personal. Confirm before setting any of them.
 - **Platform-aware.** Detect macOS vs Linux and suggest the right install commands.
-- **Idempotent.** Running `hero-skills:setup-dev` twice should be safe — skip what's already done.
+- **Idempotent.** Running `hero-skills:setup-dev` twice must be safe. Skip whatever is already done.
 - **Reference HERO.md.** Every check should tie back to why it's needed: "Required by HERO.md for hero-skills:push-pr" or "Used by CI (GitHub Actions)".
 
 ## Examples

@@ -6,15 +6,15 @@ argument-hint: [--fix]
 disable-model-invocation: true
 ---
 
-# Audit — Plugin Self-Audit
+# Audit: check the plugin's own quality
 
-Audit the hero-skills plugin for quality, consistency, and maintainability. This skill is specific to the hero-skills repo itself — it reviews the skills that make up the plugin.
+Audit the hero-skills plugin for quality, consistency, and maintainability. This skill is specific to the hero-skills repo itself. It reviews the skills that make up the plugin.
 
 ## Arguments
 
 - `$ARGUMENTS`:
-  - (none) — Audit and report findings
-  - `--fix` — Audit and auto-fix what can be fixed (formatting, ordering, etc.)
+  - (none) - Audit and report findings
+  - `--fix` - Audit and auto-fix what can be fixed, such as formatting and ordering
 
 ## Instructions
 
@@ -79,8 +79,8 @@ SIZE & COMPLEXITY
 
 Look for instructions that are repeated across multiple skills. Common patterns:
 
-- "Read HERO.md" boilerplate — should each skill repeat how to read it, or should there be a shared pattern?
-- "Check for git repo" — appears in many skills
+- "Read HERO.md" boilerplate. Should each skill repeat how to read it, or should there be a shared pattern?
+- "Check for git repo", which appears in many skills
 - Similar investigation bash blocks
 - Repeated formatting patterns for output (the `[OK]`/`[??]`/`[--]` format)
 
@@ -102,11 +102,11 @@ DRY VIOLATIONS
      Suggestion: Consider moving to references/ if init exceeds 500 lines
 ```
 
-**Important:** Not all repetition is bad. Skills run independently — they can't share runtime state. Only flag repetition that could be eliminated via supplementary files or shared references.
+**Important:** not all repetition is bad. Skills run independently and cannot share runtime state. Only flag repetition you could remove with a supplementary file or a shared reference.
 
 #### 2d: HERO.md Field Coverage
 
-`scripts/hero-fields.sh --all` is the declared map — which skill reads which
+`scripts/hero-fields.sh --all` is the declared map of which skill reads which
 field, and what it decides there (its CURRENT column is always `-`; the map
 reads no repo). It is a claim, not evidence: cross-reference
 it against the HERO.md template in init-hero and against what the skills
@@ -197,12 +197,12 @@ If `--fix` is passed, automatically fix:
 - Step renumbering gaps
 - Trailing whitespace, inconsistent newlines
 
-**Never auto-fix:** Content changes, description rewrites, structural reorganization — these need human review.
+**Never auto-fix:** content changes, description rewrites, and structural reorganization. Those need human review.
 
 ## Key Principles
 
 - **This skill is for the hero-skills repo only.** It audits the plugin, not user projects.
-- **DRY is not always better.** Skills run independently — some repetition is by design.
+- **DRY is not always better.** Skills run independently, so some repetition is by design.
 - **Field coverage matters.** Every HERO.md field should be produced by init-hero and consumed by at least one skill.
 - **Size awareness.** Skills consume context window. Large skills slow down every invocation.
 - **Be specific.** File, line, what's wrong, how to fix.

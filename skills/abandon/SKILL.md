@@ -1,36 +1,36 @@
 ---
 name: abandon
 # prettier-ignore
-description: Abandon or pause work on a branch that hasn't merged — stash uncommitted changes, switch to the default branch, and clear conversation context.
+description: Abandon or pause work on a branch that hasn't merged. Stashes uncommitted changes, switches to the default branch, and clears conversation context.
 argument-hint: "[recalibrate]"
 disable-model-invocation: true
 ---
 
-# Abandon Branch — Stash and Walk Away
+# Abandon Branch: stash it and walk away
 
 Abandon or pause work on a branch that never merged: stash any uncommitted changes, switch back to the default branch, pull latest, and clear conversation context.
 
-> **Note:** Merged branches are already cleaned up by `hero-skills:ship-pr`'s final step (switch to default, pull, delete merged head, offer cleanup) — this skill is for the opposite case, when you're stepping away from a branch that did **not** go through `ship-pr`.
+> **Note:** Merged branches are already cleaned up by `hero-skills:ship-pr`'s final step (switch to default, pull, delete the merged head, offer cleanup). This skill is for the opposite case: stepping away from a branch that did **not** go through `ship-pr`.
 
 ## `recalibrate`
 
 `hero-skills:abandon recalibrate` tunes the config that drives this skill, and
-stops. It does not then run the skill — the point is to see which field was
-wrong, not to spend a run finding out. Dispatch on it before any other
-argument parsing — whichever step does that in this skill: when the first
-token of `$ARGUMENTS` is exactly `recalibrate`, announce
-`abandon: running recalibrate`, then follow the four phases in
-[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
-— using this table as the report, and stop.
+stops. It does not go on to run the skill. You want to see which field was
+wrong, not spend a whole run finding out.
+
+Check for it before parsing any other argument. When the first token of
+`$ARGUMENTS` is exactly `recalibrate`, print `abandon: running recalibrate`,
+follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) (report, ask, write, commit)
+using the table below as the report, and stop.
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" abandon
 ```
 
-Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
-`(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
-the user says is wrong. A row that already holds the right value is not a
-question.
+Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
+`(refused)`, `(absent)`, `(no-file)`. Also ask about any row the user says is
+wrong. A row that already holds the right value is not a question.
 
 ## Instructions
 
@@ -70,7 +70,7 @@ Options:
 2. Cancel — go back and commit or handle changes first
 ```
 
-**STOP and wait for user to choose.** Do NOT proceed without explicit confirmation. Do NOT offer a "discard" option — if the user truly wants to discard, they can do that themselves before running this skill.
+**STOP and wait for user to choose.** Do NOT proceed without explicit confirmation. Do NOT offer a "discard" option. A user who truly wants to discard can do that themselves before running this skill.
 
 **If user chooses option 1 (stash):**
 
@@ -104,7 +104,7 @@ fi
 
 If already on the default branch, skip to Step 3.
 
-Otherwise, check whether the current branch has secretly already been merged (handles squash-and-merge) — if so, this isn't an abandon at all, point the user at `ship-pr`'s cleanup instead of duplicating it here. Check remotely first, but fall back to a local check if the API call fails — a network hiccup must not silently read as "unmerged" when a real merge-status query would have said otherwise, especially since this now gates a destructive Delete option below:
+Otherwise, check whether the current branch has secretly already been merged (this catches squash-and-merge). If it has, this is not an abandon at all: point the user at `ship-pr`'s cleanup rather than duplicating it here. Check remotely first, but fall back to a local check when the API call fails. A network hiccup must not read as "unmerged" when a real merge-status query would have said otherwise, and that matters more now that it gates the destructive Delete option below:
 
 ```bash
 MERGED_COUNT=$(gh pr list --head "$CURRENT" --base "$DEFAULT_BRANCH" --state merged --json number --jq 'length' 2>/dev/null)
@@ -118,7 +118,7 @@ if [ -z "$MERGED_COUNT" ]; then
 fi
 ```
 
-**If `$MERGED_COUNT >= 1` (already merged):** stop and say `'$CURRENT' already has a merged PR — this isn't an abandon. Run hero-skills:ship-pr's cleanup flow (or delete '$CURRENT' manually) instead.` If Step 1 stashed anything, say so explicitly here too — the user is being redirected away without a reminder otherwise: `Note: your uncommitted changes are stashed (stash@{0}) — restore with 'git stash pop' after switching branches.` Do not proceed with this skill.
+**If `$MERGED_COUNT >= 1` (already merged):** stop and say `'$CURRENT' already has a merged PR, so this is not an abandon. Run hero-skills:ship-pr's cleanup flow (or delete '$CURRENT' manually) instead.` If Step 1 stashed anything, say so explicitly here too, because the user is being redirected away and would otherwise get no reminder: `Note: your uncommitted changes are stashed (stash@{0}). Restore them with 'git stash pop' after switching branches.` Do not proceed with this skill.
 
 **Otherwise (genuinely unmerged):**
 
@@ -132,7 +132,7 @@ Options:
 3. Cancel — stay on '$CURRENT' and handle it first
 ```
 
-**STOP and wait for user to choose.** Never delete without this explicit confirmation — an unmerged branch is unrecoverable work once its local ref and reflog expire.
+**STOP and wait for user to choose.** Never delete without this explicit confirmation. An unmerged branch is unrecoverable work once its local ref and reflog expire.
 
 **If the user chose option 3 (Cancel): stop here.** Do not run the checkout below.
 
@@ -144,7 +144,7 @@ if [ "$CURRENT" != "$DEFAULT_BRANCH" ]; then
 fi
 ```
 
-**If the user chose option 2 (Delete):** force-delete the local branch, then check for a remote branch and/or open PR and offer to remove those too — don't delete them silently:
+**If the user chose option 2 (Delete):** force-delete the local branch, then check for a remote branch and/or open PR and offer to remove those too. Do not delete them silently:
 
 ```bash
 git branch -D "$CURRENT"
@@ -153,9 +153,9 @@ PR_INFO=$(gh pr list --head "$CURRENT" --state open --json number,url --jq '.[0]
 REMOTE_EXISTS=$(git ls-remote --heads origin "$CURRENT" 2>/dev/null)
 ```
 
-If `$PR_INFO` is non-empty, ask: `Open PR #{number} ({url}) still points at '$CURRENT'. Close it too? [y/N]` — on yes, `gh pr close {number} --delete-branch` (this closes the PR and deletes the remote branch in one call). On no, leave the PR and remote branch alone and say so explicitly.
+If `$PR_INFO` is non-empty, ask: `Open PR #{number} ({url}) still points at '$CURRENT'. Close it too? [y/N]` On yes, run `gh pr close {number} --delete-branch`, which closes the PR and deletes the remote branch in one call. On no, leave the PR and remote branch alone and say so explicitly.
 
-If there's no open PR but `$REMOTE_EXISTS` is non-empty, ask: `Remote branch 'origin/$CURRENT' still exists. Delete it too? [y/N]` — on yes, `git push origin --delete "$CURRENT"`.
+If there's no open PR but `$REMOTE_EXISTS` is non-empty, ask: `Remote branch 'origin/$CURRENT' still exists. Delete it too? [y/N]` On yes, run `git push origin --delete "$CURRENT"`.
 
 ### Step 3: Pull Latest
 
