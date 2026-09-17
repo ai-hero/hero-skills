@@ -16,7 +16,7 @@
 #   runtime: per-project .env keys vs .env.example, declared ports free,
 #              dependency file present. Scoped to projects touched by the diff
 #              when --projects is passed.
-#   pipeline, issue tracker auth (Linear / Jira / GitHub Issues), default
+#   pipeline: issue tracker auth (Linear / Jira / GitHub Issues), default
 #              branch fetch reachability
 #
 # Usage:

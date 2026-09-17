@@ -683,12 +683,12 @@ hero_item_covers() { hero_item_list_field "$1" covers; }
 # Print a frontmatter list field's entries, one per line.
 #
 # Handles BOTH YAML forms. Only the inline form was parsed before, so a block
-# sequence,
+# sequence like:
 #
 #   depends_on:
 #     - 99
 #
-# That yielded an empty value, the readiness loop never ran, and the item was
+# yielded an empty value, the readiness loop never ran, and the item was
 # reported READY despite depending on work that does not exist. Silently: there
 # was no `d` for the readiness loop's existence check to flag as missing.
 hero_item_list_field() {
@@ -1169,15 +1169,16 @@ hero_norm_id() {
 #   active   status is in-progress: someone is already on it
 #   done     completed
 #   new      status is new (or absent): created, not yet triaged. Never READY,
-#            nobody has decided this should be worked on
+#            because nobody has decided this should be worked on
 #   backlog  build kinds (and unrecognized ones) with status todo: on the
 #            roadmap, not yet planned; annotated `[deps unmet]` when a
 #            dependency isn't done
 #   review   build kinds only, status reviewing: PR open, awaiting merge
 #   feedback feedback kinds only, status todo or queued: a divergence
-#            written but not yet landed upstream. Never READY: a feedback item
-#            is DELIVERED: never built, so handing one to one-shot is wrong
-#   goal     kind: goal only, status todo: approved, waiting to run. Never
+#            written but not yet landed upstream. Never READY, because a
+#            feedback item is DELIVERED and never built, so handing one to
+#            one-shot is wrong
+#   goal     kind `goal` only, status todo: approved, waiting to run. Never
 #            READY: a goal is a container for features, and one-shot builds
 #            features. `wayfare next` selects goals by kind instead
 #   invalid  no usable id, OR an unrecognized status. Either way the item

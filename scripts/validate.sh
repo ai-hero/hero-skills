@@ -452,10 +452,10 @@ echo "────────────────────────�
 # parsers in ship-pr went unseen). Reading HERO.md through a text tool is the
 # duplication; writing it is not.
 #
-# Fields are :: separated, the patterns contain `|` alternations.
+# Fields are :: separated because the patterns contain `|` alternations.
 # `.*` not `[^\n]*`: grep -E reads the latter as "not backslash or n", which
 # cannot span an ordinary word like `print`. grep is line-based regardless.
-# \b word boundaries are required too, without them `sed` matches inside
+# \b word boundaries are required too: without them `sed` matches inside
 # "pas_sed_" and "ba_sed_", flagging ordinary prose.
 SHARED_STATE=(
   "\\b(awk|sed|cut)\\b.*HERO\\.md::hero_field::hand-rolled HERO.md parsing"

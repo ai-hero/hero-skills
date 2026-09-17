@@ -7,7 +7,7 @@ on:
   # comments.
   workflow_call:
     # Declaring this is what lets callers pass it explicitly instead of
-    # `secrets: inherit`, GitHub rejects a caller that names a secret the
+    # `secrets: inherit`. GitHub rejects a caller that names a secret the
     # reusable workflow never declared, which is why the callers used
     # `inherit` (and tripped semgrep's least-privilege rule) before.
     # GITHUB_TOKEN is deliberately absent: it is provisioned automatically
@@ -56,7 +56,7 @@ jobs:
     # within this; the ceiling just stops a hung step from pinning a runner.
     timeout-minutes: 20
     # Defense in depth on the trigger:
-    # 1. `author_association` gate, only OWNER/MEMBER/COLLABORATOR (the
+    # 1. `author_association` gate: only OWNER/MEMBER/COLLABORATOR (the
     #    associations that imply write access) can invoke. This is
     #    load-bearing, not decorative: the workflow posts a real APPROVE
     #    review and spends an API key, so without it any commenter, e.g.
@@ -125,8 +125,8 @@ jobs:
           # of a file. It used to be `: > pr_commits.json` for a human PR, read
           # back as `[ -s ... ]`, which made a zero-byte file mean "not a bot"
           # and, fatally, made `[]` mean "every commit is the bot's". Anyone
-          # tidying that `: >` into `echo '[]' >`, valid JSON, looks stricter
-          #, would have routed EVERY human PR to the scripted lane with the
+          # tidying that `: >` into `echo '[]' >` (valid JSON, looks stricter)
+          # would have routed EVERY human PR to the scripted lane with the
           # whole suite still green.
           if jq -e --arg re "$BOT_RE" '.user.login | test($re)' pr.json > /dev/null; then
             AUTHOR_IS_BOT=true
@@ -233,7 +233,7 @@ jobs:
             --jq '.[] | "\(.filename)\t\(.status)\t\(.additions)\t\(.deletions)"' > files.tsv
           cut -f1 files.tsv > changed_files.txt
 
-          # Recursive repo file tree at HEAD, lets the verifier confirm
+          # Recursive repo file tree at HEAD. It lets the verifier confirm
           # claims about files that exist outside the diff (tests,
           # migrations, indexes, etc.) without re-fetching them all.
           # Capped like the diff and the bundle: a monorepo tree with no cap
@@ -297,8 +297,9 @@ jobs:
           # file to judge correctness, dead code, and missing handling.
           # Bundled into a single file with markers so the prompt can
           # ingest it without juggling many --rawfile args.
-          # omitted.tsv: path, class, status, +A/-D, one record, read by the
-          # diff filter (column 1), the prompt, and the Go-package heuristic.
+          # omitted.tsv columns: path, class, status, +A/-D. One record per
+          # line, read by the diff filter (column 1), the prompt, and the
+          # Go-package heuristic.
           : > full_files.txt
           : > omitted.tsv
           UNREADABLE=0
@@ -612,7 +613,7 @@ jobs:
           # Legacy statuses have no `status` field; `pending` is their only
           # non-terminal state, so column 2 is `completed` for everything else
           # and column 3 carries the state word. Column 2 is only ever
-          # `completed` or not, the decision below depends on it.
+          # `completed` or not, and the decision below depends on it.
           gh api "/repos/${{ github.repository }}/commits/$HEAD_SHA/status" \
             --jq '.statuses[] | [.context, (if .state == "pending" then "in_progress" else "completed" end), .state] | @tsv' \
             >> checks.tsv
@@ -991,7 +992,7 @@ jobs:
 
       - name: Report a crashed run
         # A step that dies before Post result leaves the PR with nothing but
-        # the 👀, ship-pr then polls a "failed run with no verdict". Say so
+        # the 👀. ship-pr then polls a "failed run with no verdict". Say so
         # on the PR, with the run URL, so the failure is where the author is
         # looking.
         if: failure()

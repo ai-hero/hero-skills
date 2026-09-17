@@ -3,8 +3,8 @@
 # All Rights Reserved.
 
 # Enumerate the repos checked out in a fleet folder, and diff them against
-# FLEET.md. The read-only half of hero-skills:fleet, where `review` prints this
-# output, `sync` uses it to propose rows.
+# FLEET.md. The read-only half of hero-skills:fleet: `review` prints this
+# output, and `sync` uses it to propose rows.
 #
 # Usage: fleet-scan.sh [FLEET_ROOT] [--list | --review]
 #        fleet-scan.sh -h | --help

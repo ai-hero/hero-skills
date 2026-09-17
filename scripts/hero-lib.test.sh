@@ -5,7 +5,7 @@
 # Regression table for scripts/hero-lib.sh.
 #
 # Scoped deliberately: only the two functions with real failure modes are
-# covered, hero_field (parses attacker-controlled repo content and feeds it to
+# covered: hero_field (parses attacker-controlled repo content and feeds it to
 # git/gh) and hero_ready_items (parses hand-written frontmatter and previously
 # aborted the caller's shell on it). The thin wrappers around them are not
 # tested; a test there would pin prose, not behavior.
@@ -161,7 +161,7 @@ cat > "$F/FLEET.md" <<'EOF'
 ```
 EOF
 
-# The heading's trailing spaces cannot live in this file, the
+# The heading's trailing spaces cannot live in this file because the
 # trailing-whitespace hook strips them, so they are added after the heredoc.
 awk '!done && /^### auth$/ { print "### auth   "; done = 1; next } { print }' "$F/FLEET.md" > "$F/FLEET.md.tmp" && mv "$F/FLEET.md.tmp" "$F/FLEET.md"
 
@@ -487,7 +487,7 @@ OUT9="$(hero_ready_items "$W" 2>/dev/null)"
 check "planning: item lists as plan, not READY" "plan"    "$(state_of 021-planning.md "$OUT9")"
 check "planning: quoted planning counts"        "plan"    "$(state_of 023-qplan.md "$OUT9")"
 check "planning: capitalized planning counts"   "plan"    "$(state_of 024-capplan.md "$OUT9")"
-# A dependent of a planning item stays blocked (the id EXISTS. It is just not
+# A dependent of a planning item stays blocked (the id EXISTS, it is just not
 # done, so this is ordinary blocking, NOT a dangling-ref).
 check "planning: dependent stays blocked"       "blocked" "$(state_of 022-plandep.md "$OUT9")"
 printf '%s' "$OUT9" | grep -q '022-plandep.md.*\[missing dep:'

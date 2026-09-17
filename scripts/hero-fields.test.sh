@@ -94,7 +94,7 @@ check "section row with the heading absent" \
   "(absent)" "$("$FIELDS" setup-dev "$R" | awk -F'\t' '$1 == "Developer Setup" { print $3 }')"
 
 # A field under a heading that does not exist needs a different question than
-# a blank under a heading that does, phase 3 has to create the section.
+# a blank under a heading that does, because phase 3 has to create the section.
 check "field under a missing section is no-section" \
   "(no-section)" "$(printf '%s\n' "$OUT" | cell linters 3)"
 
@@ -122,7 +122,7 @@ EOM
 check "a heading inside a code fence is not present" \
   "(absent)" "$("$FIELDS" setup-dev "$TMP/fenced" | awk -F'\t' '$1 == "Developer Setup" { print $3 }')"
 
-# No HERO.md at all: every row says so, and the command still succeeds,
+# No HERO.md at all: every row says so, and the command still succeeds, so
 # recalibrate reads the rows and sends the user to init-hero.
 mkdir -p "$TMP/bare"
 BARE=$("$FIELDS" push-pr "$TMP/bare"); check "missing HERO.md exits 0" "0" "$?"
@@ -177,8 +177,9 @@ check "no DECIDES cell contains a pipe" \
 check "--list is non-empty" \
   "yes" "$([ "$("$FIELDS" --list | wc -l | tr -d ' ')" -gt 0 ] && echo yes || echo no)"
 
-# Every listed name is a real skill directory, catches a typo'd skill name in
-# a new map row, which would otherwise surface only when someone runs the verb.
+# Every listed name is a real skill directory. This catches a typo'd skill
+# name in a new map row, which would otherwise surface only when someone runs
+# the verb.
 BAD_NAME=""
 for name in $("$FIELDS" --list); do
   [ -d "$PLUGIN_ROOT/skills/$name" ] || BAD_NAME="$BAD_NAME $name"

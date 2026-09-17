@@ -48,7 +48,8 @@ The workflow lives at `.github/workflows/auto-approve.yaml` (or `.yml`, since bo
 stops. It does not go on to run the skill. You want to see which field was
 wrong, not spend a whole run finding out.
 
-Check for it before parsing any other argument. When the first token of
+Dispatch on it before parsing any other argument, in whichever step does
+that parsing. When the first token of
 `$ARGUMENTS` is exactly `recalibrate`, print `ship-pr: running recalibrate`,
 follow the four phases in
 [docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) (report, ask, write, commit)

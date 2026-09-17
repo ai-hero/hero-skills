@@ -129,8 +129,8 @@ check "contract: caller secrets declared by callee" "$caller_secrets" \
 # The caller's job permissions are the ceiling on the callee's token. A scope
 # the callee declares but the caller lacks is a startup validation error in
 # every consumer ("The workflow is requesting 'checks: read', but is only
-# allowed 'checks: none'"), no step runs, no verdict posts, with no change
-# on their side. Passing here is necessary, not sufficient: consumers must
+# allowed 'checks: none'"). No step runs, no verdict posts, and nothing
+# changes on their side. Passing here is necessary, not sufficient: consumers must
 # also have VENDORED the new caller before the callee change merges.
 missing_perms=$(python3 -c "
 import yaml
@@ -150,8 +150,8 @@ check "contract: caller never uses secrets: inherit" "yes" \
 # The caller must track this repo's DEFAULT branch. A tag or SHA here means a
 # fix to the shared workflow is not live until a PR lands in each of ~25
 # consumers; a non-default branch means the fleet runs code that main's branch
-# protection never gated. Both fail silently, consumers keep running the old
-# workflow with nothing red anywhere, so assert the ref explicitly.
+# protection never gated. Both fail silently: consumers keep running the old
+# workflow with nothing red anywhere. So assert the ref explicitly.
 caller_ref=$(grep -oE 'auto-approve\.ya?ml@[A-Za-z0-9._/-]+' "$SOURCE" | head -1 | cut -d@ -f2)
 check "contract: caller tracks main" "main" "$caller_ref"
 

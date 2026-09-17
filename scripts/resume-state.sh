@@ -2,7 +2,7 @@
 # Copyright (c) 2026 A.I. Hero, Inc.
 # All Rights Reserved.
 
-# resume-state.sh, gather the git/PR state one-shot needs to pick a resume point.
+# resume-state.sh: gather the git/PR state one-shot needs to pick a resume point.
 #
 # Prints shell-eval-able KEY=VALUE lines describing where the current branch
 # sits in the pipeline. one-shot's Step 0.5 maps these onto a resume step; this
@@ -166,8 +166,8 @@ if [ "$JQ_OK" = true ] && [ -n "$CURRENT_BRANCH" ]; then
   if PR_LIST=$(gh pr list --state all --head "$CURRENT_BRANCH" \
       --json number,url,isDraft,reviewDecision,state 2>/dev/null); then
     # With --state all, a branch that had a closed PR and then a new open one
-    # returns both. Prefer the OPEN one. That is the PR this pipeline is
-    # working, and fall back to the first entry when none is open.
+    # returns both. Prefer the OPEN one, because that is the PR this pipeline
+    # is working, and fall back to the first entry when none is open.
     PR_JSON=$(printf '%s' "$PR_LIST" \
       | jq -r '((map(select(.state == "OPEN")) | .[0]) // .[0]) // empty' 2>/dev/null)
     PR_NUMBER=$(printf '%s' "$PR_JSON" | jq -r '.number // empty' 2>/dev/null)

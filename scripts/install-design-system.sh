@@ -117,11 +117,12 @@ fi
 # Match on the hook's PATH appearing in an existing command, not on exact
 # string equality with $HOOK_CMD. A prior install (or a hand-edit) commonly
 # writes ${CLAUDE_PROJECT_DIR} (braced) where this script's own HOOK_CMD is
-# unbraced, both expand identically in the shell that runs it, but an exact
+# unbraced. Both expand identically in the shell that runs it, but an exact
 # match sees them as different strings and adds a SECOND PostToolUse entry
 # for the same hook, which then runs check-design-tokens.sh twice per edit.
 # `// empty` drops a null/absent command (a hooks[] entry with no "command"
-# key) before test() ever sees it, test() throws on a non-string input, and
+# key) before test() ever sees it, because test() throws on a non-string
+# input, and
 # an uncaught jq error here reads as "not wired", adding a duplicate entry
 # next to a sibling hook that merely lacks a command field of its own.
 if jq -e \
