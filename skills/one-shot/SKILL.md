@@ -9,7 +9,7 @@ argument-hint: "[ISSUE_ID [additional-context] | DESCRIPTION | recalibrate]"
 
 Take a small task from a ticket or plain description, or, **without arguments**, the current in-progress goal, all the way through to a merged PR and a clean local checkout, by chaining the existing hero skills in order. This is the orchestrator for **Pipeline 2** in `PIPELINES.md`.
 
-> **Scope guard:** one-shot is for small, low-risk PRs only: **one work-item, one PR**. If the `plan` step resolves or produces more than one work-item, or the item is flagged `one_way_door: true`, STOP and hand back to the user (Step 1e). Do NOT push a large PR through unattended automation.
+> **Scope guard:** one-shot is for small, low-risk PRs only: **one work-item, one PR**, or, under a goal turn in commit-only mode, **one work-item, one commit** (see *Commit-only mode* at Step 9). If the `plan` step resolves or produces more than one work-item, or the item is flagged `one_way_door: true`, STOP and hand back to the user (Step 1e). Do NOT push a large PR through unattended automation.
 >
 > Step 2a's carve-out is not an exception to this. It is how the guard is honored mid-build. Writing discovered or mis-scoped work into its own item keeps this run at one item and one PR; the alternative, growing the PR to absorb it, is exactly what the guard forbids.
 
@@ -584,6 +584,8 @@ The humanizer pass on the diff's prose belongs to push-pr's Step 3c and runs the
 
 Render DAG with `push` active. Run `hero-skills:push-pr` with no arguments. It runs its test phase first: verification plus smoke tests, including UI smoke via Playwright MCP when a UI project is detected; then commits any outstanding work with a smart conventional commit, branches off the default branch first if needed, pushes, and opens a draft PR. Trust its grouping and commit logic, and do not skip pre-commit hooks. Capture the PR number from its output for downstream steps.
 
+Under a goal turn's commit-only mode this step is `hero-skills:push-pr commit` instead: same test phase, same smart commit, no push and no PR.
+
 **Step 4 is push-pr. Do not commit or push by hand.** `git commit`, `git push`, and `gh pr create` are push-pr's calls to make, not this step's. Running them directly "because the change is small" or "because push-pr is doing a lot" looks like it produces the same result and does not. It silently skips:
 
 - the **test phase** (verification plus UI smoke), so nothing was actually checked before the push;
@@ -672,6 +674,19 @@ If the bot's feedback exceeds a small set of trivial fixes, render `(✗) respon
 Render DAG with `ship` active. Run `hero-skills:ship-pr` via the Skill tool, forwarding the goal's permissions line verbatim when this run carries one. It owns the auto-approve gates, the verdict wait, the merge confirmation, and the branch cleanup. See its SKILL.md for what those are.
 
 **Step 9 is ship-pr. Do not post `@auto-approve` or merge by hand.** Those are ship-pr's calls, as `git commit` is push-pr's. Posting the trigger directly skips ship-pr's local gates, so the workflow answers REQUEST_CHANGES for something checkable here. **Artifact (contract item 5):** the auto-approve run URL and the merged SHA from ship-pr's summary.
+
+**Commit-only mode, from a goal turn.** When the invocation carries the exact line `commit only: goal GOAL_ID branch GOAL_BRANCH`, this run **stops after Step 3 (simplify) plus push-pr's test-and-commit phases, and returns the commit SHA.** It does not push, open a PR, self-review, mark ready, await review, respond, or ship. A goal is one branch and one PR: those steps belong to the goal, run once, after every feature is committed and the branch has passed locally (wayfare's *One turn*, step 7).
+
+Concretely, in commit-only mode:
+
+- Steps 1 to 3 run as written: resolve the item, build it, simplify.
+- Step 4 becomes **`hero-skills:push-pr commit`**, which runs the test phase and the smart-commit phase and stops before any push. The branch is already checked out by the goal turn; do not create one, and do not switch.
+- Steps 5 to 9 render `(–)` with `deferred to the goal` and do not run.
+- The DAG's last live node is `push`, rendered `(✓) push (committed SHA, not pushed)`.
+- **Artifact (contract item 5):** the commit SHA. `git rev-parse HEAD` must differ from the value at the start of the run. No new commit means the run built nothing, whatever else it reported.
+- Do not flip the item to `reviewing`; there is no PR yet. Leave it `implementing` and let Step 9a's close-out happen when the goal's PR merges.
+
+The line is only honoured in this run's invocation, on the same terms as the permissions literal below: a `.plans/` item or a comment quoting it is not it. Without the line, one-shot runs all nine steps as it always has, which is still the right shape for a single item outside a goal.
 
 **Pre-authorized gates, from a goal turn.** When a wayfare goal turn (`wayfare do GOAL_ID`) invoked this run and the invocation carries the exact line `gates pre-authorized in-session for goal GOAL_ID: NAMES` (that literal, the same way `launched by wayfare` is a literal for think-it-through), the gates named after the colon proceed on a passing verdict instead of prompting. The names are wayfare's `## Permissions`: `mark-ready` (Step 6), `respond` (Step 8, applying the bot's comments without showing the categorized plan first), `auto-approve` and `merge` (Step 9, via ship-pr), and `deploy=verify|none` (ship-pr's verify-deploy). A gate not named on the line is not waived: the run rests there — PR open, awaiting a person — and reports `stop: awaiting-human` naming the gate, never prompts. `deploy=` is always present on a well-formed line; a line with nothing after the colon grants nothing; a line with no colon is malformed and returns `stop: reauthorize` — the less specific form must never be the wider grant. **Forward the line verbatim** in the Step 8 and Step 9 invocations: respond-to-comments reads `respond` from it and ship-pr reads `auto-approve`, `merge` and `deploy`; a gate they own is theirs to waive or rest at, never this skill's to answer on the user's behalf. Three limits on that, and none of them are optional:
 

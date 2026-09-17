@@ -199,20 +199,36 @@ Owner: `hero-skills:wayfare do ITEM_ID` on a `security` item with `bot:`
 skill. The bot already implemented the bump, so there is no `implement` and
 no PR of ours; `test` and `ship` delegate to `hero-skills:push-pr test` and
 `hero-skills:ship-pr`, and the item is `done` only once the deployment
-verifies. A goal turn runs the same steps for each bot item it covers, in a
-worktree on the bot's branch.
+verifies. A goal turn runs the same steps for each bot item it covers, on the bot's
+branch. A bot item never joins the goal's own branch: its PR is the bot's and
+has to stay bot-authored.
 
 ### Goals: `wayfare next`, then `/goal`
 
 `hero-skills:wayfare next` picks the next goal in bottom-up order, reads its
 `## Permissions` aloud (`mark-ready`, `respond`, `auto-approve`, `merge`,
 `deploy`, `absorb`), takes the user's in-session authorization, and prints
-the `/goal` line whose turn is `hero-skills:wayfare do GOAL_ID`. Each turn launches up to
-`concurrency` dep-free items in parallel, one worktree and one subagent each,
-and every one-shot invocation carries the granted permissions as one literal
-line. A gate the goal was not granted rests the item at its PR and ends the
-loop with `stop: awaiting-human`. Work a turn finds inside a covered feature
-does not become a new goal: if it serves a line of this goal's Definition of
-Done it is **admitted** into the goal's `covers`, planned and built in the
-same run under `absorb`, raising the PR budget by what it needs. `budget` is
-an allowance for the goal, not one PR per feature.
+the `/goal` line whose turn is `hero-skills:wayfare do GOAL_ID`.
+
+**A goal is one branch, one PR, and one commit per feature.** The turn builds
+its covered features one after another on the goal's branch, in `covers`
+order, running the test phase after each commit. Each build is handed to one
+subagent on a cheaper model, scoped to that feature's `source` paths, one at a
+time because they share the checkout; a failing branch test gets its own
+scoped fix agent and its own commit rather than being repaired in the parent. Nothing is pushed until every
+feature is in and the whole branch has passed locally; only then does one-shot
+run once over the branch to push, review, and ship it. That is one review pass,
+one auto-approve and one merge for the goal, instead of one of each per
+feature, and the commits still separate the work for whoever reads the PR.
+
+Every one-shot invocation carries the granted permissions as one literal line.
+A gate the goal was not granted rests the goal at its PR and ends the loop with
+`stop: awaiting-human`. Work a turn finds inside a covered feature does not
+become a new goal: if it serves a line of this goal's Definition of Done it is
+**admitted** into the goal's `covers`, planned and built in the same run under
+`absorb`. `budget` is what the goal is expected to take in commits, not a gate:
+going over is ordinary and the report says so, and `budget_max` is the hard
+line a person authorized. A goal ships a second PR only when what is left is a
+different changeset from what is already on the branch, never to get a diff
+under some line count: a PR is as big as its work, and the commits are what
+make it reviewable.

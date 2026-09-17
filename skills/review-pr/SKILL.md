@@ -188,7 +188,14 @@ not a printout to read by eye:
 | **under ~50 lines** | review inline, **no agents** | Read it yourself. Say you did, and why the fan-out was skipped. |
 | **~50 to 300 lines** | 2 | `code-reviewer` + security |
 | **~300 to 1500 lines** | all 6 | the five pr-review-toolkit agents plus security |
-| **over 1500 lines or 50 files** | all 6, scoped | warn and ask to focus on specific paths first |
+| **over ~1500 lines or 50 files** | all 6 | the same six. Review the whole diff; do not ask the author to shrink it |
+
+**The tiers size the review effort, never the PR.** A PR is as big as the
+work it does. A goal that genuinely takes 2000 lines gets a 2000-line review,
+not a request to carve it into pieces that each review cleanly and none of
+which is the change. What matters is that the commits are logical changesets a
+reviewer can walk one at a time; line count is a hint about effort, not a
+limit anyone has to stay under.
 
 Two rules keep the tiers honest:
 
@@ -438,7 +445,7 @@ gh pr view $PR_NUMBER --json commits --jq '.commits[].messageHeadline'
 
 Read the PR description carefully. It explains design decisions.
 
-Apply the same tiering as self-review Step 2: measure the diff, pick the tier, say which one and why. If the diff exceeds 1500 lines or 50 files, warn and ask to focus on specific paths.
+Apply the same tiering as self-review Step 2: measure the diff, pick the tier, say which one and why. A large diff means more review effort, not a request for the author to split it; walk the commits in order, since that is the structure they carry.
 
 ### Step 2: Run All Review Agents in Parallel
 
