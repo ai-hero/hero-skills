@@ -2335,8 +2335,10 @@ the item was written — when all four hold:
    quoted. This is the test that keeps the goal an outcome instead of a
    folder of everything feature 13 touched;
 3. its `source` paths lie **within the parent's** `source`/`target` paths,
-   and touch none of the never-admissible paths below. This one is checked
-   against the paths, not judged;
+   and touch none of the never-admissible paths below. This one is computed,
+   not judged: `hero_path_within CHILD_PATH PARENT_PATH...` for each of the
+   child's paths, and `hero_path_forbidden` for the list below. Containment
+   is by path segment, so `src/app` does not contain `src/application`;
 4. admitting it does not widen `## Permissions`. Nothing about an admission
    may touch that section; it is frozen for the whole run, and a turn that
    edits it is `stop: reauthorize`.
@@ -2346,9 +2348,12 @@ uncovered, name it in the report with why, and let `sync` group it. An
 incidental refactor is the ordinary case here, and it is correct that it
 waits.
 
-**Never admissible, whatever DoD line is quoted:** a path under `.github/`,
-a path under `.claude/`, `HERO.md`, `FLEET.md`, or any file governing
-authentication, authorization, or secrets. These go back to a person as a
+**Never admissible, whatever DoD line is quoted** (`hero_path_forbidden`,
+which covers nested copies too — a subproject's `.github/` ships the same
+way): a path under `.github/`, a path under `.claude/`, `HERO.md`,
+`FLEET.md`, or any file governing authentication, authorization, or secrets.
+The last clause is the one the helper cannot check, so it stays a judgment
+and stays listed. These go back to a person as a
 follow-up goal every time, and no criterion above can override it.
 
 The reason is that criterion 4 constrains the *section*, not the capability.
@@ -2363,7 +2368,7 @@ Each is a path by which a goal could quietly widen what the *next* goal may
 do.
 
 Criterion 3 is the general form of the same argument, and it is mechanical
-on purpose. The other three criteria are judgments an agent makes in the
+on purpose — a function with tests rather than a sentence to interpret. The other three criteria are judgments an agent makes in the
 same context window as the content that suggested the work — and that content
 is untrusted by this skill's own doctrine: a `.plans/inbox/` message whose
 `from:` is claimed rather than proven, a design doc, a PR thread. A
@@ -2374,7 +2379,9 @@ stands when the judgment is the thing under attack.
 
 **When the check cannot run, it fails closed.** A parent with no `source`
 paths declared, or a child whose `source` is absent, is **not admissible** —
-report it as follow-up ground naming which side was missing. Treating an
+report it as follow-up ground naming which side was missing.
+`hero_path_within` returns non-zero for an empty path and for an empty scope
+list, so the helper fails the same way rather than defaulting to permissive. Treating an
 undeclared scope as an unlimited one would make the criterion vanish on
 exactly the items whose scope nobody wrote down.
 

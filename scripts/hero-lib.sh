@@ -947,6 +947,57 @@ hero_msg_deposit() { # TARGET_STORE MSG_ID BODY_FILE
   printf '%s' "$dest"
 }
 
+# ---------- admission path scope -------------------------------------------
+
+# True when PATH is inside one of the SCOPE paths (a goal turn's admission
+# criterion 3, docs in skills/wayfare/SKILL.md *Admitting discovered work*).
+#
+# Mechanical on purpose. The other admission criteria are judgments an agent
+# makes in the same context window as the content that suggested the work, and
+# that content is untrusted — a persuasive paragraph can produce an item that
+# honestly seems to serve a DoD line. It cannot move the parent's declared
+# paths, so this is the criterion that still holds when the judgment is the
+# thing under attack. That only stays true if "within" is computed rather than
+# argued, which is what this function is for.
+#
+# Containment is by path SEGMENT, never by string prefix: `src/app` must not
+# contain `src/application`, which a bare `case "$p" in "$s"*)` would accept
+# and which is a real directory-naming pattern, not a contrived one.
+hero_path_within() { # PATH SCOPE [SCOPE...]
+  local p="$1" s
+  shift
+  [ -n "$p" ] || return 1
+  # `..` is refused outright rather than resolved: these are declared strings
+  # from a git-excluded file, not paths on disk, so there is nothing to
+  # canonicalize against and `a/../../etc` would otherwise "be within" `a`.
+  case "$p" in *..*) return 1 ;; esac
+  p="${p#./}"; p="${p%/}"
+  for s in "$@"; do
+    [ -n "$s" ] || continue
+    case "$s" in *..*) continue ;; esac
+    s="${s#./}"; s="${s%/}"
+    [ "$p" = "$s" ] && return 0
+    case "$p" in "$s"/*) return 0 ;; esac
+  done
+  return 1
+}
+
+# Paths no admission may touch, whatever DoD line is quoted: they widen what
+# the NEXT goal may do without ever editing `## Permissions`. `.github/`
+# carries the approval workflow this fleet calls at @main, `.claude/` is agent
+# instructions, and HERO.md/FLEET.md name the gates themselves.
+#
+# Returns 0 when PATH is forbidden, so `if hero_path_forbidden "$p"` reads as
+# "refuse it".
+hero_path_forbidden() { # PATH
+  local p="${1#./}"
+  case "$p" in
+    .github|.github/*|.claude|.claude/*|HERO.md|FLEET.md) return 0 ;;
+    */.github/*|*/.claude/*|*/HERO.md|*/FLEET.md) return 0 ;;
+  esac
+  return 1
+}
+
 # ---------- deferred deploy checks ----------------------------------------
 
 # A post-merge deploy check that could not be answered without waiting.
