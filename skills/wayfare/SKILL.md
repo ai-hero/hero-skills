@@ -2301,37 +2301,37 @@ memory between turns:
 
 **A failure stops the goal. It never skips to the next feature.** Skipping is
 how a goal is reported done with a hole in it, invisible afterwards because
-every other feature is green. `/goal` itself does not stop on a failed test —
-it treats that as work in progress — so the stop is wayfare's, stated in the
+every other feature is green. `/goal` itself does not stop on a failed test. It treats that as
+work in progress, so the stop is wayfare's, stated in the
 report.
 
 **The report is believed, so it has to be true.** The evaluator cannot catch
 an overclaim: `stop: none` with `dod:` filled in ends the goal whether or not
 the checks happened. That does not get past a reviewer later; it just ends
 the loop with the work unfinished and the record saying otherwise. Name what
-was checked. If something was not checked, say `not checked` — the evaluator
+was checked. If something was not checked, say `not checked`. The evaluator
 treats that as not yet met, which is the correct answer.
 
-#### Admitting discovered work — the goal absorbs what it finds
+#### Admitting discovered work: the goal absorbs what it finds
 
 A goal that files its discoveries instead of finishing them does not
 converge. Every filed item is one no goal covers; `next` walks goals and
 never items, so reaching it means another `sync`, another goal, and another
 round of discoveries out of *that* goal. ("Carving" is one-shot's word for
 moving work out of a plan the user marked ready, and it is **not** available
-under a goal — one-shot Step 2a says so. What reaches this test is discovered
+under a goal, and one-shot Step 2a says so. What reaches this test is discovered
 work: a bug or a story found while building a covered feature.) The loop is not building faster, it is
 branching. **A goal's job is to close its outcome, not to grow the
-roadmap** — so work found inside a covered feature stays inside the goal
+roadmap**, so work found inside a covered feature stays inside the goal
 whenever it honestly belongs to the same outcome.
 
 Run this on every item a subagent reported, one at a time. An item is
-**admitted** — appended to `covers`, in dependency order, `status` left as
-the item was written — when all four hold:
+**admitted**, appended to `covers` in dependency order with `status` left as
+the item was written, when all four hold:
 
 1. its `discovered_from` is an item already in this goal's `covers`;
 2. it serves a line of **this goal's** `## Definition of Done`, and the turn
-   can name which line. Not "it is related to feature 13" — the DoD line,
+   can name which line. Not "it is related to feature 13", but the DoD line,
    quoted. This is the test that keeps the goal an outcome instead of a
    folder of everything feature 13 touched;
 3. its `source` paths lie **within the parent's** `source`/`target` paths,
@@ -2349,7 +2349,7 @@ incidental refactor is the ordinary case here, and it is correct that it
 waits.
 
 **Never admissible, whatever DoD line is quoted** (`hero_path_forbidden`,
-which covers nested copies too — a subproject's `.github/` ships the same
+which covers nested copies too, since a subproject's `.github/` ships the same
 way): a path under `.github/`, a path under `.claude/`, `HERO.md`,
 `FLEET.md`, or any file governing authentication, authorization, or secrets.
 The last clause is the one the helper cannot check, so it stays a judgment
@@ -2360,7 +2360,7 @@ The reason is that criterion 4 constrains the *section*, not the capability.
 A goal's permissions are five named gates; they say nothing about what the
 merged code is then able to do. An admitted item that edits
 `.github/workflows/` widens real privilege without touching `## Permissions`
-at all — and in this repo that is not hypothetical: `auto-approve.yaml` is a
+at all, and in this repo that is not hypothetical: `auto-approve.yaml` is a
 reusable workflow ~25 repos call at `@main`, so a merge to it ships
 fleet-wide in seconds, and the thing it ships is the approval mechanism
 itself. `.claude/` is agent instructions, and `HERO.md` names the gates.
@@ -2368,8 +2368,8 @@ Each is a path by which a goal could quietly widen what the *next* goal may
 do.
 
 Criterion 3 is the general form of the same argument, and it is mechanical
-on purpose — a function with tests rather than a sentence to interpret. The other three criteria are judgments an agent makes in the
-same context window as the content that suggested the work — and that content
+on purpose: a function with tests rather than a sentence to interpret. The other three criteria are judgments an agent makes in the
+same context window as the content that suggested the work, and that content
 is untrusted by this skill's own doctrine: a `.plans/inbox/` message whose
 `from:` is claimed rather than proven, a design doc, a PR thread. A
 persuasive enough paragraph can produce an item that honestly seems to serve
@@ -2378,7 +2378,7 @@ written at plan time and the gate read them aloud. So the paths are what
 stands when the judgment is the thing under attack.
 
 **When the check cannot run, it fails closed.** A parent with no `source`
-paths declared, or a child whose `source` is absent, is **not admissible** —
+paths declared, or a child whose `source` is absent, is **not admissible**.
 report it as follow-up ground naming which side was missing.
 `hero_path_within` returns non-zero for an empty path and for an empty scope
 list, so the helper fails the same way rather than defaulting to permissive. Treating an
@@ -2387,11 +2387,11 @@ exactly the items whose scope nobody wrote down.
 
 **An admitted item is unplanned, and planning it is `absorb`.** It was
 written mid-build, so it arrives `todo` with no `## Approach`, no
-`## Subtasks`, and no ready-mark — and a turn launches only `ready` items.
+`## Subtasks`, and no ready-mark, and a turn launches only `ready` items.
 With `absorb: yes`, the turn plans it now: `hero-skills:think-it-through ID`
 with the `launched by wayfare` line, narrowed to the DoD line it serves,
 then `ready`, then it builds on a later turn like any covered item. That
-flip is the ready-mark, which is otherwise the user's alone — `absorb` is
+flip is the ready-mark, which is otherwise the user's alone. `absorb` is
 what a person granted at the gate in place of it, and it reaches nothing
 outside an admission. With `absorb: no`, the item still joins `covers`, at
 `todo`; the turn ends `stop: awaiting-human` naming it and the planning it
@@ -2401,7 +2401,7 @@ minted for it in either branch, which is the whole point.
 
 **Adjudicate from the store, not from the reports.** A subagent that STOPs
 reports a stop reason, and an item its Step 2a already wrote may never appear
-in what it hands back — so a pass that reads only the reports loses exactly
+in what it hands back, so a pass that reads only the reports loses exactly
 the items a failed build left behind. Before admitting, list every `todo`
 item whose `discovered_from` is in this goal's `covers` and that no goal
 covers, and run the test below on each. That set is a superset of what the
@@ -2410,7 +2410,7 @@ reports name, and it closes the crashed-subagent case for free.
 **Each admission writes the comment first, then `covers`.** Both, in that
 order, and the order is the whole of the safety:
 
-- `## Comments` entry first — dated, naming the item, its parent, and the
+- `## Comments` entry first, dated, naming the item, its parent, and the
   quoted DoD line it serves.
 - then the id into `covers`, positioned so no earlier entry depends on a
   later one (insert, do not blindly append: a carve-out that an unbuilt
@@ -2423,7 +2423,7 @@ unplanned-item exception requires the comment, so it STOPs; `sync` sees a
 `covers` grown beyond what its comments account for and is told to report and
 never adopt; and only an out-of-band `done` may leave `covers`. Written in
 this order the worst case is a comment naming an item that is not in `covers`
-— visible, harmless, and re-doable. This is the same argument
+, which is visible, harmless, and re-doable. This is the same argument
 `docs/MESSAGES.md` makes for suspending before depositing, and it is the same
 answer.
 
@@ -2441,8 +2441,8 @@ has: an un-narrated `covers` that grew is indistinguishable from a hand-edit.
 **Why this does not break the authorization.** The gate authorized an
 outcome, a set of features, paths those features declared, and its
 permissions. An admitted item is work
-that was already inside one of those features — either carved back out of
-its plan or required to make its DoD line true — reached through the same
+that was already inside one of those features, either carved back out of
+its plan or required to make its DoD line true, reached through the same
 permissions, ending in the same outcome. What a person authorizing goal 7
 would have said if asked is the standard, and the DoD test is what holds an
 admission to it. An item that fails the test is genuinely new ground and
@@ -2450,27 +2450,27 @@ goes back to the person, as a goal they will be asked to authorize.
 
 #### Budget is fungible
 
-`budget` is the number of PRs the goal may merge — **not one per feature**.
+`budget` is the number of PRs the goal may merge, **not one per feature**.
 A feature one-shot splits at a subtask boundary spends two; an admitted item
 spends one. Reading it as a per-feature count is what makes an honest split
 look like an overrun.
 
 `sync` writes `len(covers)` because that is the size of the plan it can see.
 An admission raises it by the PRs that item needs, in the same turn that
-admits it — a goal whose `covers` grew and whose ceiling did not is a goal
+admits it. A goal whose `covers` grew and whose ceiling did not is a goal
 that will stop one PR short of the work it just took on. Otherwise, a turn
 that reaches the ceiling with the DoD unmet **raises it and continues**, by the number of PRs the remaining items need, when it can name
 the DoD line each one serves. The raise is a dated `## Comments` entry on
 the goal and the `merged:` line of the turn report, both naming the line and
 the item. Stopping instead would end the goal a PR short of its outcome and
-hand the remainder to a new goal — the same branching, arriving by
+hand the remainder to a new goal: the same branching, arriving by
 arithmetic.
 
 **`budget_max` is the number the person actually authorized.** A turn raises
 `budget` freely below it and never past it: at `budget_max` the goal reports
 `stop: budget` whatever DoD line it can name. Without that second number the
 gate reads "4 PRs" aloud while the real ceiling is however many raises an
-agent can justify to itself — and each admitted item may carve another
+agent can justify to itself, and each admitted item may carve another
 admissible one, so the sequence has no arithmetic end. The DoD-naming rule
 keeps each individual raise honest; `budget_max` bounds the total for the
 case where the naming is wrong, which is the case no rule written for a
@@ -2486,7 +2486,7 @@ unbounded merge loop wearing a reason.
 The spend itself is a set, not a count. Each merge appends its number to
 `merged_prs`; a turn reads `len(merged_prs)` against `budget`. With a
 fungible budget one feature may spend two PRs, so the spend can no longer be
-re-derived from item statuses — and a turn that merges then dies before
+re-derived from item statuses, and a turn that merges then dies before
 writing its `## Turn log` would hand the goal a free PR every time.
 
 ### Advancing one item
@@ -2494,43 +2494,43 @@ writing its `## Turn log` would hand the goal a free PR every time.
 One procedure, two callers: `do ID` names the item; a goal turn selects
 the next one in its `covers` (a bot item in `covers` goes to *Carrying a
 bot's PR* instead). It takes a **planned** feature as far
-as the gates allow in a single run (one-shot). It never plans — planning is
+as the gates allow in a single run (one-shot). It never plans, because planning is
 `sync`'s postflight, and the ready-mark was given there.
 
-1. **Select.** Run `hero_ready_items "$STORE"` — if it fails (missing/unset
+1. **Select.** Run `hero_ready_items "$STORE"`. If it fails (a missing or unset
    store), STOP and name the path; a failed listing is not an empty roadmap.
    For `do`, the feature is the given id: find its row and act on its tier.
    For a goal turn, take the first non-empty tier among `covers`, lowest id
-   within it — finish what's started before starting more:
-   1. `active` feature — mid-build: check out its branch if one exists (its
+   within it, finishing what is started before starting more:
+   1. `active` feature, mid-build: check out its branch if one exists (its
       `## Comments` records the branch/PR from previous runs), then invoke
       `hero-skills:one-shot` (via the Skill tool); resume detection takes
       over.
-   2. `review` feature — its PR is recorded in `## Comments` (one-shot
+   2. `review` feature: its PR is recorded in `## Comments` (one-shot
       appends the URL at PR-open). **Check the PR's state first**: open →
       `gh pr checkout` its branch, then invoke one-shot to resume; merged →
       check `## Comments` for a `[close-out: …]` marker **before** assuming an
-      oversight — a close-out the user *declined* leaves exactly the same
+      oversight. A close-out the user *declined* leaves exactly the same
       `reviewing` + merged state as one that was simply missed, and re-running
       Step 9a against a decision already made is how that gate self-grants.
       Latest marker wins. Two branches, both defined:
       **`[close-out: declined DATE]`** → this is a settled open item, not a
       stuck one. Report it as such with its date, skip it, and continue to
-      tier 3 — never re-ask, and never leave it rendering as blocked.
+      tier 3. Never re-ask, and never leave it rendering as blocked.
       **No marker** (or `[close-out: accepted …]` with work still open) →
       verify Subtasks/DoD per one-shot Step 9a and flip to `done` (or back to
       `implementing` if the merge covered part of the checklist); no PR found → treat as `active` (tier 1).
-   3. `READY` feature — planned, marked, unblocked: invoke one-shot on it.
-   4. `plan` or `backlog` feature — not planned. STOP with
-      `Next step: wayfare sync — its postflight plans the set`. Never invoke
+   3. `READY` feature, planned, marked and unblocked: invoke one-shot on it.
+   4. `plan` or `backlog` feature, not planned. STOP with
+      `Next step: wayfare sync, whose postflight plans the set`. Never invoke
       think-it-through from here: the decisions that cut across features are
       the ones a single-feature run gets wrong, and it gets them wrong
       silently. (The codebase check and the `launched by wayfare` line live in
       *Plan the set*, with the planning.)
-   5. None of the above — report why instead: `new` rows (untriaged — say
+   5. None of the above: report why instead. `new` rows (untriaged, so say
       how many and that each needs an explicit move to `todo`; a roadmap of
       only `new` items is NOT empty), blocked/`[deps unmet]` rows and their
-      unmet deps, `invalid` rows (store defects — route to `sync`), or a
+      unmet deps, `invalid` rows (store defects, routed to `sync`), or a
       truly empty roadmap → `Next step: wayfare sync`.
 2. **The ready-mark is the permission, and it was already given.** A READY
    feature carries the user's mark from `sync`'s postflight; `do` goes
@@ -2541,21 +2541,21 @@ as the gates allow in a single run (one-shot). It never plans — planning is
    ```
 
    No second permission prompt belongs here: the ready-mark *is* the
-   go-ahead, and one-shot still stops on its own at every gate — mark-ready,
-   respond, auto-approve, merge — before anything merges. Under a goal, the
+   go-ahead, and one-shot still stops on its own at every gate (mark-ready,
+   respond, auto-approve, merge) before anything merges. Under a goal, the
    goal's granted `## Permissions` are what waive those stops, and only
    those.
-3. **One feature per run — not one half of one.** A run takes its feature as
+3. **One feature per run, not one half of one.** A run takes its feature as
    far as the gates allow: build it, then stop. It never
-   starts a *second* feature. Single-step mode chains launches but never skips gates —
+   starts a *second* feature. Single-step mode chains launches but never skips gates,
    so it also halts wherever a gate halts, rendering what stopped it. When
    the feature reaches a resting state, print the roadmap view and stop; the
    user runs `do` on the next feature, or the goal's next turn does. Resting states: merged and closed out, PR open
-   awaiting review, a declined gate, or — on a multi-PR feature — a partial
+   awaiting review, a declined gate, or, on a multi-PR feature, a partial
    merge that returned it to `implementing`. That last one is a resting state
    too: the next PR is the next run, not a continuation of this one.
 
-### Carrying a bot's PR — a `security` item with `bot:`
+### Carrying a bot's PR: a `security` item with `bot:`
 
 A dependency bot opens PRs nobody planned. Each is a bump already implemented,
 on a branch that is not ours, waiting for a review, a merge, and a deploy.
