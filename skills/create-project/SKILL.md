@@ -38,22 +38,22 @@ This skill drives the **scaffold** step and then invokes `hero-skills:setup-dev`
 ## `recalibrate`
 
 `hero-skills:create-project recalibrate` tunes the config that drives this skill, and
-stops. It does not then run the skill — the point is to see which field was
-wrong, not to spend a run finding out. Dispatch on it before any other
-argument parsing — whichever step does that in this skill: when the first
-token of `$ARGUMENTS` is exactly `recalibrate`, announce
-`create-project: running recalibrate`, then follow the four phases in
-[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
-— using this table as the report, and stop.
+stops. It does not go on to run the skill. You want to see which field was
+wrong, not spend a whole run finding out.
+
+Check for it before parsing any other argument. When the first token of
+`$ARGUMENTS` is exactly `recalibrate`, print `create-project: running recalibrate`,
+follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) (report, ask, write, commit)
+using the table below as the report, and stop.
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" create-project
 ```
 
-Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
-`(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
-the user says is wrong. A row that already holds the right value is not a
-question.
+Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
+`(refused)`, `(absent)`, `(no-file)`. Also ask about any row the user says is
+wrong. A row that already holds the right value is not a question.
 
 ## Instructions
 
