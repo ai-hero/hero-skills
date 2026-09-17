@@ -155,9 +155,24 @@ through the merge commit's workflow runs (Step 7e). Those runs have almost
 certainly finished by now — minutes or hours have passed and a session is
 open anyway — so this is the moment the answer is free.
 
+**Resolve the platform first, and honour this run's `deploy` grant.** The
+probe below is the same one Step 7e runs, and so are its preconditions: they
+are not optional here just because the step is early. Read
+`DEPLOY_PLATFORM` exactly as Step 7e does — including the `HF_RC -eq 2` arm
+that forces `none` on a value the security gate rejected — and stop before
+reading anything if `DEPLOY_PLATFORM` is `none`, or if this run carries
+`deploy=none` from a goal line. In both cases leave every entry in place and
+say so in one line: the entries belong to merges this run did not make, and a
+goal that declined deployment checks did not decline them for other people's
+merges either — it asked this session not to perform them.
+
 ```bash
-PENDING=$(hero_deploy_pending "$(hero_work_store)") || PENDING=""
+PENDING=$(hero_deploy_pending "$(hero_work_store)"); PENDING_RC=$?
 ```
+
+`PENDING_RC` 1 is an empty queue — nothing to do. **2 is not**: the store
+could not be read, and it must be reported rather than rendered as a clean
+slate, which is the failure the count line exists to prevent.
 
 For each `SHA<TAB>PR<TAB>DATE` line, read the runs on `SHA` once
 (`gh run list --commit SHA --json status,conclusion`). Three outcomes, and
@@ -165,18 +180,27 @@ none of them stops this run:
 
 - **still in flight** — leave the entry; say so in one line and move on. It
   is not this PR's problem.
-- **finished** — probe deployment health exactly as Step 7e does, print the
+- **finished** (or no run at all, on a platform whose deploys Actions never
+  drives) — probe deployment health exactly as Step 7e does, print the
   verdict naming the PR and SHA, and `hero_deploy_pending_clear` the entry.
-  A DEGRADED result is reported loudly here and, under wayfare, becomes a
-  `kind: bug` item — the fix is the next PR, which is what it would have
-  been after a ten-minute wait too.
-- **older than 7 days** — clear it with a line saying the probe was dropped
-  as stale. A deploy that old has been superseded by later merges, and a
-  verdict on it describes neither.
+  A DEGRADED result is reported loudly here and, under wayfare, is **proposed**
+  as a `kind: bug` item through the ordinary confirm flow — never written
+  unasked, since this is a pre-flight step in a session the user opened for
+  something else.
+- **older than 7 days** — the probe is never going to be answered. Do not
+  clear it silently: that is the one thing this step must not do. Report it,
+  and promote it first — a `kind: bug` item saying deployment health for PR N
+  at SHA was never verified, proposed like any other — then clear the entry
+  once the item exists or the user declines it. The finding has to outlive
+  the list, or a DEGRADED production deploy leaves no trace but one line in
+  an unrelated PR's pre-flight.
 
-Clearing an entry the probe never answered is the one thing this step must
-not do: that is how a DEGRADED deploy disappears without anyone seeing it,
-and the list is the only record that the check is owed.
+**Something must be guaranteed to drain, or the deferral is just a drop.**
+This step only runs when another PR ships, so the last merge of a goal would
+sit unprobed indefinitely. wayfare's goal turn closes that: it drains the
+list before it may write a goal `status: done` (*One turn*, step 6), which is
+the point at which an unverified deploy would otherwise be reported as a met
+Definition of Done.
 
 ### Step 3: Hard Gate — All Comments and Reviews Must Be Answered
 
@@ -950,41 +974,47 @@ else
   DEPLOY_PLATFORM=${DEPLOY_PLATFORM:-none}
 
   # A probe taken while the merge commit's own workflow runs are still going
-  # measures the PREVIOUS deploy — healthy, and not the one this PR produced.
-  # So the runs have to finish before the probe means anything. This step
-  # NEVER waits for them: it is advisory, it cannot un-merge what Step 7a
-  # landed, and a sleep here is paid on every merged PR and multiplied by a
-  # goal's concurrency. Defer instead — record the merge and let the next
-  # thing that runs in this repo probe it for free (Step 2a drains the list).
-  # Same trade as one-shot's await-review, which caps at 60s and hands
-  # enforcement to the next step rather than sitting on the session.
+  # measures the PREVIOUS deploy. This step NEVER waits for them: it is
+  # advisory, it cannot un-merge what Step 7a landed, and a sleep here is paid
+  # on every merged PR and multiplied by a goal's concurrency.
   if [ "$DEPLOY_PLATFORM" != "none" ]; then
     MERGE_COMMIT=$(gh pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid // empty') \
       || { MERGE_COMMIT=""; DEPLOY_CAVEAT="could not read the merge commit — the health result may be the previous deploy's"; }
   fi
   if [ -n "${MERGE_COMMIT:-}" ]; then
-    # Runs take seconds to register after a merge, so an empty list is "not
-    # yet", not "all finished" — the same grace Step 3e's CI wait gives, and
-    # the reason an empty list defers rather than probing.
     if ! RUNS=$(gh run list --commit "$MERGE_COMMIT" --json status 2>&1); then
       echo "deploy: could not read runs on $MERGE_COMMIT ($RUNS) — probing now"
       DEPLOY_CAVEAT="workflow runs unreadable — the health result may be the previous deploy's"
     else
       TOTAL=$(printf '%s' "$RUNS" | jq 'length')
       IN_FLIGHT=$(printf '%s' "$RUNS" | jq '[.[] | select(.status != "completed")] | length')
-      if [ "$TOTAL" -eq 0 ] || [ "$IN_FLIGHT" -gt 0 ]; then
+      # An empty list is "not yet" ONLY where Actions drives the deploy. A
+      # platform that deploys off its own git hook, or a polling CD (ArgoCD),
+      # never produces a run on the merge commit — deferring on that queues a
+      # probe that can only ever expire, so verify-deploy would go permanently
+      # unanswered on exactly those platforms. Probe now, with the caveat.
+      if [ "$TOTAL" -eq 0 ]; then
+        DEPLOY_CAVEAT="no workflow run on $MERGE_COMMIT — this result may be the previous deploy's"
+      elif [ "$IN_FLIGHT" -gt 0 ]; then
         # hero_work_store resolves a worktree to its primary, so a goal
         # turn's parallel subagents all defer into the one list.
-        hero_deploy_pending_add "$(hero_work_store)" "$MERGE_COMMIT" "$PR_NUMBER"
-        DEPLOY_STATUS="deferred"
-        echo "deploy: ${IN_FLIGHT:-0}/${TOTAL} run(s) still in flight on $MERGE_COMMIT — deferred, not waited on"
+        if hero_deploy_pending_add "$(hero_work_store)" "$MERGE_COMMIT" "$PR_NUMBER"; then
+          DEPLOY_STATUS="deferred"
+          echo "deploy: ${IN_FLIGHT}/${TOTAL} run(s) still in flight on $MERGE_COMMIT — deferred, not waited on"
+        else
+          # The list is the ONLY record that the check is owed. Reporting
+          # `deferred` on a failed queue tells the user a probe is coming for
+          # a SHA that is in no queue anywhere, and nobody looks at it again.
+          echo "deploy: could NOT record a deferred check for $MERGE_COMMIT — probing now instead" >&2
+          DEPLOY_CAVEAT="runs still in flight and the deferral could not be recorded — this result may be the previous deploy's"
+        fi
       fi
     fi
   fi
 fi
 ```
 
-**`deferred` is a real outcome, not a skip.** It renders `(⏸) verify-deploy — deferred to the next run` and the summary names the merge commit. The work item's deployment DoD line stays `not checked` — the same as an unreachable platform, and deliberately not the `skipped by goal` state, which satisfies it. Nothing downstream waits: the merge landed, the branch is reset, and the session moves on. A deploy that turns out DEGRADED is fixed by the next PR, which is what would have happened after a ten-minute wait anyway — the wait only ever changed *who was sitting there* while the runs finished.
+**`deferred` is a real outcome, not a skip.** It renders `(⏸) verify-deploy — deferred to the next run` and the summary names the merge commit. The work item's deployment DoD line stays `not checked` — the same as an unreachable platform, and deliberately not the `skipped by goal` state, which satisfies it. It is claimed only when `hero_deploy_pending_add` succeeded: the list is the sole record that the check is owed, so a `(⏸)` the queue never received is a promise to nobody.
 
 A non-empty `DEPLOY_CAVEAT` downgrades a `HEALTHY` result to `UNKNOWN` in the report below, with the caveat as the reason: the probe ran, but not against a deploy this merge is known to have produced.
 

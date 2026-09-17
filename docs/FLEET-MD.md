@@ -153,10 +153,6 @@ running a repo skill against it either fails late or, worse, half-works.
    that needs the user.
    ```
 
-   The deposit is the whole point of the standard: a subagent that finds a
-   sibling's bug has three options, and two of them — editing that repo, or
-   dropping the finding — are worse than a message nobody has read yet.
-
    A subagent cannot ask the user, so a skill with a user gate (one-shot's
    mark-ready and merge, push-pr's confirm) stops at the gate and reports it.
    That is correct: answer the gate from inside that repo, not fleet-wide.

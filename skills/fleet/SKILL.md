@@ -123,28 +123,37 @@ cat "$SECTION"
 ```
 
 **This is a message, not an edit.** `sync` does not write the section into
-those repos. Appending to a dozen siblings' `AGENTS.md` leaves a dozen dirty
+those repos: appending to a dozen siblings' `AGENTS.md` leaves a dozen dirty
 working trees nobody reviewed, in repos whose own agents did not make the
-change — the exact thing `docs/MESSAGES.md` bans, and the case that standard
-was written against. Each repo lands its own section, in its own PR, under
-its own gates.
+change. Each repo lands its own section, in its own PR, under its own gates.
 
-So for each repo in the list, deposit a `type: ask` message into its
-`.plans/inbox/` per the *Sending* procedure in `docs/MESSAGES.md`: `from`
-this fleet's own row for this repo — a fleet-root run has no repo of its
-own, so `from` is the row being asked and the message is a self-message —
-`to` that repo, an `## Ask` naming the section and where the asset lives,
-and the section's full text in the body so the recipient never has to reach
-back into this folder to read it. Show the drafts and the list once, confirm
-once, then deposit with `hero_msg_deposit`. Report the repos that now have
-mail and the one line each of them runs to act on it
-(`hero-skills:wayfare sync` — its `inbox` stage promotes the ask).
+So for each repo in the list, deposit a `type: ask` into its `.plans/inbox/`
+per the *Sending* procedure in `docs/MESSAGES.md`, with:
 
-Two repos cannot receive one: a row whose `.plans/` does not exist has no
-mailbox and no agent workflow to read it. Name those separately, and offer
-to `cd` in. Never create a store inside someone else's checkout to make the
-deposit work — that is the second kind of write, and it is the one that
-does not exist.
+- `from: fleet` — the reserved sender for a fleet-root run, which has no repo
+  of its own. Not the recipient's own row: `from == to` is how a repo marks a
+  note from its own previous session, and borrowing it throws away the one
+  provenance signal the recipient has.
+- `to:` that repo's row name.
+- `about: fleet-section` — a subject token, because a fleet-root run has no
+  local item id. The dedupe probe keys on `(from, about)` and an empty
+  `about` matches every about-less message from the same sender, so two
+  unrelated fleet asks would collapse into one and the second would never be
+  sent.
+- an `## Ask` naming the section and where the asset lives, the section's
+  full text in the body so the recipient never reaches back into this folder
+  to read it, and the instruction that it appends to `AGENTS.md` — or to
+  `CLAUDE.md` when that is the regular file and `AGENTS.md` is absent.
+
+Show the drafts and the list once, confirm once, then deposit with
+`hero_msg_deposit`. Report the repos that now have mail and the one line each
+runs to act on it (`hero-skills:wayfare sync` — its `inbox` stage promotes
+the ask).
+
+A row whose `.plans/` does not exist cannot receive one: no mailbox, and no
+agent workflow to read it. Name those separately and offer to `cd` in. Never
+create a store inside someone else's checkout to make the deposit work — that
+is the second kind of write, and it is the one that does not exist.
 
 A repo whose section is present but differs from the asset gets the same
 message, saying so; the asset is authored here, and a per-repo edit to it is

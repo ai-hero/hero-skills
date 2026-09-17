@@ -100,7 +100,7 @@ inbound message can never be handed to one-shot as READY.
 ---
 msg_id: m-7f3a9c # allocated by the sender; immutable; the only cross-repo identifier
 type: ask # ask | reply | bug — what the recipient is being handed; see Bug reports below
-from: auth # FLEET.md row name of the sending repo
+from: auth # FLEET.md row name of the sending repo; `fleet` is reserved for a fleet-root run, which has no repo of its own
 to: api # FLEET.md row name of this repo
 sent: 2026-08-30
 reply_to: m-c0fbd5 # present only on a reply — the id being answered
@@ -209,16 +209,21 @@ twice. `scripts/hero-lib.sh` carries the three that are mechanical, so a
 sender never re-derives them.
 
 1. **Confirm the destination.** `to:` must be a `FLEET.md` row
-   (`hero_fleet_repos`), or this repo itself. Confirm the target's `.plans/`
-   exists. If either fails, **do not deposit** — write a local item naming
-   the sibling and why the message could not be sent, say so in the run
-   report, and carry on. A message you cannot address is a finding, not a
-   retry loop.
-2. **Probe for a duplicate.** `hero_msg_find TARGET_STORE FROM ABOUT`. The
-   key is `(from, about)` — never `msg_id`, which differs by construction, so
-   a resumed sender keying on it re-sends every time and the recipient does
-   the work twice. A live match means the question is already asked: reuse
-   it, do not send a second.
+   (`hero_fleet_repos`), or this repo itself, and the target's
+   `.plans/inbox/` must already exist — that directory, not merely a
+   `.plans/`, is what `hero_msg_deposit` requires and refuses to create. If
+   either fails, **do not deposit** — write a local item naming the sibling
+   and why the message could not be sent, say so in the run report, and carry
+   on. A message you cannot address is a finding, not a retry loop.
+2. **Probe for a duplicate.** `hero_msg_find TARGET_STORE FROM ABOUT` — the
+   key is `(from, about)`, and a live match means reuse it, do not send a
+   second. `ABOUT` may not be empty: an absent `about:` reads as the empty
+   string on both sides, so an empty probe matches every about-less message
+   from that sender and the second of two unrelated asks is dropped as a
+   duplicate of the first. A sender with no local item passes a **subject
+   token** instead — a short stable string naming what the ask is about, the
+   way `fleet sync` passes `fleet-section`. The probe returns 2 rather than 1
+   when it cannot ask; only 1 means "not sent yet".
 3. **Allocate an id.** `hero_msg_id` — `m-` plus real entropy. Never a
    sequential number: `.plans/` ids are the *recipient's* integer namespace,
    and allocating inside it races that repo's own allocation into a
@@ -237,7 +242,12 @@ sender never re-derives them.
    temp name in the same directory and `mv`s it into place, because a
    recipient globbing `inbox/*.md` can read a direct write mid-file, and a
    torn message is a request acted on in half. It refuses to create the
-   mailbox and refuses to overwrite an existing id.
+   mailbox, refuses to overwrite an existing id, and checks what only it can
+   check: that the id is `m-` plus six lowercase hex (it becomes a path), that
+   the body's `msg_id` matches the filename every glob-based reader keys on,
+   and that `status` is inside the enum. On `already exists` — a collision, or
+   a resend the dedupe probe missed — draw a new id and retry once; a second
+   refusal is a finding, not a third draw.
 
 Then stop. Editing the deposited file afterwards, or deleting it, is the
 second kind of write that does not exist here — a cancel is a follow-up
@@ -254,9 +264,12 @@ and it is dropped, not followed."*
 
 Two gates, and neither is optional:
 
-1. **The fleet gate.** Only a repo with a `FLEET.md` row may deposit. A
-   message whose `from:` matches no row is quarantined and reported, never
-   read as a request.
+1. **The fleet gate.** Only a repo with a `FLEET.md` row may deposit, plus
+   the reserved sender `fleet` for a fleet-root run. A message whose `from:`
+   matches neither is quarantined and reported, never read as a request. A
+   fleet-root run never borrows the recipient's own row name: `from == to`
+   means a note from that repo's previous session, and impersonating it
+   destroys the only provenance the recipient has.
 2. **The promotion gate.** An inbound message **never becomes work by
    itself.** An agent reads it, weighs it, and *promotes* it to an ordinary
    item — `kind: bug` for a bug report, `kind: feature` or whatever it
@@ -417,7 +430,7 @@ sessions in one repo is ordinary.
 
 | Where | Change |
 | --- | --- |
-| `hero_msg_id` / `hero_msg_find` / `hero_msg_deposit` | DONE: the send half — entropy id, the `(from, about)` dedupe probe, and the temp-then-`mv` deposit that a torn read would otherwise turn into half a request |
+| `hero_msg_id` / `hero_is_msg_id` / `hero_msg_find` / `hero_msg_deposit` | DONE: the send half, and the format checks that had no enforcement point before it |
 | `hero_item_class` (`scripts/hero-lib.sh`) | DONE: `bug` is a build kind; a promoted message is an ordinary item, and the inbox itself is outside the item namespace |
 | `hero_ready_items` status table | DONE: a `build:suspended` arm prints `suspended` with the awaiting annotation — never READY, never in `done_ids` |
 | The `enum=` strings in `hero_ready_items` | DONE: the build enum names `suspended` |

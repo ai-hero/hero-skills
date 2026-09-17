@@ -715,7 +715,8 @@ echo "wayfare: source=$SOURCE_REPO@${SOURCE_HEAD} design-project=$DP_SHOW transp
 # inbox would act on a plan the answer changed. Local skills are DISCOVERED,
 # never listed in HERO.md.
 [ "$STORE" = REJECTED ] || echo "wayfare: inbox unread=$(hero_inbox_count "$STORE") claimed=$(hero_inbox_count "$STORE" claimed)"
-# Deploy probes a merge deferred rather than slept through (ship-pr Step 7e).
+# Printed for the same reason as the inbox count: a run that says nothing is
+# indistinguishable from a repo with nothing owed.
 [ "$STORE" = REJECTED ] || echo "wayfare: deploy checks owed=$(hero_deploy_pending "$STORE" 2>/dev/null | wc -l | tr -d ' ')"
 hero_local_skills "$ROOT" | sed 's/^/wayfare: local skill /'
 ```
@@ -1595,11 +1596,23 @@ follows):
   features' `depends_on`; a goal whose `## Permissions` is missing, lacks a
   key, or holds a value outside `yes`/`no` (`verify`/`none` for `deploy`),
   or whose `## Permissions` changed while `active`; a `concurrency` that is
-  not a positive integer; an `active` goal holding a `covers` id or a
+  not a positive integer; a `budget_max` that is absent, not a positive
+  integer, or below `budget`; an `active` goal holding a `covers` id or a
   `budget` above what its `## Comments` account for — an admission and a
-  raise each leave a dated entry naming the item and the DoD line
-  (*Admitting carved work*), so one that grew with neither is a hand-edit
-  under an authorization, reported and never silently adopted; a build item
+  raise each open a dated entry with a fixed prefix (*Admitting discovered
+  work*), so the two are summable and one that grew with neither is a
+  hand-edit under an authorization, reported and never silently adopted.
+  **This is an integrity check against hand-edits, and nothing more**: a
+  turn that admits an item writes both the `covers` entry and its comment, so
+  an admission the turn should never have made is perfectly accounted for and
+  looks identical here. What guards that is the gate re-display (*Starting a
+  goal*, step 2) and `budget_max`, not this listing. A goal the check does
+  flag cannot be repaired by `sync` — only an out-of-band `done` may leave an
+  `active` goal's `covers` — so report it with its one exit: the user
+  re-authorizes, which drops the goal to `todo`, lets the next `sync` re-cut
+  it, and sends it back through `next`'s gate. Also a `todo` item sitting in
+  an `active` goal's `covers` under `absorb: no`, which is waiting on a
+  person and shows here on every sync until someone plans it; a build item
   at `ready` or further, not `done`,
   that no `todo` or `active` goal covers (the listing warns on stderr; the
   fix is the goals stage of this same run, never a hand-written `covers`);
@@ -1775,7 +1788,7 @@ So the pass runs across the roadmap:
    while building an outcome belongs to that outcome. A sync that mints a
    goal per carved item is grouping by provenance, not by outcome, and each
    of those goals will carve again — that is the chain reaction, and it
-   ends here, at the re-cut, and at *Admitting carved work* for the goal
+   ends here, at the re-cut, and at *Admitting discovered work* for the goal
    already running. A `new` goal is untriaged
    and covers nothing — the roadmap view already says to move it to `todo`
    or delete it, and the listing does not credit its `covers`. Two kinds
@@ -1798,7 +1811,7 @@ So the pass runs across the roadmap:
      authorized. Two edits an active goal takes, neither of them sync's: a
      dropped feature that went `done` out-of-band (that shrinks what was
      authorized, never grows it), and an **admission** written by the goal's
-     own turn (*Admitting carved work*). Sync treats an admitted item as
+     own turn (*Admitting discovered work*). Sync treats an admitted item as
      covered — it is in a `covers` — and never proposes a goal for it.
      Everything else that belongs to an active goal's outcome is a
      **follow-up goal** with `depends_on` the active one, and a comment on
@@ -1973,8 +1986,18 @@ at:
 | `respond` | one-shot Step 8 — fix the review bot's comments and resolve threads without showing the plan first | `yes` |
 | `auto-approve` | ship-pr Step 4 — post `@auto-approve` | `yes` |
 | `merge` | ship-pr's merge confirmation — merge into DEFAULT_BRANCH with HERO.md's `merge-method` | `yes` |
-| `deploy` | ship-pr's post-merge verify-deploy — `verify` reports on the deploy; `none` skips it. Neither waits: a probe whose runs are still in flight is deferred and drained by the next run (ship-pr Step 2a) | `verify` |
-| `absorb` | the ready-mark on an item **admitted** into this goal — the turn plans it and builds it inside the goal (*Admitting carved work*) | `yes` |
+| `deploy` | ship-pr's post-merge verify-deploy — `verify` reports on the deploy; `none` skips it, in Step 2a's drain as well as Step 7e's probe. Neither waits: a probe whose runs are still in flight is deferred | `verify` |
+| `absorb` | the ready-mark on an item **admitted** into this goal — the turn plans it and builds it inside the goal (*Admitting discovered work*). `no` withholds the ready-mark only; the item still joins `covers`, and the turn hands it back | `yes` |
+
+**A goal that was already `active` when `absorb` arrived reads as
+`absorb: no`.** A required key plus a frozen section is otherwise a deadlock
+with no exit: `next` STOPs demanding the missing key, and `sync` cannot add it
+without committing the other defect — changing `## Permissions` while
+`active`. `no` is the conservative reading and the pre-`absorb` behaviour, so
+grandfathering it changes nothing about what that goal may do. It applies to
+this one key, only while the goal is `active`, and the gate says so aloud on
+the next resume; a `todo` goal missing it is an ordinary store defect for
+`sync` to fix.
 
 `absorb` is wayfare's own gate, not one-shot's, so it is **not** on the
 pre-authorized literal below: that line names the gates one-shot and its
@@ -2034,7 +2057,7 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
    The one unplanned item that is not a STOP is an **admission** a previous
    turn of this same goal wrote — its `discovered_from` is in `covers` and
    the goal's `## Comments` names it — under `absorb: yes`: that goal plans
-   it in its own turn (*Admitting carved work*). Under `absorb: no` it is
+   it in its own turn (*Admitting discovered work*). Under `absorb: no` it is
    the ordinary STOP, and the goal resumes after `sync` plans it. A
    goal whose `depends_on` goals are not all `done` is a STOP naming them;
    a `depends_on` entry that is not a goal is a store defect, same STOP. A
@@ -2055,15 +2078,20 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
                   absorb yes
                   — each PR goes ready, gets the bot's comments answered,
                   and merges on a passing auto-approve without asking again;
-                  absorb means work found inside these features that serves
-                  a DoD line above is planned and built inside this goal,
-                  ready-mark included, instead of coming back to you;
+                  absorb yes means work found inside these features that
+                  serves a DoD line above is planned and ready-marked by the
+                  loop instead of by you. `absorb: no` does not decline the
+                  work — it still joins this goal rather than becoming a new
+                  one — it withholds only the ready-mark, and the loop hands
+                  that item back to you;
                   a `no` above is where the loop hands back to you
-     Budget:      4 PRs to start — a PR allowance, not one per feature.
-                  Work found inside these features that serves a line of the
-                  DoD above is absorbed into this goal and raises the budget,
-                  each time naming the line; anything else is left for you
-                  to authorize as its own goal later
+     Budget:      4 PRs to start, up to 8 without asking — an allowance,
+                  not one per feature. Work found inside these features that
+                  serves a line of the DoD above is absorbed into this goal
+                  and raises the budget, each time naming the line; at 8 the
+                  goal stops and comes back to you whatever it can name.
+                  Anything that serves no DoD line above is left for you to
+                  authorize as its own goal later
      Concurrency: 3 at once — dep-free features build in parallel, each in
                   its own git worktree under .worktrees/ (1 = sequential)
      Stops on:    the goal item's ## Stop conditions
@@ -2071,6 +2099,15 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
    Type the goal id to authorize these permissions, or anything else to
    cancel (edit the item's ## Permissions first to change them):
    ```
+
+   **On a resume, show what the goal admitted since you last saw it.** A goal
+   the user is re-authorizing may have grown: every `covers` id whose
+   `## Comments` entry marks it an admission is listed separately, with its
+   parent and the DoD line it was admitted against, under a line saying these
+   were not in the set authorized at the original gate. Without that, the one
+   surface an admission has is a turn report in a transcript of a headless
+   run — which is to say none. Same for `budget`: show the number now in
+   force beside the one first authorized.
 
    The user types the id. It authorizes several merges, so `[y/N]` is too
    light. The turns run unattended only in auto mode — `/goal` does not change
@@ -2203,15 +2240,21 @@ memory between turns:
    feature's failure stops the *goal* — no new launches — but the features
    already running finish and report; the stop line names the one that
    failed.
-5. **Admit what the turn carved, before deciding the goal is done.** Each
-   subagent reports the items its Step 2a wrote, each with the goal DoD line
-   it serves. Run *Admitting carved work* on that list now, in this turn —
+5. **Admit what the turn discovered, before deciding the goal is done.**
+   Each subagent reports the items its Step 2a wrote, each with the goal DoD
+   line it serves. Run *Admitting discovered work* on that list now, in this turn —
    an item left for `sync` to group is the orphan the next goal gets built
    around. An admitted item joins `covers` and is launched by a later turn
    like any other; one that is not admitted is named in the report as
    follow-up ground, and `sync` groups it.
-6. **When every feature is done, verify the goal's DoD directly, and only
-   then write `status: done`.** Not by
+6. **When every feature is done, drain the deferred deploy checks, then
+   verify the goal's DoD directly, and only then write `status: done`.**
+   `hero_deploy_pending` holds the probes earlier merges deferred; ship-pr's
+   Step 2a only runs when another PR ships, so the last merge of this goal
+   has nobody else to drain it. This is that guarantee: probe each entry,
+   report it, clear it, and let a DEGRADED one fail the DoD line it belongs
+   to. A goal that writes `done` over an unverified deploy is reporting a met
+   Definition of Done it never checked. The DoD verification itself is not by
    inference from the features — that is the same error as ticking a DoD by
    re-reading the code just written. Run each line and look (*Visual
    verification*), and state what was checked and what was seen. Where this
@@ -2267,12 +2310,15 @@ the loop with the work unfinished and the record saying otherwise. Name what
 was checked. If something was not checked, say `not checked` — the evaluator
 treats that as not yet met, which is the correct answer.
 
-#### Admitting carved work — the goal absorbs what it finds
+#### Admitting discovered work — the goal absorbs what it finds
 
 A goal that files its discoveries instead of finishing them does not
-converge. Every carve leaves an item no goal covers; `next` walks goals and
+converge. Every filed item is one no goal covers; `next` walks goals and
 never items, so reaching it means another `sync`, another goal, and another
-round of carves out of *that* goal. The loop is not building faster, it is
+round of discoveries out of *that* goal. ("Carving" is one-shot's word for
+moving work out of a plan the user marked ready, and it is **not** available
+under a goal — one-shot Step 2a says so. What reaches this test is discovered
+work: a bug or a story found while building a covered feature.) The loop is not building faster, it is
 branching. **A goal's job is to close its outcome, not to grow the
 roadmap** — so work found inside a covered feature stays inside the goal
 whenever it honestly belongs to the same outcome.
@@ -2309,15 +2355,47 @@ needs. Either way the goal keeps the work: `wayfare sync` plans it, the user
 marks it ready, and `wayfare next` resumes **this** goal. No new goal is
 minted for it in either branch, which is the whole point.
 
-Each admission writes three things and nothing else: the id appended to
-`covers`, a dated `## Comments` entry on the goal naming the item, its
-parent and the DoD line it serves, and the `admitted:` line in the turn
-report. The comment is what a later reader has — `.plans/` is git-excluded,
-so an un-narrated `covers` that grew is indistinguishable from a
-hand-edited one.
+**Adjudicate from the store, not from the reports.** A subagent that STOPs
+reports a stop reason, and an item its Step 2a already wrote may never appear
+in what it hands back — so a pass that reads only the reports loses exactly
+the items a failed build left behind. Before admitting, list every `todo`
+item whose `discovered_from` is in this goal's `covers` and that no goal
+covers, and run the test below on each. That set is a superset of what the
+reports name, and it closes the crashed-subagent case for free.
+
+**Each admission writes the comment first, then `covers`.** Both, in that
+order, and the order is the whole of the safety:
+
+- `## Comments` entry first — dated, naming the item, its parent, and the
+  quoted DoD line it serves.
+- then the id into `covers`, positioned so no earlier entry depends on a
+  later one (insert, do not blindly append: a carve-out that an unbuilt
+  covered feature depends on has to precede it, and `covers` contradicting
+  `depends_on` is a store defect).
+- then the `admitted:` line in the turn report.
+
+Reversed, a crash between the two wedges the goal permanently: `next`'s
+unplanned-item exception requires the comment, so it STOPs; `sync` sees a
+`covers` grown beyond what its comments account for and is told to report and
+never adopt; and only an out-of-band `done` may leave `covers`. Written in
+this order the worst case is a comment naming an item that is not in `covers`
+— visible, harmless, and re-doable. This is the same argument
+`docs/MESSAGES.md` makes for suspending before depositing, and it is the same
+answer.
+
+Each raise and each admission opens its comment with a fixed prefix so the
+accounting can be summed rather than read: `admitted 21 (from 13)` and
+`budget 4 → 5 for 21`. A goal's `budget` and `covers` are then checkable
+against its own record instead of parsed out of prose. A feature that left
+`covers` on an out-of-band `done` writes `dropped 15 (done out of band)`, so
+`budget` standing above `len(covers)` is accounted for rather than read as a
+defect.
+
+`.plans/` is git-excluded, so the comment is the only record a later reader
+has: an un-narrated `covers` that grew is indistinguishable from a hand-edit.
 
 **Why this does not break the authorization.** The gate authorized an
-outcome, a set of features, and five permissions. An admitted item is work
+outcome, a set of features, and its permissions. An admitted item is work
 that was already inside one of those features — either carved back out of
 its plan or required to make its DoD line true — reached through the same
 permissions, ending in the same outcome. What a person authorizing goal 7
@@ -2343,11 +2421,28 @@ the item. Stopping instead would end the goal a PR short of its outcome and
 hand the remainder to a new goal — the same branching, arriving by
 arithmetic.
 
-The brake is still real, and it is the naming. `stop: budget` is what a turn
-reports when it is out of budget and the remaining work serves no DoD line
-it can quote: that is not an underestimate, it is scope the goal picked up,
-and it goes back to a person. A raise "to finish the work" names nothing and
-is the unbounded merge loop wearing a reason.
+**`budget_max` is the number the person actually authorized.** A turn raises
+`budget` freely below it and never past it: at `budget_max` the goal reports
+`stop: budget` whatever DoD line it can name. Without that second number the
+gate reads "4 PRs" aloud while the real ceiling is however many raises an
+agent can justify to itself — and each admitted item may carve another
+admissible one, so the sequence has no arithmetic end. The DoD-naming rule
+keeps each individual raise honest; `budget_max` bounds the total for the
+case where the naming is wrong, which is the case no rule written for a
+careful reader can cover. Raising `budget_max` itself is not a turn's to do:
+that is `wayfare next`, a person, and a fresh gate.
+
+The near brake is the naming. `stop: budget` is what a turn reports when it
+is out of budget and the remaining work serves no DoD line it can quote:
+that is not an underestimate, it is scope the goal picked up, and it goes
+back to a person. A raise "to finish the work" names nothing and is the
+unbounded merge loop wearing a reason.
+
+The spend itself is a set, not a count. Each merge appends its number to
+`merged_prs`; a turn reads `len(merged_prs)` against `budget`. With a
+fungible budget one feature may spend two PRs, so the spend can no longer be
+re-derived from item statuses — and a turn that merges then dies before
+writing its `## Turn log` would hand the goal a free PR every time.
 
 ### Advancing one item
 
@@ -2604,7 +2699,7 @@ roadmap — and wayfare owns only the contract it fills:
   feature flips to `ready` — what `wayfare do ID` builds next. One
   exception, granted by a person at `next`'s gate and nowhere else: a goal
   with `absorb: yes` marks an **admitted** item ready inside its own run
-  (*Admitting carved work*).
+  (*Admitting discovered work*).
 
 ## Item formats — `.plans/NNN-slug.md`
 
@@ -2625,9 +2720,11 @@ origin: wayfare
 title: A user can sign in with Google and land on their dashboard
 status: todo # new | todo | active | done
 depends_on: [5] # GOALS whose features this goal's features depend on — derived by sync from the items' own depends_on, never authored; `next` hands a goal out only when these are done
-covers: [12, 13, 15, 18] # the features this goal is made of, in build order; an active goal's set is frozen except for an admission (see Admitting carved work)
+covers: [12, 13, 15, 18] # the features this goal is made of, in build order; an active goal's set is frozen except for an admission (see Admitting discovered work)
 concurrency: 3 # features building at once, each in its own worktree; 1 = sequential in this checkout; positive integer, REQUIRED like budget — absent or unparsable is a store defect, never read as 1. Sync fills it with 3 unless told otherwise
-budget: 4 # PRs the goal may merge, NOT one per feature; positive integer, REQUIRED. Absent, zero, or non-numeric is a store defect and the turn stops — an unbounded pre-authorized merge loop is the wrong default. Sync fills it with len(covers); a turn raises it for a DoD line it can name (see Budget is fungible), each raise a dated ## Comments entry
+budget: 4 # PRs the goal may merge, NOT one per feature; positive integer, REQUIRED. Absent, zero, or non-numeric is a store defect and the turn stops. Sync fills it with len(covers); a turn raises it for a DoD line it can name (see Budget is fungible), each raise a dated ## Comments entry
+budget_max: 8 # the ceiling those raises may not pass; positive integer >= budget, REQUIRED. This is the number a person authorized at the gate — without it `budget` is advisory and the loop has no outer bound at all. Sync fills it with 2 * budget
+merged_prs: [201, 204] # the PRs this goal merged, appended as each lands. A set, not a count: with a fungible budget one feature may spend two PRs, so the spend cannot be re-derived from item statuses, and a turn that merges then dies before writing its ## Turn log would otherwise hand the goal a free PR
 source_ref: FULL_COMMIT_SHA
 target_ref: FULL_COMMIT_SHA
 ---
@@ -2652,7 +2749,7 @@ the loop hands back to a person (`stop: awaiting-human`).
 - auto-approve: yes # post @auto-approve
 - merge: yes # merge into DEFAULT_BRANCH with HERO.md's merge-method
 - deploy: verify # verify | none — check the deploy after each merge
-- absorb: yes # plan and build work admitted into this goal, in this run
+- absorb: yes # plan and ready-mark work admitted into this goal, in this run; `no` withholds only the ready-mark
 
 ## Stop conditions
 
@@ -2660,7 +2757,7 @@ Re-read every turn. The defaults are always on; add to them per goal.
 
 - any build, test, or auto-approve failure
 - a human comment on an open PR
-- budget reached with no DoD line to name (a raise the turn can justify is not a stop)
+- budget reached with no DoD line to name, or `budget_max` reached at all
 - a premise of the next feature no longer holds
 - a gate this goal was not granted (see Permissions)
 - no other test file is modified # goal-specific constraints go here too
@@ -2919,6 +3016,8 @@ Stamp `origin` with the producer that actually authored the item; never claim
 | Admitting on "related to feature 13" | The DoD line is the test. Provenance alone turns the goal into a folder of everything that feature touched. |
 | Reading `budget` as one PR per feature | It is a PR allowance. An honest split, or an admitted item, spends one — that is not an overrun. |
 | Raising the budget "to finish the work" | A raise names the DoD line and the item, or it is the unbounded merge loop with a reason attached. |
+| Raising `budget_max` from inside a turn | That is the number a person authorized at the gate. Only `next` and a person may move it. |
+| Appending to `covers` before writing the comment | A crash between them wedges the goal: `next` STOPs and `sync` is forbidden to fix it. Comment first. |
 | Leaving a `ready` item outside every goal | `next` walks goals, never items, so it is never handed out. A one-item goal is small; an orphan is unreachable. |
 | Keeping a `todo` goal as written because it exists | Re-derive from scratch, then diff: goals coalesce when their DoDs name one outcome and split when one names two. |
 | Authoring a goal's `depends_on` | It is derived from the features' `depends_on`. A hand-written order that disagrees is a defect, not a preference. |

@@ -510,18 +510,19 @@ the bar moves: work that a line of **this item's own** `## Definition of
 Done` needs, and that fits inside a reviewable PR, is part of this item — do
 it, and say so in the step line. Carving is for a separate story or for
 ground this item never claimed, not for a fix that happens to be three files
-wide. Two of the three gates above have nobody to answer them under a goal,
-and neither may be answered by prompting — a headless run hangs on it:
+wide. Two of the three cases above carry a gate, and under a goal neither has
+anyone to answer it — nor may either be answered by prompting, which hangs a
+headless run:
 
 - **Discovered, roadmap-shaped** → write the item, and report it to the goal
   turn with the one line of **goal G's** DoD it serves, or `serves no DoD
-  line`. The turn's admission test (wayfare, *Admitting carved work*) is the
+  line`. The turn's admission test (wayfare, *Admitting discovered work*) is the
   gate here: an item that serves the goal's outcome joins its `covers` this
   turn, and one that does not goes to `wayfare sync`, which proposes it to a
   person exactly as it would any uncovered ground. Nothing is suppressed —
   the item is named in the turn report either way.
 - **Carved** → not available under a goal. It shrinks a plan the user marked
-  ready, and the goal's five permissions do not include re-cutting one. Do
+  ready, and a goal's `## Permissions` do not include re-cutting one. Do
   the subtask, or — if it is genuinely too large for this PR — render `(✗)
   implement`, leave the tree as it is, and return `stop: awaiting-human`
   naming the subtask and why it does not fit.
