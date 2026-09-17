@@ -6,18 +6,18 @@ argument-hint: "DESCRIPTION_OF_WHAT_YOU_WANT_CLAUDE_TO_DO | recalibrate"
 disable-model-invocation: true
 ---
 
-# Create Skill — Create Claude Code Components
+# Create Skill: build Claude Code components
 
 Create skills and other components that extend Claude's capabilities.
 
 ## Arguments
 
 - `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before the description.
-- `$ARGUMENTS` — Description of what you want the skill to do
+- `$ARGUMENTS` - Description of what you want the skill to do
 
 ## Core Principles
 
-**Context is Precious** — Only add what Claude cannot infer: company-specific schemas, proprietary workflows, domain knowledge, tool integrations.
+**Context is precious.** Only add what the agent cannot work out for itself: your schemas, your workflows, your domain knowledge, your tool integrations.
 
 **Match Freedom to Fragility:**
 
@@ -46,14 +46,15 @@ name: verb-object
 # prettier-ignore
 description: What it does AND when to trigger it. (50-200 chars)
 argument-hint: [args]
-# Omit for skills meant to be model-invocable / chained by an orchestrator
-# like one-shot — a user-only skill cannot be called via the Skill tool.
+# Omit for skills an orchestrator like one-shot needs to chain. Setting it
+# makes the skill user-only, so nothing can call it automatically.
 disable-model-invocation: true
-# Omit unless this skill plugs into hero-skills:wayfare, then say where:
-# sync (a stage of `wayfare sync`), verify (a Definition-of-Done verifier
-# whose last stdout line is `verdict: PASS | FAIL | UNVERIFIED — reason`),
-# or recipe (a way to build that planning may name). Wayfare discovers it —
-# never list it in HERO.md — and asks once per session before running it.
+# Omit unless this skill plugs into hero-skills:wayfare. If it does, say
+# where: `sync` (a stage of `wayfare sync`), `verify` (a Definition-of-Done
+# checker whose last stdout line is `verdict: PASS | FAIL | UNVERIFIED —
+# reason`), or `recipe` (a way to build that planning can name). Wayfare
+# finds this by itself, so never list the skill in HERO.md. It asks once
+# per session before running one.
 wayfare: sync
 ---
 ```
@@ -61,8 +62,8 @@ wayfare: sync
 ## Body Guidelines
 
 - **Target**: Under 500 lines, under 5k words
-- **Include**: Procedures Claude cannot infer, decision trees, tool integrations
-- **Exclude**: Explanations Claude already knows
+- **Include**: procedures the agent cannot work out, decision trees, tool integrations
+- **Exclude**: anything a competent engineer already knows
 
 ## Anti-patterns
 
@@ -75,29 +76,29 @@ wayfare: sync
 
 ## `recalibrate`
 
-`hero-skills:create-skill recalibrate` tunes the config that drives this skill, and
-stops. It does not then run the skill — the point is to see which field was
-wrong, not to spend a run finding out. Dispatch on it before any other
-argument parsing — whichever step does that in this skill: when the first
-token of `$ARGUMENTS` is exactly `recalibrate`, announce
-`create-skill: running recalibrate`, then follow the four phases in
-[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
-— using this table as the report, and stop.
+`hero-skills:create-skill recalibrate` tunes the config this skill reads, then
+stops. It does not go on to run the skill. You want to see which field was
+wrong, not spend a whole run finding out.
+
+Check for it before parsing any other argument. When the first token of
+`$ARGUMENTS` is exactly `recalibrate`, print `create-skill: running
+recalibrate`, follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) (report, ask, write, commit)
+using the table below as the report, and stop.
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" create-skill
 ```
 
-Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
-`(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
-the user says is wrong. A row that already holds the right value is not a
-question.
+Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
+`(refused)`, `(absent)`, `(no-file)`. Also ask about any row the user says is
+wrong. A row that already holds the right value is not a question.
 
 ## Instructions
 
 ### Step 0: Load Configuration
 
-**If `$ARGUMENTS` is exactly `recalibrate`, run the `recalibrate` section above and stop** — the rest of this skill reads `$ARGUMENTS` as free-text describing the skill to build, so the verb would otherwise become a skill description.
+**If `$ARGUMENTS` is exactly `recalibrate`, run the `recalibrate` section above and stop.** Everything below reads `$ARGUMENTS` as free text describing the skill to build, so the verb would otherwise be planned and built as one.
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
@@ -113,7 +114,7 @@ Use `HERO.md` to understand the project's stack and conventions when creating sk
 
 Ask for:
 
-1. What should this do? (use a verb-object name — e.g., `deploy-service`, `notify-slack`)
+1. What should this do? Use a verb-object name, like `deploy-service` or `notify-slack`.
 2. When should it trigger? (what signals or user requests)
 3. What does success look like?
 
@@ -159,7 +160,9 @@ Created:
 
 Test: Invoke with hero-skills:SKILL_NAME in a new conversation
 
-Next step: hero-skills:audit-plugin — check the new skill's quality and wiring (print only — model-invocation-restricted, cannot auto-run)
+Next step: hero-skills:audit-plugin, to check the new skill's quality and
+wiring. Print this line only; audit-plugin is user-only and cannot be
+started automatically.
 ```
 
 Don't also print `hero-skills:push-pr`; `audit-plugin`'s own next-steps already lead there.
