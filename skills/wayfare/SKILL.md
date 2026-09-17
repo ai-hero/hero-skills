@@ -121,10 +121,10 @@ serves, and it is the one wayfare gets asked to break most often.
 
 Every feature must be **S**imple, **L**ovable, and **C**omplete:
 
-- **Simple** — the smallest version of the story that still stands on its own.
-- **Lovable** — a real person can use it and would want to. Not a stub, not a
+- **Simple**: the smallest version of the story that still stands on its own.
+- **Lovable**: a real person can use it and would want to. Not a stub, not a
   seam only the next feature can reach.
-- **Complete** — it works **every single time**, end to end, for the path the
+- **Complete**: it works **every single time**, end to end, for the path the
   story names. Complete does **not** mean "everything": a slice that handles
   one currency completely is complete; one that handles all six currencies
   except that nothing renders is not.
@@ -293,8 +293,8 @@ transitions).
 
 Two derived flags, never stored in `status`:
 
-- **blocked** — a `depends_on` id is not `done` (computed by `hero_ready_items`).
-- **stale** — either head moved past the item's anchor: the design snapshot
+- **blocked**: a `depends_on` id is not `done` (computed by `hero_ready_items`).
+- **stale**: either head moved past the item's anchor: the design snapshot
   head past `target_ref`, **or** the source head past `source_ref` (computed
   by the roadmap view and `sync`).
 
@@ -776,7 +776,7 @@ anchors to it, staleness compares against it, and every `git show` /
 has no history; the snapshot repo is where history accrues, one commit per
 remote change. How the worktree gets refreshed is the transport's job:
 
-- **designsync** — call `DesignSync`: `get_project` first (verifies access to
+- **designsync**: call `DesignSync`: `get_project` first (verifies access to
   `$DESIGN_PROJECT` and returns `updatedAt`), then `list_files`, then
   `get_file` per path, materializing each into `$SNAP` **by harvest, not by
   rewrite** (below), and deleting local files the listing no longer names —
@@ -795,7 +795,7 @@ remote change. How the worktree gets refreshed is the transport's job:
   target read**, never an empty design: under `auto`, offer the manual
   transport; under `designsync`, STOP and name the fix (`/design-login`, or
   switch the transport).
-- **manual** — the user carries the files. Emit a short, self-contained
+- **manual**: the user carries the files. Emit a short, self-contained
   instruction block for them to paste into a claude.ai/design session on the
   owning account: export every file in the project, preserving
   project-relative paths, and place them in `$SNAP` — then wait for their
@@ -1090,14 +1090,14 @@ sync stops re-proposing it.
    `hero_md_field "$ROOT/HERO.md" role "## Design System"`. rc 2 (a
    REJECTED value) is a STOP like every other rejected key; rc 1 (absent)
    is a consumer.
-   - **`producer`** — this repo *is* the design system. Its `design-project`
+   - **`producer`**: this repo *is* the design system. Its `design-project`
      is the design system's own claude.ai/design project — the value every
      consumer's `design-system-repo` dereferences — and `design-system-repo`
      is `none`: there is no upstream of the upstream. (Step 0's id-coincidence
      check is the backstop for a producer that mis-sets the key to its own
      path, not part of the normal producer shape.) Propose exactly that and
      do not go looking for a sibling.
-   - **`consumer`, or no block** — two pointers. `design-project` is the
+   - **`consumer`, or no block**: two pointers. `design-project` is the
      app's own design; the design system is a party of its own, found in
      step 3.
 2. **`design-project` — optional.** A design target sharpens the roadmap but
@@ -1371,14 +1371,14 @@ PRs → `(–)` and one line saying so.
    **Self-review — no `design-project`.** There is no target to pull, so
    "investigate" means reading the source repo against itself, at the
    current source head:
-   - **DESIGN.md and its architecture review** — step 1 already ran
+   - **DESIGN.md and its architecture review**: step 1 already ran
      `hero-skills:architecture review`; any decision it records as
      incomplete, deferred, or now contradicted by the code is a candidate.
-   - **Code-level gaps** — TODO/FIXME markers, stub implementations, and
+   - **Code-level gaps**: TODO/FIXME markers, stub implementations, and
      ground a DESIGN.md boundary implies should exist but does not. A grep
      hit is a lead, not a feature — read enough of the surrounding code to
      state what finishing it would let a person do.
-   - **Hardening gaps** — an existing flow with missing error handling,
+   - **Hardening gaps**: an existing flow with missing error handling,
      unvalidated input, or an edge case the code does not guard, found by
      reading the flow itself, not by counting `try`/`catch` blocks.
    Every self-review candidate still owes step 4's SLC test: closing a TODO
@@ -1457,7 +1457,7 @@ self-review mode there is no target, so no vendored `_ds/` copy either — read
 `$DS_SNAP` alone when `design-system-repo` is configured, and skip the lane
 same as any other missing-source case when it is not):
 
-- **ds-drift** — the source's own token layer, component surface, or
+- **ds-drift**: the source's own token layer, component surface, or
   guidance has diverged from the design system's, read at the source in both:
   the stylesheet's token block against the upstream one, a registry entry's
   props against its specimen — always against whichever source the lane read
@@ -1467,9 +1467,9 @@ same as any other missing-source case when it is not):
   (a named exception with a reason, re-justified every sync). Never fork a
   system component into the source; a fork silently stops receiving upstream
   fixes, and that is what makes this a finding rather than a preference.
-- **ds-gap** — the design system is missing something the source needs and
+- **ds-gap**: the design system is missing something the source needs and
   built locally. Propose a `design-system-feedback` item.
-- **consumer-only** — a divergence that could only be seen in an app that
+- **consumer-only**: a divergence that could only be seen in an app that
   *installed* the component, which neither snapshot nor the source read can
   reach. Report it as unreachable from here and say what would have to run to
   see it. Reporting clean is the wrong answer; so is guessing.
@@ -1479,7 +1479,7 @@ skipped entirely in self-review mode — there is no target, so say it is
 skipped rather than reporting clean, the same rule the Upstream lane above
 follows):
 
-- **stale** — the target head moved past a feature's `target_ref`: diff the
+- **stale**: the target head moved past a feature's `target_ref`: diff the
   feature's target paths between the two SHAs and summarize what actually
   changed (cosmetic rewording is noise; a changed design is what triggers the
   proposal). What to propose depends on how far the feature has progressed —
@@ -1489,24 +1489,24 @@ follows):
   verification* before reporting "no action needed." A target-side
   refactor is exactly the moment a pre-existing source-side rendering bug
   gets looked at again and noticed for the first time.
-- **covered** — Source now satisfies a feature's target paths (work landed
+- **covered**: Source now satisfies a feature's target paths (work landed
   out-of-band or via one-shot): propose marking it `done`, citing its
   `## Definition of Done` lines as the evidence — or, for a feature never
   planned (empty DoD), the source-vs-target diff of its paths. For a feature
   whose `target` paths render a page, "satisfies" means rendered, not merely
   structurally present — apply *Visual verification* before citing a DoD
   line (or a bare path diff, for an empty-DoD legacy feature) as evidence.
-- **uncovered** — target ground no existing feature addresses: propose new
+- **uncovered**: target ground no existing feature addresses: propose new
   `todo` features, slice-shaped per *Slices, not layers* and placed in the
   journey by the UX flow. "The design has a section nothing covers" is not by
   itself a feature — find the story that section serves.
-- **obsolete** — a feature whose target paths the design dropped: propose
+- **obsolete**: a feature whose target paths the design dropped: propose
   closing it out.
-- **in-design-not-in-code** — a target screen with no route in the router. It
+- **in-design-not-in-code**: a target screen with no route in the router. It
   is a **proposal**, not uncovered ground: record it as such rather than
   proposing a feature to build an address the design invented. See *Route
   truth* in `references/reconciliation.md`.
-- **visual-drift** — a screen that already ships and does not *look* like the
+- **visual-drift**: a screen that already ships and does not *look* like the
   target: spacing, alignment, type scale, colour, radius, a state the design
   specifies and the code has no rule for, a breakpoint that breaks. This is
   the only finding read off pixels rather than symbols, and it is the one the
@@ -1524,7 +1524,7 @@ follows):
   that predates the roadmap — gets a `polish` item too. That last case is the
   one a done-gated reading drops on the floor, and it is where most of a mature
   repo's drift lives.
-- **in-code-not-in-design** — shipped behaviour with no surface in the target,
+- **in-code-not-in-design**: shipped behaviour with no surface in the target,
   found by resolving source symbols the other way. Each row carries an opinion
   on what should happen to it, in a sentence or two; **a row without an opinion
   is a changelog entry**, and one with an opinion that the design should change
@@ -1532,29 +1532,29 @@ follows):
 
 **Source lane — the code:**
 
-- **source-stale** — the source head moved past an item's `source_ref`. This
+- **source-stale**: the source head moved past an item's `source_ref`. This
   fires **independently of the design**, and it is the finding a design-driven
   sync would otherwise never produce: re-read the item's `source` paths at the
   new head before trusting anything the item asserts about them. Report how
   many commits, not how many syncs.
-- **already-satisfied** — a `todo` or `planning` item whose work has landed
+- **already-satisfied**: a `todo` or `planning` item whose work has landed
   out-of-band. Propose `done` with the evidence, exactly as **covered** does —
   see also the pre-planning check, which exists because planning finished
   work is worse than merely wasteful.
-- **architecture drift** — a structural claim in `DESIGN.md` that the code no
+- **architecture drift**: a structural claim in `DESIGN.md` that the code no
   longer satisfies, or a boundary the target design assumes and the source does
   not have. Propose a `kind: architecture` item when the fix belongs in the
   code, and a `kind: architecture-feedback` item when the design's structural
   assumption is the thing that is wrong. The two are not interchangeable: one
   is work, the other is a question for someone else.
-- **premise defects** — an item whose `## Approach` or `## Subtasks` rest on a
+- **premise defects**: an item whose `## Approach` or `## Subtasks` rest on a
   claim the code contradicts. Report the claim, the file that disproves it, and
   route the item back to planning; a plan built on a wrong premise ships the
   wrong thing at full confidence.
 
 **Feedback lane — the three return channels:**
 
-- **feedback** — `## Design Feedback` entries marked `[undelivered]`, plus
+- **feedback**: `## Design Feedback` entries marked `[undelivered]`, plus
   every `todo`/`queued` feedback item. Propose promoting the entries to items
   and delivering per `references/feedback-channels.md`, which owns the
   manifest, the in-session destination gate, and the success-gated statuses.
@@ -1563,7 +1563,7 @@ follows):
   it. When a new item names a `subject:` some `rejected` item already names,
   say so in the proposal — otherwise the rejection history is written and never
   read, and the same divergence gets re-raised.
-- **no-ux-flow** — meaningless without a target, so it never fires in
+- **no-ux-flow**: meaningless without a target, so it never fires in
   self-review mode. With a `design-project` configured: `UX_FLOW` is `UNSET`
   and no flow was found in the target, or it holds a path that does not exist
   at the resolved SHA. Report it and
@@ -1577,14 +1577,14 @@ follows):
   the code is better, and "you have no UX flow" has none of the three — it is
   a roadmap-level fact, and at bootstrap there are no features to hang it on.
   Raise it with the design team as ordinary conversation.
-- **horizontal slices** — features whose titles or bodies name a layer rather
+- **horizontal slices**: features whose titles or bodies name a layer rather
   than a story (`… data model`, `… API`, `… frontend`), or a `depends_on`
   chain where each feature depends on the one before it. Report them as a
   shaping defect and offer to re-slice: propose the stories they add up to,
   with the layer features folded in as subtasks. Only `todo` features are
   re-sliceable this way — a `ready` or later feature keeps its plan (the
   ready-mark bought it), so propose the re-slice for what remains instead.
-- **store defects** — `hero_ready_items` stderr warnings (dangling deps,
+- **store defects**: `hero_ready_items` stderr warnings (dangling deps,
   duplicate ids, unrecognized statuses — the script checks those and nothing
   below); plus, checked by this finding itself since the listing never reads
   a goal's body: every `kind: goal` item's `covers` four ways — each id
@@ -1629,12 +1629,12 @@ follows):
   backfilling it from the current target head — a feature without a usable
   anchor is silently exempt from staleness detection, and an unresolvable one
   must never become a diff base.
-- **legacy items** — `kind: work-order` items or a `.plans/pins/` directory
+- **legacy items**: `kind: work-order` items or a `.plans/pins/` directory
   from pre-simplification wayfare: propose folding each order's content into
   its feature (or marking it `done` / deleting it) and removing `pins/` —
   never silently. `inbox/` is **not** legacy: it is the mailbox the `inbox`
   stage reads, and proposing its removal would delete every unread message.
-- **stale waits** — a `suspended` item whose `expires:` (carried on the
+- **stale waits**: a `suspended` item whose `expires:` (carried on the
   item beside `awaiting:`, since the sender keeps no copy of the message)
   has passed with no reply: report it, and propose either re-sending (a new
   message, new id) or restoring `suspended_from:` with a comment saying the
@@ -1645,7 +1645,7 @@ follows):
 Apply only what the user confirms. **Applying stale rows** splits on whether
 the feature's plan is already locked:
 
-- **`todo` or `planning`** — the feature absorbs the change: update
+- **`todo` or `planning`**: the feature absorbs the change: update
   `target_ref` to the new head, append a dated `## Comments` entry
   summarizing what moved, and (for `planning`) fold the new design into the
   in-flight planning run.
@@ -1690,7 +1690,7 @@ So the pass runs across the roadmap:
    **already-satisfied** finding, never grilled: the planning path once had no
    such check and produced a long plan for finished work. Trust the criteria,
    not the status field.
-2. **Hand the set to think-it-through's Roadmap mode** — invoke
+2. **Hand the set to think-it-through's Roadmap mode**: invoke
    `hero-skills:think-it-through ID ID ID…` (every feature from step 1 that
    still needs a plan) via the Skill tool, with the line `launched by
    wayfare` in the invocation: that line enables its chain-back exception and
@@ -1762,7 +1762,7 @@ So the pass runs across the roadmap:
    roadmap, and it will report `done` without anything having shipped that a
    person would notice. Three kinds state their outcome differently, and
    the outcome test must not leave them orphaned:
-   - **Security items** — `ready` bot items and harden items group into one
+   - **Security items**: `ready` bot items and harden items group into one
      goal per round whose DoD is "no open alert this round found, every
      bump merged and deployed". They never mix into a product goal, because
      their turns run a different pipeline (*Carrying a bot's PR*), and
@@ -2268,7 +2268,7 @@ memory between turns:
    the line `not checked`. A goal whose
    features are all done but whose DoD does not hold is the most useful thing
    this verb finds.
-7. **Write the turn report** — to the transcript for the evaluator, and as one
+7. **Write the turn report**: to the transcript for the evaluator, and as one
    line to the item's `## Turn log` for the next session. Fixed shape:
 
    ```
@@ -2689,7 +2689,7 @@ delivering. In brief:
   place to read. Sync also authors feedback items straight from its own
   reconciliation findings; those never pass through a feature, because nothing
   built them.
-- **State lives in the item's `status`** — `todo` / `queued` / `delivered` /
+- **State lives in the item's `status`**: `todo` / `queued` / `delivered` /
   `rejected` — so the backlog count is a listing scan, not a judgment about
   prose. Open items stay editable; delivered and rejected freeze.
 - **The destination is confirmed in-session**, as its own gate. It comes from

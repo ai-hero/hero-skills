@@ -531,7 +531,7 @@ grep -E "port\|PORT\|:3000\|:8000\|:8080\|:5173\|:4000" pyproject.toml package.j
 - **Lock file** → identifies the package manager (pnpm-lock.yaml → pnpm, yarn.lock → yarn, etc.)
 - **Install command** (e.g., `uv sync`, `pnpm install`) — needed by `hero-skills:push-pr`'s test phase before running
 - **Task runner** (Makefile, justfile, Taskfile) — if present, prefer its targets as canonical commands (e.g., `make test` over `uv run pytest`)
-- **Exact lint/format/typecheck commands** — not just tool names; `hero-skills:push-pr`'s test phase needs runnable commands for verification
+- **Exact lint/format/typecheck commands**: not just tool names; `hero-skills:push-pr`'s test phase needs runnable commands for verification
 - Test commands from scripts section or config files
 - Dev server commands and default ports
 - Entry points for CLIs

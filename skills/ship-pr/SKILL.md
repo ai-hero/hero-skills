@@ -178,7 +178,7 @@ For each `SHA<TAB>PR<TAB>DATE` line, read the runs on `SHA` once
 (`gh run list --commit SHA --json status,conclusion`). Three outcomes, and
 none of them stops this run:
 
-- **still in flight** — leave the entry; say so in one line and move on. It
+- **still in flight**: leave the entry; say so in one line and move on. It
   is not this PR's problem.
 - **finished** (or no run at all, on a platform whose deploys Actions never
   drives) — probe deployment health exactly as Step 7e does, print the
@@ -187,7 +187,7 @@ none of them stops this run:
   as a `kind: bug` item through the ordinary confirm flow — never written
   unasked, since this is a pre-flight step in a session the user opened for
   something else.
-- **older than 7 days** — the probe is never going to be answered. Do not
+- **older than 7 days**: the probe is never going to be answered. Do not
   clear it silently: that is the one thing this step must not do. Report it,
   and promote it first — a `kind: bug` item saying deployment health for PR N
   at SHA was never verified, proposed like any other — then clear the entry

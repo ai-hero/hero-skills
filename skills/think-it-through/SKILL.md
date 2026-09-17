@@ -84,22 +84,22 @@ Before you and the user agree understanding is complete, every one of these
 must have an explicit answer. Track them as you grill; when one is still blank,
 that is your next question.
 
-- **Context & scope** — what problem, stated as background, not as the solution.
-- **Goals** — what success looks like, concretely.
-- **Non-goals** — what could reasonably be in scope but is deliberately excluded.
+- **Context & scope**: what problem, stated as background, not as the solution.
+- **Goals**: what success looks like, concretely.
+- **Non-goals**: what could reasonably be in scope but is deliberately excluded.
   (Not "shouldn't crash" — that's a goal. A non-goal is "we are not handling
   multi-currency in this pass.")
-- **Alternatives considered** — at least one other approach, and why the chosen
+- **Alternatives considered**: at least one other approach, and why the chosen
   one won. If there was no alternative, you haven't looked.
-- **Reversibility** — is this a one-way door (expensive to undo: schema, data
+- **Reversibility**: is this a one-way door (expensive to undo: schema, data
   loss, public contract, money) or a two-way door (cheap to change)? One-way
   doors get slow, deep scrutiny; two-way doors get decided fast and moved past.
-- **Measurable success criteria** — what you will observe to know it worked,
+- **Measurable success criteria**: what you will observe to know it worked,
   stated before building.
-- **Failure modes** — the ways this breaks, and the blast radius of each.
-- **Cross-cutting concerns** — security, privacy, observability: addressed
+- **Failure modes**: the ways this breaks, and the blast radius of each.
+- **Cross-cutting concerns**: security, privacy, observability: addressed
   while they're still cheap to change, not bolted on later.
-- **Second-order effects & cost** — who else is affected, what this makes harder
+- **Second-order effects & cost**: who else is affected, what this makes harder
   later, and the ongoing operational/maintenance cost.
 
 Not every item needs a paragraph — a one-way-door "no" can be a sentence. But
