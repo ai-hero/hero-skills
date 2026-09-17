@@ -1184,6 +1184,50 @@ if command -v zsh >/dev/null 2>&1; then
   check "msg find: matches under zsh"           "$W3/inbox/m-aa1111.md" "$(zsh -c ". '$LIB'; hero_msg_find '$W3' hiro 27" 2>/dev/null)"
 fi
 
+
+# ---------- admission path scope -------------------------------------------
+# Criterion 3 of a goal turn's admission test. Mechanical because the other
+# criteria are judgments made beside untrusted content; this one has to hold
+# when that judgment is what is under attack.
+check "within: exact match"                 "yes" "$(hero_path_within src/app src/app && echo yes || echo no)"
+check "within: file under the scope dir"    "yes" "$(hero_path_within src/app/api.ts src/app && echo yes || echo no)"
+check "within: any of several scopes"       "yes" "$(hero_path_within lib/x.ts src/app lib && echo yes || echo no)"
+check "within: outside every scope"         "no"  "$(hero_path_within other/x.ts src/app lib && echo yes || echo no)"
+# The trap a string-prefix check walks into: src/app must NOT contain
+# src/application. Segment containment, not `case "$p" in "$s"*)`.
+check "within: sibling sharing a prefix"    "no"  "$(hero_path_within src/application/x.ts src/app && echo yes || echo no)"
+check "within: prefix dir, no separator"    "no"  "$(hero_path_within src/appfoo src/app && echo yes || echo no)"
+# Declared strings from a git-excluded file, not paths on disk: there is
+# nothing to canonicalize against, so `..` is refused rather than resolved.
+check "within: .. in the path is refused"   "no"  "$(hero_path_within 'src/app/../../etc/x' src/app && echo yes || echo no)"
+check "within: .. in the scope is refused"  "no"  "$(hero_path_within etc/x 'src/app/..' && echo yes || echo no)"
+check "within: trailing slash on scope"     "yes" "$(hero_path_within src/app/x.ts src/app/ && echo yes || echo no)"
+check "within: leading ./ normalized"       "yes" "$(hero_path_within ./src/app/x.ts src/app && echo yes || echo no)"
+# Fails closed: an empty path or no scopes at all is NOT within. Reading an
+# undeclared scope as an unlimited one removes the check from exactly the
+# items whose scope nobody wrote down.
+check "within: empty path is not within"    "no"  "$(hero_path_within '' src/app && echo yes || echo no)"
+check "within: no scopes is not within"     "no"  "$(hero_path_within src/app/x.ts && echo yes || echo no)"
+check "within: empty scope is skipped"      "no"  "$(hero_path_within src/app/x.ts '' && echo yes || echo no)"
+
+# Never admissible, whatever DoD line is quoted.
+check "forbidden: .github dir"              "yes" "$(hero_path_forbidden .github && echo yes || echo no)"
+check "forbidden: the shared workflow"      "yes" "$(hero_path_forbidden .github/workflows/auto-approve.yaml && echo yes || echo no)"
+check "forbidden: .claude rules"            "yes" "$(hero_path_forbidden .claude/rules/comments.md && echo yes || echo no)"
+check "forbidden: HERO.md"                  "yes" "$(hero_path_forbidden HERO.md && echo yes || echo no)"
+check "forbidden: FLEET.md"                 "yes" "$(hero_path_forbidden FLEET.md && echo yes || echo no)"
+# Nested copies count too: a monorepo subproject's .github ships the same way.
+check "forbidden: nested .github"           "yes" "$(hero_path_forbidden apps/web/.github/workflows/x.yaml && echo yes || echo no)"
+check "forbidden: nested HERO.md"           "yes" "$(hero_path_forbidden packages/api/HERO.md && echo yes || echo no)"
+check "forbidden: ./ prefixed"              "yes" "$(hero_path_forbidden ./.github/workflows/x.yaml && echo yes || echo no)"
+check "forbidden: ordinary source is not"   "no"  "$(hero_path_forbidden src/app/api.ts && echo yes || echo no)"
+# A file merely NAMED like one of them is ordinary source.
+check "forbidden: HERO.md.bak is not"       "no"  "$(hero_path_forbidden docs/HERO.md.bak && echo yes || echo no)"
+if command -v zsh >/dev/null 2>&1; then
+  check "within: segment rule holds under zsh" "no" "$(zsh -c ". '$LIB'; hero_path_within src/application/x.ts src/app" >/dev/null 2>&1 && echo yes || echo no)"
+  check "forbidden: holds under zsh"           "yes" "$(zsh -c ". '$LIB'; hero_path_forbidden .github/workflows/x.yaml" >/dev/null 2>&1 && echo yes || echo no)"
+fi
+
 # ---------- deferred deploy checks ----------------------------------------
 # The post-merge deploy probe is advisory, so it defers instead of sleeping.
 SHA_A=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1111
