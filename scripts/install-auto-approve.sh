@@ -43,7 +43,7 @@ post_install_notes() {
   echo "@auto-approve will work on PRs."
   echo ""
   echo "The target repo needs an ANTHROPIC_API_KEY secret (org-level is fine),"
-  echo "and must be PRIVATE — the caller is gated on it, and on a public repo"
+  echo "and must be PRIVATE. The caller is gated on it, and on a public repo"
   echo "@auto-approve produces a skipped run with no error anywhere."
 }
 
@@ -99,7 +99,7 @@ if [[ -f "$TARGET" ]]; then
   [[ "$TARGET" == *.yml ]] && OTHER="$TARGET_DIR/auto-approve.yaml"
   if [[ -n "$OTHER" && -f "$OTHER" ]]; then
     echo ""
-    echo "  WARNING: $OTHER also exists. GitHub runs both — two verifications"
+    echo "  WARNING: $OTHER also exists. GitHub runs both, so two verifications"
     echo "  and two review submissions per @auto-approve. Delete one."
   fi
 

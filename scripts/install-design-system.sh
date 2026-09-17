@@ -78,7 +78,7 @@ create_once() {
     return 0
   fi
   cp "$src" "$dst"
-  echo "INSTALLED: $dst (repo-owned from here — edit freely, re-vendoring never touches it)"
+  echo "INSTALLED: $dst (repo-owned from here: edit freely, re-vendoring never touches it)"
 }
 
 copy_or_flag "$SRC_RULE" "$TARGET_ROOT/.claude/rules/design-system.md"
@@ -97,7 +97,7 @@ HOOK_CMD='"$CLAUDE_PROJECT_DIR/.claude/hooks/check-design-tokens.sh"'
 
 if ! command -v jq >/dev/null 2>&1; then
   echo ""
-  echo "NOTE: jq not found — could not wire the hook automatically."
+  echo "NOTE: jq not found, so could not wire the hook automatically."
   echo "Add this to $SETTINGS by hand:"
   echo '  "hooks": { "PostToolUse": [ { "matcher": "Write|Edit",'
   echo "    \"hooks\": [ { \"type\": \"command\", \"command\": \"$HOOK_CMD\" } ] } ] }"
@@ -109,7 +109,7 @@ mkdir -p "$(dirname "$SETTINGS")"
 [[ -f "$SETTINGS" ]] || echo '{}' > "$SETTINGS"
 
 if ! jq -e . "$SETTINGS" >/dev/null 2>&1; then
-  echo "ERROR: $SETTINGS is not valid JSON — refusing to modify it." >&2
+  echo "ERROR: $SETTINGS is not valid JSON; refusing to modify it." >&2
   echo "Fix the file, then re-run this installer." >&2
   exit 1
 fi
@@ -147,7 +147,7 @@ else
     echo "WIRED: PostToolUse hook added to $SETTINGS"
   else
     rm -f "$TMP"
-    echo "ERROR: failed to update $SETTINGS — left unchanged." >&2
+    echo "ERROR: failed to update $SETTINGS; left unchanged." >&2
     exit 1
   fi
 fi
@@ -171,9 +171,9 @@ fi
 echo ""
 echo "Design-system enforcement installed."
 echo "  Rule:  .claude/rules/design-system.md  (loads on **/*.{tsx,jsx,css})"
-echo "  Local: .claude/rules/design-system.local.md  (repo-owned; never overwritten —"
+echo "  Local: .claude/rules/design-system.local.md  (repo-owned; never overwritten,"
 echo "         put facts specific to this repo here, not in design-system.md)"
-echo "  Hook:  .claude/hooks/check-design-tokens.sh  (advisory — PostToolUse cannot"
+echo "  Hook:  .claude/hooks/check-design-tokens.sh  (advisory: PostToolUse cannot"
 echo "         block a call that already ran; mirror it in pre-commit for a gate)"
 echo "  Test:  .claude/hooks/check-design-tokens.test.sh  (run it after editing the hook)"
 
@@ -187,7 +187,7 @@ if [[ ${#IGNORED[@]} -gt 0 ]]; then
   echo "  !.claude/rules/"
   echo "  !.claude/hooks/"
   echo "  !.claude/settings.json"
-  echo "(Keep .claude/settings.local.json ignored — that one is personal.)"
+  echo "(Keep .claude/settings.local.json ignored; that one is personal.)"
 fi
 
 [[ $DRIFT -eq 1 ]] && exit 2

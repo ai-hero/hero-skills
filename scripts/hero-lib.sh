@@ -98,14 +98,14 @@ hero_md_field() {
   [ -n "$value" ] || return 1
   case "$value" in
     -*)
-      echo "hero_md_field: refusing '$key' in ${file##*/} — value starts with '-' and would be read as a command-line option: $value" >&2
+      echo "hero_md_field: refusing '$key' in ${file##*/}; value starts with '-' and would be read as a command-line option: $value" >&2
       return 2 ;;
   esac
   # Control characters (newline, NUL-ish, escape) have no legitimate place in a
   # config scalar and break line-oriented consumers.
   case "$value" in
     *[[:cntrl:]]*)
-      echo "hero_md_field: refusing '$key' in ${file##*/} — value contains control characters" >&2
+      echo "hero_md_field: refusing '$key' in ${file##*/}; value contains control characters" >&2
       return 2 ;;
   esac
   printf '%s' "$value"
@@ -158,16 +158,16 @@ hero_normalize_repo_ref() {
   # `word::rest` is the transport-helper syntax (ext::, fd::, and so on), which is the RCE path.
   case "$ref" in
     *::*)
-      echo "hero_normalize_repo_ref: refusing '$ref' — '::' transport-helper syntax runs a command" >&2
+      echo "hero_normalize_repo_ref: refusing '$ref'; '::' transport-helper syntax runs a command" >&2
       return 2 ;;
   esac
   case "$ref" in
     https://*|ssh://*) printf '%s' "$ref"; return 0 ;;
     file://*)
-      echo "hero_normalize_repo_ref: refusing '$ref' — file:// is not an allowed transport" >&2
+      echo "hero_normalize_repo_ref: refusing '$ref'; file:// is not an allowed transport" >&2
       return 2 ;;
     *://*)
-      echo "hero_normalize_repo_ref: refusing '$ref' — only https:// and ssh:// URL transports are allowed" >&2
+      echo "hero_normalize_repo_ref: refusing '$ref'; only https:// and ssh:// URL transports are allowed" >&2
       return 2 ;;
   esac
   # scp-style ssh (git@host:path): a colon, no scheme, no space.
@@ -188,7 +188,7 @@ hero_normalize_repo_ref() {
         *) printf 'https://github.com/%s' "$ref"; return 0 ;;
       esac ;;
   esac
-  echo "hero_normalize_repo_ref: refusing '$ref' — not OWNER/NAME, https://, ssh://, git@host:path, or an existing local directory" >&2
+  echo "hero_normalize_repo_ref: refusing '$ref': not OWNER/NAME, https://, ssh://, git@host:path, or an existing local directory" >&2
   return 2
 }
 
@@ -209,7 +209,7 @@ hero_default_branch() {
   # `-`: `main:refs/heads/evil`, `..`, `@{u}` and `main^` are all accepted by
   # `git fetch`/`checkout` as something other than the branch they resemble.
   # hero_field's character gate cannot catch those; check-ref-format can.
-  [ -n "${b:-}" ] && echo "hero_default_branch: '$b' is not a valid branch name — using main" >&2
+  [ -n "${b:-}" ] && echo "hero_default_branch: '$b' is not a valid branch name, using main" >&2
   printf 'main'
 }
 
@@ -228,11 +228,11 @@ hero_default_branch_verbose() {
   # Distinct messages: "not found" sends an operator hunting for a missing key
   # that is actually present and was rejected.
   case "$rc" in
-    2) echo "default branch: main (fallback — HERO.md value REJECTED as unsafe)" >&2 ;;
+    2) echo "default branch: main (fallback: HERO.md value REJECTED as unsafe)" >&2 ;;
     *) if [ -n "${b:-}" ]; then
-         echo "default branch: main (fallback — '$b' is not a valid branch name)" >&2
+         echo "default branch: main (fallback: '$b' is not a valid branch name)" >&2
        else
-         echo "default branch: main (fallback — HERO.md default-branch not found)" >&2
+         echo "default branch: main (fallback: HERO.md default-branch not found)" >&2
        fi ;;
   esac
   return 3
@@ -260,7 +260,7 @@ hero_check_staleness() {
     .github/workflows .pre-commit-config.yaml \
     CLAUDE.md Makefile justfile Taskfile.yml 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
   if [ "${config_time:-0}" -gt "${hero_time:-0}" ]; then
-    echo "note: HERO.md may be out of date — run hero-skills:init-hero recalibrate to refresh." >&2
+    echo "note: HERO.md may be out of date; run hero-skills:init-hero recalibrate to refresh." >&2
   fi
   return 0
 }
@@ -288,7 +288,7 @@ hero_fleet_root() { # [START]
   while [ -n "$d" ]; do
     if [ -f "$d/FLEET.md" ]; then
       if [ -f "$d/HERO.md" ]; then
-        echo "hero_fleet_root: passing over $d — FLEET.md beside HERO.md is a repo, not a fleet" >&2
+        echo "hero_fleet_root: passing over $d; FLEET.md beside HERO.md is a repo, not a fleet" >&2
       else
         printf '%s' "$d"; return 0
       fi
@@ -382,7 +382,7 @@ hero_fleet_repos() { # [FLEET_ROOT]
       done
       [ -n "$reason" ] || case "$rport" in *[!0-9]*) reason="port is not a number: $rport" ;; esac
       if [ -n "$reason" ]; then
-        echo "hero_fleet_repos: skipping '$name' — $reason" >&2
+        echo "hero_fleet_repos: skipping '$name': $reason" >&2
         nbad=$((nbad + 1)); continue
       fi
       seen="$seen$name "
@@ -393,7 +393,7 @@ hero_fleet_repos() { # [FLEET_ROOT]
       if [ -d "$rpath" ]; then
         real=$(cd "$rpath" && pwd -P)
         case "$real" in "$root"/*) rpath=$real ;; *)
-          echo "hero_fleet_repos: skipping '$name' — path resolves outside the fleet: $real" >&2
+          echo "hero_fleet_repos: skipping '$name': path resolves outside the fleet: $real" >&2
           nbad=$((nbad + 1)); continue ;;
         esac
       fi
@@ -460,10 +460,10 @@ hero_rebase_on_base() { # BASE
   base="$1"
   hero_is_valid_branch "$base" || { echo "hero_rebase_on_base: not a branch name: '$base'" >&2; return 2; }
   branch=$(git branch --show-current)
-  [ -n "$branch" ] || { echo "hero_rebase_on_base: detached HEAD — check out the PR branch first" >&2; return 2; }
-  [ "$branch" != "$base" ] || { echo "hero_rebase_on_base: on $base itself — nothing to rebase" >&2; return 2; }
+  [ -n "$branch" ] || { echo "hero_rebase_on_base: detached HEAD; check out the PR branch first" >&2; return 2; }
+  [ "$branch" != "$base" ] || { echo "hero_rebase_on_base: on $base itself, nothing to rebase" >&2; return 2; }
   if [ -n "$(git status --porcelain)" ]; then
-    echo "hero_rebase_on_base: working tree is dirty — commit or discard first:" >&2
+    echo "hero_rebase_on_base: working tree is dirty; commit or discard first:" >&2
     git status --short >&2
     return 2
   fi
@@ -476,12 +476,12 @@ hero_rebase_on_base() { # BASE
   if ! git rebase -q "origin/$base" >/dev/null 2>&1; then
     conflicts=$(git diff --name-only --diff-filter=U)
     git rebase --abort
-    echo "hero_rebase_on_base: rebasing $branch onto origin/$base conflicts — aborted, branch unchanged. Conflicting files:" >&2
+    echo "hero_rebase_on_base: rebasing $branch onto origin/$base conflicts, aborted, branch unchanged. Conflicting files:" >&2
     printf '  %s\n' $conflicts >&2
     return 1
   fi
   git push -q --force-with-lease origin "$branch" 2>/dev/null || {
-    echo "hero_rebase_on_base: push refused by the lease — origin/$branch moved; fetch, inspect, re-run" >&2
+    echo "hero_rebase_on_base: push refused by the lease: origin/$branch moved; fetch, inspect, re-run" >&2
     return 2
   }
   echo "hero_rebase_on_base: rebased $branch onto origin/$base ($behind commits behind) and pushed" >&2
@@ -601,14 +601,14 @@ hero_work_store() {
   # cwd may be a DIFFERENT repo, and the guard passing on the wrong repo
   # created an un-ignored store in $root while polluting the cwd's excludes.
   hero_exclude_path "$root" >/dev/null || {
-    echo "hero_work_store: '$root' is not a git repo — refusing to create an un-ignorable store" >&2
+    echo "hero_work_store: '$root' is not a git repo; refusing to create an un-ignorable store" >&2
     return 1
   }
 
   # A store that is a symlink redirects every later work-item write outside
   # the checkout, into a directory the agent itself reads back. Refuse.
   if [ -L "$store" ]; then
-    echo "hero_work_store: refusing to use '$store' — it is a symlink" >&2
+    echo "hero_work_store: refusing to use '$store'; it is a symlink" >&2
     return 1
   fi
   for legacy in my-work plan-work; do
@@ -620,10 +620,10 @@ hero_work_store() {
     # brick the store forever.
     if [ -L "$root/$legacy" ]; then
       if [ ! -e "$store" ]; then
-        echo "hero_work_store: refusing to migrate '$root/$legacy' — it is a symlink" >&2
+        echo "hero_work_store: refusing to migrate '$root/$legacy'; it is a symlink" >&2
         return 1
       fi
-      echo "hero_work_store: ignoring legacy '$root/$legacy' — it is a symlink" >&2
+      echo "hero_work_store: ignoring legacy '$root/$legacy'; it is a symlink" >&2
       continue
     fi
     if [ -d "$root/$legacy" ] && [ ! -e "$store" ]; then
@@ -634,7 +634,7 @@ hero_work_store() {
       echo "Migrated legacy $legacy/ store to .plans/." >&2
     fi
     if [ -d "$root/$legacy" ] && [ -d "$store" ]; then
-      echo "hero_work_store: both $legacy/ and .plans/ exist — items in $legacy/ are NOT migrated and will be invisible. Merge them by hand." >&2
+      echo "hero_work_store: both $legacy/ and .plans/ exist; items in $legacy/ are NOT migrated and will be invisible. Merge them by hand." >&2
     fi
     # Keep the legacy name excluded through the transition so a not-yet-migrated
     # legacy store is never accidentally committed either. The subshell cd
@@ -750,7 +750,7 @@ hero_item_class() {
     goal)                                                         printf goal ;;
     design-feedback|architecture-feedback|design-system-feedback) printf feedback ;;
     *)
-      echo "hero_ready_items: $2 has unrecognized kind '$1' — listed on the plain enum but never handed out READY; add it to hero_item_class or fix the frontmatter" >&2
+      echo "hero_ready_items: $2 has unrecognized kind '$1'; listed on the plain enum but never handed out READY; add it to hero_item_class or fix the frontmatter" >&2
       printf unknown ;;
   esac
 }
@@ -766,7 +766,7 @@ hero_item_class() {
 hero_inbox_count() { # STORE [claimed]
   local n=0 f st
   if [ -e "$1/inbox" ] && [ ! -d "$1/inbox" ]; then
-    echo "hero_inbox_count: $1/inbox is not a directory — no message can land here" >&2
+    echo "hero_inbox_count: $1/inbox is not a directory; no message can land here" >&2
   fi
   [ -d "$1/inbox" ] || { printf 0; return 0; }
   # zsh aborts on an unmatched glob; an EMPTY inbox is the normal state after
@@ -854,7 +854,7 @@ hero_is_msg_id() { # ID
 hero_msg_find() { # STORE FROM ABOUT
   local f n=0 st exp today
   [ -d "$1/inbox" ] || return 1
-  [ -n "${3:-}" ] || { echo "hero_msg_find: ABOUT is empty — an about-less probe matches every about-less message; pass a subject token" >&2; return 2; }
+  [ -n "${3:-}" ] || { echo "hero_msg_find: ABOUT is empty; an about-less probe matches every about-less message; pass a subject token" >&2; return 2; }
   today=$(date +%Y%m%d)
   setopt localoptions nullglob 2>/dev/null || true
   for f in "$1"/inbox/*.md; do
@@ -862,7 +862,7 @@ hero_msg_find() { # STORE FROM ABOUT
     if [ ! -r "$f" ]; then
       # Skipping in silence would return "not sent yet" and send a duplicate,
       # the exact double-dispatch this probe exists to prevent.
-      echo "hero_msg_find: cannot read $f — probe is incomplete" >&2
+      echo "hero_msg_find: cannot read $f; probe is incomplete" >&2
       continue
     fi
     [ "$(hero_item_field "$f" from)" = "$2" ] || continue
@@ -874,7 +874,7 @@ hero_msg_find() { # STORE FROM ABOUT
     case "$st" in
       new|claimed) ;;
       answered|declined) continue ;;
-      *) echo "hero_msg_find: $f has status '${st:-<absent>}', outside the enum — not counted as live" >&2; continue ;;
+      *) echo "hero_msg_find: $f has status '${st:-<absent>}', outside the enum, not counted as live" >&2; continue ;;
     esac
     # An awaited message whose expiry has passed is settled by lapse: the
     # recipient never answered and the sender has already resumed, so holding
@@ -886,9 +886,9 @@ hero_msg_find() { # STORE FROM ABOUT
     exp=$(hero_item_field "$f" expires | tr -d -)
     case "$exp" in
       '') ;;
-      *[!0-9]*) echo "hero_msg_find: $f has an unparsable expires — treated as live" >&2 ;;
+      *[!0-9]*) echo "hero_msg_find: $f has an unparsable expires, treated as live" >&2 ;;
       *) if [ "$exp" -lt "$today" ]; then
-           echo "hero_msg_find: $f expired — not counted as live" >&2
+           echo "hero_msg_find: $f expired, not counted as live" >&2
            continue
          fi ;;
     esac
@@ -919,29 +919,29 @@ hero_msg_deposit() { # TARGET_STORE MSG_ID BODY_FILE
   [ -r "$3" ] || { echo "hero_msg_deposit: cannot read $3" >&2; return 1; }
   hero_is_msg_id "$2" || { echo "hero_msg_deposit: '$2' is not a message id (m- plus six lowercase hex)" >&2; return 1; }
   body_id=$(hero_item_field "$3" msg_id)
-  [ "$body_id" = "$2" ] || { echo "hero_msg_deposit: body msg_id '${body_id:-<absent>}' disagrees with '$2' — readers key on the filename, repliers on the body" >&2; return 1; }
+  [ "$body_id" = "$2" ] || { echo "hero_msg_deposit: body msg_id '${body_id:-<absent>}' disagrees with '$2'; readers key on the filename, repliers on the body" >&2; return 1; }
   st=$(hero_item_field "$3" status | tr '[:upper:]' '[:lower:]')
   case "$st" in
     new|claimed|answered|declined) ;;
-    *) echo "hero_msg_deposit: status '${st:-<absent>}' is outside the enum — the recipient's unread count cannot classify it" >&2; return 1 ;;
+    *) echo "hero_msg_deposit: status '${st:-<absent>}' is outside the enum; the recipient's unread count cannot classify it" >&2; return 1 ;;
   esac
-  [ -d "$1/inbox" ] || { echo "hero_msg_deposit: $1/inbox does not exist — the target has no mailbox; report it, do not create one" >&2; return 1; }
+  [ -d "$1/inbox" ] || { echo "hero_msg_deposit: $1/inbox does not exist; the target has no mailbox; report it, do not create one" >&2; return 1; }
   dest="$1/inbox/$2.md"
   # `[ -e ] && { ...; }` would leave the happy path returning 1 under `set -e`.
   if [ -e "$dest" ]; then
-    echo "hero_msg_deposit: $dest already exists — allocate a new id rather than overwrite a message" >&2
+    echo "hero_msg_deposit: $dest already exists; allocate a new id rather than overwrite a message" >&2
     return 1
   fi
   tmp="$1/inbox/.$2.$$.tmp"
   cat "$3" > "$tmp"; rc=$?
   if [ "$rc" -ne 0 ]; then
     rm -f "$tmp"
-    echo "hero_msg_deposit: could not write $tmp (rc $rc) — nothing was deposited" >&2
+    echo "hero_msg_deposit: could not write $tmp (rc $rc); nothing was deposited" >&2
     return 1
   fi
   if ! mv "$tmp" "$dest"; then
     rm -f "$tmp"
-    echo "hero_msg_deposit: could not move $tmp to $dest — nothing was deposited" >&2
+    echo "hero_msg_deposit: could not move $tmp to $dest; nothing was deposited" >&2
     return 1
   fi
   printf '%s' "$dest"
@@ -1003,20 +1003,19 @@ hero_path_forbidden() { # PATH
 # A post-merge deploy check that could not be answered without waiting.
 #
 # The check is advisory and never un-merges anything, so blocking a session
-# on it buys nothing and costs a sleep per merged PR, multiplied by a goal's
-# concurrency. Instead the merge commit is recorded here and probed by the
-# next thing that runs in this repo, which pays no wait at all. Same shape as
-# one-shot's await-review: cap the wait, then hand the enforcement to whatever
-# runs next.
+# on it buys nothing and costs a sleep per merged PR. Instead the merge
+# commit is recorded here and probed by the next thing that runs in this
+# repo, which pays no wait at all. Same shape as one-shot's await-review:
+# cap the wait, then hand the enforcement to whatever runs next.
 #
 # One line per pending merge: SHA<TAB>PR<TAB>DATE.
 
 # Serialize a read-modify-write on the list. `mkdir` is the portable atomic
-# test-and-set; `flock` is absent on macOS. wayfare runs `concurrency`
-# subagents that share one list (hero_work_store resolves every worktree to
-# the primary), and one drains at Step 2a while another appends at Step 7e,
-# so an unlocked rewrite silently drops whatever was appended between its read
-# and its rename, which is a DEGRADED deploy nobody will ever see.
+# test-and-set; `flock` is absent on macOS. Separate runs share one list
+# (hero_work_store resolves every worktree to the primary), and one can drain
+# at Step 2a while another appends at Step 7e, so an unlocked rewrite silently
+# drops whatever was appended between its read and its rename, which is a
+# DEGRADED deploy nobody will ever see.
 hero_pending_lock() { # FILE [TIMEOUT_S]
   local lock="$1.lock" waited=0 limit="${2:-10}" owner
   while ! mkdir "$lock" 2>/dev/null; do
@@ -1025,7 +1024,7 @@ hero_pending_lock() { # FILE [TIMEOUT_S]
     # wedge every future drain.
     owner=$(find "$lock" -maxdepth 0 -mmin +1 2>/dev/null)
     [ -n "$owner" ] && { rm -rf "$lock"; continue; }
-    [ "$waited" -ge "$limit" ] && { echo "hero_pending_lock: $lock held for ${limit}s — giving up" >&2; return 1; }
+    [ "$waited" -ge "$limit" ] && { echo "hero_pending_lock: $lock held for ${limit}s, giving up" >&2; return 1; }
     sleep 1; waited=$((waited + 1))
   done
   return 0
@@ -1052,7 +1051,7 @@ hero_deploy_pending_add() { # STORE SHA PR
   # because dedupe is on the SHA alone, permanent: a later add carrying the
   # number is a no-op.
   case "${3:-}" in
-    '') echo "hero_deploy_pending_add: PR is required — the drain reports the verdict against it" >&2; return 1 ;;
+    '') echo "hero_deploy_pending_add: PR is required; the drain reports the verdict against it" >&2; return 1 ;;
     *[!0-9]*) echo "hero_deploy_pending_add: PR '$3' is not a number" >&2; return 1 ;;
   esac
   hero_pending_lock "$f" || return 1
@@ -1101,12 +1100,12 @@ hero_deploy_pending_clear() { # STORE SHA
   # a short write as one) unlinks a list of never-probed checks.
   if [ "$rc" -gt 1 ]; then
     rm -f "$tmp"; hero_pending_unlock "$f"
-    echo "hero_deploy_pending_clear: cannot rewrite $f (grep rc $rc) — $2 left pending" >&2
+    echo "hero_deploy_pending_clear: cannot rewrite $f (grep rc $rc); $2 left pending" >&2
     return 1
   fi
   if ! mv "$tmp" "$f"; then
     rm -f "$tmp"; hero_pending_unlock "$f"
-    echo "hero_deploy_pending_clear: cannot replace $f — $2 left pending" >&2
+    echo "hero_deploy_pending_clear: cannot replace $f; $2 left pending" >&2
     return 1
   fi
   [ -s "$f" ] || rm -f "$f"
@@ -1137,7 +1136,7 @@ hero_local_skills() { # ROOT [HOOK]
     name=$(hero_item_field "$f" name)
     case "$hook" in
       sync|verify|recipe) ;;
-      *) echo "hero_local_skills: $f declares wayfare: '$hook' — not sync|verify|recipe; skipped" >&2; continue ;;
+      *) echo "hero_local_skills: $f declares wayfare: '$hook', which is not sync|verify|recipe; skipped" >&2; continue ;;
     esac
     [ -z "${2:-}" ] || [ "$2" = "$hook" ] || continue
     printf '%s\t%s\t%s\n' "${name:-$(basename "$(dirname "$f")")}" "$hook" "$f"
@@ -1256,15 +1255,15 @@ hero_ready_items() (
     id=$(hero_norm_id "$(hero_item_field "$f" id)")
     case "$id" in
       '')
-        echo "hero_ready_items: $f has no id — dependents on it cannot resolve" >&2
+        echo "hero_ready_items: $f has no id; dependents on it cannot resolve" >&2
         continue ;;
       *[[:space:]]*)
-        echo "hero_ready_items: $f has a whitespace-containing id ('$id') — dependents on it cannot resolve" >&2
+        echo "hero_ready_items: $f has a whitespace-containing id ('$id'); dependents on it cannot resolve" >&2
         continue ;;
     esac
     case "$all_ids" in
       *" $id "*)
-        echo "hero_ready_items: duplicate id $id — dependents may resolve against the wrong item" >&2 ;;
+        echo "hero_ready_items: duplicate id $id; dependents may resolve against the wrong item" >&2 ;;
     esac
     all_ids="$all_ids$id "
     # The same alphabet gate the listing loop applies, applied BEFORE anything
@@ -1294,7 +1293,7 @@ hero_ready_items() (
           # Same guard as all_ids: a whitespace-containing entry would inject
           # extra tokens and mark ids covered that no goal names.
           case "$d" in
-            *[[:space:]]*) echo "hero_ready_items: $f covers '$raw', which is not one id — ignored" >&2; continue ;;
+            *[[:space:]]*) echo "hero_ready_items: $f covers '$raw', which is not one id, ignored" >&2; continue ;;
           esac
           covered_ids="$covered_ids$d "
         done <<EOF
@@ -1317,7 +1316,7 @@ EOF
     # lowercase letters and hyphens only.
     case "$state$kind" in
       *[!a-z-]*)
-        echo "hero_ready_items: $f has a malformed status/kind ('$state' / '$kind') — keywords are lowercase letters and hyphens only; not eligible for READY" >&2
+        echo "hero_ready_items: $f has a malformed status/kind ('$state' / '$kind'); keywords are lowercase letters and hyphens only, not eligible for READY" >&2
         echo "invalid $f — $title"
         continue ;;
     esac
@@ -1339,7 +1338,7 @@ EOF
       build:ready|build:implementing|build:in-progress|build:reviewing)
         case "$covered_ids" in
           *" $id "*) ;;
-          *) echo "hero_ready_items: $f is $state and no open goal covers it — wayfare sync groups it into a goal" >&2 ;;
+          *) echo "hero_ready_items: $f is $state and no open goal covers it; wayfare sync groups it into a goal" >&2 ;;
         esac ;;
     esac
     # One CLASS-keyed table, not a case block per kind: shared states appear
@@ -1381,7 +1380,7 @@ EOF
       build:suspended)
         awaiting=$(hero_item_awaiting "$store/$f" | tr '\n' ' ' | sed 's/ $//')
         if [ -z "$awaiting" ]; then
-          echo "hero_ready_items: $f is suspended with no awaiting ids — nothing can resume it; restore its status by hand" >&2
+          echo "hero_ready_items: $f is suspended with no awaiting ids; nothing can resume it; restore its status by hand" >&2
           echo "invalid $f — $title"; continue
         fi
         since=$(hero_item_field "$store/$f" suspended_at)
@@ -1403,7 +1402,7 @@ EOF
           goal)     enum="new/todo/active/done (kind: goal)" ;;
           *)        enum="new/planning/todo/in-progress/done" ;;
         esac
-        echo "hero_ready_items: $f has unrecognized status '$state' — not one of $enum; not eligible for READY" >&2
+        echo "hero_ready_items: $f has unrecognized status '$state', which is not one of $enum; not eligible for READY" >&2
         echo "invalid $f — $title"
         continue ;;
     esac
@@ -1423,7 +1422,7 @@ EOF
           # listing (so the model sees it) and stderr (so a human does), and
           # say it with the RAW value as written in the file, so grepping the
           # store for the printed token actually finds it.
-          echo "hero_ready_items: $f depends_on '$raw', which no item carries — blocked until the reference is fixed" >&2
+          echo "hero_ready_items: $f depends_on '$raw', which no item carries; blocked until the reference is fixed" >&2
           missing="$missing $raw"
           ready=0
           continue ;;

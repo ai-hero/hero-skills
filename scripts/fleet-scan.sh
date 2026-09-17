@@ -72,8 +72,8 @@ if [ "$MODE" = list ]; then
   exit 0
 fi
 
-[ -f "$ROOT/FLEET.md" ] || { echo "fleet-scan: no FLEET.md in $ROOT — run hero-skills:fleet sync to create one" >&2; exit 2; }
-hero_at_fleet_root "$ROOT" || { echo "fleet-scan: $ROOT holds HERO.md beside FLEET.md — a repo, not a fleet" >&2; exit 2; }
+[ -f "$ROOT/FLEET.md" ] || { echo "fleet-scan: no FLEET.md in $ROOT; run hero-skills:fleet sync to create one" >&2; exit 2; }
+hero_at_fleet_root "$ROOT" || { echo "fleet-scan: $ROOT holds HERO.md beside FLEET.md, which is a repo, not a fleet" >&2; exit 2; }
 
 BAD=$(mktemp) || exit 2
 trap 'rm -f "$BAD"' EXIT
@@ -128,7 +128,7 @@ review() {
 
   while IFS= read -r line; do
     case "$line" in
-      *"skipping '"*"' — "*) name=${line#*skipping \'}; name=${name%%\'*}; printf 'BAD_ROW\t%s\t%s\n' "$name" "${line#*— }" ;;
+      *"skipping '"*"': "*) name=${line#*skipping \'}; name=${name%%\'*}; printf 'BAD_ROW\t%s\t%s\n' "$name" "${line#*\': }" ;;
     esac
   done < "$BAD"
 }

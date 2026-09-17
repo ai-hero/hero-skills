@@ -66,7 +66,7 @@ if ! . "$HERO_LIB" 2>/dev/null; then
   # row could not match and the run proceeded on garbage.
   echo "STATE_OK=false"
   echo "STATE_ERRORS=lib"
-  echo "echo 'resume-state: cannot source hero-lib.sh — reinstall the plugin.' >&2"
+  echo "echo 'resume-state: cannot source hero-lib.sh; reinstall the plugin.' >&2"
   exit 0
 fi
 
