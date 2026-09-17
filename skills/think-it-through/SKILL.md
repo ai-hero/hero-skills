@@ -62,7 +62,7 @@ button.
 ### 4. Investigate over interrogate
 
 If a question can be answered by reading the codebase, the docs, or the git
-history, so go read it. Do not spend the user's attention on something you can
+history, go read it. Do not spend the user's attention on something you can
 find yourself. Come back with "I checked; the repo already does X here, so I'll
 assume we extend that, right?"
 

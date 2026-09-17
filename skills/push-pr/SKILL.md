@@ -168,7 +168,7 @@ ls pyproject.toml package.json next.config.* vite.config.* 2>/dev/null
 ls backend/pyproject.toml frontend/package.json 2>/dev/null
 ```
 
-Check the project's `CLAUDE.md` for specific run instructions. Report what was detected; if nothing, ask the user. Install dependencies first when needed (`uv sync`, `npm install`, once per project for full-stack).
+Check the project's `CLAUDE.md` for specific run instructions. Report what was detected; if nothing, ask the user. Install dependencies first when needed (`uv sync`, `npm install`, one per project for full-stack).
 
 #### 2b: Verify Implementation (Lint, Typecheck, Unit Tests)
 
@@ -496,7 +496,7 @@ A route fails the smoke if any of:
 
 - The HTTP status of the document request is 4xx or 5xx.
 - An entry in `browser_console_messages` has `type=error` AND its body does NOT match an allowlist entry from the section above. Match the allowlist conservatively: if you are not sure whether a message is benign, treat it as a failure and let the user decide.
-- An uncaught exception appears in the dev server log (covers a broad set of common failures and ignores nothing). This check only applies when **this** skill started the dev server. `$DEV_LOG` is only set on that path, when the server was already running there is no log to grep, so gate on `$DEV_LOG` being set and the file existing:
+- An uncaught exception appears in the dev server log (covers a broad set of common failures and ignores nothing). This check only applies when **this** skill started the dev server. `$DEV_LOG` is only set on that path. When the server was already running there is no log to grep, so gate on `$DEV_LOG` being set and the file existing:
 
   ```bash
   if [ -n "$DEV_LOG" ] && [ -f "$DEV_LOG" ]; then

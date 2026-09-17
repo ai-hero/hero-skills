@@ -43,7 +43,7 @@ never touches the files those skills keep:
 
 `wayfare` has both: `sync` for the plan (and, through its architecture stage,
 `DESIGN.md`), `recalibrate` for the `HERO.md` fields that tell it and its
-stages (`architecture` and `harden`) and how to run. Those two stages carry no
+stages (`architecture` and `harden`) how to run. Those two stages carry no
 `recalibrate` of their own.
 
 Five skills read `HERO.md` and deliberately have no `recalibrate`, the two stages above, and three more. `fleet`

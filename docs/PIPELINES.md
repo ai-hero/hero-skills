@@ -28,9 +28,9 @@ When a step is **skipped** (because it doesn't apply, e.g., `test` step on a
 docs-only commit), mark it `(–)` and continue to the next step. Do not collapse
 or renumber.
 
-When a step is **deferred**. It applies, but answering it now would mean
+When a step is **deferred** (it applies, but answering it now would mean
 waiting on something outside the pipeline, and nothing downstream depends on
-the answer, mark it `(⏸)` and name what will pick it up. `(–)` would claim
+the answer), mark it `(⏸)` and name what will pick it up. `(–)` would claim
 the step did not apply, and `(✓)` would claim an answer nobody has. A
 deferred step is owed by whatever runs next in that repo, never by a sleep
 in this session; ship-pr's `verify-deploy` is the worked example.
@@ -110,7 +110,7 @@ feature's `## Design Feedback`, and `wayfare sync` delivers it. Two
 destinations, no third: a configured `feedback-repo` gets an issue wayfare
 files itself (entries verbatim plus a manifest, destination confirmed
 in-session), and everything else (`feedback-repo: none`, a rejected value,
-or a repo with issues disabled, gets a packet under `$STORE/.feedback/`
+or a repo with issues disabled) gets a packet under `$STORE/.feedback/`
 that the user delivers by hand. `.plans/` is git-ignored and wayfare never writes the target, so
 there is no other way out. Delivery deliberately does *not* route through
 `hero-skills:handoff`: that skill distills the *current* conversation, which

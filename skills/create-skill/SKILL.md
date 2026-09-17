@@ -17,7 +17,7 @@ Create skills and other components that extend Claude's capabilities.
 
 ## Core Principles
 
-**Context is precious.** Only add what the agent cannot work out for itself: your schemas, your workflows, your domain knowledge, your tool integrations.
+**Context is precious.** Only add what the agent cannot work out for itself: your project's schemas, its workflows, its domain knowledge, its tool integrations.
 
 **Match Freedom to Fragility:**
 
@@ -51,8 +51,9 @@ argument-hint: [args]
 disable-model-invocation: true
 # Omit unless this skill plugs into hero-skills:wayfare. If it does, say
 # where: `sync` (a stage of `wayfare sync`), `verify` (a Definition-of-Done
-# checker whose last stdout line is `verdict: PASS | FAIL | UNVERIFIED —
-# reason`), or `recipe` (a way to build that planning can name). Wayfare
+# checker whose last stdout line is
+# `verdict: PASS | FAIL | UNVERIFIED — reason`), or `recipe` (a way to
+# build that planning can name). Wayfare
 # finds this by itself, so never list the skill in HERO.md. It asks once
 # per session before running one.
 wayfare: sync
@@ -63,7 +64,7 @@ wayfare: sync
 
 - **Target**: Under 500 lines, under 5k words
 - **Include**: procedures the agent cannot work out, decision trees, tool integrations
-- **Exclude**: anything a competent engineer already knows
+- **Exclude**: explanations a competent engineer already knows
 
 ## Anti-patterns
 
@@ -82,8 +83,7 @@ wrong, not spend a whole run finding out.
 
 Dispatch on it before parsing any other argument, in whichever step does
 that parsing. When the first token of
-`$ARGUMENTS` is exactly `recalibrate`, print `create-skill: running
-recalibrate`, follow the four phases in
+`$ARGUMENTS` is exactly `recalibrate`, print `create-skill: running recalibrate`, follow the four phases in
 [docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) (report, ask, write, commit)
 using the table below as the report, and stop.
 

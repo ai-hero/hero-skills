@@ -346,7 +346,7 @@ It must be all three of these, and dropping any one reintroduces a defect:
 - **Loud on the row**, with the outstanding ids and the age:
 
   ```text
-  suspended 012-device-flow.md, I can sign in with the device flow [awaiting 2 of 3: m-c0fbd5, m-d3e881, 3d]
+  suspended 012-device-flow.md — I can sign in with the device flow [awaiting 2 of 3: m-c0fbd5, m-d3e881 — 3d]
   ```
 
   A suspension with no age is indistinguishable from a healthy one. The

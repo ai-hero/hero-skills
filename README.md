@@ -29,10 +29,10 @@ Most dev work follows the same loop: grab a ticket, plan, implement, test, revie
 
 Hero Skills gives you **slash commands for the entire dev lifecycle** that adapt to your stack. Configure once with `HERO.md`, then every skill knows your conventions, your tools, and your preferences.
 
-- **Plan and implement from tickets**, Fetch from Linear/Jira/GitHub Issues, grill the work into dependency-aware work-items, create branches, then implement on approval
-- **Verify changes**, Auto-detect project type (API, frontend, CLI, MCP) and run lint, typecheck, unit tests, and smoke tests
-- **Ship with confidence**, Pre-commit checks, conventional commits, draft PRs by default, automated parallel review before requesting human review
-- **Stay informed**, CI/CD status, cluster health, security scans
+- **Plan and implement from tickets**: fetch from Linear/Jira/GitHub Issues, grill the work into dependency-aware work-items, create branches, then implement on approval
+- **Verify changes**: auto-detect project type (API, frontend, CLI, MCP) and run lint, typecheck, unit tests, and smoke tests
+- **Ship with confidence**: pre-commit checks, conventional commits, draft PRs by default, automated parallel review before requesting human review
+- **Stay informed**: CI/CD status, cluster health, security scans
 
 ## Install
 
@@ -46,7 +46,7 @@ Skills are immediately available in any Claude Code session. No restart needed.
 
 Three pieces ride along with one-shot, install them so Steps 4 (`push`, tests included), 5 (`self-review`), 8 (`respond`), and 9 (`ship`) work out of the box:
 
-**1. GitHub CLI (`gh`)**, required by `push-pr`, `review-pr`, `respond-to-comments`, and `ship-pr` for every PR / comment / workflow operation. Without it, every step from `push` onward fails immediately.
+**1. GitHub CLI (`gh`)**: required by `push-pr`, `review-pr`, `respond-to-comments`, and `ship-pr` for every PR / comment / workflow operation. Without it, every step from `push` onward fails immediately.
 
 ```bash
 # macOS (Homebrew)
@@ -66,7 +66,7 @@ gh auth login -s repo
 
 `hero-skills:preflight` verifies both presence and the `repo` scope.
 
-**2. `pr-review-toolkit` plugin**, provides five of the six review agents that `hero-skills:review-pr` runs in parallel (code-reviewer, silent-failure-hunter, pr-test-analyzer, comment-analyzer, type-design-analyzer; the sixth, a security pass, needs no install). From inside Claude Code:
+**2. `pr-review-toolkit` plugin**: provides five of the six review agents that `hero-skills:review-pr` runs in parallel (code-reviewer, silent-failure-hunter, pr-test-analyzer, comment-analyzer, type-design-analyzer; the sixth, a security pass, needs no install). From inside Claude Code:
 
 ```
 /plugin install pr-review-toolkit
@@ -80,7 +80,7 @@ claude plugins add pr-review-toolkit@claude-plugins-official
 
 If you skip this, `hero-skills:review-pr` still runs but produces a much thinner review.
 
-**3. Playwright MCP server**, drives the browser smoke test in `hero-skills:push-pr`'s test phase (frontend smoke). Requires Node.js 18+ (check with `node --version`):
+**3. Playwright MCP server**: drives the browser smoke test in `hero-skills:push-pr`'s test phase (frontend smoke). Requires Node.js 18+ (check with `node --version`):
 
 ```bash
 claude mcp add playwright npx @playwright/mcp@latest
@@ -210,7 +210,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:wayfare` | Five verbs. `sync` runs one round of convergence (`config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals`, writing every `.plans/` item (features, architecture, polish, security, bugs, feedback, goals) and proposing goals bottom-up while re-cutting the `todo` ones; `next` picks the next runnable goal, reads its `## Permissions` (mark-ready, respond, auto-approve, merge, deploy, absorb) for your in-session authorization, and prints the `/goal` line; `do ID` builds one feature via one-shot, carries one Dependabot PR to merged and deployed, or runs one goal turn (up to `concurrency` items in parallel worktrees); `improve` audits this repo, or the whole fleet from its root, against the compliance register and proposes the fixes and backports; `recalibrate` tunes every field the stages read. Features are SLC vertical slices (user stories, never layers) carrying subtasks, a definition of done, comments, design feedback back to the design team, and staleness flags |
+| `hero-skills:wayfare` | Five verbs. `sync` runs one round of convergence (`config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals`), writing every `.plans/` item (features, architecture, polish, security, bugs, feedback, goals) and proposing goals bottom-up while re-cutting the `todo` ones; `next` picks the next runnable goal, reads its `## Permissions` (mark-ready, respond, auto-approve, merge, deploy, absorb) for your in-session authorization, and prints the `/goal` line; `do ID` builds one feature via one-shot, carries one Dependabot PR to merged and deployed, or runs one goal turn (up to `concurrency` items in parallel worktrees); `improve` audits this repo, or the whole fleet from its root, against the compliance register and proposes the fixes and backports; `recalibrate` tunes every field the stages read. Features are SLC vertical slices (user stories, never layers) carrying subtasks, a definition of done, comments, design feedback back to the design team, and staleness flags |
 
 Two skills are stages of `sync` and hidden from the slash menu (`user-invocable: false`). You never call them, but they still own their procedures:
 
@@ -351,12 +351,12 @@ No `HERO.md`? Skills fall back to auto-detection. Run `hero-skills:init-hero` to
 
 `HERO.md` supports these sections:
 
-- **Project Management**, Linear, Jira, Asana, GitHub Issues
-- **Code Review Agent**, Greptile, CodeRabbit, Copilot (trigger, poll method, bot username)
-- **CI/CD**, GitHub Actions, GitLab CI, Jenkins, CircleCI
-- **Deployment**, Kubernetes, Vercel, ECS, Fly.io, container registries
-- **Code Quality**, pre-commit, linters, formatters, type checkers
-- **Projects**, per-subproject language, framework, test/dev commands, ports
+- **Project Management**: Linear, Jira, Asana, GitHub Issues
+- **Code Review Agent**: Greptile, CodeRabbit, Copilot (trigger, poll method, bot username)
+- **CI/CD**: GitHub Actions, GitLab CI, Jenkins, CircleCI
+- **Deployment**: Kubernetes, Vercel, ECS, Fly.io, container registries
+- **Code Quality**: pre-commit, linters, formatters, type checkers
+- **Projects**: per-subproject language, framework, test/dev commands, ports
 
 </details>
 

@@ -105,9 +105,10 @@ targets the fleet that checkout lives in.
 `scripts/fleet-scan.sh FLEET_ROOT --list` enumerates the checkouts on disk
 with their compose port; `--review` diffs disk against the rows and prints
 `CODE<TAB>NAME<TAB>DETAIL`. The codes and their meanings are the script's
-`--help`, exit 1 when there is anything to fix, exit 2 for a folder that is
-not a fleet (no `FLEET.md`, or a `HERO.md` beside it). Disk is always scanned. A registry that only re-reads
-itself reports a fleet that no longer exists.
+`--help`. `--review` exits 1 when there is anything to fix, and 2 for a
+folder that is not a fleet (no `FLEET.md`, or a `HERO.md` beside it). Disk is
+always scanned. A registry that only re-reads itself reports a fleet that no
+longer exists.
 
 ## Fleet-aware repos
 
@@ -142,7 +143,7 @@ running a repo skill against it either fails late or, worse, half-works.
    shape, substituting the absolute path from the registry:
 
    ```
-   cd ABSOLUTE_REPO_PATH, every command in this task runs inside that repo.
+   cd ABSOLUTE_REPO_PATH. Every command in this task runs inside that repo.
    It is one checkout in a fleet. Modify no sibling. Read one only for the
    two probes docs/MESSAGES.md names, the duplicate check before sending a
    message, and the mutual-suspension check, and make exactly one kind of

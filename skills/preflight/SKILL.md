@@ -1,7 +1,7 @@
 ---
 name: preflight
 # prettier-ignore
-description: Run pre-flight checks for the hero-skills pipeline. Catches missing tooling, stale HERO.md, .env mismatches, busy ports, before any step does destructive work.
+description: Run pre-flight checks for the hero-skills pipeline. Catches missing tooling, stale HERO.md, .env mismatches and busy ports before any step does destructive work.
 argument-hint: "[--bucket tooling|repo|runtime|pipeline|all] [--projects p1,p2] | recalibrate"
 disable-model-invocation: true
 ---
@@ -46,8 +46,7 @@ wrong, not spend a whole run finding out.
 
 Dispatch on it before parsing any other argument, in whichever step does
 that parsing. When the first token of
-`$ARGUMENTS` is exactly `recalibrate`, print `preflight: running
-recalibrate`, follow the four phases in
+`$ARGUMENTS` is exactly `recalibrate`, print `preflight: running recalibrate`, follow the four phases in
 [docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) (report, ask, write, commit)
 using the table below as the report, and stop.
 
@@ -75,7 +74,7 @@ If `HERO.md` is missing, mention it but still run `scripts/preflight.sh`. The sc
 
 ### Step 1: Run the Script
 
-Prefer the harness-provided `$CLAUDE_PLUGIN_ROOT` when set (covers worktrees and non-default `~/.claude` layouts), otherwise fall back to the in-repo path, then the user-dir path. Only prepend `CLAUDE_PLUGIN_ROOT` when it is non-empty. Otherwise the first candidate expands to a bare absolute path (`/scripts/preflight.sh`) and silently point at the wrong file:
+Prefer the harness-provided `$CLAUDE_PLUGIN_ROOT` when set (covers worktrees and non-default `~/.claude` layouts), otherwise fall back to the in-repo path, then the user-dir path. Only prepend `CLAUDE_PLUGIN_ROOT` when it is non-empty. Otherwise the first candidate expands to a bare absolute path (`/scripts/preflight.sh`) and silently points at the wrong file:
 
 ```bash
 PREFLIGHT=""

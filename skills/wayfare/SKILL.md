@@ -877,7 +877,7 @@ shipping, the same stale-copy failure removing the duplicated project id was
 meant to end.
 
 **Snapshot meta is the machine record.** Keep it at `$SNAP/.git/wayfare-meta`
-(inside the git dir, outside the worktree, so recording it never mints a
+(inside the git dir, outside the worktree), so recording it never mints a
 head. After **every** refresh, changed or not, write: the project id, the
 transport, the remote `updatedAt` when known, and a `truncated:` line per
 capped file. This is what the re-pull predicate and the truncation rule above
@@ -1103,8 +1103,9 @@ sync stops re-proposing it.
      step 3.
 2. **`design-project`, optional.** A design target sharpens the roadmap but
    is not required. If Step 0 left `DESIGN_PROJECT=none` (missing block,
-   `design-project: none`, no extractable UUID, or a REJECTED value (Step 0
-   prints which) and the transport is not `manual`, offer to set one up:
+   `design-project: none`, no extractable UUID, or a REJECTED value, and
+   Step 0 prints which) and the transport is not `manual`, offer to set one
+   up:
    ask for the claude.ai/design link (or run `DesignSync list_projects` and
    let the user pick, or offer `design-transport: manual` for a project this
    session's account cannot reach), extract and verify the UUID with
@@ -1244,7 +1245,7 @@ wayfare`. It is read-only and writes `kind: security` (or `architecture`)
 items at `status: planning`, each carrying an execution recipe, a
 verification, and its failure modes, so those items skip the grill in *Plan
 the set* and go straight to the ready-mark. It degrades per part, not as a
-whole: no `gh` alerts scope, no `docker`, no `trivy` each render that part
+whole: no `gh` alerts scope, no `docker`, or no `trivy` each render that part
 `(–)` with the reason, and the report says which parts ran. Read its summary
 back by its fixed spellings: a `Dependabot alerts: skipped (unavailable)`
 line, a `Trivy: skipped (unavailable)` or `Docker/Scout: skipped

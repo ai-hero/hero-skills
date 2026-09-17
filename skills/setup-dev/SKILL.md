@@ -103,7 +103,7 @@ git config --local user.name "USER_NAME"
 git config --local user.email "USER_EMAIL"
 ```
 
-Ask the user. Never set identity config without confirmation.
+Ask the user. Never auto-set identity config without confirmation.
 
 ### Step 3: Check Required CLI Tools
 
@@ -232,7 +232,7 @@ Don't also print `hero-skills:one-shot`; `preflight`'s own next-steps lead there
 - **Never modify shared files.** This skill only touches local git config and suggests installs. It never writes to HERO.md, CLAUDE.md, or any committed file.
 - **Always ask before changing config.** Git identity, signing keys, and auth are personal. Confirm before setting any of them.
 - **Platform-aware.** Detect macOS vs Linux and suggest the right install commands.
-- **Idempotent.** Running `hero-skills:setup-dev` twice must be safe. Skip whatever is already done.
+- **Idempotent.** Running `hero-skills:setup-dev` twice should be safe. Skip whatever is already done.
 - **Reference HERO.md.** Every check should tie back to why it's needed: "Required by HERO.md for hero-skills:push-pr" or "Used by CI (GitHub Actions)".
 
 ## Examples

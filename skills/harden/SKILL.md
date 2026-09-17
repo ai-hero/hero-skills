@@ -94,7 +94,7 @@ A bot PR that can merge as it stands is not harden's to re-implement: wayfare's 
 For each open alert, read enough of the codebase to judge (this is the expensive-model work):
 
 - Is the vulnerable code path actually reachable from this repo's usage?
-- Is the fix a patch/minor bump (low risk) or a major bump, which carries breaking-change risk and should be flagged?
+- Is the fix a patch/minor bump (low risk) or a major bump (breaking-change risk, so flag it)?
 - What is the correct update command for this ecosystem (`npm install PACKAGE@VERSION`, `uv lock && uv sync` after a `pyproject.toml` edit, a version pin bump in `.github/workflows/*.yml`)?
 - What test/verification proves the update didn't break anything?
 
@@ -121,7 +121,7 @@ If `docker` is unavailable, do not let Part B silently drop out of the audit. Re
 command -v docker > /dev/null 2>&1 || echo "DOCKER_UNAVAILABLE"
 ```
 
-Scan the base of the **final runtime stage**. Builder stages never ship.
+Scan the base of the **final/runtime stage**. Builder stages never ship.
 
 ```bash
 find . -name "Dockerfile*" -type f
@@ -209,7 +209,7 @@ High signal only: every finding needs a concrete failure or exploit scenario and
 
 ## Step 2: Prioritize
 
-Rank everything found by `severity × blast radius ÷ effort`. Cluster related findings into plan-sized units (one dependency-update batch per ecosystem; one code-hardening item per subsystem or mechanism, never per line). Cap the emitted plans at the top **10** items per run; note what was cut so nothing is silently dropped.
+Rank everything found by `severity × blast radius ÷ effort`. Cluster related findings into plan-sized units (one dependency-update batch per ecosystem; one code-hardening item per subsystem or mechanism, not per line). Cap the emitted plans at the top **10** items per run; note what was cut so nothing is silently dropped.
 
 ## Step 3: Emit Plan Items
 
