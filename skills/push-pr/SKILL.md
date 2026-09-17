@@ -5,19 +5,19 @@ description: Test (verify + smoke), commit, push, and open a draft PR with a CI 
 argument-hint: "[recalibrate | test [MODIFIER...] | ready | target-branch]"
 ---
 
-# Push — Test, Commit, Push, Draft PR, and Merge Workflow
+# Push: test, commit, push, open a draft PR, or merge
 
 Test the outstanding work (verification plus smoke tests), commit it with a smart conventional commit, branch off the default branch first if you're still on it, push to the remote repository, and open a **draft PR by default**. Drafts are the default because the author should run `hero-skills:review-pr` (which calls all pr-review-toolkit agents plus a security pass, applies fixes, and asks for confirmation) before promoting the PR to ready-for-review. After a successful push, this skill also prints a brief CI status summary.
 
-The test phase (Step 2) absorbed the former `hero-skills:test-changes` skill — run `hero-skills:push-pr test` for a test-only run that stops before any commit.
+The test phase (Step 2) absorbed the former `hero-skills:test-changes` skill. Run `hero-skills:push-pr test` for a test-only run that stops before any commit.
 
 ## Arguments
 
-- `$ARGUMENTS` - Optional mode keyword or target branch. Only the **first** whitespace-separated token is matched against the keywords below (exact match, not prefix) — a branch literally named `test` or `ready` cannot be targeted this way and needs a rename or a manual `git merge` instead:
+- `$ARGUMENTS` - Optional mode keyword or target branch. Only the **first** whitespace-separated token is matched against the keywords below, and it must match exactly rather than by prefix. A branch literally named `test` or `ready` cannot be targeted this way, and needs a rename or a manual `git merge` instead:
   - `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before every other form.
   - (none, default) - Test, commit if dirty, push, and create a **draft** PR
-  - `test [MODIFIER...]` - Run only Step 2 (verification + smoke tests) and stop — no commit, no push. Optional trailing tokens narrow the run: `verify` (static checks + unit tests only), `smoke` (skip verification), `backend`, `frontend [routes...]` (routes must start with `/`), `cli`, `mcp`, or free text (a test description to focus on)
-  - `ready` - Test, commit if dirty, push, and create a non-draft PR (ready for review immediately) — only use when you have already self-reviewed or for trivial changes
+  - `test [MODIFIER...]` - Run only Step 2 (verification plus smoke tests) and stop. No commit, no push. Optional trailing tokens narrow the run: `verify` (static checks + unit tests only), `smoke` (skip verification), `backend`, `frontend [routes...]` (routes must start with `/`), `cli`, `mcp`, or free text (a test description to focus on)
+  - `ready` - Test, commit if dirty, push, and create a non-draft PR (ready for review immediately). Only use this when you have already self-reviewed, or for trivial changes
   - Any other first token - Treated as a target branch name (e.g., `main`, `develop`): test, commit if dirty, push, then merge into that branch (no PR). A branch literally named `recalibrate`, `test`, or `ready` cannot be targeted this way and needs a rename or a manual `git merge`
 
 ## `recalibrate`
@@ -76,11 +76,11 @@ If `HERO.md` is missing, suggest `hero-skills:init-hero` but proceed with defaul
 FIRST_ARG=$(printf '%s' "$ARGUMENTS" | awk '{print $1}')
 ```
 
-Parse only the first whitespace-separated token — a target branch that happens to start with `test` (e.g. `testing`, `test-staging`) must not be misread as the `test` keyword.
+Parse only the first whitespace-separated token. A target branch that happens to start with `test` (e.g. `testing`, `test-staging`) must not be misread as the `test` keyword.
 
-**If `$FIRST_ARG` is exactly `recalibrate`, none of this step runs** — go to the `recalibrate` section above and stop there. The catch-all below treats any unrecognized first token as a branch to merge into, so missing this dispatch merges the work into a branch named `recalibrate`.
+**If `$FIRST_ARG` is exactly `recalibrate`, none of this step runs.** Go to the `recalibrate` section above and stop there. The catch-all below treats any unrecognized first token as a branch to merge into, so missing this dispatch merges the work into a branch named `recalibrate`.
 
-**If `$FIRST_ARG` is exactly `test`, skip this step** — a test-only run commits nothing, so it may run on any branch, including the default.
+**If `$FIRST_ARG` is exactly `test`, skip this step.** A test-only run commits nothing, so it may run on any branch, including the default.
 
 Never commit or push directly to the default branch.
 
@@ -96,7 +96,7 @@ echo "Current branch: $BRANCH (default: $DEFAULT_BRANCH)"
 
 **If `$BRANCH` is not `$DEFAULT_BRANCH`, skip this step entirely** and proceed to Step 2 on the current branch.
 
-**If `$BRANCH` equals `$DEFAULT_BRANCH`:** pull it fresh before branching off it — a stale local default branch means the new feature branch (and later, the PR's base diff) silently misses recent commits.
+**If `$BRANCH` equals `$DEFAULT_BRANCH`:** pull it fresh before branching off it. A stale local default branch means the new feature branch (and later, the PR's base diff) silently misses recent commits.
 
 ```bash
 if ! git pull --ff-only origin "$DEFAULT_BRANCH"; then
@@ -106,11 +106,11 @@ if ! git pull --ff-only origin "$DEFAULT_BRANCH"; then
 fi
 ```
 
-**If the pull failed, stop here — do not proceed to branch creation below.** Only continue once it succeeds.
+**If the pull failed, stop here. Do not proceed to branch creation below.** Only continue once it succeeds.
 
-Then derive a feature-branch name from the diff and check out a new branch. Uncommitted changes follow the checkout automatically — do **not** stash.
+Then derive a feature-branch name from the diff and check out a new branch. Uncommitted changes follow the checkout automatically, so do **not** stash.
 
-Generate `BRANCH_NAME` by applying `hero_branch_policy` — the shared naming rules, also used by one-shot's auto-branch step so the two cannot drift:
+Generate `BRANCH_NAME` by applying `hero_branch_policy`, the shared naming rules, which one-shot's auto-branch step also uses so the two cannot drift:
 
 ```bash
 # shellcheck source=/dev/null
@@ -118,7 +118,7 @@ Generate `BRANCH_NAME` by applying `hero_branch_policy` — the shared naming ru
 hero_branch_policy   # apply these rules to the diff to derive BRANCH_NAME
 ```
 
-Deriving the name is a model task, not a shell one — read the diff, then apply the policy. Unlike one-shot (which derives and proceeds), push-pr proposes and waits for confirmation.
+Deriving the name is a model task, not a shell one: read the diff, then apply the policy. Unlike one-shot (which derives and proceeds), push-pr proposes and waits for confirmation.
 
 Present the proposed name and let the user confirm or modify:
 
@@ -147,7 +147,7 @@ Verify the implementation works end to end before anything is committed: static 
 
 Mode selection from `$ARGUMENTS` (after the leading `test`, when present): `verify` runs only Step 2b; `smoke`, `backend`, `frontend [routes...]`, `cli`, and `mcp` skip Step 2b and run only the matching part of Step 2c; anything else (including no modifier) runs both. Free text that is not a mode keyword is a test description to focus on.
 
-**Failure semantics:** if a check fails with a quick, mechanical fix (lint, typo, import order), apply the fix and re-run. If it fails in a way that needs design judgment (test asserting wrong behavior, integration breakage, flaky CI), or the UI smoke flags a regression on a changed route, **STOP** — report the failure and hand back to the user. Never carry a known regression into a commit.
+**Failure semantics:** if a check fails with a quick, mechanical fix (lint, typo, import order), apply the fix and re-run. If it fails in a way that needs design judgment (a test asserting wrong behavior, integration breakage, flaky CI), or the UI smoke flags a regression on a changed route, **STOP**, report the failure, and hand back to the user. Never carry a known regression into a commit.
 
 #### 2a: Detect Project Structure
 
@@ -167,11 +167,11 @@ ls pyproject.toml package.json next.config.* vite.config.* 2>/dev/null
 ls backend/pyproject.toml frontend/package.json 2>/dev/null
 ```
 
-Check the project's `CLAUDE.md` for specific run instructions. Report what was detected; if nothing, ask the user. Install dependencies first when needed (`uv sync`, `npm install` — per project for full-stack).
+Check the project's `CLAUDE.md` for specific run instructions. Report what was detected; if nothing, ask the user. Install dependencies first when needed (`uv sync`, `npm install`, once per project for full-stack).
 
 #### 2b: Verify Implementation (Lint, Typecheck, Unit Tests)
 
-Capture the list of changed files first (uncommitted, then last commit, fallback to empty). Read the dedupe back into the array via `mapfile` so filenames containing spaces, tabs, or globs survive intact — `($(...))` would word-split and corrupt them:
+Capture the list of changed files first (uncommitted, then last commit, fallback to empty). Read the dedupe back into the array with `mapfile` so filenames containing spaces, tabs, or globs survive intact. `($(...))` would word-split and corrupt them:
 
 ```bash
 mapfile -t CHANGED_FILES < <(git diff --name-only; git diff --name-only HEAD~1 HEAD 2>/dev/null)
@@ -181,7 +181,7 @@ mapfile -t CHANGED_FILES < <(printf "%s\n" "${CHANGED_FILES[@]}" | sort -u)
 
 If `CHANGED_FILES` is empty, run the checks on the whole project (replace `"${CHANGED_FILES[@]}"` with `.` or the project root).
 
-If `HERO.md`'s **Repository** section sets `task-runner` (e.g. `just`, `make`), prefer that tool's targets (`just lint`, `just test`, …) over the per-project commands below when both exist — the task runner is what CI itself calls, so it is the copy that cannot drift from CI's actual gate.
+If `HERO.md`'s **Repository** section sets `task-runner` (e.g. `just`, `make`), prefer that tool's targets (`just lint`, `just test`, and so on) over the per-project commands below when both exist. The task runner is what CI itself calls, so it is the copy that cannot drift from CI's actual gate.
 
 Use commands from `HERO.md` **Code Quality** and **Projects** sections when available. Otherwise auto-detect:
 
@@ -189,7 +189,7 @@ Use commands from `HERO.md` **Code Quality** and **Projects** sections when avai
 - **Typecheck:** `uv run mypy "${CHANGED_FILES[@]}"` (Python), `npx tsc --noEmit` (TS)
 - **Unit tests:** the `test-command` from HERO.md per project; else `uv run pytest` / `npm test`. If a test file maps directly to a changed source file, prefer running just those tests for speed.
 
-Then, a scoped pre-commit dry-run — this is the only place a `push-pr test` run (which stops before Step 3) ever exercises pre-commit, so skipping it here would mean commit-hook regressions surface only in a real commit:
+Then run a scoped pre-commit dry-run. This is the only place a `push-pr test` run (which stops before Step 3) ever exercises pre-commit, so skipping it here would mean commit-hook regressions surface only in a real commit:
 
 ```bash
 if command -v pre-commit > /dev/null 2>&1; then
@@ -199,7 +199,7 @@ else
 fi
 ```
 
-Report the verification result — `NO_PRECOMMIT` means pre-commit isn't installed; report that case as `SKIPPED`:
+Report the verification result. `NO_PRECOMMIT` means pre-commit is not installed, so report that case as `SKIPPED`:
 
 ```
 Verification
@@ -210,26 +210,26 @@ Unit tests: 42 passed, 0 failed
 Pre-commit: PASSED (or SKIPPED if NO_PRECOMMIT)
 ```
 
-If any check fails, apply the failure semantics above — mechanical fixes are fixed and re-run; judgment calls stop the skill before the smoke tests.
+If any check fails, apply the failure semantics above: mechanical fixes get fixed and re-run, and judgment calls stop the skill before the smoke tests.
 
 #### 2c: Run Smoke Tests by Type
 
 Skip entirely in `verify` mode.
 
-**CLI / Library** — find entry points in `pyproject.toml` (`[project.scripts]`) or `__main__.py` and run with `--help` or a basic invocation (`uv run SCRIPT_NAME --help`); for libraries with no CLI, `uv run python -c "import PACKAGE; print('OK')"`.
+**CLI or library**: find entry points in `pyproject.toml` (`[project.scripts]`) or `__main__.py` and run with `--help` or a basic invocation (`uv run SCRIPT_NAME --help`); for libraries with no CLI, `uv run python -c "import PACKAGE; print('OK')"`.
 
-**Backend API** — start the server in the background (e.g., `uv run uvicorn app.main:app --reload --port 8000`), wait for ready, then smoke:
+**Backend API**: start the server in the background (e.g., `uv run uvicorn app.main:app --reload --port 8000`), wait for ready, then smoke:
 
 ```bash
 curl -s http://localhost:8000/health
 curl -s http://localhost:8000/openapi.json | head -50
 ```
 
-**MCP Server** — start the server, launch `npx @modelcontextprotocol/inspector`, connect via Playwright at `http://localhost:6274` (Streamable HTTP → server URL → Connect), and exercise the available tools through the Inspector UI.
+**MCP server**: start the server, launch `npx @modelcontextprotocol/inspector`, connect via Playwright at `http://localhost:6274` (Streamable HTTP → server URL → Connect), and exercise the available tools through the Inspector UI.
 
-**Full-stack** — backend first (APIs must be ready), frontend second (may proxy to backend), then smoke each layer.
+**Full-stack**: backend first (APIs must be ready), frontend second (it may proxy to the backend), then smoke each layer.
 
-**Frontend App** — the full recipe below: detect whether this is a UI project, confirm/start its dev server under `.test-output/`, derive up to 5 routes from the diff (or use explicit `/`-routes passed after `frontend`), drive each route with Playwright MCP, and apply the console-noise allowlist and failure rules. If no UI project is detected, skip gracefully — expected on backend-only diffs, not a failure.
+**Frontend app**: the full recipe below. Detect whether this is a UI project, confirm or start its dev server under `.test-output/`, derive up to 5 routes from the diff (or use explicit `/`-routes passed after `frontend`), drive each route with Playwright MCP, and apply the console-noise allowlist and failure rules. If no UI project is detected, skip gracefully. That is expected on backend-only diffs, not a failure.
 
 ##### Detect UI project
 
@@ -240,7 +240,7 @@ If Step 2a detected no frontend indicator at all (no `next.config.*`, `vite.conf
 This is expected on backend-only PRs.
 ```
 
-Otherwise, confirm which project to drive using HERO.md's `## Projects` section (already loaded in Step 0). UI detection there is **heuristic, not closed-enum** — `init-hero` does not constrain the `framework` value, so treat the list below as a hint and fall back to asking the user when nothing matches.
+Otherwise, confirm which project to drive using HERO.md's `## Projects` section (already loaded in Step 0). UI detection there is **heuristic, not a closed enum**. `init-hero` does not constrain the `framework` value, so treat the list below as a hint and fall back to asking the user when nothing matches.
 
 **Known-UI frameworks (auto-detected as UI):**
 
@@ -265,12 +265,12 @@ rails sinatra laravel
    ```
    Project 'PROJECT_NAME' declares framework: FRAMEWORK_VALUE.
    Treat as a UI project for smoke testing?
-     [y] Yes — drive the dev server with Playwright MCP
-     [n] No — skip (recommended for non-UI frameworks)
+     [y] Yes, drive the dev server with Playwright MCP
+     [n] No, skip it (recommended for non-UI frameworks)
      [a] Add 'FRAMEWORK_VALUE' to the known-UI list in skills/push-pr/SKILL.md and continue (asks once per session, not durable)
    ```
 
-   Default to `n` if the user answers ambiguously — silently smoking a backend project is worse than silently skipping a UI one.
+   Default to `n` if the user answers ambiguously. Silently smoking a backend project is worse than silently skipping a UI one.
 
 If multiple UI projects exist, ask the user which one to smoke-test (or pass it explicitly via the project's path). One per run keeps the dev-server lifecycle simple.
 
@@ -402,7 +402,7 @@ if ! curl -sf -o /dev/null -m 2 "$DEV_URL"; then
 fi
 ```
 
-Note the log path so the user can `tail -f` it in another terminal if a smoke-test failure needs deeper diagnosis. Do NOT auto-tail it into this conversation — it will flood the context.
+Note the log path so the user can `tail -f` it in another terminal if a smoke-test failure needs deeper diagnosis. Do NOT auto-tail it into this conversation, because it floods the context.
 
 ##### Identify routes
 
@@ -411,13 +411,13 @@ If `/`-routes were passed after `frontend` (e.g., `hero-skills:push-pr test fron
 Otherwise, derive from the diff. For each changed file under the UI project, map to its owning route(s):
 
 - Next.js App Router: `app/foo/bar/page.tsx` → `/foo/bar`; `app/(group)/x/page.tsx` → `/x` (route groups are URL-invisible); route handlers (`route.ts`) excluded.
-- Next.js dynamic / catch-all segments: `app/posts/[slug]/page.tsx`, `app/[...slug]/page.tsx`, `app/[[...slug]]/page.tsx` — there is no canonical URL for these. Ask the user once for a sample value (e.g., a real `slug` from the dev DB), or skip the route with `(–)` and a note. Do not invent values like `/posts/example` — those usually 404.
-- Next.js parallel and intercepted routes: `app/@modal/...`, `app/(.)photo/...`, `app/(..)settings/...` — exclude entirely. They have no free-standing URL; navigating to a literal `@modal` returns 404 and pollutes the smoke result.
+- Next.js dynamic / catch-all segments: `app/posts/[slug]/page.tsx`, `app/[...slug]/page.tsx`, `app/[[...slug]]/page.tsx`. There is no canonical URL for these. Ask the user once for a sample value (e.g., a real `slug` from the dev DB), or skip the route with `(–)` and a note. Do not invent values like `/posts/example`, which usually 404.
+- Next.js parallel and intercepted routes: `app/@modal/...`, `app/(.)photo/...`, `app/(..)settings/...`: exclude these entirely. They have no free-standing URL; navigating to a literal `@modal` returns 404 and pollutes the smoke result.
 - Next.js Pages Router: `pages/foo/bar.tsx` → `/foo/bar`; `pages/index.tsx` → `/`; `pages/[slug].tsx` → ask for a sample value or skip.
 - Vite + React Router / SvelteKit / Remix / etc.: walk the routing config (`routes.tsx`, `+page.svelte`, `routes/`) and emit the canonical paths. Apply the same dynamic-segment rule (ask for a sample or skip).
 - Shared components (`components/Button.tsx`, `lib/`, `hooks/`): no direct route. Pick the **landing page** (`/`) plus the **most-changed page** as a fallback so we exercise the rendering path at all.
 
-If the diff touches no UI files at all (despite the project being a UI project — e.g., the change was server actions only), exercise just the landing page `/` so we still detect a hard regression like a build break.
+If the diff touches no UI files at all (despite the project being a UI project, for example when the change was server actions only), exercise just the landing page `/` so we still detect a hard regression like a build break.
 
 Cap the route list at **5 routes** for a smoke test. More than that and the user should run a real E2E suite.
 
@@ -437,16 +437,16 @@ Mark `BROWSER_OPENED=true` after the first successful `browser_navigate` so the 
 For each route in order, run the same recipe via Playwright MCP:
 
 1. `mcp__playwright__browser_navigate` to `$DEV_URL$ROUTE`. Set `expectedStatus` to 200-399 if the tool supports it; otherwise check status from a follow-up `browser_network_requests` call.
-2. `mcp__playwright__browser_wait_for` until the page is interactive (look for a stable selector — `body`, the route's `<h1>`, or a known landmark from the snapshot).
-3. `mcp__playwright__browser_snapshot` — capture the accessibility tree as the canonical "did it render" check.
-4. `mcp__playwright__browser_console_messages` — read messages emitted since the last navigate.
-5. `mcp__playwright__browser_take_screenshot` — save a PNG named `smoke-ROUTE_SLUG.png` under `$ROOT/.test-output/playwright-mcp/`. **Before the first screenshot of this run**, do the three-step setup once:
+2. `mcp__playwright__browser_wait_for` until the page is interactive (look for a stable selector: `body`, the route's `<h1>`, or a known landmark from the snapshot).
+3. `mcp__playwright__browser_snapshot`: capture the accessibility tree as the canonical "did it render" check.
+4. `mcp__playwright__browser_console_messages`: read messages emitted since the last navigate.
+5. `mcp__playwright__browser_take_screenshot`: save a PNG named `smoke-ROUTE_SLUG.png` under `$ROOT/.test-output/playwright-mcp/`. **Before the first screenshot of this run**, do the three-step setup once:
 
    ```bash
    # shellcheck source=/dev/null
    . "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
    mkdir -p "$ROOT/.test-output/playwright-mcp"
-   # Idempotent — safe whether or not the dev-server block above already ran.
+   # Idempotent, and safe whether or not the dev-server block above already ran.
    hero_exclude_add .test-output/
    # Clear stale artifacts from previous runs so this report only reflects
    # the current diff. Scope the delete to this skill's artifacts so
@@ -455,11 +455,11 @@ For each route in order, run the same recipe via Playwright MCP:
    rm -f "$ROOT/.test-output/playwright-mcp"/smoke-*.png
    ```
 
-   `$ROOT/.test-output/` is the canonical local-only test-artifacts directory for hero-skills. All disposable outputs from any hero skill — Playwright screenshots, traces, videos, network logs, dev-server logs, coverage reports — land somewhere under it so the repo root stays clean and a single exclude entry covers them all.
+   `$ROOT/.test-output/` is the canonical local-only test-artifacts directory for hero-skills. All disposable outputs from any hero skill (Playwright screenshots, traces, videos, network logs, dev-server logs, coverage reports) land somewhere under it so the repo root stays clean and a single exclude entry covers them all.
 
 For routes that involve a form change (detected by reading the diff: `<form>` / `useForm` / `onSubmit` added or modified), additionally:
 
-1. `mcp__playwright__browser_fill_form` with placeholder-but-plausible values for the visible inputs (keep it under 5 inputs — refuse if the form is huge; that's a real E2E test, not a smoke test).
+1. `mcp__playwright__browser_fill_form` with placeholder-but-plausible values for the visible inputs (keep it under 5 inputs, and refuse if the form is huge; that's a real E2E test, not a smoke test).
 2. Click the submit control, `browser_wait_for` the success state, `browser_console_messages` again.
 
 ###### Console noise allowlist
@@ -487,7 +487,7 @@ General:
     emitting in the page context — not the app's fault).
 ```
 
-If a future framework has its own benign-warnings set, the user must update this list explicitly via a follow-up edit to this skill — the frontend smoke does not silently expand its filter set.
+If a future framework has its own benign-warnings set, the user must update this list explicitly via a follow-up edit to this skill. The frontend smoke does not silently expand its filter set.
 
 ###### Failure rules
 
@@ -495,7 +495,7 @@ A route fails the smoke if any of:
 
 - The HTTP status of the document request is 4xx or 5xx.
 - An entry in `browser_console_messages` has `type=error` AND its body does NOT match an allowlist entry from the section above. Match the allowlist conservatively: if you are not sure whether a message is benign, treat it as a failure and let the user decide.
-- An uncaught exception appears in the dev server log (covers a broad set of common failures and ignores nothing). This check only applies when **this** skill started the dev server — `$DEV_LOG` is only set on that path; when the server was already running there is no log to grep, so gate on `$DEV_LOG` being set and the file existing:
+- An uncaught exception appears in the dev server log (covers a broad set of common failures and ignores nothing). This check only applies when **this** skill started the dev server. `$DEV_LOG` is only set on that path, when the server was already running there is no log to grep, so gate on `$DEV_LOG` being set and the file existing:
 
   ```bash
   if [ -n "$DEV_LOG" ] && [ -f "$DEV_LOG" ]; then
@@ -505,8 +505,8 @@ A route fails the smoke if any of:
   fi
   ```
 
-- `browser_wait_for` times out — the page never became interactive.
-- A form submission's `wait_for` fails — the success state never rendered.
+- `browser_wait_for` times out, so the page never became interactive.
+- A form submission's `wait_for` fails, so the success state never rendered.
 
 On any failure: stop driving further routes, surface the failing route + the console message + the screenshot path, and treat the run as failed. Do **not** auto-retry; the model is a poor judge of "transient vs real" for UI bugs.
 
@@ -554,7 +554,7 @@ Smoke Tests:
     Result:      OK | FAILED at ROUTE — REASON
 ```
 
-**If `$FIRST_ARG` (from Step 1) is exactly `test`, STOP here** — the test-only run is complete. Suggest `/simplify` and a plain `hero-skills:push-pr` as next steps. Otherwise continue to Step 3.
+**If `$FIRST_ARG` (from Step 1) is exactly `test`, STOP here.** The test-only run is complete. Suggest `/simplify` and a plain `hero-skills:push-pr` as next steps. Otherwise continue to Step 3.
 
 ### Step 3: Commit Dirty Changes (Smart Commit)
 
@@ -562,7 +562,7 @@ Smoke Tests:
 git status --porcelain
 ```
 
-**If the tree is clean (no output):** the work is already committed — skip straight to Step 4.
+**If the tree is clean (no output):** the work is already committed, so skip straight to Step 4.
 
 **If the tree is dirty**, run the following before pushing.
 
@@ -591,15 +591,15 @@ For each changed file: read the diff, understand its purpose, assess quality.
 
 #### 3c: Simplify Code
 
-Invoke the `simplify` skill via the Skill tool. `simplify` is **not** part of this plugin — it ships separately (see the user-invocable skills list in the current session). It reviews the current diff for reuse, quality, and efficiency and fixes any issues found before the commit lands. Step 3g below handles the post-fix pre-push dry-run.
+Invoke the `simplify` skill via the Skill tool. `simplify` is **not** part of this plugin. It ships separately (see the user-invocable skills list in the current session). It reviews the current diff for reuse, quality, and efficiency and fixes any issues found before the commit lands. Step 3g below handles the post-fix pre-push dry-run.
 
-If the `simplify` skill is unavailable in this environment, report `NO_SIMPLIFY_SKILL — falling back to inline checklist` and apply this check before continuing:
+If the `simplify` skill is unavailable in this environment, report `NO_SIMPLIFY_SKILL: falling back to inline checklist` and apply this check before continuing:
 
 - [ ] No premature abstractions
 - [ ] No over-engineering
 - [ ] Could this be simpler?
 
-Then the **humanizer pass**: `hero-skills:my-humanizer inline` over the prose this diff adds or rewrites — code comments, docstrings, README/docs/CHANGELOG text, error and log messages a person reads. The same pass covers every prose this skill emits: the commit body (3f) and the PR body (A3), drafted first, humanized once.
+Then the **humanizer pass**: `hero-skills:my-humanizer inline` over the prose this diff adds or rewrites: code comments, docstrings, README/docs/CHANGELOG text, error and log messages a person reads. The same pass covers every prose this skill emits: the commit body (3f) and the PR body (A3), drafted first, humanized once.
 
 #### 3d: Ruthless Code Review
 
@@ -755,7 +755,7 @@ git diff origin/$DEFAULT_BRANCH..HEAD --stat
 git diff origin/$DEFAULT_BRANCH..HEAD --name-only
 ```
 
-If `$FETCH_FOR_DIFF_OK` is `false`: this doesn't block the PR (GitHub computes the actual base/diff server-side regardless of local staleness), but the title and changeset list generated below are built from this possibly-stale local log — prepend a note to the generated PR body: `⚠️ Generated against a possibly-stale local view of $DEFAULT_BRANCH (fetch failed) — verify the changeset list against GitHub's own diff.`
+If `$FETCH_FOR_DIFF_OK` is `false`: this does not block the PR (GitHub computes the actual base and diff server-side regardless of local staleness), but the title and changeset list generated below are built from this possibly-stale local log. Prepend a note to the generated PR body: `⚠️ Generated against a possibly-stale local view of $DEFAULT_BRANCH (fetch failed) — verify the changeset list against GitHub's own diff.`
 
 Determine the draft flag (drafts are the default). Parse the first whitespace-separated token of `$ARGUMENTS` so trailing whitespace or extra arguments don't silently fall through:
 
@@ -823,8 +823,8 @@ Next step: hero-skills:review-pr — self-review, runs pr-review-toolkit agents 
 
 If the PR was created with `ready` (non-draft), report `PR created` instead of `Draft PR created`, skip the self-review hint, and pick exactly one next step instead:
 
-- **This PR touched dependency files** (`package.json`, `pyproject.toml`, lockfiles, `.github/workflows/*.yml` version pins, or `Dockerfile*` — harden covers Docker image hardening too): `Next step: hero-skills:wayfare sync — its harden stage audits the new dependency surface and writes any fix as a security item` (print only).
-- **Otherwise**: `Next step: hero-skills:ship-pr — once green, @auto-approve, merge, verify deploy, reset` (offer to auto-run).
+- **This PR touched dependency files** (`package.json`, `pyproject.toml`, lockfiles, `.github/workflows/*.yml` version pins, or `Dockerfile*`, since harden covers Docker image hardening too): `Next step: hero-skills:wayfare sync, whose harden stage audits the new dependency surface and writes any fix as a security item` (print only).
+- **Otherwise**: `Next step: hero-skills:ship-pr, which once green posts @auto-approve, merges, verifies the deploy, and resets` (offer to auto-run).
 
 ### A5: Report CI Status
 
@@ -896,7 +896,7 @@ FEATURE_BRANCH=$(git branch --show-current)
 git status --porcelain
 ```
 
-**If uncommitted changes exist at this point, STOP.** Do not switch branches — go back and commit them (re-run Step 3) before continuing.
+**If uncommitted changes exist at this point, STOP.** Do not switch branches. Go back and commit them (re-run Step 3) before continuing.
 
 ```bash
 git checkout $TARGET_BRANCH
@@ -936,7 +936,7 @@ Suggestion: Delete the feature branch?
 
 ## Safety Checks
 
-- [ ] Test phase (Step 2) passed — no known regression is committed
+- [ ] Test phase (Step 2) passed, so no known regression is committed
 - [ ] Pre-push hooks pass before any push
 - [ ] Working tree clean before push (Step 3 committed any dirty changes)
 - [ ] Not force pushing
@@ -966,7 +966,7 @@ This may take a few minutes.
 - Auto-resolve merge conflicts
 - Skip hooks with `--no-verify`
 - Push secrets or sensitive files
-- Stash changes to work around a dirty tree — commit them instead (Step 3)
+- Stash changes to work around a dirty tree. Commit them instead (Step 3)
 
 ## Large PR Warning
 
@@ -989,9 +989,9 @@ hero-skills:push-pr develop                               # Test, commit, push, 
 - Uses GitHub CLI (`gh`) for PR, branch, and CI operations
 - Respects repository PR templates if they exist
 - Always creates merge commits for traceability
-- Never commits or pushes directly to the default branch — Step 1 branches off first
+- Never commits or pushes directly to the default branch. Step 1 branches off first
 - Always check the project's CLAUDE.md first for custom run instructions
 - The frontend smoke is a **smoke** test, not a full E2E: cap routes at 5, skip large forms, do not chase flaky tests. If a real E2E suite already exists in the repo (Playwright config, Cypress, etc.), prefer running it directly instead.
-- The test phase never modifies tracked source files. It only reads, drives, and reports, but writes disposable local artifacts under `$ROOT/.test-output/` (screenshots in `.test-output/playwright-mcp/`, the dev-server log at `.test-output/dev-server.log`). The ignore rule lives in `.git/info/exclude` (repo-local, untracked) — *not* `.gitignore` — so the working tree never gets dirtied.
+- The test phase never modifies tracked source files. It only reads, drives, and reports, but writes disposable local artifacts under `$ROOT/.test-output/` (screenshots in `.test-output/playwright-mcp/`, the dev-server log at `.test-output/dev-server.log`). The ignore rule lives in `.git/info/exclude`, which is repo-local and untracked, *not* `.gitignore`, so the working tree never gets dirtied.
 - Use `browser_snapshot` (not screenshots) for reliable element interaction; screenshots are captured separately as evidence for the report
-- When testing completes, stop the background servers the test phase started — except the frontend dev server, which is left running by default and only stopped when the user opts in
+- When testing completes, stop the background servers the test phase started, except the frontend dev server, which is left running by default and only stopped when the user opts in
