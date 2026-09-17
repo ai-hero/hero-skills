@@ -25,7 +25,7 @@ Print at each step transition:
 Now running: verdict
 ```
 
-Mapping to the steps below: Step 3 = `gates`, Step 4 = `trigger`, Steps 5-6 = `verdict`, Step 7a = `merge`, Step 7b = `reset` (merged-branch cleanup — see Step 7b's own note), Step 7e = `verify-deploy` (platform-agnostic post-merge deployment-health check). Steps 1-2 are pre-flight (PR identification, workflow-on-default-branch check) and Step 8 is the summary — neither appears in the DAG. Steps 7c (REQUEST_CHANGES) and 7d (WORKFLOW_FAILED) are alternative end states that *replace* `merge`, `reset`, and `verify-deploy` — there is no merge to verify deployment health for. On those paths render `(✗) merge → ( ) reset → ( ) verify-deploy` and stop, never `(✓) merge → (✓) reset → (✓) verify-deploy`.
+Mapping to the steps below: Step 3 = `gates`, Step 4 = `trigger`, Steps 5-6 = `verdict`, Step 7a = `merge`, Step 7b = `reset` (merged-branch cleanup — see Step 7b's own note), Step 7e = `verify-deploy` (platform-agnostic post-merge deployment-health check). Steps 1-2a are pre-flight (PR identification, workflow-on-default-branch check, draining any deferred deploy probe) and Step 8 is the summary — neither appears in the DAG. Steps 7c (REQUEST_CHANGES) and 7d (WORKFLOW_FAILED) are alternative end states that *replace* `merge`, `reset`, and `verify-deploy` — there is no merge to verify deployment health for. On those paths render `(✗) merge → ( ) reset → ( ) verify-deploy` and stop, never `(✓) merge → (✓) reset → (✓) verify-deploy`.
 
 The workflow lives at `.github/workflows/auto-approve.yaml` (or `.yml` — both are honoured). **GitHub only honors `issue_comment`-triggered workflows that already exist on the default branch**, so the workflow file must be merged to `main` (or your default branch) before this skill can do anything useful. This skill checks that first.
 
@@ -147,6 +147,36 @@ Fix:
 ```
 
 Do not proceed.
+
+### Step 2a: Drain deferred deploy checks — opportunistic, never a wait
+
+A previous run deferred its post-merge deploy probe rather than sleeping
+through the merge commit's workflow runs (Step 7e). Those runs have almost
+certainly finished by now — minutes or hours have passed and a session is
+open anyway — so this is the moment the answer is free.
+
+```bash
+PENDING=$(hero_deploy_pending "$(hero_work_store)") || PENDING=""
+```
+
+For each `SHA<TAB>PR<TAB>DATE` line, read the runs on `SHA` once
+(`gh run list --commit SHA --json status,conclusion`). Three outcomes, and
+none of them stops this run:
+
+- **still in flight** — leave the entry; say so in one line and move on. It
+  is not this PR's problem.
+- **finished** — probe deployment health exactly as Step 7e does, print the
+  verdict naming the PR and SHA, and `hero_deploy_pending_clear` the entry.
+  A DEGRADED result is reported loudly here and, under wayfare, becomes a
+  `kind: bug` item — the fix is the next PR, which is what it would have
+  been after a ten-minute wait too.
+- **older than 7 days** — clear it with a line saying the probe was dropped
+  as stale. A deploy that old has been superseded by later merges, and a
+  verdict on it describes neither.
+
+Clearing an entry the probe never answered is the one thing this step must
+not do: that is how a DEGRADED deploy disappears without anyone seeing it,
+and the list is the only record that the check is owed.
 
 ### Step 3: Hard Gate — All Comments and Reviews Must Be Answered
 
@@ -921,44 +951,46 @@ else
 
   # A probe taken while the merge commit's own workflow runs are still going
   # measures the PREVIOUS deploy — healthy, and not the one this PR produced.
-  # Wait for them (ten-minute cap), then probe. Only Actions-driven deploys
-  # are visible here: a platform that deploys off its own git hook or a
-  # polling CD (ArgoCD) has no run to wait on, and the probe can still read
-  # the previous deploy.
+  # So the runs have to finish before the probe means anything. This step
+  # NEVER waits for them: it is advisory, it cannot un-merge what Step 7a
+  # landed, and a sleep here is paid on every merged PR and multiplied by a
+  # goal's concurrency. Defer instead — record the merge and let the next
+  # thing that runs in this repo probe it for free (Step 2a drains the list).
+  # Same trade as one-shot's await-review, which caps at 60s and hands
+  # enforcement to the next step rather than sitting on the session.
   if [ "$DEPLOY_PLATFORM" != "none" ]; then
     MERGE_COMMIT=$(gh pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid // empty') \
       || { MERGE_COMMIT=""; DEPLOY_CAVEAT="could not read the merge commit — the health result may be the previous deploy's"; }
   fi
   if [ -n "${MERGE_COMMIT:-}" ]; then
     # Runs take seconds to register after a merge, so an empty list is "not
-    # yet", not "all finished" — same grace as Step 3e's CI wait.
-    WAITED=0; RUNS_EMPTY_UNTIL=120
-    while [ "$WAITED" -lt 600 ]; do
-      if ! RUNS=$(gh run list --commit "$MERGE_COMMIT" --json status 2>&1); then
-        # Advisory step: a gh that cannot list runs will not start listing
-        # them in ten minutes — probe now rather than sleep out the cap.
-        echo "deploy: could not read runs on $MERGE_COMMIT ($RUNS) — probing now"
-        DEPLOY_CAVEAT="workflow runs unreadable — the health result may be the previous deploy's"
-        break
-      fi
+    # yet", not "all finished" — the same grace Step 3e's CI wait gives, and
+    # the reason an empty list defers rather than probing.
+    if ! RUNS=$(gh run list --commit "$MERGE_COMMIT" --json status 2>&1); then
+      echo "deploy: could not read runs on $MERGE_COMMIT ($RUNS) — probing now"
+      DEPLOY_CAVEAT="workflow runs unreadable — the health result may be the previous deploy's"
+    else
       TOTAL=$(printf '%s' "$RUNS" | jq 'length')
       IN_FLIGHT=$(printf '%s' "$RUNS" | jq '[.[] | select(.status != "completed")] | length')
-      if [ "$TOTAL" -eq 0 ]; then
-        [ "$WAITED" -ge "$RUNS_EMPTY_UNTIL" ] && { echo "deploy: no workflow runs on $MERGE_COMMIT after ${RUNS_EMPTY_UNTIL}s — probing; a HEALTHY result may be the previous deploy's"; break; }
-      elif [ "$IN_FLIGHT" -eq 0 ]; then
-        break
+      if [ "$TOTAL" -eq 0 ] || [ "$IN_FLIGHT" -gt 0 ]; then
+        # hero_work_store resolves a worktree to its primary, so a goal
+        # turn's parallel subagents all defer into the one list.
+        hero_deploy_pending_add "$(hero_work_store)" "$MERGE_COMMIT" "$PR_NUMBER"
+        DEPLOY_STATUS="deferred"
+        echo "deploy: ${IN_FLIGHT:-0}/${TOTAL} run(s) still in flight on $MERGE_COMMIT — deferred, not waited on"
       fi
-      echo "deploy: ${IN_FLIGHT:-0}/${TOTAL} run(s) still in flight on $MERGE_COMMIT — waiting…"
-      sleep 30; WAITED=$((WAITED + 30))
-    done
-    [ "$WAITED" -ge 600 ] && echo "deploy: runs on $MERGE_COMMIT still in flight after 10 minutes — probing anyway; treat a HEALTHY result as the previous deploy's"
+    fi
   fi
 fi
 ```
 
+**`deferred` is a real outcome, not a skip.** It renders `(⏸) verify-deploy — deferred to the next run` and the summary names the merge commit. The work item's deployment DoD line stays `not checked` — the same as an unreachable platform, and deliberately not the `skipped by goal` state, which satisfies it. Nothing downstream waits: the merge landed, the branch is reset, and the session moves on. A deploy that turns out DEGRADED is fixed by the next PR, which is what would have happened after a ten-minute wait anyway — the wait only ever changed *who was sitting there* while the runs finished.
+
 A non-empty `DEPLOY_CAVEAT` downgrades a `HEALTHY` result to `UNKNOWN` in the report below, with the caveat as the reason: the probe ran, but not against a deploy this merge is known to have produced.
 
-Dispatch on `$DEPLOY_PLATFORM`:
+Dispatch on `$DEPLOY_PLATFORM` — **unless `DEPLOY_STATUS` is already
+`deferred`**, in which case there is nothing to probe yet and the step is
+done. Skip to the report.
 
 **`kubernetes`** — read-only cluster health (nodes, pods, deployments, optional ArgoCD):
 
@@ -1059,6 +1091,7 @@ Render the Pipeline DAG line **conditionally on the verdict, whether the user me
 - APPROVE + merged + reset succeeded + deploy DEGRADED → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✓) reset → (✗) verify-deploy`
 - APPROVE + merged + reset succeeded + deploy UNKNOWN (a health query failed) → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✓) reset → (✗) verify-deploy` with a `could not verify deployment health` note (distinct from DEGRADED — the deployment may be fine; the check couldn't confirm it)
 - APPROVE + merged + reset succeeded + no platform configured (skipped) → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✓) reset → (–) verify-deploy`
+- APPROVE + merged + reset succeeded + the merge commit's runs still in flight → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✓) reset → (⏸) verify-deploy` with `deferred to the next run (SHA)` — the probe is owed by Step 2a of whatever runs next, and this session ends now rather than sitting on it
 - APPROVE + merged + reset partial (RESET_OK=false) → `(✓) gates → (✓) trigger → (✓) verdict → (✓) merge → (✗) reset → (✓|✗|–) verify-deploy` — verify-deploy still runs off `MERGED == true`, independent of the reset outcome
 - APPROVE + user declined merge → `(✓) gates → (✓) trigger → (✓) verdict → (✗) merge → ( ) reset → ( ) verify-deploy` with `Stopped: user declined merge`
 - REQUEST_CHANGES → `(✓) gates → (✓) trigger → (✓) verdict → (✗) merge → ( ) reset → ( ) verify-deploy` with `Stopped: REQUEST_CHANGES`

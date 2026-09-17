@@ -141,13 +141,21 @@ STORE=$(hero_work_store)
 
 # Show what's already on the plate so grilling builds on it, not beside it.
 hero_ready_items "$STORE"
+
+# Mail from a sibling repo (docs/MESSAGES.md). A count is all this step owes:
+# an unread ask can change what is worth planning, and nothing else in a
+# planning session would ever make an agent look in that folder.
+echo "inbox: unread=$(hero_inbox_count "$STORE") claimed=$(hero_inbox_count "$STORE" claimed)"
 ```
 
 If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
 
 Read any existing work-items first — new grilling may resolve, block, or
 supersede work already captured. Grill against the current plate, not a blank
-slate.
+slate. An unread message is not one of those items and is never grilled here:
+say the count, name `hero-skills:wayfare sync` as what triages it, and carry
+on. Promotion is that stage's, on the user's confirmation — planning straight
+off an inbound message is a sibling writing this repo's roadmap.
 
 ### Step 1: Frame the work
 

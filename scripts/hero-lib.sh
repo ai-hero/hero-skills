@@ -809,6 +809,106 @@ hero_item_awaiting() { # ITEM_FILE
   ' "$1"
 }
 
+# A message id with real entropy (docs/MESSAGES.md). Hash-named, never
+# numbered: `.plans/` ids are a sequential integer namespace, and a sender
+# allocating an id inside the RECIPIENT's namespace races that repo's own
+# allocation — which surfaces as a duplicate id and a silent mis-resolution,
+# not a failure.
+hero_msg_id() {
+  local h
+  h=$(od -An -N3 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')
+  [ -n "$h" ] || { echo "hero_msg_id: no entropy source" >&2; return 1; }
+  printf 'm-%s' "$h"
+}
+
+# Live messages in a store's inbox matching FROM and ABOUT, as paths, one per
+# line. This is the dedupe probe every sender runs BEFORE depositing: the key
+# is (from, about), never msg_id, which differs by construction — so a resumed
+# sender that skips this re-sends and the recipient does the work twice.
+# `answered` and `declined` are settled and never match; a settled message is
+# a conversation that finished, not a live duplicate. Returns 1 when nothing
+# matches, so `if hero_msg_find ...` reads as "already sent".
+hero_msg_find() { # STORE FROM ABOUT
+  local f n=0 st
+  [ -d "$1/inbox" ] || return 1
+  setopt localoptions nullglob 2>/dev/null || true
+  for f in "$1"/inbox/*.md; do
+    [ -f "$f" ] || continue
+    [ "$(hero_item_field "$f" from)" = "$2" ] || continue
+    [ "$(hero_item_field "$f" about)" = "$3" ] || continue
+    st=$(hero_item_field "$f" status | tr '[:upper:]' '[:lower:]')
+    case "$st" in answered|declined) continue ;; esac
+    echo "$f"; n=$((n + 1))
+  done
+  [ "$n" -gt 0 ]
+}
+
+# Deposit a message file into a target store's inbox, atomically. BODY_FILE is
+# the fully-written message; the deposited path goes to stdout.
+#
+# Atomicity is the whole reason this is a function: a recipient globbing
+# inbox/*.md can read a file mid-write, so the content is written to a temp
+# name IN THE SAME DIRECTORY and `mv`d into place — rename is atomic on one
+# filesystem, a direct write is not, and a torn read of a message is a request
+# acted on in half.
+#
+# It will not create the inbox. A target with no `.plans/` has no agent
+# workflow to read a message, and materializing a store inside someone else's
+# checkout is the second kind of write the standard bans.
+hero_msg_deposit() { # TARGET_STORE MSG_ID BODY_FILE
+  local dest tmp
+  [ -r "$3" ] || { echo "hero_msg_deposit: cannot read $3" >&2; return 1; }
+  case "$2" in m-*) ;; *) echo "hero_msg_deposit: '$2' is not a message id (m-HEX)" >&2; return 1 ;; esac
+  [ -d "$1/inbox" ] || { echo "hero_msg_deposit: $1/inbox does not exist — the target has no mailbox; report it, do not create one" >&2; return 1; }
+  dest="$1/inbox/$2.md"
+  [ -e "$dest" ] && { echo "hero_msg_deposit: $dest already exists — allocate a new id rather than overwrite a message" >&2; return 1; }
+  tmp="$1/inbox/.$2.$$.tmp"
+  cat "$3" > "$tmp" || { rm -f "$tmp"; return 1; }
+  mv "$tmp" "$dest" || { rm -f "$tmp"; return 1; }
+  printf '%s' "$dest"
+}
+
+# ---------- deferred deploy checks ----------------------------------------
+
+# A post-merge deploy check that could not be answered without waiting.
+#
+# The check is advisory — it never un-merges anything — so blocking a session
+# on it buys nothing and costs a sleep per merged PR, multiplied by a goal's
+# concurrency. Instead the merge commit is recorded here and probed by the
+# next thing that runs in this repo, which pays no wait at all. Same shape as
+# one-shot's await-review: cap the wait, then hand the enforcement to whatever
+# runs next.
+#
+# One line per pending merge: SHA<TAB>PR<TAB>DATE. Appending a SHA already
+# present is a no-op — a re-run of the same merge must not queue it twice.
+hero_deploy_pending_add() { # STORE SHA PR
+  local f="$1/.deploy-pending"
+  [ -d "$1" ] || { echo "hero_deploy_pending_add: no store at $1" >&2; return 1; }
+  case "$2" in ''|*[!0-9a-fA-F]*) echo "hero_deploy_pending_add: '$2' is not a commit sha" >&2; return 1 ;; esac
+  if [ -f "$f" ] && cut -f1 "$f" | grep -qxF "$2"; then return 0; fi
+  printf '%s\t%s\t%s\n' "$2" "${3:-}" "$(date +%Y-%m-%d)" >> "$f"
+}
+
+# The pending merges, oldest first, as SHA<TAB>PR<TAB>DATE. Empty and rc 1
+# when there is nothing waiting, so `if hero_deploy_pending "$STORE"` reads as
+# "something is owed".
+hero_deploy_pending() { # STORE
+  local f="$1/.deploy-pending"
+  [ -s "$f" ] || return 1
+  cat "$f"
+}
+
+# Drop one sha from the list, once it has been probed and reported. Clearing
+# an entry that was never probed is how a DEGRADED deploy disappears silently,
+# so the only caller is the code that just printed a verdict for it.
+hero_deploy_pending_clear() { # STORE SHA
+  local f="$1/.deploy-pending" tmp
+  [ -f "$f" ] || return 0
+  tmp="$f.$$.tmp"
+  grep -v "^$2	" "$f" > "$tmp" 2>/dev/null || :
+  if [ -s "$tmp" ]; then mv "$tmp" "$f"; else rm -f "$tmp" "$f"; fi
+}
+
 # Repo-local skills that plug into wayfare: every .claude/skills/*/SKILL.md
 # whose frontmatter carries `wayfare: HOOK`, as `name<TAB>hook<TAB>path`, one
 # per line; HOOK filters to one hook. The three hooks are sync (a stage of

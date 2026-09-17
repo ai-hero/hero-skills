@@ -57,8 +57,8 @@ ask. A wrong guess writes a registry into someone's home directory.
 ### `sync` — converge FLEET.md with the folder
 
 Both modes share one shape: **scan, propose, write only what the user
-confirms.** `sync` writes two things: `FLEET.md`, and the `## Fleet` section
-of each fleet repo's `AGENTS.md` (step *Make the repos fleet-aware*, both
+confirms.** `sync` writes one file — `FLEET.md` — and sends the `## Fleet`
+section to each fleet repo as a message (step *Make the repos fleet-aware*, both
 modes). Any other repo change — a port, a missing `HERO.md` — is routed to
 the skill that owns it.
 
@@ -122,14 +122,33 @@ SECTION="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/assets/fleet/a
 cat "$SECTION"
 ```
 
-Show the list of repos and the section once, confirm once, then append it
-(a blank line, then the file's contents) to each repo's `AGENTS.md` — or to
-`CLAUDE.md` when that is the regular file and `AGENTS.md` is absent. Do not
-rewrite anything else in those files, and do not commit: report the repos
-now carrying an uncommitted change and offer `hero-skills:push-pr` from the
-fleet root, fanning out to exactly those repos. A repo whose section is
-present but differs from the asset is re-vendored the same way; the asset is
-authored here, and a per-repo edit to it is output to be overwritten.
+**This is a message, not an edit.** `sync` does not write the section into
+those repos. Appending to a dozen siblings' `AGENTS.md` leaves a dozen dirty
+working trees nobody reviewed, in repos whose own agents did not make the
+change — the exact thing `docs/MESSAGES.md` bans, and the case that standard
+was written against. Each repo lands its own section, in its own PR, under
+its own gates.
+
+So for each repo in the list, deposit a `type: ask` message into its
+`.plans/inbox/` per the *Sending* procedure in `docs/MESSAGES.md`: `from`
+this fleet's own row for this repo — a fleet-root run has no repo of its
+own, so `from` is the row being asked and the message is a self-message —
+`to` that repo, an `## Ask` naming the section and where the asset lives,
+and the section's full text in the body so the recipient never has to reach
+back into this folder to read it. Show the drafts and the list once, confirm
+once, then deposit with `hero_msg_deposit`. Report the repos that now have
+mail and the one line each of them runs to act on it
+(`hero-skills:wayfare sync` — its `inbox` stage promotes the ask).
+
+Two repos cannot receive one: a row whose `.plans/` does not exist has no
+mailbox and no agent workflow to read it. Name those separately, and offer
+to `cd` in. Never create a store inside someone else's checkout to make the
+deposit work — that is the second kind of write, and it is the one that
+does not exist.
+
+A repo whose section is present but differs from the asset gets the same
+message, saying so; the asset is authored here, and a per-repo edit to it is
+output to be overwritten.
 
 ### `review` — report drift, write nothing
 
@@ -145,9 +164,10 @@ skill fixes it. Do not write `FLEET.md`, and do not touch a repo.
 
 - **Guessing membership.** A checkout with a `HERO.md` is a repo the hero
   skills run in, not proof it shares the fleet's stack. Default `none`, ask.
-- **Editing a repo to satisfy the registry.** Beyond the `## Fleet`
-  section, `sync` touches no repo. Port changes and missing configs go through
-  the skill that owns them, in that repo, on a PR.
+- **Editing a repo to satisfy the registry.** `sync` touches no repo at all —
+  the `## Fleet` section goes as a message, like everything else
+  (`docs/MESSAGES.md`). Port changes and missing configs go through the skill
+  that owns them, in that repo, on a PR.
 - **Adding rows for repos that are not on disk.** The org listing is
   informational. See the standard.
 

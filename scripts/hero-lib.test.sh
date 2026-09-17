@@ -1099,6 +1099,71 @@ if command -v zsh >/dev/null 2>&1; then
 fi
 check "inbox files never list as items"                "no" "$(printf '%s' "$OUT3" | grep -q 'm-1' && echo yes || echo no)"
 
+# ---------- sending: id, dedupe probe, atomic deposit ----------------------
+# The send half of docs/MESSAGES.md. Every sender runs these three in order,
+# so they live here rather than as prose each sender re-derives.
+MID1="$(hero_msg_id)"; MID2="$(hero_msg_id)"
+check "msg id: m- prefixed 6 hex"        "yes" "$(printf '%s' "$MID1" | grep -Eq '^m-[0-9a-f]{6}$' && echo yes || echo no)"
+check "msg id: two draws differ"         "yes" "$([ "$MID1" != "$MID2" ] && echo yes || echo no)"
+
+# The dedupe key is (from, about) — never msg_id, which differs by
+# construction, so a resumed sender keying on it re-sends every time.
+printf -- '---\nmsg_id: m-aa1\ntype: bug\nfrom: hiro\nto: ds\nabout: 27\nstatus: new\n---\n' > "$W3/inbox/m-aa1.md"
+printf -- '---\nmsg_id: m-aa2\ntype: bug\nfrom: hiro\nto: ds\nabout: 28\nstatus: answered\n---\n' > "$W3/inbox/m-aa2.md"
+printf -- '---\nmsg_id: m-aa3\ntype: bug\nfrom: hiro\nto: ds\nabout: 29\nstatus: declined\n---\n' > "$W3/inbox/m-aa3.md"
+check "msg find: live match returns its path" "$W3/inbox/m-aa1.md" "$(hero_msg_find "$W3" hiro 27)"
+check "msg find: live match returns 0"        "yes" "$(hero_msg_find "$W3" hiro 27 >/dev/null && echo yes || echo no)"
+# A settled conversation is not a live duplicate: keep either of these
+# matching and the sender can never raise the same subject twice.
+check "msg find: answered does not match"     "no"  "$(hero_msg_find "$W3" hiro 28 >/dev/null 2>&1 && echo yes || echo no)"
+check "msg find: declined does not match"     "no"  "$(hero_msg_find "$W3" hiro 29 >/dev/null 2>&1 && echo yes || echo no)"
+check "msg find: other sender does not match" "no"  "$(hero_msg_find "$W3" web 27 >/dev/null 2>&1 && echo yes || echo no)"
+check "msg find: no inbox returns non-zero"   "no"  "$(hero_msg_find "$TMP/w/.plans" hiro 27 >/dev/null 2>&1 && echo yes || echo no)"
+
+printf -- '---\nmsg_id: m-bb1\ntype: ask\nfrom: hiro\nto: ds\nabout: 30\nstatus: new\n---\n\n## Ask\n\nBody.\n' > "$TMP/draft.md"
+DEST="$(hero_msg_deposit "$W3" m-bb1 "$TMP/draft.md")"
+check "deposit: lands at inbox/MSG_ID.md"     "$W3/inbox/m-bb1.md" "$DEST"
+check "deposit: content arrives whole"        "yes" "$(grep -q '## Ask' "$W3/inbox/m-bb1.md" && echo yes || echo no)"
+check "deposit: deposited message is unread"  "yes" "$(hero_msg_find "$W3" hiro 30 >/dev/null && echo yes || echo no)"
+# No temp file may survive, or the recipient's glob reads a half-message as
+# a real one on the next run.
+check "deposit: leaves no temp behind"        "0" "$(find "$W3/inbox" -name '.*.tmp' | wc -l | tr -d ' ')"
+# Overwriting would destroy a message the recipient may already be acting on,
+# and the sender keeps no copy of either one.
+check "deposit: refuses to overwrite"         "no"  "$(hero_msg_deposit "$W3" m-bb1 "$TMP/draft.md" >/dev/null 2>&1 && echo yes || echo no)"
+# A target with no mailbox has no agent workflow to read one; creating the
+# directory would be the second kind of write the standard bans.
+check "deposit: refuses a missing inbox"      "no"  "$(hero_msg_deposit "$TMP/w/.plans" m-cc1 "$TMP/draft.md" >/dev/null 2>&1 && echo yes || echo no)"
+# `|| true` is load-bearing: this file runs with `pipefail`, so the deposit's
+# own non-zero status is the pipeline's status whatever grep finds.
+check "deposit: names the missing mailbox"    "yes" "$({ hero_msg_deposit "$TMP/w/.plans" m-cc1 "$TMP/draft.md" 2>&1 >/dev/null || true; } | grep -q 'has no mailbox' && echo yes || echo no)"
+check "deposit: rejects a non-message id"     "no"  "$(hero_msg_deposit "$W3" 42 "$TMP/draft.md" >/dev/null 2>&1 && echo yes || echo no)"
+check "deposit: rejects an unreadable body"   "no"  "$(hero_msg_deposit "$W3" m-cc2 "$TMP/nope.md" >/dev/null 2>&1 && echo yes || echo no)"
+if command -v zsh >/dev/null 2>&1; then
+  check "msg find: empty inbox under zsh, rc 1" "no" "$(zsh -c ". '$LIB'; hero_msg_find '$TMP/w4/.plans' hiro 27" >/dev/null 2>&1 && echo yes || echo no)"
+fi
+
+# ---------- deferred deploy checks ----------------------------------------
+# The post-merge deploy probe is advisory, so it defers instead of sleeping;
+# these are the three calls that make the deferral durable.
+DS="$TMP/w5/.plans"; mkdir -p "$DS"
+check "deploy pending: empty is rc 1"        "no"  "$(hero_deploy_pending "$DS" >/dev/null 2>&1 && echo yes || echo no)"
+hero_deploy_pending_add "$DS" abc123 41
+hero_deploy_pending_add "$DS" def456 42
+check "deploy pending: lists oldest first"   "abc123 def456" "$(hero_deploy_pending "$DS" | cut -f1 | tr '\n' ' ' | sed 's/ $//')"
+check "deploy pending: carries the PR"       "41"  "$(hero_deploy_pending "$DS" | head -1 | cut -f2)"
+# A re-run of the same merge (a resumed ship-pr) must not queue it twice, or
+# the next session probes one deploy N times and reports it N times.
+hero_deploy_pending_add "$DS" abc123 41
+check "deploy pending: add is idempotent"    "2"   "$(hero_deploy_pending "$DS" | wc -l | tr -d ' ')"
+check "deploy pending: rejects a non-sha"    "no"  "$(hero_deploy_pending_add "$DS" 'not a sha' 43 >/dev/null 2>&1 && echo yes || echo no)"
+hero_deploy_pending_clear "$DS" abc123
+check "deploy pending: clear drops one"      "def456" "$(hero_deploy_pending "$DS" | cut -f1)"
+hero_deploy_pending_clear "$DS" def456
+check "deploy pending: empty again after clear" "no" "$(hero_deploy_pending "$DS" >/dev/null 2>&1 && echo yes || echo no)"
+check "deploy pending: no file left behind"  "0"   "$(ls "$DS" | wc -l | tr -d ' ')"
+check "deploy pending: clearing nothing is rc 0" "yes" "$(hero_deploy_pending_clear "$DS" abc123 >/dev/null 2>&1 && echo yes || echo no)"
+
 R3="$TMP/r3"
 mkdir -p "$R3/.claude/skills/plan-drift" "$R3/.claude/skills/plain" "$R3/.claude/skills/odd"
 printf -- '---\nname: plan-drift\ndescription: d\nwayfare: sync\n---\n' > "$R3/.claude/skills/plan-drift/SKILL.md"
