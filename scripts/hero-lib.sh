@@ -809,6 +809,259 @@ hero_item_awaiting() { # ITEM_FILE
   ' "$1"
 }
 
+# A message id with real entropy (docs/MESSAGES.md). Hash-named, never
+# numbered: `.plans/` ids are a sequential integer namespace, and a sender
+# allocating an id inside the RECIPIENT's namespace races that repo's own
+# allocation — which surfaces as a duplicate id and a silent mis-resolution,
+# not a failure.
+hero_msg_id() {
+  local h
+  h=$(od -An -N3 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')
+  # A SHORT read is the trap, not an empty one: `m-ab` is non-empty, passes a
+  # `[ -n ]` test, and collapses the collision space from 2^24 to 2^8 while
+  # still looking like an id everywhere downstream.
+  case "$h" in
+    [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+    *) echo "hero_msg_id: no usable entropy (got '${h:-}')" >&2; return 1 ;;
+  esac
+  printf 'm-%s' "$h"
+}
+
+# True when ID has the documented shape, m- plus exactly six lowercase hex.
+# Every place an id becomes a PATH must go through this: `m-*` alone admits
+# `m-../../AGENTS`, and the deposit builds `inbox/$ID.md` from it.
+hero_is_msg_id() { # ID
+  case "$1" in
+    m-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Live messages in a store's inbox matching FROM and ABOUT, as paths, one per
+# line. This is the dedupe probe every sender runs BEFORE depositing: the key
+# is (from, about), never msg_id, which differs by construction — so a resumed
+# sender that skips this re-sends and the recipient does the work twice.
+#
+# Returns 1 when nothing matches, so `if hero_msg_find ...` reads as "already
+# sent"; 2 when the probe could not be run, which a caller must NOT read as
+# "not sent yet".
+#
+# ABOUT is required and may not be empty. An absent `about:` reads as "" too,
+# so an empty probe matches every about-less message from that sender — two
+# unrelated asks from one repo would dedupe against each other and the second
+# would never be sent. A sender with no local item passes a subject token
+# instead (docs/MESSAGES.md, Sending step 2).
+hero_msg_find() { # STORE FROM ABOUT
+  local f n=0 st exp today
+  [ -d "$1/inbox" ] || return 1
+  [ -n "${3:-}" ] || { echo "hero_msg_find: ABOUT is empty — an about-less probe matches every about-less message; pass a subject token" >&2; return 2; }
+  today=$(date +%Y%m%d)
+  setopt localoptions nullglob 2>/dev/null || true
+  for f in "$1"/inbox/*.md; do
+    [ -f "$f" ] || continue
+    if [ ! -r "$f" ]; then
+      # Skipping in silence would return "not sent yet" and send a duplicate —
+      # the exact double-dispatch this probe exists to prevent.
+      echo "hero_msg_find: cannot read $f — probe is incomplete" >&2
+      continue
+    fi
+    [ "$(hero_item_field "$f" from)" = "$2" ] || continue
+    [ "$(hero_item_field "$f" about)" = "$3" ] || continue
+    st=$(hero_item_field "$f" status | tr '[:upper:]' '[:lower:]')
+    # Liveness is the CLOSED enum, not "anything not settled". A typo'd or
+    # missing status read as live would match forever and the sender could
+    # never raise the subject again.
+    case "$st" in
+      new|claimed) ;;
+      answered|declined) continue ;;
+      *) echo "hero_msg_find: $f has status '${st:-<absent>}', outside the enum — not counted as live" >&2; continue ;;
+    esac
+    # An awaited message whose expiry has passed is settled by lapse: the
+    # recipient never answered and the sender has already resumed, so holding
+    # the subject closed on it hangs the conversation forever.
+    # Compared as digits, not with `[ a \< b ]`: bash's test reads `<` as a
+    # string comparison and zsh's reads it as a numeric one, so the string
+    # form silently stops detecting expiry under the shell half this fleet
+    # runs on.
+    exp=$(hero_item_field "$f" expires | tr -d -)
+    case "$exp" in
+      '') ;;
+      *[!0-9]*) echo "hero_msg_find: $f has an unparsable expires — treated as live" >&2 ;;
+      *) if [ "$exp" -lt "$today" ]; then
+           echo "hero_msg_find: $f expired — not counted as live" >&2
+           continue
+         fi ;;
+    esac
+    echo "$f"; n=$((n + 1))
+  done
+  [ "$n" -gt 0 ]
+}
+
+# Deposit a message file into a target store's inbox, atomically. BODY_FILE is
+# the fully-written message; the deposited path goes to stdout.
+#
+# Atomicity is the whole reason this is a function: a recipient globbing
+# inbox/*.md can read a file mid-write, so the content is written to a temp
+# name IN THE SAME DIRECTORY and `mv`d into place — rename is atomic on one
+# filesystem, a direct write is not, and a torn read of a message is a request
+# acted on in half.
+#
+# It refuses when `inbox/` is absent. A checkout with no mailbox has no agent
+# workflow to read a message, and materializing one inside someone else's
+# checkout is the second kind of write the standard bans.
+#
+# It is also the one chokepoint every sender passes through, so the checks the
+# format documents but nothing else enforces live here: the id's shape, the
+# body's `msg_id` agreeing with the filename every glob-based reader keys on,
+# and `status` inside its enum.
+hero_msg_deposit() { # TARGET_STORE MSG_ID BODY_FILE
+  local dest tmp st body_id rc
+  [ -r "$3" ] || { echo "hero_msg_deposit: cannot read $3" >&2; return 1; }
+  hero_is_msg_id "$2" || { echo "hero_msg_deposit: '$2' is not a message id (m- plus six lowercase hex)" >&2; return 1; }
+  body_id=$(hero_item_field "$3" msg_id)
+  [ "$body_id" = "$2" ] || { echo "hero_msg_deposit: body msg_id '${body_id:-<absent>}' disagrees with '$2' — readers key on the filename, repliers on the body" >&2; return 1; }
+  st=$(hero_item_field "$3" status | tr '[:upper:]' '[:lower:]')
+  case "$st" in
+    new|claimed|answered|declined) ;;
+    *) echo "hero_msg_deposit: status '${st:-<absent>}' is outside the enum — the recipient's unread count cannot classify it" >&2; return 1 ;;
+  esac
+  [ -d "$1/inbox" ] || { echo "hero_msg_deposit: $1/inbox does not exist — the target has no mailbox; report it, do not create one" >&2; return 1; }
+  dest="$1/inbox/$2.md"
+  # `[ -e ] && { ...; }` would leave the happy path returning 1 under `set -e`.
+  if [ -e "$dest" ]; then
+    echo "hero_msg_deposit: $dest already exists — allocate a new id rather than overwrite a message" >&2
+    return 1
+  fi
+  tmp="$1/inbox/.$2.$$.tmp"
+  cat "$3" > "$tmp"; rc=$?
+  if [ "$rc" -ne 0 ]; then
+    rm -f "$tmp"
+    echo "hero_msg_deposit: could not write $tmp (rc $rc) — nothing was deposited" >&2
+    return 1
+  fi
+  if ! mv "$tmp" "$dest"; then
+    rm -f "$tmp"
+    echo "hero_msg_deposit: could not move $tmp to $dest — nothing was deposited" >&2
+    return 1
+  fi
+  printf '%s' "$dest"
+}
+
+# ---------- deferred deploy checks ----------------------------------------
+
+# A post-merge deploy check that could not be answered without waiting.
+#
+# The check is advisory — it never un-merges anything — so blocking a session
+# on it buys nothing and costs a sleep per merged PR, multiplied by a goal's
+# concurrency. Instead the merge commit is recorded here and probed by the
+# next thing that runs in this repo, which pays no wait at all. Same shape as
+# one-shot's await-review: cap the wait, then hand the enforcement to whatever
+# runs next.
+#
+# One line per pending merge: SHA<TAB>PR<TAB>DATE.
+
+# Serialize a read-modify-write on the list. `mkdir` is the portable atomic
+# test-and-set; `flock` is absent on macOS. wayfare runs `concurrency`
+# subagents that share one list (hero_work_store resolves every worktree to
+# the primary), and one drains at Step 2a while another appends at Step 7e —
+# so an unlocked rewrite silently drops whatever was appended between its read
+# and its rename, which is a DEGRADED deploy nobody will ever see.
+hero_pending_lock() { # FILE [TIMEOUT_S]
+  local lock="$1.lock" waited=0 limit="${2:-10}" owner
+  while ! mkdir "$lock" 2>/dev/null; do
+    # A lock older than a minute outlived any legitimate holder — this guards
+    # a grep and a rename, not a network call — and a crashed session must not
+    # wedge every future drain.
+    owner=$(find "$lock" -maxdepth 0 -mmin +1 2>/dev/null)
+    [ -n "$owner" ] && { rm -rf "$lock"; continue; }
+    [ "$waited" -ge "$limit" ] && { echo "hero_pending_lock: $lock held for ${limit}s — giving up" >&2; return 1; }
+    sleep 1; waited=$((waited + 1))
+  done
+  return 0
+}
+
+hero_pending_unlock() { # FILE
+  rm -rf "$1.lock"
+}
+
+# Queue a merge whose deploy probe was deferred. Appending a SHA already
+# present is a no-op — a re-run of the same merge must not queue it twice.
+hero_deploy_pending_add() { # STORE SHA PR
+  local f="$1/.deploy-pending"
+  [ -d "${1:-}" ] || { echo "hero_deploy_pending_add: no store at '${1:-}'" >&2; return 1; }
+  # 40-hex, matching what the rest of the store means by a SHA. An abbreviated
+  # sha would be added but never cleared — hero_deploy_pending_clear matches
+  # the full field — so the entry would be re-probed and re-reported forever.
+  case "$2" in
+    ????????????????????????????????????????) ;;
+    *) echo "hero_deploy_pending_add: '$2' is not a 40-character commit sha" >&2; return 1 ;;
+  esac
+  case "$2" in *[!0-9a-f]*) echo "hero_deploy_pending_add: '$2' is not lowercase hex" >&2; return 1 ;; esac
+  # The PR is what the drain names in its verdict. Blank is representable and,
+  # because dedupe is on the SHA alone, permanent — a later add carrying the
+  # number is a no-op.
+  case "${3:-}" in
+    '') echo "hero_deploy_pending_add: PR is required — the drain reports the verdict against it" >&2; return 1 ;;
+    *[!0-9]*) echo "hero_deploy_pending_add: PR '$3' is not a number" >&2; return 1 ;;
+  esac
+  hero_pending_lock "$f" || return 1
+  if [ -f "$f" ] && awk -F'\t' -v s="$2" '$1 == s { found = 1 } END { exit !found }' "$f"; then
+    hero_pending_unlock "$f"; return 0
+  fi
+  # A file whose last line lost its newline would fuse with this one: the
+  # fused line matches no sha, so both entries become unclearable.
+  if [ -s "$f" ] && [ -n "$(tail -c 1 "$f")" ]; then printf '\n' >> "$f"; fi
+  printf '%s\t%s\t%s\n' "$2" "$3" "$(date +%Y-%m-%d)" >> "$f"
+  rc=$?
+  hero_pending_unlock "$f"
+  [ "$rc" -eq 0 ] || { echo "hero_deploy_pending_add: could not append to $f" >&2; return 1; }
+}
+
+# The pending merges, oldest first, as SHA<TAB>PR<TAB>DATE. rc 1 means nothing
+# is waiting; rc 2 means the question could not be asked. Collapsing the two
+# is how a repo with an unreadable list reports a clean slate forever.
+hero_deploy_pending() { # STORE
+  local f="$1/.deploy-pending"
+  [ -d "${1:-}" ] || { echo "hero_deploy_pending: no store at '${1:-}'" >&2; return 2; }
+  [ -s "$f" ] || return 1
+  [ -r "$f" ] || { echo "hero_deploy_pending: $f exists but cannot be read" >&2; return 2; }
+  cat "$f"
+}
+
+# Drop one sha from the list, once it has been probed and reported. Only call
+# this after printing a verdict for SHA: clearing an entry the probe never
+# answered is how a DEGRADED deploy disappears with no record.
+hero_deploy_pending_clear() { # STORE SHA
+  local f="$1/.deploy-pending" tmp rc
+  [ -f "$f" ] || return 0
+  # The destructive half validates what the additive half validates. `$2` is
+  # interpolated into a BRE, so an unvalidated `.*` matches every line and the
+  # whole queue goes.
+  case "$2" in
+    ????????????????????????????????????????) ;;
+    *) echo "hero_deploy_pending_clear: '$2' is not a 40-character commit sha" >&2; return 1 ;;
+  esac
+  case "$2" in *[!0-9a-f]*) echo "hero_deploy_pending_clear: '$2' is not lowercase hex" >&2; return 1 ;; esac
+  hero_pending_lock "$f" || return 1
+  tmp="$f.$$.tmp"
+  grep -v "^$2	" "$f" > "$tmp"; rc=$?
+  # grep's rc 1 is "every line matched, nothing remains" — the normal empty
+  # case. rc 2+ is an ERROR, and treating it as "nothing remains" (or reading
+  # a short write as one) unlinks a list of never-probed checks.
+  if [ "$rc" -gt 1 ]; then
+    rm -f "$tmp"; hero_pending_unlock "$f"
+    echo "hero_deploy_pending_clear: cannot rewrite $f (grep rc $rc) — $2 left pending" >&2
+    return 1
+  fi
+  if ! mv "$tmp" "$f"; then
+    rm -f "$tmp"; hero_pending_unlock "$f"
+    echo "hero_deploy_pending_clear: cannot replace $f — $2 left pending" >&2
+    return 1
+  fi
+  [ -s "$f" ] || rm -f "$f"
+  hero_pending_unlock "$f"
+}
+
 # Repo-local skills that plug into wayfare: every .claude/skills/*/SKILL.md
 # whose frontmatter carries `wayfare: HOOK`, as `name<TAB>hook<TAB>path`, one
 # per line; HOOK filters to one hook. The three hooks are sync (a stage of

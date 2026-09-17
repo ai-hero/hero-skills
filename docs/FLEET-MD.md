@@ -143,9 +143,14 @@ running a repo skill against it either fails late or, worse, half-works.
 
    ```
    cd ABSOLUTE_REPO_PATH — every command in this task runs inside that repo.
-   It is one checkout in a fleet; do not read or modify its siblings.
+   It is one checkout in a fleet. Modify no sibling. Read one only for the
+   two probes docs/MESSAGES.md names — the duplicate check before sending a
+   message, and the mutual-suspension check — and make exactly one kind of
+   write outside this repo: a file in a sibling's .plans/inbox/, per that
+   standard, on the user's confirmation.
    Invoke the skill hero-skills:SKILL_NAME with arguments: ARGS.
-   Report: what changed, any PR URLs, and anything that needs the user.
+   Report: what changed, any PR URLs, any messages deposited, and anything
+   that needs the user.
    ```
 
    A subagent cannot ask the user, so a skill with a user gate (one-shot's

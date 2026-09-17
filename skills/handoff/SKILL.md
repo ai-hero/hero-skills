@@ -145,6 +145,8 @@ Filing to a tracker is outward-facing — do it only on the explicit flag or an 
 
 `.plans/` is git-ignored and repo-local — it cannot carry work to another repository, and copying a file into a sibling checkout's `.plans/` would land somewhere that never syncs and that no teammate can see. **The tracker is the transport.** `--repo` files the distilled item as an issue on the target repo and leaves a stub here so this repo still remembers it delegated the work.
 
+**One narrow exception, and it is not a handoff.** `docs/MESSAGES.md` adds a mailbox at `.plans/inbox/` for *agents in sibling checkouts on this machine* — and the rule above is why it is a mailbox and not a copied item: a message is never work, it is promoted into work by the recipient's own `wayfare sync`, in that repo, on confirmation. The two lanes split on who reads it. A person on another team reads a tracker issue, which is this skill. An agent in a sibling checkout reads a message, which is not — being invisible to teammates and dying with the folder is the point there, and the defect here. Nothing above is relaxed: the store is still not a transport, and a handoff still never lands in someone else's `.plans/` as an item.
+
 Handing work to another team's repo is outward-facing and visible to people who are not in this conversation. **Confirm the target and show the body before filing** — never file to a repo the user did not name in this session.
 
 1. **Resolve and verify the target.** Confirm it exists and you can file to it:
@@ -211,7 +213,7 @@ hero-skills:one-shot (or anything else) against their own tracker.
 
 - **Self-containment is the contract.** Write for a reader with zero session context; decisions without their why are the first thing to rot.
 - **One item per handoff.** If the conversation holds several independent threads, hand off the named one and list the rest as candidates — or run `hero-skills:think-it-through` to decompose properly.
-- **The store is private.** `.plans/` is git-ignored; never commit or push it. The `--issue` and `--repo` paths are the deliberate ways to make a handoff shared — the store itself is not a transport, and never becomes one.
+- **The store is private.** `.plans/` is git-ignored; never commit or push it. The `--issue` and `--repo` paths are the deliberate ways to make a handoff shared — the store itself is not a transport, and never becomes one. A sibling's `.plans/inbox/` is a mailbox, not a store slot (`docs/MESSAGES.md`); depositing a message there is not a handoff and never carries one.
 - **A cross-repo handoff is a request, not an assignment.** Filing an issue on someone else's repo does not schedule their work. Say what you need and by when in the item; do not assume it will be picked up.
 - **Pickup is per-repo.** `hero-skills:one-shot` Step 1 resolves against the local `.plans/` store and this repo's tracker only. A `--repo` handoff is picked up by whoever runs their own tooling in the target repo.
 - **Update, don't duplicate.** Re-running handoff on the same thread updates the existing item and bumps its sections, keeping the id stable.

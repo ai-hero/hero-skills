@@ -28,6 +28,13 @@ When a step is **skipped** (because it doesn't apply — e.g., `test` step on a
 docs-only commit), mark it `(–)` and continue to the next step. Do not collapse
 or renumber.
 
+When a step is **deferred** — it applies, but answering it now would mean
+waiting on something outside the pipeline, and nothing downstream depends on
+the answer — mark it `(⏸)` and name what will pick it up. `(–)` would claim
+the step did not apply, and `(✓)` would claim an answer nobody has. A
+deferred step is owed by whatever runs next in that repo, never by a sleep
+in this session; ship-pr's `verify-deploy` is the worked example.
+
 When the pipeline **stops early** (user declined, hard gate, error), print a
 final DAG with `(✗)` on the failed/declined step and `( )` on remaining ones,
 followed by `Stopped: REASON`.
@@ -199,9 +206,13 @@ worktree on the bot's branch.
 
 `hero-skills:wayfare next` picks the next goal in bottom-up order, reads its
 `## Permissions` aloud (`mark-ready`, `respond`, `auto-approve`, `merge`,
-`deploy`), takes the user's in-session authorization, and prints the `/goal`
-line whose turn is `hero-skills:wayfare do GOAL_ID`. Each turn launches up to
+`deploy`, `absorb`), takes the user's in-session authorization, and prints
+the `/goal` line whose turn is `hero-skills:wayfare do GOAL_ID`. Each turn launches up to
 `concurrency` dep-free items in parallel, one worktree and one subagent each,
 and every one-shot invocation carries the granted permissions as one literal
 line. A gate the goal was not granted rests the item at its PR and ends the
-loop with `stop: awaiting-human`.
+loop with `stop: awaiting-human`. Work a turn finds inside a covered feature
+does not become a new goal: if it serves a line of this goal's Definition of
+Done it is **admitted** into the goal's `covers` — planned and built in the
+same run under `absorb`, raising the PR budget by what it needs. `budget` is
+an allowance for the goal, not one PR per feature.

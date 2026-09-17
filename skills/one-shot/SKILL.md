@@ -134,6 +134,14 @@ ROOT=$(hero_root)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 hero_check_staleness
 hero_at_fleet_root && echo "FLEET_ROOT" || true
+# Mail from a sibling repo (docs/MESSAGES.md), and deploy probes an earlier
+# merge deferred rather than slept through (ship-pr Step 7e). Both are counts,
+# not work: this run neither triages nor waits on them. A run that prints
+# nothing is indistinguishable from an empty inbox, which is the whole reason
+# the line exists.
+STORE=$(hero_work_store)
+echo "inbox: unread=$(hero_inbox_count "$STORE") claimed=$(hero_inbox_count "$STORE" claimed)"
+echo "deploy checks owed: $(hero_deploy_pending "$STORE" 2>/dev/null | wc -l | tr -d ' ')"
 ```
 
 If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
@@ -494,6 +502,30 @@ Three cases, gated by what each one actually costs:
   → wrote .plans/018-i-stay-signed-in-across-sessions.md (feature 18)
   → continuing with subtasks 4–5
 ```
+
+**Under a goal turn, finish before you file.** A run carrying `gates
+pre-authorized in-session for goal G` is one feature of an outcome someone
+authorized, and every item written here needs a goal to reach it later. So
+the bar moves: work that a line of **this item's own** `## Definition of
+Done` needs, and that fits inside a reviewable PR, is part of this item — do
+it, and say so in the step line. Carving is for a separate story or for
+ground this item never claimed, not for a fix that happens to be three files
+wide. Two of the three cases above carry a gate, and under a goal neither has
+anyone to answer it — nor may either be answered by prompting, which hangs a
+headless run:
+
+- **Discovered, roadmap-shaped** → write the item, and report it to the goal
+  turn with the one line of **goal G's** DoD it serves, or `serves no DoD
+  line`. The turn's admission test (wayfare, *Admitting discovered work*) is the
+  gate here: an item that serves the goal's outcome joins its `covers` this
+  turn, and one that does not goes to `wayfare sync`, which proposes it to a
+  person exactly as it would any uncovered ground. Nothing is suppressed —
+  the item is named in the turn report either way.
+- **Carved** → not available under a goal. It shrinks a plan the user marked
+  ready, and a goal's `## Permissions` do not include re-cutting one. Do
+  the subtask, or — if it is genuinely too large for this PR — render `(✗)
+  implement`, leave the tree as it is, and return `stop: awaiting-human`
+  naming the subtask and why it does not fit.
 
 What the carved item is:
 

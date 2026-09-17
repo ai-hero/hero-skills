@@ -109,9 +109,10 @@ hero-skills:init-hero
 hero-skills:wayfare sync
 
 # 3. Take the next goal. It reads the goal's permissions aloud (mark-ready,
-#    respond, auto-approve, merge, deploy), you authorize them in-session,
-#    and it prints a /goal line. Paste that; each turn builds up to
-#    `concurrency` features in parallel worktrees through merge.
+#    respond, auto-approve, merge, deploy, absorb), you authorize them
+#    in-session, and it prints a /goal line. Paste that; each turn builds up
+#    to `concurrency` features in parallel worktrees through merge, and
+#    absorbs what it finds into the same goal rather than spawning one.
 hero-skills:wayfare next
 ```
 
@@ -209,7 +210,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:wayfare` | Five verbs. `sync` runs one round of convergence — `config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals` — writing every `.plans/` item (features, architecture, polish, security, bugs, feedback, goals) and proposing goals bottom-up while re-cutting the `todo` ones; `next` picks the next runnable goal, reads its `## Permissions` (mark-ready, respond, auto-approve, merge, deploy) for your in-session authorization, and prints the `/goal` line; `do ID` builds one feature via one-shot, carries one Dependabot PR to merged and deployed, or runs one goal turn (up to `concurrency` items in parallel worktrees); `improve` audits this repo — or the whole fleet from its root — against the compliance register and proposes the fixes and backports; `recalibrate` tunes every field the stages read. Features are SLC vertical slices (user stories, never layers) carrying subtasks, a definition of done, comments, design feedback back to the design team, and staleness flags |
+| `hero-skills:wayfare` | Five verbs. `sync` runs one round of convergence — `config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals` — writing every `.plans/` item (features, architecture, polish, security, bugs, feedback, goals) and proposing goals bottom-up while re-cutting the `todo` ones; `next` picks the next runnable goal, reads its `## Permissions` (mark-ready, respond, auto-approve, merge, deploy, absorb) for your in-session authorization, and prints the `/goal` line; `do ID` builds one feature via one-shot, carries one Dependabot PR to merged and deployed, or runs one goal turn (up to `concurrency` items in parallel worktrees); `improve` audits this repo — or the whole fleet from its root — against the compliance register and proposes the fixes and backports; `recalibrate` tunes every field the stages read. Features are SLC vertical slices (user stories, never layers) carrying subtasks, a definition of done, comments, design feedback back to the design team, and staleness flags |
 
 Two skills are stages of `sync` and hidden from the slash menu (`user-invocable: false`) — you never call them, but they still own their procedures:
 
