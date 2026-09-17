@@ -174,7 +174,7 @@ skill fixes it. Do not write `FLEET.md`, and do not touch a repo.
 - **Guessing membership.** A checkout with a `HERO.md` is a repo the hero
   skills run in, not proof it shares the fleet's stack. Default `none`, ask.
 - **Editing a repo to satisfy the registry.** `sync` touches no repo at all.
-  the `## Fleet` section goes as a message, like everything else
+  The `## Fleet` section goes as a message, like everything else
   (`docs/MESSAGES.md`). Port changes and missing configs go through the skill
   that owns them, in that repo, on a PR.
 - **Adding rows for repos that are not on disk.** The org listing is
