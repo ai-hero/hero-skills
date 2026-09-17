@@ -1405,8 +1405,8 @@ PRs → `(–)` and one line saying so.
    possible rather than aspirational. Found one that `ux-flow` did not name →
    propose writing it to HERO.md, so the next run does not search again.
    Genuinely none → say so plainly before proposing (the **no-ux-flow**
-   finding below), name what you fell back to — the design's own structure,
-   the source's existing entry points — and carry that caveat into the
+   finding below), name what you fell back to, whether the design's own structure
+   or the source's existing entry points, and carry that caveat into the
    proposal: these slices are inferred, not read.
 4. **Propose.** One table, a row per candidate feature: title (a user story),
    source paths, target paths, dependencies. Self-review mode has no target
@@ -1416,8 +1416,8 @@ PRs → `(–)` and one line saying so.
    the SLC test from *Slices, not layers*: state in the table what a person
    can do when that row ships, and drop any row whose honest answer is
    "nothing yet".
-   Order rows by the journey from step 3 — the story a user reaches first
-   comes first — and set `depends_on` only where one story genuinely requires
+   Order rows by the journey from step 3, so the story a user reaches first
+   comes first, and set `depends_on` only where one story genuinely requires
    another to exist. Each row's slice cuts through the layers step 1 mapped;
    that cut becomes its `## Subtasks` when the feature is planned. Note any
    existing item from another producer that covers similar ground
@@ -1429,16 +1429,16 @@ PRs → `(–)` and one line saying so.
    (self-review mode resolved no target head, so leave it absent). Ids
    continue the store's single sequence (think-it-through's numbering
    rules).
-6. **Plan the set — the postflight.** See *Plan the set* below. `sync` is
+6. **Plan the set: the postflight.** See *Plan the set* below. `sync` is
    not finished when the rows are written; it is finished when every feature
    that needs a plan has one and the user has marked what they mark.
 
-**Update — roadmap exists.** Re-read both ends and report, one table, a row
+**Update: the roadmap exists.** Re-read both ends and report, one table, a row
 per finding. **Self-review mode (no `design-project`) has no app-design
-target** — the Target lane below is skipped and reported as such, never as
+target**, so the Target lane below is skipped and reported as such, never as
 clean. The Upstream lane is a separate question, gated on `design-system-repo`
 rather than `design-project`, and still runs from `$DS_SNAP` when that key is
-configured — see its own header below for exactly which source it reads and
+configured; see its own header below for exactly which source it reads and
 when it, too, is skipped. Shipped features change the source, so `DESIGN.md` can
 trail reality: the `architecture` stage above already ran its review and
 offered its `sync`; the refreshed map (or, if declined, the stale one, said
@@ -1449,19 +1449,19 @@ from `references/reconciliation.md`'s vocabulary and satisfies its evidence
 rules.** A finding whose evidence rule could not be satisfied is reported
 `unverified`; it is never dropped and never promoted.
 
-**Upstream lane — the design system** (read from the target's vendored `_ds/`
+**Upstream lane: the design system** (read from the target's vendored `_ds/`
 copy when it has one, else `$DS_SNAP`; skipped entirely when there is neither,
-and then say it is skipped rather than reporting clean — a lane with no source
+and then say it is skipped rather than reporting clean. A lane with no source
 that reports no findings is indistinguishable from a lane that found none. In
-self-review mode there is no target, so no vendored `_ds/` copy either — read
+self-review mode there is no target, so no vendored `_ds/` copy either, so read
 `$DS_SNAP` alone when `design-system-repo` is configured, and skip the lane
 same as any other missing-source case when it is not):
 
 - **ds-drift**: the source's own token layer, component surface, or
   guidance has diverged from the design system's, read at the source in both:
   the stylesheet's token block against the upstream one, a registry entry's
-  props against its specimen — always against whichever source the lane read
-  (`_ds/` or `$DS_SNAP`), and the report says which. Three outcomes only — **adopt** (the system covers it,
+  props against its specimen, always against whichever source the lane read
+  (`_ds/` or `$DS_SNAP`), and the report says which. Three outcomes only: **adopt** (the system covers it,
   replace ours), **propose** (a real gap: keep ours and raise it as a
   `design-system-feedback` item, naming the file it would live in), **diverge**
   (a named exception with a reason, re-justified every sync). Never fork a
@@ -1474,32 +1474,32 @@ same as any other missing-source case when it is not):
   reach. Report it as unreachable from here and say what would have to run to
   see it. Reporting clean is the wrong answer; so is guessing.
 
-**Target lane — the app design** (the findings this skill has always had;
-skipped entirely in self-review mode — there is no target, so say it is
+**Target lane: the app design** (the findings this skill has always had;
+skipped entirely in self-review mode, because there is no target, so say it is
 skipped rather than reporting clean, the same rule the Upstream lane above
 follows):
 
 - **stale**: the target head moved past a feature's `target_ref`: diff the
   feature's target paths between the two SHAs and summarize what actually
   changed (cosmetic rewording is noise; a changed design is what triggers the
-  proposal). What to propose depends on how far the feature has progressed —
+  proposal). What to propose depends on how far the feature has progressed.
   see "applying stale rows" below. A diff that reads as cosmetic (structure
-  extracted, no copy or layout change) is a hypothesis, not a conclusion —
+  extracted, no copy or layout change) is a hypothesis, not a conclusion,
   confirm it by rendering the feature's shipped pages per *Visual
   verification* before reporting "no action needed." A target-side
   refactor is exactly the moment a pre-existing source-side rendering bug
   gets looked at again and noticed for the first time.
 - **covered**: Source now satisfies a feature's target paths (work landed
   out-of-band or via one-shot): propose marking it `done`, citing its
-  `## Definition of Done` lines as the evidence — or, for a feature never
+  `## Definition of Done` lines as the evidence, or, for a feature never
   planned (empty DoD), the source-vs-target diff of its paths. For a feature
   whose `target` paths render a page, "satisfies" means rendered, not merely
-  structurally present — apply *Visual verification* before citing a DoD
+  structurally present. Apply *Visual verification* before citing a DoD
   line (or a bare path diff, for an empty-DoD legacy feature) as evidence.
 - **uncovered**: target ground no existing feature addresses: propose new
   `todo` features, slice-shaped per *Slices, not layers* and placed in the
   journey by the UX flow. "The design has a section nothing covers" is not by
-  itself a feature — find the story that section serves.
+  itself a feature. Find the story that section serves.
 - **obsolete**: a feature whose target paths the design dropped: propose
   closing it out.
 - **in-design-not-in-code**: a target screen with no route in the router. It
@@ -1510,18 +1510,18 @@ follows):
   target: spacing, alignment, type scale, colour, radius, a state the design
   specifies and the code has no rule for, a breakpoint that breaks. This is
   the only finding read off pixels rather than symbols, and it is the one the
-  other rows structurally cannot produce — a screen resolves to its route,
+  other rows structurally cannot produce: a screen resolves to its route,
   the route exists, and coverage reports `built` while the page looks wrong.
-  Run it per *Polish — the fine-tuning pass*: measured rows only, split three
+  Run it per *Polish: the fine-tuning pass*: measured rows only, split three
   ways (`polish` / `design-feedback` / `design-system-feedback`), one item per
   screen. An unmeasurable row is `unverified`, not a proposal. **Where the row
   lands depends on what owns the screen**, and all three cases occur:
   a feature still open owns its own drift (the row goes in that feature's
-  Definition of Done — this is the same rendered check **covered** already
+  Definition of Done. This is the same rendered check **covered** already
   requires before proposing `done`, so it is one read, not two); a feature
   already `done` gets a `polish` item for drift that appeared after it closed;
-  and a shipped screen with **no feature item at all** — legacy surfaces, work
-  that predates the roadmap — gets a `polish` item too. That last case is the
+  and a shipped screen with **no feature item at all** (legacy surfaces, or work
+  that predates the roadmap) gets a `polish` item too. That last case is the
   one a done-gated reading drops on the floor, and it is where most of a mature
   repo's drift lives.
 - **in-code-not-in-design**: shipped behaviour with no surface in the target,
@@ -1530,7 +1530,7 @@ follows):
   is a changelog entry**, and one with an opinion that the design should change
   is a `design-feedback` item.
 
-**Source lane — the code:**
+**Source lane: the code:**
 
 - **source-stale**: the source head moved past an item's `source_ref`. This
   fires **independently of the design**, and it is the finding a design-driven
@@ -1538,8 +1538,8 @@ follows):
   new head before trusting anything the item asserts about them. Report how
   many commits, not how many syncs.
 - **already-satisfied**: a `todo` or `planning` item whose work has landed
-  out-of-band. Propose `done` with the evidence, exactly as **covered** does —
-  see also the pre-planning check, which exists because planning finished
+  out-of-band. Propose `done` with the evidence, exactly as **covered** does.
+  See also the pre-planning check, which exists because planning finished
   work is worse than merely wasteful.
 - **architecture drift**: a structural claim in `DESIGN.md` that the code no
   longer satisfies, or a boundary the target design assumes and the source does
@@ -1552,7 +1552,7 @@ follows):
   route the item back to planning; a plan built on a wrong premise ships the
   wrong thing at full confidence.
 
-**Feedback lane — the three return channels:**
+**Feedback lane: the three return channels:**
 
 - **feedback**: `## Design Feedback` entries marked `[undelivered]`, plus
   every `todo`/`queued` feedback item. Propose promoting the entries to items
@@ -1561,7 +1561,7 @@ follows):
   **One delivery per destination**, never one issue carrying two lanes. This is
   the only finding that flows source → outward, so nothing else will surface
   it. When a new item names a `subject:` some `rejected` item already names,
-  say so in the proposal — otherwise the rejection history is written and never
+  say so in the proposal. Otherwise the rejection history is written and never
   read, and the same divergence gets re-raised.
 - **no-ux-flow**: meaningless without a target, so it never fires in
   self-review mode. With a `design-project` configured: `UX_FLOW` is `UNSET`
@@ -1574,7 +1574,7 @@ follows):
 
   This finding is **not** design feedback and must not be filed through that
   channel: an entry there requires a design path, the code's behavior, and why
-  the code is better, and "you have no UX flow" has none of the three — it is
+  the code is better, and "you have no UX flow" has none of the three. It is
   a roadmap-level fact, and at bootstrap there are no features to hang it on.
   Raise it with the design team as ordinary conversation.
 - **horizontal slices**: features whose titles or bodies name a layer rather
@@ -1582,12 +1582,12 @@ follows):
   chain where each feature depends on the one before it. Report them as a
   shaping defect and offer to re-slice: propose the stories they add up to,
   with the layer features folded in as subtasks. Only `todo` features are
-  re-sliceable this way — a `ready` or later feature keeps its plan (the
+  re-sliceable this way. A `ready` or later feature keeps its plan (the
   ready-mark bought it), so propose the re-slice for what remains instead.
 - **store defects**: `hero_ready_items` stderr warnings (dangling deps,
-  duplicate ids, unrecognized statuses — the script checks those and nothing
+  duplicate ids, unrecognized statuses; the script checks those and nothing
   below); plus, checked by this finding itself since the listing never reads
-  a goal's body: every `kind: goal` item's `covers` four ways — each id
+  a goal's body: every `kind: goal` item's `covers` four ways: each id
   exists, is a build kind, appears in no other goal's `covers` (two goals
   pre-authorizing merges on the same feature is a real hazard), and no
   earlier entry `depends_on` a later one (the order the turn walks must not
@@ -1598,7 +1598,7 @@ follows):
   or whose `## Permissions` changed while `active`; a `concurrency` that is
   not a positive integer; a `budget_max` that is absent, not a positive
   integer, or below `budget`; an `active` goal holding a `covers` id or a
-  `budget` above what its `## Comments` account for — an admission and a
+  `budget` above what its `## Comments` account for. An admission and a
   raise each open a dated entry with a fixed prefix (*Admitting discovered
   work*), so the two are summable and one that grew with neither is a
   hand-edit under an authorization, reported and never silently adopted.
@@ -1607,9 +1607,9 @@ follows):
   an admission the turn should never have made is perfectly accounted for and
   looks identical here. What guards that is the path scope and the never-admissible
   list (*Admitting discovered work*), the gate re-display (*Starting a goal*,
-  step 2), and `budget_max` — not this listing. A goal the check does
-  flag cannot be repaired by `sync` — only an out-of-band `done` may leave an
-  `active` goal's `covers` — so report it with its one exit: the user
+  step 2), and `budget_max`, not this listing. A goal the check does
+  flag cannot be repaired by `sync`, because only an out-of-band `done` may leave an
+  `active` goal's `covers`, so report it with its one exit: the user
   re-authorizes, which drops the goal to `todo`, lets the next `sync` re-cut
   it, and sends it back through `next`'s gate. Also a `todo` item sitting in
   an `active` goal's `covers` under `absorb: no`, which is waiting on a
@@ -1623,15 +1623,15 @@ follows):
   whose `budget` is absent, zero, or not a positive integer; plus any
   non-`done` item whose `target_ref` is absent, not a 40-hex SHA (legacy or
   hand-damaged), or an unresolvable anchor (40-hex but unknown to the
-  snapshot — a rebuilt `$SNAP`; see *Reading the target*) — **only when
+  snapshot; a rebuilt `$SNAP`, see *Reading the target*), **only when
   `$DESIGN_PROJECT` is a project id**; with no design target, an absent
   `target_ref` is the normal state of every item, not a defect: propose
-  backfilling it from the current target head — a feature without a usable
+  backfilling it from the current target head. A feature without a usable
   anchor is silently exempt from staleness detection, and an unresolvable one
   must never become a diff base.
 - **legacy items**: `kind: work-order` items or a `.plans/pins/` directory
   from pre-simplification wayfare: propose folding each order's content into
-  its feature (or marking it `done` / deleting it) and removing `pins/` —
+  its feature (or marking it `done`, or deleting it) and removing `pins/`,
   never silently. `inbox/` is **not** legacy: it is the mailbox the `inbox`
   stage reads, and proposing its removal would delete every unread message.
 - **stale waits**: a `suspended` item whose `expires:` (carried on the
@@ -1649,7 +1649,7 @@ the feature's plan is already locked:
   `target_ref` to the new head, append a dated `## Comments` entry
   summarizing what moved, and (for `planning`) fold the new design into the
   in-flight planning run.
-- **`ready` or later** (`implementing`/`reviewing`/`done`) — the plan is
+- **`ready` or later** (`implementing`, `reviewing`, `done`): the plan is
   locked; never mutate it to chase the design. Propose a **new `todo`
   feature** covering the design delta, `depends_on` the existing one, with
   `target_ref` = the new head. The original keeps its `target_ref` and ships
@@ -1657,10 +1657,10 @@ the feature's plan is already locked:
   (`superseded by feature N for the vN design changes`). A feature mid-flight
   is information, not interruption.
 
-**Plan the set — `sync`'s postflight, both modes.** After the confirmed rows
+**Plan the set: `sync`'s postflight, in both modes.** After the confirmed rows
 are written (bootstrap step 6; the last thing update-mode does once its
 findings are written), `sync` runs one planning pass over every `todo`
-feature that needs one — the grilling, the questions, the decisions — so a
+feature that needs one, doing the grilling, the questions and the decisions, so a
 feature leaves `sync` planned and marked, and `do` only ever builds.
 This is the *postflight* of sync, not a preflight of building: planning used
 to happen lazily, one feature at a time, at the moment each was about to be
@@ -1670,7 +1670,7 @@ Planning them one at a time is worse in three specific ways, and all three
 show up late:
 
 - **Shared decisions get made repeatedly, and differently.** Where state
-  lives, how errors surface, which component owns a concern — these span
+  lives, how errors surface, which component owns a concern) span
   features. Decided once per feature, they get decided inconsistently, and the
   inconsistency lands as rework in feature six.
 - **Shaping problems only show up across the set.** A feature that turns out
@@ -1685,8 +1685,8 @@ So the pass runs across the roadmap:
 1. **Check the codebase before grilling anything.** For each candidate
    feature, read its `source` paths at the current head and test its
    `success` / Definition-of-Done claims against what is there. A feature
-   already satisfied out-of-band — the dependency patched, the alerts closed
-   — is proposed `done` with the evidence and routed to the
+   already satisfied out-of-band (the dependency patched, the alerts closed)
+   is proposed `done` with the evidence and routed to the
    **already-satisfied** finding, never grilled: the planning path once had no
    such check and produced a long plan for finished work. Trust the criteria,
    not the status field.
@@ -1696,7 +1696,7 @@ So the pass runs across the roadmap:
    wayfare` in the invocation: that line enables its chain-back exception and
    is the only thing that distinguishes this from a standalone planning
    session, since the invocation is otherwise byte-identical to a user
-   typing it. Roadmap mode owns the shape of the pass — the cross-cutting
+   typing it. Roadmap mode owns the shape of the pass: the cross-cutting
    decisions settled once and recorded where they can be found again, the
    slicing and order confirmed across the set, then each feature's
    `## Approach`, `## Subtasks`, and `## Definition of Done` from that shared
@@ -1706,11 +1706,11 @@ So the pass runs across the roadmap:
    grill; say which ones and why.
 
    **Security items are planned differently, and both ways skip the grill.**
-   A harden item arrives `planning` with its recipe already written — the
-   audit was the planning — so it goes to the ready-mark directly: show its
+   A harden item arrives `planning` with its recipe already written, because the
+   audit was the planning, so it goes to the ready-mark directly: show its
    title, `success`, and the recipe's first lines, and the user's yes flips
    it `ready`. A bot item arrives `todo` and the bot's PR is the plan: show
-   package, bump, class, severity, CI state, and — for a `major` — the
+   package, bump, class, severity, CI state, and, for a `major`, the
    breaking-change lines from the PR's release notes and the repo call sites
    they name; the user's yes flips it `ready`. Wayfare never self-flips
    either. A no leaves the item where it was, named in the report.
@@ -1718,10 +1718,10 @@ So the pass runs across the roadmap:
    was not planned stays `todo` and is named in the report; `do` refuses it
    until the next `sync` plans it. Nothing is silently deferred.
 
-4. **Goals — cover every planned item, bottom-up, and re-cut what is
+4. **Goals: cover every planned item, bottom-up, and re-cut what is
    already there.** A goal is the unit `next` hands out and `/goal` loops
    against, and every item in its `covers` must already be `ready`
-   (*Starting a goal*, step 1) — so the end of this pass is the one moment
+   (*Starting a goal*, step 1), so the end of this pass is the one moment
    in the workflow where a goal can be formed *from* the set instead of
    reassembled by hand afterwards. Roadmap mode has just settled the
    cross-cutting decisions and the dependency order across these features.
@@ -1735,7 +1735,7 @@ So the pass runs across the roadmap:
    stage exists to prevent. The invariant at the end of the pass: **every
    build item at `ready` or further and not `done` is in exactly one open
    goal.** A single item that adds up to nothing larger is a one-item goal
-   with `budget: 1` — small, but reachable. The stage runs even when the
+   with `budget: 1`: small, but reachable. The stage runs even when the
    plan pass stopped early or the user declined a ready-mark: it groups
    what is `ready`, and names each `todo` or `planning` leftover as the
    reason a goal is still missing. It never renders `(–)`. A run that
@@ -1748,15 +1748,15 @@ So the pass runs across the roadmap:
    nothing outside the group; the next is the smallest outcome whose
    remaining dependencies are all inside goals already formed; and so on
    until every `ready` build item is in a goal. A goal's own `depends_on`
-   names the **goals** its features' dependencies fall in — derived, never
+   names the **goals** its features' dependencies fall in, derived and never
    authored: if any feature in goal B `depends_on` a feature in goal A, then
    B `depends_on: [A]`. That derived order is what `next` walks, so a goal
    whose dependencies are not `done` is never handed out, and two goals with
    no edge between them are independent and may run in either order. A
-   cycle between goals means the grouping is wrong — say so and re-cut
+   cycle between goals means the grouping is wrong. Say so and re-cut
    rather than write it.
 
-   Group by **outcome** — what a person can do once the whole group ships —
+   Group by **outcome**, meaning what a person can do once the whole group ships,
    never by area or layer. A group whose Definition of Done cannot be stated
    as one user-visible outcome is not a goal; it is a filter over the
    roadmap, and it will report `done` without anything having shipped that a
@@ -1768,8 +1768,8 @@ So the pass runs across the roadmap:
      their turns run a different pipeline (*Carrying a bot's PR*), and
      because a person authorizing a feature goal should not be authorizing
      dependency merges in the same breath.
-   - **Bugs and polish** group per surface — the screen or flow they
-     correct — into a goal whose DoD is that surface working as designed:
+   - **Bugs and polish** group per surface, the screen or flow they
+     correct, into a goal whose DoD is that surface working as designed:
      each item's `success` line, plus one line stating the surface's story
      end to end. A bug on a surface a feature in this round also changes
      joins that feature's goal instead.
@@ -1778,20 +1778,20 @@ So the pass runs across the roadmap:
      goal, whose DoD is the invariant the item names, stated as something
      the code now enforces.
 
-   **Re-cut before proposing — coalesce and split.** Existing goals are
+   **Re-cut before proposing: coalesce and split.** Existing goals are
    input, not fixed points. Re-derive the grouping over the current `ready`
    set from scratch, as if no goal existed, then diff the result against
-   every goal in the store. Goals written under an earlier rule — a
-   feature left to `do`, a round of bugs never grouped — get no exemption:
+   every goal in the store. Goals written under an earlier rule (a
+   feature left to `do`, a round of bugs never grouped) get no exemption:
    the diff is what brings them under this one. **The diff has a
    direction.** Goals are outcomes, and a round that planned no new ground
    should end with no more open goals than it started with: work found
    while building an outcome belongs to that outcome. A sync that mints a
    goal per carved item is grouping by provenance, not by outcome, and each
-   of those goals will carve again — that is the chain reaction, and it
+   of those goals will carve again. That is the chain reaction, and it
    ends here, at the re-cut, and at *Admitting discovered work* for the goal
    already running. A `new` goal is untriaged
-   and covers nothing — the roadmap view already says to move it to `todo`
+   and covers nothing. The roadmap view already says to move it to `todo`
    or delete it, and the listing does not credit its `covers`. Two kinds
    of open goal, two rules:
    - **`todo` goals are re-cut freely.** A feature planned this round that
@@ -1806,14 +1806,14 @@ So the pass runs across the roadmap:
      `## Comments`; every change is a dated comment naming what moved and
      why. Each proposed change is a row in the same confirm flow as a new
      goal, and a declined row leaves that goal exactly as it was.
-   - **`active` goals are frozen — `sync` never re-cuts one.** Their
+   - **`active` goals are frozen, and `sync` never re-cuts one.** Their
      `covers` and `## Permissions` were shown at `next`'s gate and
      authorized as a set; changing either from outside changes what was
      authorized. Two edits an active goal takes, neither of them sync's: a
      dropped feature that went `done` out-of-band (that shrinks what was
      authorized, never grows it), and an **admission** written by the goal's
      own turn (*Admitting discovered work*). Sync treats an admitted item as
-     covered — it is in a `covers` — and never proposes a goal for it.
+     covered, because it is in a `covers`, and never proposes a goal for it.
      Everything else that belongs to an active goal's outcome is a
      **follow-up goal** with `depends_on` the active one, and a comment on
      the active goal points at it. Before writing one, check it is not
@@ -1821,28 +1821,28 @@ So the pass runs across the roadmap:
      absorbed is the chain reaction this stage is trying not to start.
 
    Each proposal goes through the same confirm flow as any other row, and is
-   written in **the full goal item format** (*Item formats* below) — not the
+   written in **the full goal item format** (*Item formats* below), not the
    subset this paragraph happens to discuss. Sync decides five of its
    values: `status: todo`, `covers` in dependency order, `depends_on` as
    derived above, `budget` = `len(covers)`, `concurrency: 3`. The rest of
    the format is not optional. `source_ref` and `target_ref` are anchored
    here, from the heads this run already resolved: a non-`done` item with no
    `target_ref` is a store defect the *next* sync reports **when
-   `$DESIGN_PROJECT` is a project id** — the same carve-out the store-defects
+   `$DESIGN_PROJECT` is a project id**, the same carve-out the store-defects
    finding uses, since self-review mode resolves no target head to anchor.
    So a pass that omits `target_ref` while a design project is configured
    writes defects it had the values to prevent. `## Stop conditions` gets
    the documented defaults; it is the one per-goal brake on a loop that
    pre-authorizes merges, and a turn reads it every time. `## Permissions`
-   gets the documented defaults too — it is what `next`'s gate reads aloud
+   gets the documented defaults too. It is what `next`'s gate reads aloud
    and the user authorizes, and a goal with none is a goal whose gate cannot
    say what it is asking for. The `## Definition of Done` spans the group.
    Concatenating the features' own DoDs is not that: it asserts only what
    each feature already asserts alone. Exclude any feature already in
-   another goal's `covers` — overlapping `covers` is a store defect, two
+   another goal's `covers`. Overlapping `covers` is a store defect: two
    goals pre-authorizing merges on one feature.
 
-   **Sync writes the item and stops there — it never authorizes.** The
+   **Sync writes the item and stops there. It never authorizes.** The
    approval that grants a goal's `## Permissions` is typed by a person at
    `wayfare next`'s gate, in-session, and is never written to the item; a
    sync that carried it would put into a file exactly the flag *Starting a
@@ -1853,7 +1853,7 @@ So the pass runs across the roadmap:
    is `Next step: hero-skills:wayfare next`.
 
 **This is not a gate on building.** The roadmap does not have to be fully
-planned before the first feature ships — that would be waterfall, and it
+planned before the first feature ships. That would be waterfall, and it
 contradicts slicing the work so each piece stands alone. Plan the set as far
 as it is understood, build with `do`, and the next `sync` re-runs the pass
 over what it adds. What is being avoided is *deferring the thinking to
@@ -1861,24 +1861,24 @@ implementation time*, not batching the work.
 
 **Hand-adding a feature is a sync edit, not a verb.** An idea the user brings
 (as `sync`'s trailing context, or during confirmation) is a row added to the
-proposal table: investigate its source paths and target design first — a
-feature captures conclusions, not guesses — and it is written with the same
+proposal table: investigate its source paths and target design first, because a
+feature captures conclusions rather than guesses, and it is written with the same
 confirm flow, same format, same `status: todo`. Ids continue the store's
 sequence per think-it-through's numbering rules, re-checked immediately
 before writing; zero-pad only the filename.
 
-### `do ID` — advance one item, or run one goal turn
+### `do ID`: advance one item, or run one goal turn
 
 `do` takes exactly one id and dispatches on the item's kind:
 
 - **A build kind** (`feature`, `architecture`, `polish`, or a `security`
   item without `bot:`) runs *Advancing one item* below on it, with the item
   given rather than selected: one item, as far as the gates allow, then
-  stop. It never plans — an item that is not `ready` (or further along) is
+  stop. It never plans. An item that is not `ready` (or further along) is
   refused with `Next step: wayfare sync`, whose postflight plans the set; an
   item with unmet deps is refused naming them. `do` on a feature is
   unaffected by an active `/goal`.
-- **A `security` item with `bot:`** runs *Carrying a bot's PR* below —
+- **A `security` item with `bot:`** runs *Carrying a bot's PR* below,
   there is nothing to build, only a bot's PR to carry to merged and
   deployed.
 - **A goal** runs *One turn* of it. This is the form the `/goal` line
@@ -1887,10 +1887,10 @@ before writing; zero-pad only the filename.
   reads its permissions aloud — exactly as `next` would; no turn runs until
   the id is typed there.
 
-### `improve` — the compliance audit on its own, and the backports
+### `improve`: the compliance audit on its own, and the backports
 
 `improve` takes no argument. In a repo it runs the `compliance` stage
-exactly as `sync` does — same engine call, same items, same confirm flow —
+exactly as `sync` does, with the same engine call, the same items and the same confirm flow, and
 and then does the one thing `sync` never does: **the backport half**. Run
 the engine once more for the fleet's template (`--repo TEMPLATE`, the
 `template:` row in FLEET.md) and, for every check the template fails where
@@ -1914,27 +1914,27 @@ audit:
    the commit and make it on the user's word.
 3. Read the register's `reference:` rows against the results: every check
    where the reference repo itself fails is a **register defect** (the
-   reference is wrong, or the repo regressed) — report it first; it is the
+   reference is wrong, or the repo regressed). Report it first; it is the
    one finding nobody else surfaces.
 4. Offer the per-repo fan-out per **At the fleet root** in
    `docs/FLEET-MD.md`: the user picks repos, and each gets
    `hero-skills:wayfare improve` in a subagent, which proposes its own
-   items in its own store. The fleet form writes into no repo's store —
+   items in its own store. The fleet form writes into no repo's store,
    items are a repo's own decision, made in that repo.
 
 A family whose FLEET.md rows all say `group: none` is not a family; say
 that instead of auditing nothing and reporting clean.
 
-### `next` — hand out the next goal
+### `next`: hand out the next goal
 
 `next` takes no argument. It picks the next goal, gets its permissions
-authorized in-session, and prints the `/goal` line — then stops. It never
+authorized in-session, and prints the `/goal` line, then stops. It never
 builds, and it never plans.
 
 **Selection is deterministic, from the store.** Run `hero_ready_items` and
 walk the goals:
 
-1. An `active` goal — a run already under way (its worktrees may still be
+1. An `active` goal: a run already under way (its worktrees may still be
    there). Resume it: re-authorize per *Starting a goal* and print its
    `/goal` line. Two active goals is a store defect to report, not a choice.
 2. Else the first `todo` goal in bottom-up order (its `depends_on` goals all
@@ -1949,17 +1949,17 @@ walk the goals:
 Then run *Starting a goal* on the pick. `next` is how a goal starts; `do
 GOAL_ID` is how it turns.
 
-### A goal's turns — driven by Claude Code's `/goal`
+### A goal's turns, driven by Claude Code's `/goal`
 
 The looping is Claude Code's built-in **`/goal`**: it sets a completion
-condition, and after each turn a small fast model judges it — met, not yet,
-or impossible — and starts another turn if not. Wayfare does not implement a
+condition, and after each turn a small fast model judges it met, not yet, or impossible,
+and starts another turn if not. Wayfare does not implement a
 loop of its own.
 
 | | Owns |
 | --- | --- |
 | `/goal` | when the next turn starts, and when to stop |
-| the goal item | the rules — features, DoD, budget, permissions, stop conditions |
+| the goal item | the rules: features, DoD, budget, permissions, stop conditions |
 | wayfare | what one turn does, and the report the evaluator reads |
 
 Three facts about `/goal` shape everything below:
@@ -1973,7 +1973,7 @@ Three facts about `/goal` shape everything below:
 - **It keeps nothing but the condition.** Turn count, budget and merge
   authorization are not restored on resume; the condition is.
 
-#### Permissions — what a goal may do without asking again
+#### Permissions: what a goal may do without asking again
 
 A goal runs unattended, so what it is allowed to do on its own has to be
 said before it starts, in one place, and granted by a person. That place is
@@ -1983,17 +1983,17 @@ at:
 
 | Permission | The gate it waives | Sync writes |
 | --- | --- | --- |
-| `mark-ready` | one-shot Step 6 — draft → ready for review | `yes` |
-| `respond` | one-shot Step 8 — fix the review bot's comments and resolve threads without showing the plan first | `yes` |
-| `auto-approve` | ship-pr Step 4 — post `@auto-approve` | `yes` |
-| `merge` | ship-pr's merge confirmation — merge into DEFAULT_BRANCH with HERO.md's `merge-method` | `yes` |
-| `deploy` | ship-pr's post-merge verify-deploy — `verify` reports on the deploy; `none` skips it, in Step 2a's drain as well as Step 7e's probe. Neither waits: a probe whose runs are still in flight is deferred | `verify` |
-| `absorb` | the ready-mark on an item **admitted** into this goal — the turn plans it and builds it inside the goal (*Admitting discovered work*). `no` withholds the ready-mark only; the item still joins `covers`, and the turn hands it back | `yes` |
+| `mark-ready` | one-shot Step 6: draft → ready for review | `yes` |
+| `respond` | one-shot Step 8: fix the review bot's comments and resolve threads without showing the plan first | `yes` |
+| `auto-approve` | ship-pr Step 4: post `@auto-approve` | `yes` |
+| `merge` | ship-pr's merge confirmation: merge into DEFAULT_BRANCH with HERO.md's `merge-method` | `yes` |
+| `deploy` | ship-pr's post-merge verify-deploy. `verify` reports on the deploy; `none` skips it, in Step 2a's drain as well as Step 7e's probe. Neither waits: a probe whose runs are still in flight is deferred | `verify` |
+| `absorb` | the ready-mark on an item **admitted** into this goal. The turn plans it and builds it inside the goal (*Admitting discovered work*). `no` withholds the ready-mark only; the item still joins `covers`, and the turn hands it back | `yes` |
 
 **A goal that was already `active` when `absorb` arrived reads as
 `absorb: no`.** A required key plus a frozen section is otherwise a deadlock
 with no exit: `next` STOPs demanding the missing key, and `sync` cannot add it
-without committing the other defect — changing `## Permissions` while
+without committing the other defect, which is changing `## Permissions` while
 `active`. `no` is the conservative reading and the pre-`absorb` behaviour, so
 grandfathering it changes nothing about what that goal may do. It applies to
 this one key, only while the goal is `active`, and the gate says so aloud on
@@ -2003,8 +2003,8 @@ the next resume; a `todo` goal missing it is an ordinary store defect for
 `absorb` is wayfare's own gate, not one-shot's, so it is **not** on the
 pre-authorized literal below: that line names the gates one-shot and its
 children answer, and a name they do not know has no business travelling on
-it. The values are an enum — `yes` / `no`, and `verify` / `none` for
-`deploy` — and the section is required: a goal with no `## Permissions`, a missing
+it. The values are an enum (`yes` or `no`, and `verify` or `none` for
+`deploy`) and the section is required: a goal with no `## Permissions`, a missing
 key, or a value outside its enum is a **store defect** (`sync` reports it),
 and `next` STOPs on it with `Next step: wayfare sync` rather than reading
 anything aloud. "Sync writes" is what `sync` puts on a new goal; it is never
@@ -2012,11 +2012,11 @@ what an absent line means.
 
 `no` on a permission is not a failure; it is where the loop hands back. A
 feature that reaches a waived gate proceeds; one that reaches a gate the goal
-was not granted **rests there** — PR open, awaiting a person — and the turn
+was not granted **rests there**, with the PR open and awaiting a person, and the turn
 reports it as `stop: awaiting-human` naming the gate and the PR. The loop
 ends; the person does the thing (marks ready, merges), then runs `wayfare
 next` to resume. So a goal with `merge: no` builds and reviews every feature
-up to a mergeable PR and merges nothing — the right setting for a repo whose
+up to a mergeable PR and merges nothing, which is the right setting for a repo whose
 default branch a person wants to watch. Nothing here overrides what is
 outside the goal: auto-approve still has to pass, branch protection still
 applies, a REQUEST_CHANGES or a red workflow still stops the feature, and a
@@ -2024,7 +2024,7 @@ human comment on the PR still cancels the waiver on that PR.
 
 The permissions travel to one-shot in its invocation, as one literal line:
 `gates pre-authorized in-session for goal 7: mark-ready, respond,
-auto-approve, merge, deploy=verify` — the goal id, the granted names, and
+auto-approve, merge, deploy=verify`, carrying the goal id, the granted names, and
 `deploy=` always present (`deploy=none` is the skip; omitting it would read
 as an ungranted gate at a step nobody can answer). one-shot honors exactly
 the names on that line and forwards it verbatim to respond-to-comments
