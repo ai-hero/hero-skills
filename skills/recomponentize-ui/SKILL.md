@@ -5,7 +5,7 @@ description: Refactor a project's UI into atomic components (atoms/molecules/org
 argument-hint: "[--audit-only] [REGISTRY_NAMESPACE] | recalibrate"
 ---
 
-# Recomponentize UI — Atomic Components, Design-System Sourced
+# Recomponentize UI: atomic components, sourced from the design system
 
 Refactor an app's UI into a proper atomic component hierarchy, and stop
 hand-rolling primitives that already exist upstream.
@@ -31,16 +31,16 @@ Now running: enforce
 Enforcement is installed early, before any code is rewritten, so the path-scoped
 rule guides the migration itself rather than only future work.
 
-When no registry is configured, `map` and `install` still run — against stock
+When no registry is configured, `map` and `install` still run, against stock
 shadcn or the project's existing UI library instead of a private registry.
 
 ## Arguments
 
 - `$ARGUMENTS`:
-  - `recalibrate` — tune the `HERO.md` fields this skill reads, then stop (see below). Matched before every other form.
-  - (none) — full pass using the component source resolved in Step 0
-  - `--audit-only` — run `preflight`, `inventory`, `map`; report the plan, change nothing. Skips `enforce` too: installing the rule and hook writes files, which `--audit-only` promises not to do.
-  - `REGISTRY_NAMESPACE` — override the registry (e.g. `@acme`)
+  - `recalibrate` - tune the `HERO.md` fields this skill reads, then stop (see below). Matched before every other form.
+  - (none) - full pass using the component source resolved in Step 0
+  - `--audit-only` - run `preflight`, `inventory`, `map`; report the plan, change nothing. Skips `enforce` too: installing the rule and hook writes files, which `--audit-only` promises not to do.
+  - `REGISTRY_NAMESPACE` - override the registry, for example `@acme`
 
 ## `recalibrate`
 
@@ -64,9 +64,9 @@ wrong. A row that already holds the right value is not a question.
 
 ## Step 0: Resolve the component source
 
-**If the first token of `$ARGUMENTS` is exactly `recalibrate`, run the `recalibrate` section above and stop** — before the producer opt-out below, which halts the skill entirely on a `role: producer` repo and would take the verb down with it.
+**If the first token of `$ARGUMENTS` is exactly `recalibrate`, run the `recalibrate` section above and stop.** Do this before the producer opt-out below, which halts the skill entirely on a `role: producer` repo and would take the verb down with it.
 
-### Producer repos must opt out — check this first
+### Producer repos must opt out, so check this first
 
 **If `HERO.md` says `role: producer` (or `enabled: false`) under `## Design
 System`, stop immediately.** Report that this repo *publishes* the design system
@@ -95,10 +95,10 @@ Resolve in this order and **state which one you picked** before proceeding:
 | Condition | Source |
 | --- | --- |
 | `HERO.md` `## Design System` present with `namespace` | That registry |
-| No config, but the user wants one | Offer `@aihero` / `https://design.aihero.studio` — needs a token (Step 1) |
-| No registry, `components.json` exists | Stock shadcn — `npx shadcn@latest add ITEM` |
+| No config, but the user wants one | Offer `@aihero` at `https://design.aihero.studio`. Needs a token (Step 1) |
+| No registry, `components.json` exists | Stock shadcn: `npx shadcn@latest add ITEM` |
 | No registry, another UI lib in `package.json` (MUI, Chakra, Mantine, Ant) | That library's primitives; do not migrate libraries uninvited |
-| Nothing — plain HTML/CSS | Recomponentize and codemod only; **ask** before introducing any dependency |
+| Nothing, just plain HTML and CSS | Recomponentize and codemod only; **ask** before introducing any dependency |
 
 Expected `HERO.md` keys: `namespace`, `registry-url`, `token-env-var`, `docs`,
 `atomic-layers`. AI Hero defaults:
@@ -110,7 +110,7 @@ Expected `HERO.md` keys: `namespace`, `registry-url`, `token-env-var`, `docs`,
 
 **If the registry publishes a consumer handbook, read it first and let it win
 over this skill.** For `@aihero` that is `handbook/consuming-the-registry.md` in
-the `ai-hero/design-system` repo — it ships a canonical consumer AGENTS.md stanza
+the `ai-hero/design-system` repo, which ships a canonical consumer AGENTS.md stanza
 and consumer SKILL.md. Install those rather than re-deriving them.
 
 Never introduce a UI library into a project that has none without asking. The
@@ -118,32 +118,32 @@ atomic refactor is valuable on its own and carries no new dependency.
 
 ## Step 1: Preflight (`preflight`)
 
-**Skip to Step 2 when the source is "recomponentize only" — the enforcement layer still applies.** Otherwise, never run
-`npx shadcn init` on an existing project — it does not add the `registries` block
+**Skip to Step 2 when the source is "recomponentize only". The enforcement layer still applies.** Otherwise, never run
+`npx shadcn init` on an existing project. It does not add the `registries` block
 and may pick a conflicting style.
 
 | Check | Requirement |
 | --- | --- |
 | `components.json` | Has a `registries` block for the namespace; `"ui": "@/components/ui"` |
-| Token expansion | Header is `Bearer ${REGISTRY_TOKEN}` — the plain form ONLY |
+| Token expansion | Header is `Bearer ${REGISTRY_TOKEN}`, the plain form ONLY |
 | `.env` | Holds the token; `.gitignore` covers `.env` BEFORE the token is written |
 | `src/lib/utils.ts` | Exports `cn` (clsx + tailwind-merge) |
 | `tsconfig.json` | `baseUrl: "."` and `paths: { "@/*": ["./src/*"] }` |
 | CSS entry | Imports tailwind (v4); named in `components.json` → `tailwind.css` |
 | Runtime deps | `react@^19`, `react-dom@^19`, `tailwindcss@^4`, `clsx@^2`, `tailwind-merge@^3`, `shadcn@^4.13.0` |
 
-**Trap — never write `${VAR:-default}`.** The CLI's expansion regex is
+**Trap: never write `${VAR:-default}`.** The CLI's expansion regex is
 `/\$\{(\w+)\}/g`, so the default form ships as a literal header string and
 surfaces as a confusing 401 instead of a missing-variable error.
 
-**Trap — do not copy the design system's own `components.json`.** A registry
+**Trap: do not copy the design system's own `components.json`.** A registry
 repo's config points at localhost and aliases `ui` to its internal atomic dir.
 Those are wrong in a consumer.
 
 If the project has a committed `.env`, rename it to `.env.example`, strip the
 value, and gitignore the real one. Never commit a token.
 
-**Trap — `.env` must sit next to `components.json`, not in the cwd.** Verified
+**Trap: `.env` must sit next to `components.json`, not in the cwd.** Verified
 empirically against shadcn 4.13:
 
 | `.env` location | cwd | Result |
@@ -157,11 +157,11 @@ empirically against shadcn 4.13:
 So in a monorepo whose UI lives in `ui/`, the token goes in `ui/.env` even when
 the repo's house convention keeps every other secret in a root `.env`. A root
 `.env` produces `Set the required environment variables to your .env or
-.env.local file` — which reads like a missing variable rather than a
+.env.local file`, which reads like a missing variable rather than a
 wrong-directory problem, so it is easy to misdiagnose. Exporting the variable in
 the shell or a task-runner recipe also works and beats duplicating the secret.
 
-Confirm the wiring before going further — install the theme item first so tokens
+Confirm the wiring before going further. Install the theme item first so tokens
 land before any component references them:
 
 ```bash
@@ -173,7 +173,7 @@ grep -- "--primary" src/styles.css
 
 A skill only fires when the model chooses it, and model-discretion triggering is
 least reliable for exactly this kind of well-trained task. These layers do not
-depend on that choice — install both:
+depend on that choice, so install both:
 
 ```bash
 "$PLUGIN_ROOT/scripts/install-design-system.sh" "$ROOT"
@@ -182,17 +182,17 @@ depend on that choice — install both:
 It writes, without overwriting customized files (exit 2 on drift, same contract
 as `install-auto-approve.sh`):
 
-- `.claude/rules/design-system.md` — path-scoped to `**/*.{tsx,jsx,css}`, so the
+- `.claude/rules/design-system.md`, path-scoped to `**/*.{tsx,jsx,css}`, so the
   constraints load whenever Claude reads a UI file rather than when a description
   happens to match.
-- `.claude/hooks/check-design-tokens.sh` + `PostToolUse` wiring — flags raw hex,
+- `.claude/hooks/check-design-tokens.sh` plus `PostToolUse` wiring, which flags raw hex,
   palette classes, and component-root margins on write.
 
 Then add the registry's AGENTS.md stanza (Part 8 of the `@aihero` handbook) and
 the consumer SKILL.md (Part 9). If the registry ships them, paste verbatim.
 
 Optionally port the registry's lint config (for `@aihero`,
-`eslint.taste.config.mjs` — Tailwind correctness, token discipline, a11y floor).
+`eslint.taste.config.mjs`, covering Tailwind correctness, token discipline and an a11y floor).
 Its atomic-boundaries block **does** apply once Step 6's layers exist; add `ui`
 and `blocks` as the lowest elements in the layer matrix.
 
@@ -216,13 +216,13 @@ grep -rnE 'className="[^"]*\bdark:(bg|text|border)-' --include="*.tsx" src/
 ```
 
 Record for each finding: file, line, what it is, and the UI concept it expresses
-("a primary action", "a labelled form field with error text"). The concept — not
-the markup — is what you search for in Step 4.
+("a primary action", "a labelled form field with error text"). The concept, not
+the markup, is what you search for in Step 4.
 
 ## Step 4: Map local → upstream (`map`)
 
 For every concept in the inventory, find its upstream equivalent. Use **both**
-paths — they surface different things:
+paths, because they surface different things:
 
 **Search the catalog** (finds by category keyword):
 
@@ -232,12 +232,12 @@ npx shadcn@latest view NAMESPACE/field    # inspect the API before committing
 ```
 
 There is no `--registry` flag; registries come only from `components.json`. For
-`@aihero` the full catalog is `GET /r/registry.json` — there is no
+`@aihero` the full catalog is `GET /r/registry.json`. There is no
 `/r/index.json`.
 
 **Browse the docs/gallery site** (finds by appearance): open it with the browser
 tools and look at the rendered components. Search matches keywords; the gallery
-matches *look*. A local "stat card" may be a `tile` or a `kpi-strip` — only the
+matches *look*. A local "stat card" may be a `tile` or a `kpi-strip`, and only the
 gallery makes that obvious. For stock shadcn, use `ui.shadcn.com/docs/components`.
 
 Optionally wire the registry's MCP server for in-editor search:
@@ -246,7 +246,7 @@ Optionally wire the registry's MCP server for in-editor search:
 npx shadcn@latest mcp init --client claude
 ```
 
-It reads `components.json` for registries **and** auth headers — no separate MCP
+It reads `components.json` for registries **and** auth headers, so there is no separate MCP
 auth. If `/mcp` reports no tools, run `npx clear-npx-cache`.
 
 **Produce a mapping table and show it to the user before installing:**
@@ -258,7 +258,7 @@ src/components/StatCard.tsx    → @aihero/tile         medium      confirm agai
 src/components/Wizard.tsx      → (none)               —           keep; recomponentize only
 ```
 
-Items with no upstream equivalent stay local — they still get recomponentized
+Items with no upstream equivalent stay local. They still get recomponentized
 (Step 6) and codemodded (Step 7). Do not force a bad match.
 
 ## Step 5: Install and rewrite call sites (`install`)
@@ -268,7 +268,7 @@ npx shadcn@latest add NAMESPACE/button NAMESPACE/card
 npx shadcn@latest add NAMESPACE/button --dry-run --diff   # review a re-add
 ```
 
-`registryDependencies` resolve transitively — asking for `field` also brings
+`registryDependencies` resolve transitively, so asking for `field` also brings
 `label` and `separator`. `add` defaults to `--overwrite false`.
 
 **Installed files are vendored, not authored.** This is the rule that matters
@@ -282,12 +282,12 @@ typecheck passes.
 
 ## Step 6: Recomponentize (`recomponentize`)
 
-**This step always runs — it is the point of the skill.** It runs for components
+**This step always runs. It is the point of the skill.** It runs for components
 with no upstream match, for projects with no registry at all, and for the app code
 that composes vendored primitives. Swapping in new components without
 recomponentizing leaves the same monolith wearing new classes.
 
-Target layout — vendored code stays flat; the app's own components go atomic:
+Target layout. Vendored code stays flat; the app's own components go atomic:
 
 ```
 src/components/
@@ -303,12 +303,12 @@ Layer rules, enforced in review:
 
 - **atoms / molecules** are stateless and generic: no fetching, no auth, no domain
   types. Props in, UI out. Every one accepts and merges `className`.
-- **organisms** may import domain types and compose molecules — still no data
+- **organisms** may import domain types and compose molecules, but still no data
   fetching; data arrives via props.
 - **templates** define *where things go* via slot props (`header`, `sidebar`,
   `children`); they never hardcode copy or fetch data.
 - **Imports flow downward only:** templates → organisms → molecules → atoms →
-  (`ui/`, `blocks/`). `ui/` and `blocks/` are the floor — any layer may import
+  (`ui/`, `blocks/`). `ui/` and `blocks/` are the floor, and any layer may import
   them. An atom importing a molecule is a defect; restructure instead of
   suppressing it.
 - **Same-layer imports** only for *family* relationships. Test: can you describe
@@ -316,14 +316,14 @@ Layer rules, enforced in review:
   buttons → atom. The moment a component combines distinct siblings
   (`input` + `button` = `search-bar`), it belongs one layer up.
 - Place each component at the **lowest layer that fits**. Promote only when it
-  gains domain knowledge or composition — never preemptively.
+  gains domain knowledge or composition. Never preemptively.
 
 Signals a component needs recomponentizing: boolean-prop explosion, a molecule
 fetching data, two organisms sharing copy-pasted JSX, a component importing from a
 higher layer, a file well above the codebase's median length.
 
 Migrate call sites as you move files; never leave a re-export shim behind as
-"temporary" — finish the move or don't start it.
+"temporary". Finish the move or do not start it.
 
 ## Step 7: Codemod off-token styling (`codemod`)
 
@@ -331,23 +331,23 @@ Migrate call sites as you move files; never leave a re-export shim behind as
 | --- | --- |
 | Raw palette (`bg-zinc-100`, `text-gray-500`) | Semantic token (`bg-muted`, `text-muted-foreground`) |
 | Hex / `oklch()` literal in TSX | A token in the `@theme` layer |
-| `dark:` **color** override | Delete it — a `dark:` color means the wrong token was used |
+| `dark:` **color** override | Delete it. A `dark:` color means the wrong token was used |
 | Margin on a component root (`m-*`, `mt-*`, `ms-*`) | `gap-*` / `space-*` on the **parent**; parents own layout |
 | Arbitrary spacing (`p-[13px]`, `gap-[7px]`) | The spacing scale; if a step is missing, change the scale |
 | `z-[9999]` | The named z-scale (`z-dropdown` < `z-sticky` < `z-overlay` < `z-modal` < `z-toast`) |
 | `rounded-[10px]`, `text-[15px]`, any `[Npx]` | The radius / type / spacing scale |
-| `shadow-*` | Remove — elevation is borders and hairlines (`@aihero` house rule) |
+| `shadow-*` | Remove. Elevation is borders and hairlines (`@aihero` house rule) |
 | Non-Lucide icons | Lucide, sized `size-4` / `size-5`, `aria-hidden` unless it is the only label |
 | Text on a colored surface | The paired foreground token (`bg-primary` → `text-primary-foreground`) |
-| Removed focus outline | A visible `focus-visible:` ring — removing one without a replacement is a defect |
+| Removed focus outline | A visible `focus-visible:` ring. Removing one without a replacement is a defect |
 | Opacity hack for disabled | `disabled:` variants + `aria-disabled` semantics |
 
 Also: variants via `cva` with typed props, never ternary/string-concat className
-soup. Never hand-sort classes — `prettier-plugin-tailwindcss` owns the order.
+soup. Never hand-sort classes; `prettier-plugin-tailwindcss` owns the order.
 
 The no-shadow rule and the exact token vocabulary are registry-specific. With
 stock shadcn, keep its default token names (`bg-background`,
-`text-muted-foreground` are shared) and **do not** strip shadows — that is an
+`text-muted-foreground` are shared) and **do not** strip shadows. That is an
 `@aihero` house rule, not a shadcn one.
 
 ## Step 8: Verify (`verify`)
@@ -359,7 +359,7 @@ npx tsc --noEmit
 Then, using the browser tools, render the migrated screens and confirm:
 
 1. Each replaced component renders correctly in **light and dark**. Dark mode is
-   the `.dark` class — never `prefers-color-scheme`.
+   the `.dark` class, never `prefers-color-scheme`.
 2. Transitive deps arrived (installing `field` must also produce `label.tsx` and
    `separator.tsx`).
 3. `grep -- "--primary" CSS_ENTRY` finds the theme's variables.
