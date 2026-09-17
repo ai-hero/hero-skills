@@ -193,7 +193,7 @@ a `kind: bug` item from it: `origin: message`, `msg_id` as provenance, the
 four sections carried in as `## Context`, and a Definition of Done of "the
 repro no longer reproduces, and a test pins it". `bug` rides the build
 lifecycle like `polish` and is exempt from the slice rule for the same
-reason. It is not a story, it is a surface that exists and is wrong.
+reason: it is not a story, it is a surface that exists and is wrong.
 Declining the report is `status: declined` on the message with a comment
 saying why; the sender reads that in its own inbox if it asked for a reply.
 

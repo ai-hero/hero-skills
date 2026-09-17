@@ -37,7 +37,7 @@ trap 'rm -rf "$TMP"' EXIT
 R="$(cd "$TMP" && pwd -P)/repo"
 mkdir -p "$R"
 
-# `platform` appears in the map twice. push-pr reads CI/CD's, ship-pr reads
+# `platform` appears in the map twice: push-pr reads CI/CD's, ship-pr reads
 # Deployment's, so both sections carry one here. hero-lib.sh calls this the
 # trap its BLOCK argument exists for; without both sections in the fixture the
 # scoping argument is never exercised and could be dropped with no test failing.

@@ -390,7 +390,7 @@ Rows are first-match, top to bottom.
 | `$ARGUMENTS` matches a **backlog** item (a build kind at `status: todo`) | STOP. the feature is on the roadmap but unplanned. Suggest `hero-skills:think-it-through FEATURE_ID` (its Feature mode plans it in place); never build a feature that skipped planning. |
 | `$ARGUMENTS` matches a **review** feature (`status: reviewing`) | Check its PR first (URL recorded in the feature's `## Comments`; else `gh pr list --search`). Open → `gh pr checkout` its branch and let Step 0.5's resume detection route from there. Merged → the close-out was missed: run Step 9a on it now. No PR found → treat as active/in-flight and confirm with the user. Never assume the PR is open. A merged-but-not-closed-out feature must not loop here. |
 | `$ARGUMENTS` matches a **done** item | STOP. report that it already landed, with the item's `success` criteria as evidence. Offer the next READY item. Do NOT re-grill it; that writes a duplicate. |
-| `$ARGUMENTS` matches an **active** (in-progress) item | STOP and confirm. another session may hold it. Step 2 marks items `in-progress` before the first edit precisely so two runs cannot claim one item. |
+| `$ARGUMENTS` matches an **active** (in-progress) item | STOP and confirm: another session may hold it. Step 2 marks items `in-progress` before the first edit precisely so two runs cannot claim one item. |
 | `$ARGUMENTS` matches nothing, or is empty | Print the readiness view and ask: pick a READY item, or grill this as new work → 1d |
 | `$ARGUMENTS` matches more than one READY item | Ask which one. Never guess. |
 
@@ -466,7 +466,7 @@ one-shot drives **one work-item to one PR**. After 1b to 1d:
 - **think-it-through emitted more than one item** → STOP. This is the scope guard firing: the work decomposed into a stack, which is the signal it is too large for unattended automation. Print the readiness view and tell the user to run one-shot per item, starting with the READY one(s).
 - **The single item is flagged `one_way_door: true`** → STOP and confirm with the user before proceeding. One-way doors (schema, public API, data model, money) do not belong in an unattended pipeline without an explicit go-ahead.
 
-The item's own `Non-goals` and `success` fields replace the old file-count heuristics. think-it-through sizes items to "the smallest units that each deliver something testable and can be reviewed on their own", which is exactly one-shot's contract.
+The item's own `Non-goals` and `success` fields replace the old file-count heuristics: think-it-through sizes items to "the smallest units that each deliver something testable and can be reviewed on their own", which is exactly one-shot's contract.
 
 ### Step 2: implement
 
@@ -559,7 +559,7 @@ The same capture applies to a **structural** divergence: a boundary or invariant
 
 Do not edit the target design; this flow cannot, and the design project is someone else's. Do not file anything either. `wayfare sync` owns delivery, on the user's confirmation, to a destination confirmed in-session.
 
-If the code is *not* the better answer, this is not feedback, it is a bug. Fix the code and log nothing.
+If the code is *not* the better answer, this is not feedback; it is a bug. Fix the code and log nothing.
 
 #### 2c: Self-review the diff
 
@@ -575,7 +575,7 @@ Render DAG with `simplify` active. Invoke the `simplify` skill via the Skill too
 
 `simplify` is **not** part of this plugin. It ships separately (see the user-invocable skills list). `hero-skills:push-pr` also invokes it internally when it commits, so running it here makes simplification visible as its own DAG step *and* the second invocation inside push-pr is a fast no-op once nothing is left to simplify.
 
-If the `simplify` skill is unavailable in this environment, render `(–) simplify` and continue. push-pr's own commit step will catch anything we missed via its inline fallback checklist.
+If the `simplify` skill is unavailable in this environment, render `(–) simplify` and continue, since push-pr's own commit step will catch anything we missed via its inline fallback checklist.
 
 The humanizer pass on the diff's prose belongs to push-pr's Step 3c and runs there at commit time, so do not run it here as well.
 
@@ -615,7 +615,7 @@ Render DAG with `self-review` active. Run `hero-skills:review-pr --no-mark-ready
 
 **Artifact (contract item 5):** `hero_self_review_count "$PR_NUMBER"` ≥ 1 before Step 6 (source `hero-lib.sh` first; each bash block is a fresh shell). It is the same author-filtered signal ship-pr's Step 3a reads, so a stranger's comment carrying the marker does not count.
 
-This step covers `review-pr`'s functional work in Steps 1 to 8 only: post the review comment, ask permission to apply fixes, apply them, push the commit, post the improvements summary, and update the PR description. Mark-ready is deliberately deferred to one-shot's Step 6 so the DAG renders it as a visible, separately-tracked node. `review-pr`'s own Step 9 (mark-ready prompt) is skipped per `--no-mark-ready`; its Step 10 (summary print) still runs but is purely informational. one-shot's own DAG and summary are what is authoritative here, not review-pr's next-step suggestion.
+This step covers `review-pr`'s functional work in Steps 1 to 8 only: post the review comment, ask permission to apply fixes, apply them, push the commit, post the improvements summary, and update the PR description. Mark-ready is deliberately deferred to one-shot's Step 6 so the DAG renders it as a visible, separately-tracked node. `review-pr`'s own Step 9 (mark-ready prompt) is skipped per `--no-mark-ready`; its Step 10 (summary print) still runs but is purely informational, and one-shot's own DAG and summary are what is authoritative here, not review-pr's next-step suggestion.
 
 ### Step 6: mark-ready
 
@@ -731,7 +731,7 @@ If the pipeline stopped early, render the DAG with `(✗)` on the failed step, t
 - **one-shot consumes work-items; it authors only Step 2a items.** `think-it-through`, `handoff`, `harden`, and `wayfare` are the producers into `.plans/`. The one thing one-shot writes is Step 2a's output: work it *discovered* while building, or work it *carved* back out of the current item. It never grills or plans one from scratch. Step 1 resolves against that store (and the tracker) before it will grill anything new, and Step 9 is what marks an item `done` automatically. Wayfare `sync`'s covered finding can also propose `done`, but only user-confirmed, so a skipped close-out here still leaves a stale store until the next sync.
 - **Trust the criteria, not the status field.** `status: todo` (`ready` for a build kind) means a human marked it ready but says nothing about whether the work has since landed. Work lands out-of-band all the time. Step 1c re-verifies against the codebase before implementing.
 - This skill **does not retry** on judgment-call failures (test design, large bot feedback). Retrying without human input is how small PRs become broken merges.
-- Step 0.4's `git checkout -b` is unconfirmed by design. one-shot never works on the default branch and assumes the auto-derived name is acceptable. To rename later, use `git branch -m`. The sibling skill `push-pr` prompts for the name because it's invoked deliberately on an existing branch; one-shot's auto-mode contract precludes that prompt.
+- Step 0.4's `git checkout -b` is unconfirmed by design, because one-shot never works on the default branch and assumes the auto-derived name is acceptable. To rename later, use `git branch -m`. The sibling skill `push-pr` prompts for the name because it's invoked deliberately on an existing branch; one-shot's auto-mode contract precludes that prompt.
 - For larger work, run the same skills individually so you can pause between them.
 - **Committing and pushing belong to push-pr (Step 4), never to this skill directly.** Doing it by hand skips the test phase, `/simplify`, the commit convention, and the draft PR, with no error to show for it. Branch creation at Step 0.4 and read-only git commands are the only exceptions.
-- Run `hero-skills:abandon` separately if you abandon mid-pipeline. ship-pr's reset only fires after a successful merge.
+- Run `hero-skills:abandon` separately if you abandon mid-pipeline, because ship-pr's reset only fires after a successful merge.

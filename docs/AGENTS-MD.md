@@ -40,7 +40,7 @@ Mechanical, and `check-agents-md.sh` fails the commit:
 Judgment, applied in a rewrite, not by the script:
 
 1. **R7, every "don't" names the "do".** Bare prohibitions without an alternative doubled task time in measurement.
-2. **R8, every rule names a trap.** Same test as the comments rule: would someone undo this for a reason the line prevents? A rule the agent already follows unprompted is deleted; a rule that only worked around an older model's limit is deleted.
+2. **R8: every rule names a trap.** Same test as the comments rule: would someone undo this for a reason the line prevents? A rule the agent already follows unprompted is deleted; a rule that only worked around an older model's limit is deleted.
 3. **R9, commands are copy-pasteable and include the verification.** "Run `just test`; boot the stack and hit `/readyz`", not "test your changes".
 4. **R10, pointers, not copies.** `file:line`, `DESIGN.md`, a skill name. No pasted snippet over five lines; snippets rot.
 

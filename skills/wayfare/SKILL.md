@@ -1160,8 +1160,8 @@ sync stops re-proposing it.
      anything about producers; the skipped row may be the producer;
    - no fleet, no producer sibling, or the user says this repo has no
      upstream system → `none`, and say which of the three it was.
-   (At read time the target's vendored `_ds/` copy still wins over `$DS_SNAP`
-   , see *Configuration*.)
+   (At read time the target's vendored `_ds/` copy still wins over `$DS_SNAP`;
+   see *Configuration*.)
 4. **`feedback-repo`.** Ask once; `none` keeps feedback in local packets.
    `ux-flow` and `reconciliation` are set up where sync first needs them
    (*Investigate*), not here.
@@ -2129,8 +2129,8 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
    every time is how they drift; the item is what every turn re-reads.
 4. **The authorization lives in this session only. Never write it to the
    item.** A stored "approved" flag outlives the conversation that granted it
-   and sits in a file anyone can edit. `/goal` restores the condition on resume
-   , not this, so a resumed goal re-asks (`wayfare next` finds it `active`
+   and sits in a file anyone can edit. `/goal` restores the condition on resume,
+   not this, so a resumed goal re-asks (`wayfare next` finds it `active`
    and runs this gate again). That re-ask is what keeps the authorization
    attached to a person who is present.
 
@@ -2162,7 +2162,7 @@ memory between turns:
    *Permissions*, `gates pre-authorized in-session for goal 7: mark-ready,
    respond, auto-approve, merge, deploy=verify`, built from the set granted
    at this session's gate, never re-read from the file (the file may only
-   narrow it; a wider file is `stop: reauthorize`). one-shot matches that
+   narrow it; a wider file is `stop: reauthorize`), and one-shot matches that
    literal and nothing else, the same way think-it-through matches
    `launched by wayfare`.
 3. **Check the stop conditions** from the item, each with a concrete check:
@@ -2422,8 +2422,8 @@ Reversed, a crash between the two wedges the goal permanently: `next`'s
 unplanned-item exception requires the comment, so it STOPs; `sync` sees a
 `covers` grown beyond what its comments account for and is told to report and
 never adopt; and only an out-of-band `done` may leave `covers`. Written in
-this order the worst case is a comment naming an item that is not in `covers`
-, which is visible, harmless, and re-doable. This is the same argument
+this order the worst case is a comment naming an item that is not in `covers`,
+which is visible, harmless, and re-doable. This is the same argument
 `docs/MESSAGES.md` makes for suspending before depositing, and it is the same
 answer.
 

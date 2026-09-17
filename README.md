@@ -283,8 +283,8 @@ Three consequences worth internalising:
 
 - That file has a blast radius no other file here has. Review it accordingly.
 - **`main`'s branch protection is the only gate.** Not a formality: approval
-  required, stale approvals dismissed on push, and last-push approval required
- , without that last pair, an approval collected on a benign diff survives a
+  required, stale approvals dismissed on push, and last-push approval required.
+  Without that last pair, an approval collected on a benign diff survives a
   force-push and ships fleet-wide seconds later.
 - Roll back by reverting on `main`. That is the whole procedure.
 

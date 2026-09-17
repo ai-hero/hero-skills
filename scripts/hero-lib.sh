@@ -1214,7 +1214,7 @@ hero_norm_id() {
 # duplicating it. Filtering them out silently defeated both.
 #
 # `active` is separated from READY so two sessions cannot both pick up the same
-# in-flight item. one-shot marks an item in-progress (`implementing` for a
+# in-flight item: one-shot marks an item in-progress (`implementing` for a
 # feature) before its first edit specifically to prevent that, and folding it
 # into READY undid it.
 #

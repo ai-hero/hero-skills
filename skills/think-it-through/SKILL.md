@@ -378,7 +378,7 @@ verify before acting. `hero-skills:one-shot` Step 1c does exactly that.
   `hero-skills:one-shot` consumes them. The two point at each other on purpose:
   one-shot's `plan` step delegates here when nothing on the plate matches, and
   this skill's next step points back at one-shot once an item is READY. That is
-  a hand-off, not a loop. one-shot only grills when it could not resolve an
+  a hand-off, not a loop: one-shot only grills when it could not resolve an
   existing item, so a second lap has nothing left to grill.
 - **`status` is a claim, not a fact.** Nothing observes the codebase on your
   behalf. An item stays `ready` after the work lands unless someone edits it,

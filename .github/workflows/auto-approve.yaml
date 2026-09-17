@@ -821,7 +821,7 @@ jobs:
 
           # Not `curl -f`: that discards the error body, and the body is the
           # only place "prompt is too long" or "invalid model" ever appears.
-          # Retry once on 5xx/429/529 only, a 4xx is deterministic and comes
+          # Retry once on 5xx/429/529 only: a 4xx is deterministic and comes
           # back identical.
           HTTP=000
           for attempt in 1 2; do

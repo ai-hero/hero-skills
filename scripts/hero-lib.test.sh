@@ -351,7 +351,7 @@ check "item_field: success keeps its colon" \
 # ---------- silent-READY regressions ---------------------------------------
 #
 # Each of these reported an item as READY (or its dependent as permanently
-# blocked) with nothing on stderr, an agent would have picked up work whose
+# blocked) with nothing on stderr, so an agent would have picked up work whose
 # dependencies do not exist, or skipped work that was actually unblocked.
 
 cat > "$W/011-mldeps.md" <<'EOF'
@@ -1249,7 +1249,7 @@ hero_deploy_pending_add "$DS" "$SHA_A" 41
 check "deploy pending: add is idempotent"    "2"   "$(hero_deploy_pending "$DS" | wc -l | tr -d ' ')"
 check "deploy pending: rejects a non-sha"    "no"  "$(hero_deploy_pending_add "$DS" 'not a sha' 43 >/dev/null 2>&1 && echo yes || echo no)"
 # An abbreviated sha would be added but never cleared, since clear matches the
-# whole field, the entry is re-probed and re-reported forever.
+# whole field, so the entry is re-probed and re-reported forever.
 check "deploy pending: rejects a short sha"  "no"  "$(hero_deploy_pending_add "$DS" abc123 43 >/dev/null 2>&1 && echo yes || echo no)"
 # Blank is representable and, because dedupe is on the sha alone, permanent:
 # a later add carrying the number is a no-op.
