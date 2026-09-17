@@ -61,7 +61,7 @@ argument-hint: [args]
 disable-model-invocation: true
 ---
 
-# ${SKILL_TITLE} — TODO: Title
+# ${SKILL_TITLE} (TODO: Title)
 
 TODO: Brief description of what this skill does.
 

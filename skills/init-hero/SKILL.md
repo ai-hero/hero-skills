@@ -6,7 +6,7 @@ argument-hint: "[recalibrate]"
 disable-model-invocation: true
 ---
 
-# Init — Investigate & Configure
+# Init: investigate the repo and write its config
 
 Deeply investigate the repository, auto-detect project settings, then confirm findings with the user through smart, evidence-based questions. Creates or updates `HERO.md` at the repo root.
 
@@ -37,8 +37,8 @@ Now running: confirm
 
 - `$ARGUMENTS`:
   - (none) - Investigate repo and create `HERO.md`
-  - `--update` - Deprecated spelling of `recalibrate`. Accept it, say once that the verb was renamed, and continue — the old name is vendored into consumer repos' instructions and stays in circulation until they re-vendor.
-  - `recalibrate` - Re-investigate and update the existing `HERO.md`. The whole-file pass of the verb every skill carries — see [docs/RECALIBRATE.md](../../docs/RECALIBRATE.md). A skill that is misbehaving over one field is cheaper to fix with that skill's own `recalibrate`.
+  - `--update` - Deprecated spelling of `recalibrate`. Accept it, say once that the verb was renamed, and continue. The old name is vendored into consumer repos' instructions and stays in circulation until they re-vendor.
+  - `recalibrate` - Re-investigate and update the existing `HERO.md`. The whole-file pass of the verb every skill carries; see [docs/RECALIBRATE.md](../../docs/RECALIBRATE.md). A skill that is misbehaving over one field is cheaper to fix with that skill's own `recalibrate`.
 
 ## Why This Matters
 
@@ -51,13 +51,13 @@ Each skill needs specific information to work well. This skill figures out what'
 | `hero-skills:push-pr` | Default branch, branch convention, hosting platform (`gh`/`glab`), issue prefix, commit convention, pre-commit run command, CI platform, workflow names, registry, required status checks |
 | `hero-skills:one-shot` | PM tool + MCP server name, branch template, issue prefix, project list |
 | `hero-skills:push-pr` (test phase) | Language, framework, lint/format/typecheck commands, test/dev/install commands, ports, dependency file |
-| `hero-skills:review-pr` | Code Quality (pre-commit), Code Review Agent (bot username — to dedupe its comments) |
+| `hero-skills:review-pr` | Code Quality (pre-commit), Code Review Agent (bot username, used to dedupe its comments) |
 | `hero-skills:wayfare` | Wayfare (source-repo, design-project, design-transport, feedback-repo, ux-flow); for its stages: repo type, project list, deployment platform and registry, linters, dependency files per project |
 | `hero-skills:create-project` | Repo type, coding conventions, code quality tools, project scaffold patterns |
 | `hero-skills:setup-dev` | Required tools, recommended tools, MCP servers |
 | `hero-skills:respond-to-comments` | Code Review Agent (agent, trigger, poll-method, bot-username) |
 | `hero-skills:ship-pr` | CI/CD (auto-approve workflow installed on default branch), Repository (default branch), deployment platform, namespaces, ArgoCD, health check endpoints |
-| `hero-skills:init-hero recalibrate` | All sections — re-investigates and refreshes HERO.md on demand |
+| `hero-skills:init-hero recalibrate` | All sections. Re-investigates and refreshes HERO.md on demand |
 | `hero-skills:recomponentize-ui` | Design System (role, namespace, registry-url, token-env-var, atomic-layers), frontend project paths |
 | `hero-skills:audit-plugin` | (internal) Plugin structure validation |
 
@@ -67,9 +67,9 @@ Each skill needs specific information to work well. This skill figures out what'
 
 **House standard: `AGENTS.md` is the real file; `CLAUDE.md` is a symlink to it.**
 
-`AGENTS.md` is the cross-agent open standard (agents.md) — Cursor, Copilot, and others read it. Claude Code reads `CLAUDE.md`. A symlink means one file serves every agent with zero duplication and no drift between them. **Always write content to `AGENTS.md`, never to `CLAUDE.md`.**
+`AGENTS.md` is the cross-agent open standard (agents.md), which Cursor, Copilot, and others read. Claude Code reads `CLAUDE.md`. A symlink means one file serves every agent with zero duplication and no drift between them. **Always write content to `AGENTS.md`, never to `CLAUDE.md`.**
 
-Detect the current state — note that `-L` must be tested *before* `-f`, since `-f` is true for a symlink pointing at an existing file:
+Detect the current state. Note that `-L` must be tested *before* `-f`, since `-f` is true for a symlink pointing at an existing file:
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
@@ -96,7 +96,7 @@ Act on the state. **Never delete a `CLAUDE.md` whose content is not already pres
 | `CORRECT` | Nothing to do. Edit `AGENTS.md` in Step 5. |
 | `NEITHER` | Create `AGENTS.md` with the scaffold below, then `ln -s AGENTS.md CLAUDE.md`. |
 | `AGENTS_ONLY` | Create the symlink: `ln -s AGENTS.md CLAUDE.md`. |
-| `CLAUDE_ONLY` | Rename, then link: `git mv CLAUDE.md AGENTS.md && ln -s AGENTS.md CLAUDE.md`. Content is preserved by the rename — nothing is lost. |
+| `CLAUDE_ONLY` | Rename, then link: `git mv CLAUDE.md AGENTS.md && ln -s AGENTS.md CLAUDE.md`. Content is preserved by the rename, so nothing is lost. |
 | `BOTH_REGULAR_FILES` | **Stop and ask the user.** Two independent files exist. Show a diff, propose merging `CLAUDE.md`'s unique content into `AGENTS.md`, and only replace `CLAUDE.md` with a symlink once the user confirms the merge. Never silently discard either file. |
 | `SYMLINK_WRONG_TARGET` | Report it and ask. Do not repoint a symlink the user aimed somewhere deliberately. |
 
@@ -128,11 +128,11 @@ See [HERO.md](./HERO.md) for coding conventions detected from the codebase.
 - If a section is **missing**, append it.
 - If a section exists but does **not** reference `HERO.md`, add:
   `See [HERO.md](./HERO.md) for details managed by hero-skills:init-hero.`
-- **Do not** remove or overwrite content the user wrote — only add the pointer if absent.
+- **Do not** remove or overwrite content the user wrote. Only add the pointer if it is absent.
 
-**Windows note:** symlinks need Developer Mode or elevated privileges. If `ln -s` fails, fall back to a regular `CLAUDE.md` containing a single line — `See [AGENTS.md](./AGENTS.md).` — and tell the user why.
+**Windows note:** symlinks need Developer Mode or elevated privileges. If `ln -s` fails, fall back to a regular `CLAUDE.md` containing the single line `See [AGENTS.md](./AGENTS.md).` and tell the user why.
 
-**Why this matters:** `AGENTS.md`/`CLAUDE.md` is loaded into context at conversation start. Without a HERO.md reference, Claude won't consult HERO.md for tech stack decisions (OpenTofu vs Terraform) or coding conventions (snake_case, structured logging, no DB mocks). The pointer ensures Claude reads HERO.md for authoritative configuration — and it survives context compaction, which loaded skills may not.
+**Why this matters:** `AGENTS.md`/`CLAUDE.md` is loaded into context at conversation start. Without a HERO.md reference, Claude won't consult HERO.md for tech stack decisions (OpenTofu vs Terraform) or coding conventions (snake_case, structured logging, no DB mocks). The pointer ensures the agent reads HERO.md for authoritative configuration, and it survives a context compaction, which loaded skills may not.
 
 ### Step 2: Check for Existing HERO.md Configuration
 
@@ -147,11 +147,11 @@ If `HERO.md` exists and `recalibrate` was not passed, show current config and as
 
 ### Step 3: Deep Investigation
 
-Launch a thorough investigation of the repository. Use an Explore subagent or do it yourself — the goal is to gather **evidence** for every configuration decision.
+Launch a thorough investigation of the repository. Use an Explore subagent or do it yourself. The goal is to gather **evidence** for every configuration decision.
 
 #### 3a: Coding Agent & AI Tooling
 
-Detect which AI coding agent(s) the team uses. This must come first — it determines what hooks, configs, and integrations are possible.
+Detect which AI coding agent(s) the team uses. This must come first, because it determines which hooks, configs, and integrations are possible.
 
 ```bash
 # Claude Code
@@ -179,11 +179,11 @@ grep -r "claude\|cursor\|copilot\|windsurf\|aider" .pre-commit-config.yaml 2>/de
 
 **What to look for:**
 
-- `.claude/` directory or `AGENTS.md`/`CLAUDE.md` → Claude Code user — can use hooks, skills, MCP servers
-- `.cursorrules` or `.cursor/rules/` → Cursor user — rules files, no hook system
-- `.github/copilot-instructions.md` → Copilot user — instructions file
-- `.windsurfrules` → Windsurf user — rules file
-- Multiple signals → team uses different agents — note all of them
+- `.claude/` directory or `AGENTS.md`/`CLAUDE.md` → Claude Code user, so hooks, skills, and MCP servers are available
+- `.cursorrules` or `.cursor/rules/` → Cursor user: rules files, no hook system
+- `.github/copilot-instructions.md` → Copilot user: instructions file
+- `.windsurfrules` → Windsurf user: rules file
+- Multiple signals → the team uses different agents, so note all of them
 - Pre-commit hooks referencing AI tools → existing self-review or lint integration
 
 **If no coding agent detected**, ask:
@@ -211,8 +211,8 @@ gh api "/repos/{owner}/{repo}/installation" --jq '{app_slug, app_name}' 2>/dev/n
 
 **What to look for:**
 
-- `.coderabbit.yaml` → CodeRabbit — trigger: auto on push, poll-method: comments, bot-username: `coderabbitai`
-- `.greptile/` or `.greptile.yaml` → Greptile — trigger: `@greptile review` comment, poll-method: check-runs, bot-username: `greptile-bot`
+- `.coderabbit.yaml` → CodeRabbit. Trigger: auto on push, poll-method: comments, bot-username: `coderabbitai`
+- `.greptile/` or `.greptile.yaml` → Greptile. Trigger: `@greptile review` comment, poll-method: check-runs, bot-username: `greptile-bot`
 - Bot usernames in recent PR comments → identifies active review agent
 - GitHub Copilot code review enabled → trigger: auto on push, poll-method: comments, bot-username: `copilot`
 
@@ -254,7 +254,7 @@ grep -rlE '#[0-9a-fA-F]{3,6}\b' --include="*.tsx" src/ 2>/dev/null | wc -l
 - `components.json` with a `registries` block → already a consumer; read the namespace and URL from it rather than asking.
 - `components.json` whose `"ui"` alias points at an internal atomic dir (e.g. `@/components/atoms`) rather than `@/components/ui` → another producer signal.
 - A frontend with no `components.json` → candidate consumer. Ask (see Group 6).
-- Existing MUI/Chakra/Mantine/Ant → note it. **Never propose migrating UI libraries during init** — that is a project, not a config decision.
+- Existing MUI/Chakra/Mantine/Ant → note it. **Never propose migrating UI libraries during init.** That is a project, not a config decision.
 - Atomic dirs already present → record `atomic-layers: true`.
 
 #### 3c: Repository & Collaboration Model
@@ -339,7 +339,7 @@ grep -l "test\|lint\|build\|deploy\|release" .github/workflows/*.yml 2>/dev/null
 - Which workflows exist and what they do (test, lint, build images, deploy)
 - Whether CI runs on PR, push to main, or both
 - Required status checks (signals what must pass before merge)
-- Whether `.github/workflows/auto-approve.yaml` (or `.yml`) already exists — needed by `hero-skills:ship-pr`
+- Whether `.github/workflows/auto-approve.yaml` (or `.yml`) already exists, which `hero-skills:ship-pr` needs
 
 ```bash
 # Check whether the hero-skills auto-approve workflow is installed
@@ -414,7 +414,7 @@ which pre-commit 2>/dev/null && pre-commit --version
 - Which tools the project actually requires (cross-reference with deps, CI, Dockerfiles, Makefiles)
 - Distinguish between **required** (project won't build/run without it) vs. **recommended** (nice to have)
 - Note minimum versions if the project depends on specific features
-- These go into HERO.md `## Developer Setup` as team-shared requirements — individual installation/auth is handled by `hero-skills:setup-dev`
+- These go into HERO.md `## Developer Setup` as team-shared requirements. Individual installation and auth are handled by `hero-skills:setup-dev`
 
 #### 3g: Deployment & Infrastructure
 
@@ -526,19 +526,19 @@ grep -E "port\|PORT\|:3000\|:8000\|:8080\|:5173\|:4000" pyproject.toml package.j
 **What to look for:**
 
 - Language and framework from dependency files
-- Monorepo structure (nx, turborepo, `workspaces` in `package.json`, multiple `pyproject.toml`) — one repo with many packages. A folder of sibling checkouts is a **fleet**, mapped by `FLEET.md` (`hero-skills:fleet`), and is not a monorepo
-- **Dependency file** per project (pyproject.toml, package.json, go.mod, etc.) — needed by `hero-skills:harden` and `hero-skills:push-pr`'s test phase
+- Monorepo structure (nx, turborepo, `workspaces` in `package.json`, multiple `pyproject.toml`): one repo with many packages. A folder of sibling checkouts is a **fleet**, mapped by `FLEET.md` (`hero-skills:fleet`), and is not a monorepo
+- **Dependency file** per project (pyproject.toml, package.json, go.mod, and so on), needed by `hero-skills:harden` and `hero-skills:push-pr`'s test phase
 - **Lock file** → identifies the package manager (pnpm-lock.yaml → pnpm, yarn.lock → yarn, etc.)
-- **Install command** (e.g., `uv sync`, `pnpm install`) — needed by `hero-skills:push-pr`'s test phase before running
-- **Task runner** (Makefile, justfile, Taskfile) — if present, prefer its targets as canonical commands (e.g., `make test` over `uv run pytest`)
-- **Exact lint/format/typecheck commands** — not just tool names; `hero-skills:push-pr`'s test phase needs runnable commands for verification
+- **Install command** (for example `uv sync` or `pnpm install`), needed by `hero-skills:push-pr`'s test phase before running
+- **Task runner** (Makefile, justfile, Taskfile). If present, prefer its targets as canonical commands (e.g., `make test` over `uv run pytest`)
+- **Exact lint/format/typecheck commands**: not just tool names; `hero-skills:push-pr`'s test phase needs runnable commands for verification
 - Test commands from scripts section or config files
 - Dev server commands and default ports
 - Entry points for CLIs
 
 #### 3j: Coding Conventions & Team Patterns
 
-Investigate the codebase for established conventions the team follows. These are critical — Claude must follow the same patterns the team uses.
+Investigate the codebase for established conventions the team follows. These are critical, because the agent must follow the same patterns the team uses.
 
 ```bash
 # Existing style guides or contributing docs
@@ -579,7 +579,7 @@ grep -rE "(Base\.metadata|declarative_base|mapped_column|Column\(|prisma\.|drizz
 grep -rE '("""|\/\*\*|/// |//!)' --include="*.py" --include="*.ts" --include="*.tsx" --include="*.go" --include="*.rs" 2>/dev/null | head -10
 ```
 
-**What to look for — adapt to detected tech stack:**
+**What to look for, adapted to the detected tech stack:**
 
 For **Python** projects:
 
@@ -620,16 +620,16 @@ For **Rust** projects:
 - Config management: env vars, config files, secrets handling
 - Test organization: co-located vs separate directory, naming patterns (`test_*`, `*.test.ts`, `*_test.go`)
 
-**Rationale detection — when to ask "why":**
+**Rationale detection: when to ask "why"**
 
-Most conventions are self-evident (snake_case in Python, PascalCase classes) — don't ask why for those. But flag and ask about anything that is:
+Most conventions are self-evident (snake_case in Python, PascalCase classes), so do not ask why for those. But flag and ask about anything that is:
 
 - **An exception to the language/framework default** (e.g., no default exports in TS, relative imports in a flat Python project)
 - **A deliberate avoidance** (e.g., no ORM, no mocks, no barrel files)
 - **A tool choice that has a common alternative** (e.g., OpenTofu over Terraform, pnpm over npm, Bun over Node)
 - **A pattern that would surprise a new team member or Claude**
 
-For these, ask the user: *"I noticed you use X instead of Y — is there a specific reason? This helps Claude avoid suggesting Y in the future."*
+For these, ask the user: *"I noticed you use X instead of Y. Is there a specific reason? This helps Claude avoid suggesting Y in the future."*
 
 Keep rationale brief for mild preferences, elaborate for hard-won lessons (e.g., "mocks hid a migration bug").
 
@@ -664,16 +664,16 @@ Based on your investigation, present findings grouped by **what the hero skills 
 - Coding agent (Claude Code, Cursor, Windsurf, etc.)
 - Whether hooks/pre-commit integration is possible
 
-Do NOT offer to install a pre-commit hook for `hero-skills:init-hero recalibrate`. Skills surface a stale-HERO.md hint on demand instead — see `scripts/check-hero-staleness.sh`.
+Do NOT offer to install a pre-commit hook for `hero-skills:init-hero recalibrate`. Skills surface a stale-HERO.md hint on demand instead; see `scripts/check-hero-staleness.sh`.
 
 #### Group 1: "For committing and pushing code" (`hero-skills:push-pr`, `hero-skills:ship-pr`)
 
-- Hosting platform (GitHub, GitLab, Bitbucket — from remote URL)
+- Hosting platform (GitHub, GitLab, Bitbucket), read from the remote URL
 - Commit convention (evidence from git log patterns)
 - Branch naming convention and branch template (evidence from branch -r patterns)
 - Default branch
-- Merge method for PRs — squash, rebase, or merge. Detect with `gh repo view --json squashMergeAllowed,rebaseMergeAllowed,mergeCommitAllowed`; pick the **first allowed in this preference order: squash → rebase → merge**. If multiple are allowed, confirm with the user once and write the choice to `merge-method` in HERO.md.
-- Whether GitHub auto-deletes merged head branches — `gh repo view --json deleteBranchOnMerge`. If false, `hero-skills:ship-pr` will clean up the remote + local branch after merge. Record as `auto-delete-branches` in HERO.md.
+- Merge method for PRs: squash, rebase, or merge. Detect with `gh repo view --json squashMergeAllowed,rebaseMergeAllowed,mergeCommitAllowed`; pick the **first allowed in this preference order: squash → rebase → merge**. If multiple are allowed, confirm with the user once and write the choice to `merge-method` in HERO.md.
+- Whether GitHub auto-deletes merged head branches, via `gh repo view --json deleteBranchOnMerge`. If false, `hero-skills:ship-pr` will clean up the remote + local branch after merge. Record as `auto-delete-branches` in HERO.md.
 - Pre-commit hooks and what they run
 - Linters, formatters
 - Task runner (if Makefile/justfile provides commit/push/lint targets)
@@ -700,7 +700,7 @@ Do NOT offer to install a pre-commit hook for `hero-skills:init-hero recalibrate
 - Container registry
 - ArgoCD / GitOps
 - Namespaces / environments
-- Whether to install `.github/workflows/auto-approve.yml` for `hero-skills:ship-pr` — if absent, ask:
+- Whether to install `.github/workflows/auto-approve.yml` for `hero-skills:ship-pr`. If it is absent, ask:
   *"`hero-skills:ship-pr` lets you comment `@auto-approve` on a PR to get a Claude-verified approval (gated by self-review, no unresolved threads, and PR-metadata checks). Install `.github/workflows/auto-approve.yml`? It also requires an `ANTHROPIC_API_KEY` repo secret."*
   - If the user says yes, run the install in Step 6a below.
   - If the workflow exists locally but is not on the default branch yet, remind the user that `@auto-approve` will be a no-op until that file lands on the default branch.
@@ -710,10 +710,10 @@ Do NOT offer to install a pre-commit hook for `hero-skills:init-hero recalibrate
 Skip this group entirely for projects with no frontend.
 
 - **Producer detected** (`registry.json` / `registry-dist/` / `shadcn build`): do not ask whether to adopt a design system. Confirm instead:
-  *"This repo publishes a design system. I'll set `role: producer` so `hero-skills:recomponentize-ui` refuses to run here — it would try to consume this repo's own output. Correct?"*
+  *"This repo publishes a design system. I'll set `role: producer` so `hero-skills:recomponentize-ui` refuses to run here, because it would try to consume this repo's own output. Correct?"*
 - **Consumer already wired** (`registries` block present): confirm the namespace and URL read from `components.json`; no question needed.
-- **Frontend, no registry**: ask once —
-  *"Use the AI Hero design system (`@aihero`, <https://design.aihero.studio>) for UI in this project? It needs a `REGISTRY_TOKEN` in `.env` — a Personal Access Token from auth.aihero.studio/profile. Choosing no keeps stock shadcn / your current UI library; `hero-skills:recomponentize-ui` still does the atomic refactor either way."*
+- **Frontend, no registry**: ask once.
+  *"Use the AI Hero design system (`@aihero`, <https://design.aihero.studio>) for UI in this project? It needs a `REGISTRY_TOKEN` in `.env`, a Personal Access Token from auth.aihero.studio/profile. Choosing no keeps stock shadcn / your current UI library; `hero-skills:recomponentize-ui` still does the atomic refactor either way."*
 - If yes, also ask: *"Install the enforcement layer (`.claude/rules/design-system.md` + a PostToolUse token check)? It is what makes the constraints apply reliably rather than only when a skill happens to trigger."* If the user agrees, run the install in Step 6b.
 - **Never** propose migrating off an existing UI library here.
 
@@ -1059,7 +1059,7 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 
 **Only include sections that are relevant.** If there's no CI/CD, no deployment, etc., omit those sections entirely rather than filling them with "none". Keep it clean.
 
-**Also update `AGENTS.md` Tech Stack and Best Practices sections** (never write to `CLAUDE.md` — it is a symlink) with a human-readable summary of the key findings. This ensures Claude has immediate context without needing to parse HERO.md. Example:
+**Also update `AGENTS.md` Tech Stack and Best Practices sections** (never write to `CLAUDE.md`, which is a symlink) with a human-readable summary of the key findings. This ensures Claude has immediate context without needing to parse HERO.md. Example:
 
 ```markdown
 ## Tech Stack
@@ -1122,7 +1122,7 @@ Run hero-skills:setup-dev to configure your local dev environment
 
 ### Step 6a: Optionally Install Auto-Approve Workflow
 
-If the user agreed to install `.github/workflows/auto-approve.yml` (Group 4 confirmation), copy it into their repo using the bundled installer. The installer's exit code is the contract — capture it and branch on it explicitly so an existing customized workflow is never silently overwritten or treated as "installed":
+If the user agreed to install `.github/workflows/auto-approve.yml` (Group 4 confirmation), copy it into their repo using the bundled installer. The installer's exit code is the contract, so capture it and branch on it explicitly so an existing customized workflow is never silently overwritten or treated as "installed":
 
 ```bash
 # Locate this plugin's installed root. Tries the two standard locations;
@@ -1195,7 +1195,7 @@ case "$INSTALL_RC" in
 esac
 ```
 
-Reminders shown only when the workflow was newly created this run (`INSTALL_FRESH_WRITE=true`). For an already-up-to-date repo (`INSTALL_OK=true` but `INSTALL_FRESH_WRITE=false`), skip the "installed at..." text — it would be misleading.
+Reminders shown only when the workflow was newly created this run (`INSTALL_FRESH_WRITE=true`). For an already-up-to-date repo (`INSTALL_OK=true` but `INSTALL_FRESH_WRITE=false`), skip the "installed at..." text, which would be misleading.
 
 1. **Merge the workflow to the default branch.** GitHub only honors `issue_comment` workflows that already exist on the default branch.
 2. **Add an `ANTHROPIC_API_KEY` repo secret.** The workflow uses it for Claude verification.
@@ -1211,7 +1211,7 @@ Next steps before hero-skills:ship-pr will work:
 
 ### Step 6b: Optionally Install Design-System Enforcement
 
-If the user opted in during Group 6, install the rule + hook. Same exit-code contract as Step 6a — branch on it explicitly rather than assuming success:
+If the user opted in during Group 6, install the rule + hook. Same exit-code contract as Step 6a: branch on it explicitly rather than assuming success:
 
 ```bash
 DS_RC=255
@@ -1238,7 +1238,7 @@ case "$DS_RC" in
 esac
 ```
 
-`$PLUGIN_ROOT` is resolved in Step 6a — run that lookup first if Step 6a was skipped.
+`$PLUGIN_ROOT` is resolved in Step 6a, so run that lookup first if Step 6a was skipped.
 
 Remind the user only when the install succeeded:
 
@@ -1255,9 +1255,9 @@ hero-skills:recomponentize-ui to migrate the UI.
 
 Always commit `HERO.md` to the repo. Do NOT ask whether to commit or whether to add it to `.gitignore`. Stage and commit it immediately after user confirmation in Step 6 (and Step 6a if the workflow was installed).
 
-Only stage the workflow file when Step 6a reported the file is in sync with the plugin (`INSTALL_OK=true`, covering both the fresh-install and already-up-to-date paths). When the installer returned exit 2 (`EXISTS`, drift detected), the working file is still the user's original — committing it now would falsely claim `hero-skills:init-hero` installed the new version.
+Only stage the workflow file when Step 6a reported the file is in sync with the plugin (`INSTALL_OK=true`, covering both the fresh-install and already-up-to-date paths). When the installer returned exit 2 (`EXISTS`, drift detected), the working file is still the user's original, and committing it now would falsely claim `hero-skills:init-hero` installed the new version.
 
-**Stage `AGENTS.md`, not just `CLAUDE.md`.** `CLAUDE.md` is a symlink, so staging it alone commits the link and silently drops every content change — those live in `AGENTS.md`. Stage both: the symlink itself needs committing the first time it is created.
+**Stage `AGENTS.md`, not just `CLAUDE.md`.** `CLAUDE.md` is a symlink, so staging it alone commits the link and silently drops every content change, because those live in `AGENTS.md`. Stage both: the symlink itself needs committing the first time it is created.
 
 ```bash
 FILES_TO_ADD=("HERO.md" "AGENTS.md" "CLAUDE.md")
@@ -1284,7 +1284,7 @@ When `recalibrate` is passed:
 
 1. Read existing `HERO.md` and `AGENTS.md`, and re-check the CLAUDE.md symlink state from Step 1
 2. Re-run full investigation (Step 3, all sub-steps)
-3. Compare findings against current config — flag what changed, what's new, and what was removed
+3. Compare findings against the current config, flagging what changed, what is new, and what was removed
 4. Show only deltas: `[CHANGED]`, `[NEW]`, `[REMOVED]` markers
 5. Ask user to confirm updates
 6. Preserve any custom content or comments the user added to both files
@@ -1297,7 +1297,7 @@ When `recalibrate` is passed:
 - **Ask smart questions.** "I see X, does that mean Y?" not "What is your Z?"
 - **Be purpose-driven.** Frame everything as "skill X needs this to work."
 - **Omit irrelevant sections.** If no deployment, don't include a Deployment section.
-- **One round of questions.** Present all findings at once with a single numbered list of questions (1. 2. 3. ...), get all answers at once. Use plan mode or numbered format — never freeform prose questions.
+- **One round of questions.** Present all findings at once with a single numbered list of questions (1. 2. 3. ...), get all answers at once. Use plan mode or a numbered format, never freeform prose questions.
 
 ## Examples
 

@@ -95,7 +95,7 @@ check "malformed JSON -> distinct WARN naming installed_plugins.json" "installed
 # directory -> falls back to the (correctly negative) directory probe, same
 # as if the file were absent. `command -v jq` only reports the FIRST PATH hit,
 # but a runner can have jq reachable from more than one directory (a distro
-# package plus a language-toolchain shim, e.g.) — shadowing only that one
+# package plus a language-toolchain shim, e.g.), shadowing only that one
 # match left the real jq reachable from a later directory on Linux CI while
 # passing on macOS. Instead, walk every PATH entry and shadow (as symlinks to
 # every OTHER binary) any directory that itself contains a `jq` executable,
@@ -106,7 +106,7 @@ i=0
 # `IFS=` scopes to the read, so the global stays untouched: a global IFS=':'
 # changes how EVERY later unquoted expansion in this file splits, and the
 # restore only runs if nothing between here and it exits first.
-# The here-doc (not a pipe) keeps the loop in this shell — a `|` would run it
+# The here-doc (not a pipe) keeps the loop in this shell, a `|` would run it
 # in a subshell and NO_JQ_PATH would come back empty, silently rebuilding the
 # PATH as "" and testing nothing.
 while IFS= read -r dir; do

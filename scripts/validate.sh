@@ -302,7 +302,7 @@ fi
 # `disable-model-invocation: true` cannot be invoked by the model, so the
 # calling pipeline breaks at that step (there is no per-caller allowlist).
 # Keep this list in sync with one-shot's step→skill mapping AND
-# a goal turn's tiers — `one-shot` is here because re-adding its flag
+# a goal turn's tiers. `one-shot` is here because re-adding its flag
 # would silently break every goal turn. `architecture` is chained three
 # ways: wayfare sync runs its review/sync in both modes, and
 # think-it-through's `arch` dispatch
@@ -312,13 +312,13 @@ fi
 # would carry this repo's session state into a third party's tracker.
 # `harden` is here because re-adding `disable-model-invocation: true` would
 # break every sync at its harden stage.
-# `preflight` is intentionally absent — one-shot runs
+# `preflight` is intentionally absent, one-shot runs
 # it via scripts/preflight.sh, not the Skill tool, so it may stay user-only.
 CHAINED_SKILLS="think-it-through push-pr review-pr respond-to-comments ship-pr one-shot architecture harden"
 for chained in $CHAINED_SKILLS; do
   chained_file="$SKILLS_DIR/$chained/SKILL.md"
   # A missing chained skill silently breaks the calling pipeline at that step, so error
-  # rather than skip — the list above must always resolve to real skills.
+  # rather than skip, the list above must always resolve to real skills.
   if [[ ! -f "$chained_file" ]]; then
     error "the pipelines chain '$chained' but skills/$chained/SKILL.md is missing" \
       "skills/$chained/SKILL.md" \
@@ -334,7 +334,7 @@ for chained in $CHAINED_SKILLS; do
   # Here-string, not `printf | grep -q`. Under `set -o pipefail`, grep -q exits
   # the moment it matches, which SIGPIPEs the still-writing printf; the pipeline
   # then reports 141 and the `if` takes the FAILURE branch even though the match
-  # succeeded. The bigger the input, the likelier it fires — so the guard would
+  # succeeded. The bigger the input, the likelier it fires, so the guard would
   # start lying precisely as a skill grew.
   if grep -qE '^[[:space:]]*disable-model-invocation:[[:space:]]*true' <<< "$CHAINED_FM"; then
     DMI_LINE=$(grep -nE '^[[:space:]]*disable-model-invocation:[[:space:]]*true' "$chained_file" | head -1 | cut -d: -f1)
@@ -354,7 +354,7 @@ echo "────────────────────────�
 # scan-vulns, test-changes, and document-arch were deleted and folded into
 # harden, push-pr, and think-it-through respectively. A live reference to one
 # of these names is fine ONLY as a lineage note ("absorbed the former X",
-# "absorbed from X") — anything else is a leftover pointer to a skill that no
+# "absorbed from X"), anything else is a leftover pointer to a skill that no
 # longer exists. Scoped to tracked, non-historical docs; a plans/ retrospective
 # describing what the repo looked like at the time it was written is exempt.
 ABSORBED_SKILLS="scan-vulns test-changes document-arch"
@@ -389,7 +389,7 @@ echo "────────────────────────�
 # ── skill-reference resolution guard ───────────────────────────────
 # `hero-skills:NAME` references fan out across skills, README, and
 # PIPELINES.md; a renamed or deleted skill rots every one of them silently.
-# ABSORBED_SKILLS above is the hand-curated tail of that class — this is the
+# ABSORBED_SKILLS above is the hand-curated tail of that class. This is the
 # generic half: every referenced name must resolve to skills/NAME/SKILL.md.
 # Lineage notes ("absorbed the former hero-skills:X") are exempt, same rule
 # as the absorbed guard.
@@ -431,12 +431,12 @@ echo "────────────────────────�
 # This checks SEMANTICS, not literal byte strings. An earlier version matched
 # the exact awk one-liners that existed at the time; those strings stopped
 # appearing the moment hero-lib.sh was rewritten, so the guard matched nothing
-# anywhere in the repo — including the canonical implementation — and reported
+# anywhere in the repo, including the canonical implementation, and reported
 # clean over every possible violation. Any reworded copy (awk -F":", sed -n,
 # grep|cut) escaped it too.
 #
 # The inverted rule: if a file TOUCHES shared state, it must also reference the
-# library. That has no phrasing to evade — you cannot parse default-branch
+# library. That has no phrasing to evade. You cannot parse default-branch
 # without naming default-branch.
 #
 # Format: "marker-regex|hero-lib replacement|human description"
@@ -452,10 +452,10 @@ echo "────────────────────────�
 # parsers in ship-pr went unseen). Reading HERO.md through a text tool is the
 # duplication; writing it is not.
 #
-# Fields are :: separated — the patterns contain `|` alternations.
+# Fields are :: separated because the patterns contain `|` alternations.
 # `.*` not `[^\n]*`: grep -E reads the latter as "not backslash or n", which
 # cannot span an ordinary word like `print`. grep is line-based regardless.
-# \b word boundaries are required too — without them `sed` matches inside
+# \b word boundaries are required too: without them `sed` matches inside
 # "pas_sed_" and "ba_sed_", flagging ordinary prose.
 SHARED_STATE=(
   "\\b(awk|sed|cut)\\b.*HERO\\.md::hero_field::hand-rolled HERO.md parsing"
@@ -496,7 +496,7 @@ fi
 # audit-plugin reads HERO.md to audit this plugin's own field coverage, not
 # as a project's config, and never runs in another repo. A `user-invocable:
 # false` skill is reached only by a Skill-tool chain from a skill that already
-# ran the fleet test (wayfare Step 0, think-it-through Step 0) — a second test
+# ran the fleet test (wayfare Step 0, think-it-through Step 0), a second test
 # there would be dead code that reads as a promise, and dropping the exemption
 # would re-add fleet handling to skills that have no user path to a fleet
 # folder. A hand-typed run at a fleet root is unguarded and fails loudly on
@@ -518,7 +518,7 @@ done
 # ── work-item store: producers must have a consumer ────────────────
 # think-it-through, handoff, and harden all WRITE work-items into .plans/
 # (and read the plate back to build on it). one-shot is the only skill that
-# CONSUMES an item — resolving it to execute and marking it done. (It also
+# CONSUMES an item, resolving it to execute and marking it done. (It also
 # authors Step 2a carve-outs, but it never plans one from scratch.) If that delegation
 # is ever edited away, the store silently becomes write-only: items pile up,
 # nothing marks them done, and one-shot goes back to planning from scratch
@@ -530,7 +530,7 @@ if [[ ! -f "$ONE_SHOT" ]]; then
 else
   # Strip HTML comments and fenced blocks before matching, and require the
   # reference in an ACTIVE position (an Invoke instruction or a table row).
-  # A bare substring check was satisfied by leaving the name in a comment —
+  # A bare substring check was satisfied by leaving the name in a comment,
   # "this pipeline used to call hero-skills:think-it-through" passed while
   # every real delegation had been deleted, which is exactly the drift this
   # guard exists to catch.
@@ -540,7 +540,7 @@ else
     /<!--/           { next }
     { print }
   ' "$ONE_SHOT")
-  # Here-string rather than `printf | grep -q` — see the pipefail/SIGPIPE note
+  # Here-string rather than `printf | grep -q`, see the pipefail/SIGPIPE note
   # on the chained-skill guard above. This site is the one that actually bit:
   # the match sits near the top of one-shot's Step->skill table, so grep -q
   # exited early and killed printf mid-write, and the guard reported drift that
@@ -553,7 +553,7 @@ else
       "" \
       "think-it-through is the planning skill; one-shot's Step 1 must resolve against .plans/ and delegate to it. See PIPELINES.md Pipeline 2"
   fi
-  # Require several real references, not one incidental mention — "plans" is
+  # Require several real references, not one incidental mention. "plans" is
   # a word that appears in ordinary prose, so match the literal `.plans` token.
   STORE_HITS=$(printf '%s\n' "$ONE_SHOT_ACTIVE" | grep -cF '.plans' || true)
   if [[ "${STORE_HITS:-0}" -ge 3 ]]; then

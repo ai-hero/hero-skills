@@ -6,7 +6,7 @@ argument-hint: "PROJECT_NAME [description] | recalibrate"
 disable-model-invocation: true
 ---
 
-# Create Project — Scaffold a New Project
+# Create Project: scaffold a new project
 
 Scaffold a new project, either standalone or as a subproject in an existing repo.
 
@@ -28,32 +28,33 @@ Now running: setup-dev
 
 This skill drives the **scaffold** step and then invokes `hero-skills:setup-dev`, then `hero-skills:init-hero`, and finally a `git commit` of HERO.md + AGENTS.md. Each chained skill renders its own internal DAG when it has one.
 
-**Naming note for `first-commit`:** When scaffolding a *standalone* repo, Step 6 below already creates the literal first commit (the scaffold). The pipeline's `first-commit` node refers specifically to the commit that lands `HERO.md` and `AGENTS.md` — that's a follow-up commit on standalone repos, or simply the next commit when adding to an existing repo. See `PIPELINES.md` for the canonical definition.
+**Naming note for `first-commit`:** When scaffolding a *standalone* repo, Step 6 below already creates the literal first commit (the scaffold). The pipeline's `first-commit` node means the commit that lands `HERO.md` and `AGENTS.md`. On a standalone repo that is a follow-up commit; when adding to an existing repo it is simply the next commit. See `PIPELINES.md` for the canonical definition.
 
 ## Arguments
 
 - `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before the project name.
-- `$ARGUMENTS` — Project name (required) and optional description
+- `$ARGUMENTS` - Project name (required) and an optional description
 
 ## `recalibrate`
 
 `hero-skills:create-project recalibrate` tunes the config that drives this skill, and
-stops. It does not then run the skill — the point is to see which field was
-wrong, not to spend a run finding out. Dispatch on it before any other
-argument parsing — whichever step does that in this skill: when the first
-token of `$ARGUMENTS` is exactly `recalibrate`, announce
-`create-project: running recalibrate`, then follow the four phases in
-[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
-— using this table as the report, and stop.
+stops. It does not go on to run the skill. You want to see which field was
+wrong, not spend a whole run finding out.
+
+Dispatch on it before parsing any other argument, in whichever step does
+that parsing. When the first token of
+`$ARGUMENTS` is exactly `recalibrate`, print `create-project: running recalibrate`,
+follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) (report, ask, write, commit)
+using the table below as the report, and stop.
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" create-project
 ```
 
-Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
-`(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
-the user says is wrong. A row that already holds the right value is not a
-question.
+Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
+`(refused)`, `(absent)`, `(no-file)`. Also ask about any row the user says is
+wrong. A row that already holds the right value is not a question.
 
 ## Instructions
 
@@ -71,7 +72,7 @@ Read `HERO.md` for repo type (single vs monorepo), code quality tools, and codin
 
 ### Step 1: Parse Arguments
 
-- `recalibrate` as the first word is the verb, not a project name — run the `recalibrate` section above and stop. A project genuinely named `recalibrate` has to be created by hand.
+- `recalibrate` as the first word is the verb, not a project name. Run the `recalibrate` section above and stop. A project genuinely named `recalibrate` has to be created by hand.
 - **Project name** (required): First word. Ask if missing.
 - **Description** (optional): Remaining text.
 
@@ -94,12 +95,12 @@ Ask based on context:
 
 Ask the user:
 
-1. **Python backend** — FastAPI with uv
-2. **Python library** — Reusable package (uv)
-3. **Python CLI** — Command-line tool (uv)
-4. **Full-stack** — FastAPI + Next.js or Vite with shadcn
-5. **Frontend only** — Next.js or Vite with shadcn
-6. **Node.js service** — Express/Fastify backend
+1. **Python backend**: FastAPI with uv
+2. **Python library**: a reusable package (uv)
+3. **Python CLI**: a command-line tool (uv)
+4. **Full-stack**: FastAPI plus Next.js or Vite with shadcn
+5. **Frontend only**: Next.js or Vite with shadcn
+6. **Node.js service**: an Express or Fastify backend
 
 ### Step 4: Scaffold
 
@@ -209,7 +210,7 @@ If `ln -s` fails (Windows without Developer Mode), write a one-line `CLAUDE.md`
 containing `See [AGENTS.md](./AGENTS.md).` and tell the user why.
 
 `hero-skills:init-hero` (Step 1) fills in the Tech Stack / Best Practices /
-Coding Conventions sections after it investigates — leave them out here.
+Coding Conventions sections after it investigates, so leave them out here.
 
 ```markdown
 # PROJECT_NAME
@@ -320,4 +321,4 @@ Don't also print `hero-skills:one-shot`; `preflight`'s own next-steps lead there
 
 - Always creates AGENTS.md with a CLAUDE.md symlink. Uses uv for all Python projects.
 - Frontend UI comes from the design-system registry in HERO.md when one is configured, else stock shadcn. Run `hero-skills:recomponentize-ui` after scaffolding to establish the atomic component layers.
-- Does not push or create remote repos — local scaffolding only.
+- Does not push or create remote repos. Local scaffolding only.

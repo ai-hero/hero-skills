@@ -21,7 +21,7 @@ That file has a blast radius no other file here has:
   fleet-wide seconds later.
 - **Roll back by reverting on `main`.** That is the whole procedure.
 - **Never rename or move it without sequencing.** Consumers reference it by
-  exact path, so a rename breaks auto-approve — which is the mechanism that
+  exact path, so a rename breaks auto-approve, the very mechanism that
   approves the PRs fixing it. Bank the consumer approvals first, then flip.
 
 `assets/auto-approve/caller.yaml` is what gets installed into consumers. It is
@@ -31,9 +31,9 @@ not the logic and must stay small.
 
 `ls` shows it. The two non-obvious facts: `assets/` is installed **into**
 other repos (the auto-approve caller, the design-system rule and hook, the
-`## Fleet` section for AGENTS.md) — except `assets/compliance/`, the
-register baseline the engine reads in place — and
-`pr-check.yaml` is this repo's own gate while `auto-approve.yaml` is the fleet's.
+`## Fleet` section for AGENTS.md), with the exception of `assets/compliance/`,
+the register baseline the engine reads in place. And `pr-check.yaml` is this
+repo's own gate while `auto-approve.yaml` is the fleet's.
 
 ## Conventions
 
@@ -49,7 +49,7 @@ register baseline the engine reads in place — and
   If no, leave it out.
 - **`.yaml`, never `.yml`** (PLACE-06). Nothing in this fleet mandates `.yml`.
   The installer defaults fresh installs to `.yaml` but still adopts an existing
-  `.yml` — writing the second spelling beside the first would leave two live
+  `.yml`. Writing the second spelling beside the first would leave two live
   `issue_comment` workflows, and every trigger would run twice.
 - **A folder of sibling checkouts is a fleet, not a project.** `FLEET.md` at
   its top maps it ([docs/FLEET-MD.md](./docs/FLEET-MD.md)); every repo skill
@@ -59,7 +59,7 @@ register baseline the engine reads in place — and
   build at once (wayfare's goal turns run one worktree subagent per
   feature), and other people merge underneath every PR. Before a review, an
   approval, or a merge, rebase the PR onto the current default branch with
-  `hero_rebase_on_base` and confirm it went through — no conflict, checks
+  `hero_rebase_on_base` and confirm it went through: no conflict, and checks
   green on the rebased head. A verdict on a stale head is a verdict on code
   that will not merge. Rebase *before* `@auto-approve`, never between the
   verdict and the merge: branch protection dismisses approvals on push.
@@ -70,15 +70,15 @@ register baseline the engine reads in place — and
   unrelated: they converge FLEET.md and the plan, not config.
 - **`wayfare` is the front door; `architecture` and `harden` are its stages.**
   Both are `user-invocable: false` and chained (`CHAINED_SKILLS` in
-  `scripts/validate.sh`), and neither carries `recalibrate` — wayfare's rows
+  `scripts/validate.sh`), and neither carries `recalibrate`, because wayfare's rows
   in `scripts/hero-fields.sh` cover their fields. A verb added to either is a
   verb nobody reaches unless `wayfare sync` (or, for architecture,
   think-it-through's `arch` dispatch) calls it.
 - **Assets are vendored downstream, not authored there.** Fix a bug here, then
   re-vendor. A consuming repo's copy is output.
 - **Tests are `scripts/*.test.sh` and both runners glob.** Add a suite and it
-  gates automatically — no runner edit needed.
-- **Agents are created once and versioned, not per run** — see `docs/PIPELINES.md`.
+  gates automatically, with no runner edit needed.
+- **Agents are created once and versioned, not per run**; see `docs/PIPELINES.md`.
 
 ## Commands
 
@@ -97,13 +97,13 @@ in that map, not chosen here: take the next free port there first, then set
 it in every place this repo names it (compose defaults, health checks).
 Any hero skill run from the fleet folder fans out to the repos you pick.
 
-Work here is concurrent: other branches — including worktree subagents
-building features in parallel — merge underneath every open PR. Before a
+Work here is concurrent: other branches, including worktree subagents
+building features in parallel, merge underneath every open PR. Before a
 review, an approval, or a merge, rebase the PR onto the current default
 branch and confirm it can be done (no conflict, checks green on the rebased
 head); never review, approve, or merge a stale head. Rebase before the
-approval, not after it — approvals are dismissed on push.
+approval, not after it: approvals are dismissed on push.
 
 An agent working in one checkout that needs something from a sibling sends a
-message rather than reaching into that repo directly — see
+message rather than reaching into that repo directly; see
 [docs/MESSAGES.md](./docs/MESSAGES.md).

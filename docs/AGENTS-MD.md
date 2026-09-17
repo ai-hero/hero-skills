@@ -1,7 +1,7 @@
 # The AGENTS.md standard
 
 What a repo's agent-instructions file must be, why, and how it is checked.
-`scripts/check-agents-md.sh` enforces R1–R6 mechanically; R7–R10 need
+`scripts/check-agents-md.sh` enforces R1 to R6 mechanically; R7 to R10 need
 judgment and are applied in a rewrite pass.
 
 ## The principle
@@ -19,7 +19,7 @@ lives. Everything else has a better home:
 
 | It is… | Put it in |
 | --- | --- |
-| A fact the tree or a manifest already states (layout, stack, dependencies) | Nowhere — or `HERO.md` if a tool needs it |
+| A fact the tree or a manifest already states (layout, stack, dependencies) | Nowhere, or `HERO.md` if a tool needs it |
 | A data model, contract, or boundary | `DESIGN.md` (`hero-skills:architecture`) |
 | A multi-step procedure | A skill; loads only when used |
 | A rule for one area of the tree | `.claude/rules/NAME.md` with `paths:` frontmatter |
@@ -28,21 +28,21 @@ lives. Everything else has a better home:
 
 ## The checks
 
-Mechanical — `check-agents-md.sh` fails the commit:
+Mechanical, and `check-agents-md.sh` fails the commit:
 
-1. **R1 — one file.** `AGENTS.md` is the file; `CLAUDE.md` is a symlink to it. Two regular files diverge silently. A repo with only one of the two warns.
-2. **R2 — ≤ 200 lines,** warning above 150. Block HTML comments are stripped before load and do not count, so maintainer notes are free.
-3. **R3 — rules over 60 lines carry `paths:`.** An unscoped rule loads in every session; a scoped one only when a matching file is read.
-4. **R4 — one line of emphasis.** More than one `IMPORTANT`/`NEVER`/`ALWAYS`/`MUST`/`CRITICAL` line warns; more than five fails. When many lines shout, none stands out.
-5. **R5 — no derivable sections.** A heading that is exactly one of `Layout`, `Tech Stack`, `Technology Stack`, `Directory Structure`, `Directory Layout`, `Project Structure`, `Folder Structure`, `Data Model`, `Architecture Overview`, `Dependencies`, `File-by-file` (a trailing colon, dash, or parenthetical is allowed) may hold at most five lines — a pointer, not the content.
-6. **R6 — no banned phrases** in the file, the rules, or commit messages: `load-bearing`, `honest take`, `belt and suspenders`, `that's the unlock`, `you're absolutely right`, `delve`. A writing rule may list them inside a code fence.
+1. **R1, one file.** `AGENTS.md` is the file; `CLAUDE.md` is a symlink to it. Two regular files diverge silently. A repo with only one of the two warns.
+2. **R2: 200 lines or fewer,** with a warning above 150. Block HTML comments are stripped before load and do not count, so maintainer notes are free.
+3. **R3, rules over 60 lines carry `paths:`.** An unscoped rule loads in every session; a scoped one only when a matching file is read.
+4. **R4, one line of emphasis.** More than one `IMPORTANT`/`NEVER`/`ALWAYS`/`MUST`/`CRITICAL` line warns; more than five fails. When many lines shout, none stands out.
+5. **R5, no derivable sections.** A heading that is exactly one of `Layout`, `Tech Stack`, `Technology Stack`, `Directory Structure`, `Directory Layout`, `Project Structure`, `Folder Structure`, `Data Model`, `Architecture Overview`, `Dependencies`, `File-by-file` (a trailing colon, dash, or parenthetical is allowed) may hold at most five lines, a pointer, not the content.
+6. **R6, no banned phrases** in the file, the rules, or commit messages: `load-bearing`, `honest take`, `belt and suspenders`, `that's the unlock`, `you're absolutely right`, `delve`. A writing rule may list them inside a code fence.
 
-Judgment — applied in a rewrite, not by the script:
+Judgment, applied in a rewrite, not by the script:
 
-1. **R7 — every "don't" names the "do".** Bare prohibitions without an alternative doubled task time in measurement.
-2. **R8 — every rule names a trap.** Same test as the comments rule: would someone undo this for a reason the line prevents? A rule the agent already follows unprompted is deleted; a rule that only worked around an older model's limit is deleted.
-3. **R9 — commands are copy-pasteable and include the verification.** "Run `just test`; boot the stack and hit `/readyz`", not "test your changes".
-4. **R10 — pointers, not copies.** `file:line`, `DESIGN.md`, a skill name. No pasted snippet over five lines; snippets rot.
+1. **R7, every "don't" names the "do".** Bare prohibitions without an alternative doubled task time in measurement.
+2. **R8: every rule names a trap.** Same test as the comments rule: would someone undo this for a reason the line prevents? A rule the agent already follows unprompted is deleted; a rule that only worked around an older model's limit is deleted.
+3. **R9, commands are copy-pasteable and include the verification.** "Run `just test`; boot the stack and hit `/readyz`", not "test your changes".
+4. **R10, pointers, not copies.** `file:line`, `DESIGN.md`, a skill name. No pasted snippet over five lines; snippets rot.
 
 ## Beyond the file
 
@@ -52,7 +52,7 @@ directly and belong in the same rollout:
 - `permissions.deny` `Read(...)` rules on committed generated code, so the agent never spends context on output.
 - A code-intelligence plugin for the language, so a symbol lookup replaces a grep-and-read loop.
 - Investigation in an Explore subagent; the main session keeps the conclusion.
-- Verification by running the check, not by re-reading the diff — and a `PostToolUse` hook for the formatter, so it happens every time.
+- Verification by running the check, not by re-reading the diff, and a `PostToolUse` hook for the formatter, so it happens every time.
 
 ## Running it
 

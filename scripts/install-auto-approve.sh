@@ -9,13 +9,13 @@
 #
 # SOURCE is the CALLER, not this repo's own .github/workflows/auto-approve.yaml.
 # Point it at the logic and every target repo gets a private copy of the shared
-# workflow, which then drifts — including past security fixes made here.
+# workflow, which then drifts, including past security fixes made here.
 #
 # Idempotent: if the target file already matches the source, no-op.
 # An existing file is never overwritten: the new version lands beside it as
 # .new and the operator decides.
 #
-# Exit codes are a contract — skills/init-hero/SKILL.md branches on them:
+# Exit codes are a contract, skills/init-hero/SKILL.md branches on them:
 #   0  installed, or already up to date (safe to stage)
 #   2  a different file exists; .new written beside it (do NOT stage)
 #   3  the plugin's own source is missing (the plugin is broken)
@@ -52,13 +52,13 @@ TARGET_DIR="$TARGET_ROOT/.github/workflows"
 
 # Adopt an existing workflow under EITHER spelling as the target. GitHub runs
 # both, so writing auto-approve.yaml beside an existing auto-approve.yml does
-# not "install" anything — it leaves two live issue_comment workflows, which
+# not "install" anything. It leaves two live issue_comment workflows, which
 # means two Claude verifications and two review submissions per @auto-approve
 # comment, and ship-pr polling whichever of the two same-named workflows the
 # API happens to return first. Every guard below is keyed to TARGET, so a
 # TARGET that cannot see the existing file has no guard at all.
 # .yaml is the fleet standard (PLACE-06). This is only the default for
-# a repo that has neither spelling yet — the loop below still adopts an
+# a repo that has neither spelling yet, the loop below still adopts an
 # existing .yml rather than writing a second live workflow beside it.
 TARGET="$TARGET_DIR/auto-approve.yaml"
 for ext in yaml yml; do
@@ -84,7 +84,7 @@ if [[ -f "$TARGET" ]]; then
   echo ""
   # Not "diff and merge". The existing file is almost always the old inline
   # logic; the new one is a caller. Merging them yields a job with both `uses:`
-  # and `steps:`, which GitHub rejects as an invalid workflow file — and since
+  # and `steps:`, which GitHub rejects as an invalid workflow file, and since
   # the trigger is issue_comment, nothing surfaces that until someone runs
   # ship-pr and gets a failure with no failing step.
   echo "  Replace it, do not merge it: the existing file is the old inline"

@@ -171,7 +171,7 @@ check "claims: body without backticks -> no claims" "0" "$(wc -l < "$WORK/claims
 # This block classifies the review lane: deps_bot=true means a scripted APPROVE
 # with the model skipped, so every assertion here is about not granting that
 # wrongly. It was untested when an arity bug in its `gh` call shipped, and the
-# first attempt at covering it bracketed only the filter — re-adding the broken
+# first attempt at covering it bracketed only the filter, re-adding the broken
 # call to the fetch line left the suite green. The markers now start above the
 # fetch, and `gh` is stubbed so the fetch itself is under test.
 #
@@ -184,7 +184,7 @@ check "bot-lane: BOT_RE still assigned in the workflow" "yes" \
 
 # lane PR_JSON COMMITS_BODY [GH_RC] [BOT_RE] -> "rc|deps_bot|log"
 # rc is captured because a crash and a clean run that wrote nothing are
-# otherwise indistinguishable — which is what let the fail-closed paths go
+# otherwise indistinguishable, which is what let the fail-closed paths go
 # unasserted. A later `|| true` or `// empty` has to fail a test.
 lane() {
   printf '%b' "$1" > "$WORK/pr.json"

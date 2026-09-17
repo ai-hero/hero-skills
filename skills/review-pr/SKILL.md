@@ -5,17 +5,17 @@ description: Review a PR with the pr-review-toolkit agents plus a security pass.
 argument-hint: "[#PR] [--no-mark-ready] | recalibrate"
 ---
 
-# Review — PR Review
+# Review: review a pull request
 
 Context-aware PR review. Auto-detects whether you're reviewing your own draft or someone else's PR and runs the right mode. Every review includes a security-focused pass (a checklist similar to `/security-review`, run as an in-process agent rather than invoking that skill) alongside the pr-review-toolkit agents.
 
 ## Arguments
 
-- `$ARGUMENTS` — Optional PR number or URL, plus optional flags
-  - `recalibrate` — Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before every other form.
-  - (none) — Auto-detect from current branch → your draft PR → self-review mode
-  - `#123` or URL — Your PR: self-review mode. Someone else's PR: review mode (no edits).
-  - `--no-mark-ready` — Self-review mode only: run Steps 1–8 (post review, apply fixes, push, post improvements summary, update PR description) but skip Step 9 (the mark-ready prompt + `gh pr ready`). Used by `hero-skills:one-shot` so its DAG can render `self-review` (Step 5) and `mark-ready` (Step 6) as distinct nodes without double-prompting. Combine with a PR number/URL as needed (`#42 --no-mark-ready`).
+- `$ARGUMENTS` - Optional PR number or URL, plus optional flags
+  - `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before every other form.
+  - (none) - Auto-detect from the current branch, to your draft PR, to self-review mode
+  - `#123` or URL - Your PR: self-review mode. Someone else's PR: review mode (no edits).
+  - `--no-mark-ready` - Self-review mode only: run Steps 1 to 8 (post review, apply fixes, push, post improvements summary, update PR description) but skip Step 9 (the mark-ready prompt and `gh pr ready`). Used by `hero-skills:one-shot` so its DAG can render `self-review` (Step 5) and `mark-ready` (Step 6) as distinct nodes without double-prompting. Combine with a PR number/URL as needed (`#42 --no-mark-ready`).
 
 Parse `$ARGUMENTS` for the flag once at the top of Step 0:
 
@@ -41,22 +41,23 @@ ARGS_FILTERED=$(printf '%s' "$ARGS_FILTERED" | sed 's/^ //')
 ## `recalibrate`
 
 `hero-skills:review-pr recalibrate` tunes the config that drives this skill, and
-stops. It does not then run the skill — the point is to see which field was
-wrong, not to spend a run finding out. Dispatch on it before any other
-argument parsing — whichever step does that in this skill: when the first
-token of `$ARGUMENTS` is exactly `recalibrate`, announce
-`review-pr: running recalibrate`, then follow the four phases in
-[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) — report, ask, write, commit
-— using this table as the report, and stop.
+stops. It does not go on to run the skill. You want to see which field was
+wrong, not spend a whole run finding out.
+
+Dispatch on it before parsing any other argument, in whichever step does
+that parsing. When the first token of
+`$ARGUMENTS` is exactly `recalibrate`, print `review-pr: running recalibrate`,
+follow the four phases in
+[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) (report, ask, write, commit)
+using the table below as the report, and stop.
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" review-pr
 ```
 
-Ask only about the rows whose CURRENT is parenthesised — `(unset)`,
-`(no-section)`, `(refused)`, `(absent)`, `(no-file)` — plus any row whose value
-the user says is wrong. A row that already holds the right value is not a
-question.
+Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
+`(refused)`, `(absent)`, `(no-file)`. Also ask about any row the user says is
+wrong. A row that already holds the right value is not a question.
 
 ## Instructions
 
@@ -111,10 +112,10 @@ BASE_BRANCH=$(echo "$PR_JSON" | jq -r '.baseRefName')
 
 | Condition | Mode |
 | --- | --- |
-| No PR found | STOP — "No PR for '$BRANCH'. Run `hero-skills:push-pr` first." |
-| Closed/merged | STOP — Report status. |
+| No PR found | STOP: "No PR for '$BRANCH'. Run `hero-skills:push-pr` first." |
+| Closed or merged | STOP and report status. |
 | PR author is you AND draft | Self-review mode |
-| PR author is you AND not draft | Warn "PR is already ready-for-review — continue self-review? [y/N]" |
+| PR author is you AND not draft | Warn "PR is already ready-for-review. Continue self-review? [y/N]" |
 | PR author is someone else | Review mode (no edits) |
 
 ---
@@ -133,7 +134,7 @@ If `CURRENT != PR_BRANCH`, check for uncommitted changes:
 git status --porcelain
 ```
 
-If uncommitted changes exist, STOP — show what's uncommitted and tell the user to commit or cancel. Never silently stash.
+If uncommitted changes exist, STOP. Show what is uncommitted and tell the user to commit or cancel. Never silently stash.
 
 When working tree is clean, switch:
 
@@ -143,8 +144,8 @@ git checkout "$PR_BRANCH"
 git pull origin "$PR_BRANCH"
 ```
 
-**Rebase onto the base before judging anything.** Work is concurrent — other
-branches merge while this PR waits — so the head on the branch is routinely
+**Rebase onto the base before judging anything.** Work is concurrent: other
+branches merge while this PR waits, so the head on the branch is routinely
 behind the base, and a review of a stale head reviews code that is not what
 will merge.
 
@@ -157,9 +158,9 @@ BASE_BRANCH=${BASE_BRANCH:-$(hero_default_branch)}
 hero_rebase_on_base "$BASE_BRANCH"; echo "REBASE_RC=$?"
 ```
 
-`REBASE_RC=0` continues (up to date, or rebased and pushed — say which).
+`REBASE_RC=0` continues (up to date, or rebased and pushed; say which).
 `1` is a conflict: the rebase was aborted and the branch is unchanged; STOP,
-list the conflicting files it printed, and hand back to the user — never
+list the conflicting files it printed, and hand back to the user. Never
 resolve a conflict on someone's behalf. `2` cannot proceed (dirty tree,
 detached HEAD, fetch or lease failure): STOP with its message.
 
@@ -179,14 +180,14 @@ CHANGED_LINES=$(git diff --numstat "origin/$BASE_BRANCH...HEAD" \
 echo "review-pr: $CHANGED_FILES files, $CHANGED_LINES lines changed"
 ```
 
-Pick the tier from `CHANGED_LINES` and `CHANGED_FILES` — they are the input,
+Pick the tier from `CHANGED_LINES` and `CHANGED_FILES`. They are the input,
 not a printout to read by eye:
 
 | Diff | Agents | Which |
 | --- | --- | --- |
 | **under ~50 lines** | review inline, **no agents** | Read it yourself. Say you did, and why the fan-out was skipped. |
-| **~50–300 lines** | 2 | `code-reviewer` + security |
-| **~300–1500 lines** | all 6 | the five pr-review-toolkit agents plus security |
+| **~50 to 300 lines** | 2 | `code-reviewer` + security |
+| **~300 to 1500 lines** | all 6 | the five pr-review-toolkit agents plus security |
 | **over 1500 lines or 50 files** | all 6, scoped | warn and ask to focus on specific paths first |
 
 Two rules keep the tiers honest:
@@ -204,7 +205,7 @@ Say which tier you picked and why, in one line, before launching. A review that
 silently ran two agents reads identically to one that ran six and found
 nothing.
 
-Then launch the tier's agents simultaneously in a single message — for the full
+Then launch the tier's agents simultaneously in a single message. For the full
 six, the five pr-review-toolkit agents plus the security agent:
 
 ```
@@ -216,9 +217,9 @@ Agent(subagent_type="pr-review-toolkit:type-design-analyzer", ...)
 Agent(subagent_type="general-purpose", security review — prompt spec below)
 ```
 
-**Security agent prompt spec.** Give the agent the PR diff scope (repo path, branch/PR number) and this brief: review ONLY for security vulnerabilities that are plausibly exploitable in the changed code — injection (SQL/command/template), XSS, authentication/authorization flaws, secrets or credentials in code or logs, SSRF, path traversal, unsafe deserialization/RCE, cryptographic misuse, and sensitive-data exposure. High signal only: every finding needs a concrete exploit scenario (who sends what, what happens). Explicitly EXCLUDE noise categories — denial-of-service/rate-limiting, memory safety in memory-safe languages, theoretical issues with no plausible attack path, and anything requiring an already-privileged attacker position. Return findings with file:line, severity (Critical = exploitable, Important = realistic hardening gap), and the exploit scenario; return "NO FINDINGS" when clean.
+**Security agent prompt spec.** Give the agent the PR diff scope (repo path, branch/PR number) and this brief: review ONLY for security vulnerabilities that are plausibly exploitable in the changed code: injection (SQL, command, template), XSS, authentication/authorization flaws, secrets or credentials in code or logs, SSRF, path traversal, unsafe deserialization/RCE, cryptographic misuse, and sensitive-data exposure. High signal only: every finding needs a concrete exploit scenario (who sends what, what happens). Explicitly EXCLUDE noise categories: denial of service and rate limiting, memory safety in memory-safe languages, theoretical issues with no plausible attack path, and anything requiring an already-privileged attacker position. Return findings with file:line, severity (Critical = exploitable, Important = realistic hardening gap), and the exploit scenario; return "NO FINDINGS" when clean.
 
-Wait for all agents to complete, then aggregate findings into: **Critical** (bugs, security, data loss), **Important** (quality, correctness), **Suggestions** (style, polish), **Strengths**. Security findings land in Critical/Important per the spec above — never bury an exploitable finding in Suggestions.
+Wait for all agents to complete, then aggregate findings into: **Critical** (bugs, security, data loss), **Important** (quality, correctness), **Suggestions** (style, polish), **Strengths**. Security findings land in Critical or Important per the spec above. Never bury an exploitable finding in Suggestions.
 
 ### Step 3: Post Review Comment
 
@@ -257,7 +258,7 @@ Two things about this comment matter, so do not "tidy" them:
   gets REQUEST_CHANGES with no obvious cause.
 - **The body must not START with `@auto-approve`.** That is the workflow's
   trigger, and this comment carries the very marker the prior-review gate
-  accepts — so a comment that both fires the run and satisfies the gate would
+  accepts, so a comment that both fires the run and satisfies the gate would
   post a real APPROVE that nobody asked for. That happened once, before the
   trigger was anchored; the workflow now also ignores any comment carrying this
   marker, but keeping the heading first is the belt to that braces.
@@ -282,7 +283,7 @@ Wait for the user's choice. If "individually", walk through each finding yes/no.
 For each accepted finding:
 
 1. Read the file and surrounding context.
-2. Apply the minimal fix — don't refactor surrounding code.
+2. Apply the minimal fix. Do not refactor surrounding code.
 3. Track changed files.
 4. If a finding is ambiguous or conflicts with another, stop and ask.
 
@@ -320,7 +321,7 @@ Commit logically distinct fixes separately if they touch unrelated areas.
 
 **Always post this, even when no fixes were applied.** This is the durable record that the review ran.
 
-Render the template with real values — never post literal placeholders. Omit sections whose count is zero. Draft this and Step 8's description together, humanize both in one `inline` call, then post.
+Render the template with real values. Never post literal placeholders. Omit sections whose count is zero. Draft this and Step 8's description together, humanize both in one `inline` call, then post.
 
 ```bash
 gh pr comment $PR_NUMBER --body "$(cat <<'EOF'
@@ -347,7 +348,7 @@ EOF
 )"
 ```
 
-If the post fails, surface the rendered body for manual paste — do NOT swallow the error.
+If the post fails, surface the rendered body for manual paste. Do NOT swallow the error.
 
 ### Step 8: Update PR Description if Scope Changed
 
@@ -372,11 +373,11 @@ EOF
 )"
 ```
 
-Substitute `DRAFTED_FULL_BODY_HERE` with actual Markdown before running — the drafted body must end with `_Generated using hero-skills._`.
+Substitute `DRAFTED_FULL_BODY_HERE` with actual Markdown before running. The drafted body must end with `_Generated using hero-skills._`.
 
 ### Step 9: Ask to Mark Ready
 
-**Skip this step entirely when `$NO_MARK_READY` is `true`** (caller passed `--no-mark-ready`, typically `hero-skills:one-shot` whose own Step 6 owns the mark-ready gate). In that case, jump straight to Step 10 — the summary will show `PR state: Draft (mark-ready deferred to caller)`.
+**Skip this step entirely when `$NO_MARK_READY` is `true`** (caller passed `--no-mark-ready`, typically `hero-skills:one-shot` whose own Step 6 owns the mark-ready gate). In that case, jump straight to Step 10. The summary will show `PR state: Draft (mark-ready deferred to caller)`.
 
 Otherwise, ask the user:
 
@@ -415,10 +416,10 @@ URL: {pr-url}
 Next step: (pick exactly one, based on what actually happened above)
 ```
 
-- **`$NO_MARK_READY` is `true`** (deferred to caller, e.g. `one-shot`): no next-step line — the caller owns what happens next (one-shot's own Step 7 mark-ready gate).
-- **Marked ready, agent configured**: print `Waiting on {agent}'s first review — then run hero-skills:respond-to-comments.` (no prompt, nothing to invoke yet).
-- **Marked ready, `agent: none`**: `Next step: hero-skills:ship-pr — @auto-approve, merge, reset` (offer to auto-run: ask "Run it now? [y/N]", invoke via Skill tool on yes).
-- **Declined mark-ready**: `Next step: address the findings above, then re-run hero-skills:review-pr.` (print only — re-invoking the same skill right after it finishes isn't auto-chained).
+- **`$NO_MARK_READY` is `true`** (deferred to caller, e.g. `one-shot`): no next-step line. The caller owns what happens next (one-shot's own Step 7 mark-ready gate).
+- **Marked ready, agent configured**: print `Waiting on {agent}'s first review, then run hero-skills:respond-to-comments.` (no prompt, nothing to invoke yet).
+- **Marked ready, `agent: none`**: `Next step: hero-skills:ship-pr, which posts @auto-approve, merges, and resets` (offer to auto-run: ask "Run it now? [y/N]", invoke via Skill tool on yes).
+- **Declined mark-ready**: `Next step: address the findings above, then re-run hero-skills:review-pr.` (print only, because re-invoking the same skill right after it finishes is not auto-chained).
 
 ---
 
@@ -435,9 +436,9 @@ gh api "repos/$OWNER/$REPO/pulls/$PR_NUMBER/comments" \
 gh pr view $PR_NUMBER --json commits --jq '.commits[].messageHeadline'
 ```
 
-Read the PR description carefully — it explains design decisions.
+Read the PR description carefully. It explains design decisions.
 
-Apply the same tiering as self-review Step 2 — measure the diff, pick the tier, say which one and why. If the diff exceeds 1500 lines or 50 files, warn and ask to focus on specific paths.
+Apply the same tiering as self-review Step 2: measure the diff, pick the tier, say which one and why. If the diff exceeds 1500 lines or 50 files, warn and ask to focus on specific paths.
 
 ### Step 2: Run All Review Agents in Parallel
 
@@ -476,7 +477,7 @@ For multi-line: also pass `-F start_line=$START_LINE -f start_side="RIGHT"`.
 
 | Has criticals? | Has importants? | Decision |
 | --- | --- | --- |
-| Yes | — | `--request-changes` |
+| Yes | any | `--request-changes` |
 | No | Yes | `--comment` |
 | No | No | `--approve` (unless questions remain) |
 
@@ -524,6 +525,6 @@ URL: {pr-url}
 
 ## Notes
 
-- Never edit code in review mode — only post comments.
+- Never edit code in review mode. Only post comments.
 - Never mark a PR ready without explicit user confirmation.
 - Do not auto-resolve other reviewers' comments.

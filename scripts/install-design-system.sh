@@ -13,7 +13,7 @@
 # and wires the hook into .claude/settings.json.
 #
 # Idempotent. Never overwrites a customized file: on drift it writes .new and
-# exits 2 so the caller can diff and decide — same contract as
+# exits 2 so the caller can diff and decide, same contract as
 # install-auto-approve.sh.
 #
 # Exit codes:
@@ -39,7 +39,7 @@ done
 TARGET_ROOT="${1:-$(git rev-parse --show-toplevel)}"
 DRIFT=0
 
-# copy_or_flag SOURCE TARGET — install, no-op, or flag drift.
+# copy_or_flag SOURCE TARGET: install, no-op, or flag drift.
 copy_or_flag() {
   local src="$1" dst="$2"
   mkdir -p "$(dirname "$dst")"
@@ -63,12 +63,12 @@ copy_or_flag() {
   echo "INSTALLED: $dst"
 }
 
-# create_once SOURCE TARGET — unlike copy_or_flag, this NEVER compares or
+# create_once SOURCE TARGET: unlike copy_or_flag, this NEVER compares or
 # overwrites an existing file, drifted or not. design-system.local.md is
 # repo-owned the instant it exists; the installer's only job is to make sure
 # it exists at all. Treating it like the other vendored files (refuse-on-drift,
 # write .new) would silently defeat its purpose the first time a re-vendor ran
-# after a repo customized it — .new would sit next to it forever, unread,
+# after a repo customized it. A .new would sit next to it forever, unread,
 # because nothing prompts a reconciliation for a file nobody expects to change.
 create_once() {
   local src="$1" dst="$2"
@@ -117,11 +117,12 @@ fi
 # Match on the hook's PATH appearing in an existing command, not on exact
 # string equality with $HOOK_CMD. A prior install (or a hand-edit) commonly
 # writes ${CLAUDE_PROJECT_DIR} (braced) where this script's own HOOK_CMD is
-# unbraced — both expand identically in the shell that runs it, but an exact
+# unbraced. Both expand identically in the shell that runs it, but an exact
 # match sees them as different strings and adds a SECOND PostToolUse entry
 # for the same hook, which then runs check-design-tokens.sh twice per edit.
 # `// empty` drops a null/absent command (a hooks[] entry with no "command"
-# key) before test() ever sees it — test() throws on a non-string input, and
+# key) before test() ever sees it, because test() throws on a non-string
+# input, and
 # an uncaught jq error here reads as "not wired", adding a duplicate entry
 # next to a sibling hook that merely lacks a command field of its own.
 if jq -e \
@@ -139,7 +140,7 @@ else
     }]
   ' "$SETTINGS" > "$TMP"
 
-  # Only replace the real file once jq produced valid JSON — a failed jq run
+  # Only replace the real file once jq produced valid JSON, a failed jq run
   # must not truncate the user's settings.
   if jq -e . "$TMP" >/dev/null 2>&1; then
     mv "$TMP" "$SETTINGS"
@@ -154,7 +155,7 @@ fi
 # --- Warn if what we just wrote is gitignored -------------------------------
 # A blanket `.claude/*` rule is common, and it makes these files local-only:
 # the installer reports success, the rule works on this machine, and every
-# teammate and CI agent silently gets nothing. Surface it loudly — a
+# teammate and CI agent silently gets nothing. Surface it loudly, a
 # half-installed enforcement layer is worse than none, because it looks done.
 IGNORED=()
 if git -C "$TARGET_ROOT" rev-parse --git-dir >/dev/null 2>&1; then

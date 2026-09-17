@@ -30,7 +30,7 @@ check() {
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# fixture NAME — a repo root with a compliant 30-line AGENTS.md and the symlink.
+# fixture NAME: a repo root with a compliant 30-line AGENTS.md and the symlink.
 # The R2 boundary cases below add to that 30.
 fixture() {
   local d="$WORK/$1"
@@ -246,7 +246,7 @@ run "$d"
 check "R5 heading inside a code fence: rc" "0" "$rc"
 
 # docs/AGENTS-MD.md is the spec: every name it lists under R5 must trip the
-# checker. The extraction is asserted non-empty first — a renumbered doc
+# checker. The extraction is asserted non-empty first, because a renumbered doc
 # would otherwise run zero cases and pass.
 r5_names=$(grep -E '^5\. \*\*R5' "$DOC" | grep -oE '`[^`]+`' | tr -d '`')
 check "R5 doc list extracted" "yes" "$([[ -n "$r5_names" ]] && echo yes || echo no)"
