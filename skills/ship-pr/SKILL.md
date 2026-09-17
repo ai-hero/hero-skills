@@ -215,10 +215,15 @@ OWNER_REPO=$(gh repo view --json owner,name --jq '"\(.owner.login) \(.name)"')
 OWNER=$(echo "$OWNER_REPO" | awk '{print $1}')
 REPO=$(echo "$OWNER_REPO" | awk '{print $2}')
 # login and type in one call — 3d needs both, and they are fields of the same
-# object.
-PR_AUTHOR_JSON=$(gh api "/repos/$OWNER/$REPO/pulls/$PR_NUMBER" --jq '"\(.user.login) \(.user.type)"')
+# object. Checked, like 3a's count: an unread author leaves both empty, and an
+# empty PR_AUTHOR makes 3d's `!= $PR_AUTHOR` match every comment on the PR —
+# a STOP whose stated reason is other people's unanswered questions, on a PR
+# that may have none.
+PR_AUTHOR_JSON=$(gh api "/repos/$OWNER/$REPO/pulls/$PR_NUMBER" --jq '"\(.user.login) \(.user.type)"') \
+  || { echo "ship-pr: cannot read the PR author — the gates below cannot be evaluated"; exit 1; }
 PR_AUTHOR=${PR_AUTHOR_JSON%% *}
 PR_AUTHOR_TYPE=${PR_AUTHOR_JSON##* }
+[ -n "$PR_AUTHOR" ] || { echo "ship-pr: the PR author came back empty — refusing to evaluate the gates"; exit 1; }
 
 # 3a — Prior review present (self-review OR reviewer review OR bot inline)
 # Branch on the rc: an empty count summed below reads as 0, "no review".
