@@ -468,14 +468,14 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
   # reports WORKFLOW_FAILED for a run in which nothing executed.
   # A queued or in-progress run has conclusion null, so it survives this
   # filter; only genuinely skipped ones are dropped.
-  # Fetch RAW, then filter — never `gh api --jq` on this endpoint. An
-  # issue_comment run carries the comment body in `display_title`, so a PR
-  # comment containing a control character (U+0000–U+001F) puts one inside a
-  # JSON string, and the whole poll dies with
-  #   jq: parse error: Invalid string: control characters ... must be escaped
-  # for a run that is otherwise perfectly healthy. Stripping C0 is safe on
-  # both sides of the problem: between tokens they were only whitespace, and
-  # inside a string they were illegal anyway.
+  # Fetch RAW, then filter — never `gh api --jq` on this endpoint, so a parse
+  # failure is this loop's to retry rather than gh's to exit on.
+  # The C0 strip below is kept because it is free and safe on both sides:
+  # between tokens those bytes are only whitespace, and inside a string they
+  # were illegal anyway. It is NOT the fix for the recurring parse error, and
+  # has never been shown to be — `display_title` on an issue_comment run
+  # holds the PR title, not the comment body (checked against the live
+  # endpoint), and a payload captured after a failure carries no C0 bytes.
   #
   # Capture before filtering, and check gh's own status. `gh api | jq` would
   # swallow it — a 404 or a rate-limit would read as "no run yet" and poll to
@@ -486,14 +486,35 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
     sleep 5; continue
   fi
   rm -f "$RUNS_ERR"
-  # jq is checked too: an unchecked parse failure reads as "no run yet" and
-  # burns all ten polls before printing a "Common causes" list that does not
-  # contain the cause.
+  # jq is checked too, and a parse failure RETRIES rather than exiting: the
+  # error is transient — seven occurrences, every one cleared on the next
+  # attempt — so `exit 1` here ends a ship, mid-flight, over a blip the loop
+  # was already built to ride out. An unchecked failure would be just as
+  # wrong in the other direction: it reads as "no run yet" and burns all ten
+  # polls before printing a "Common causes" list that does not contain the
+  # cause. Checked-and-retried is the only shape that is honest about both.
+  #
+  # The failing bytes are kept, not just described. Every prior investigation
+  # re-derived the cause from the error message alone, because the loop's
+  # next attempt had already overwritten the payload that failed.
   RUN_JSON=$(printf '%s' "$RAW" | tr -d '\000-\037' \
     | jq -c "[.workflow_runs[]
              | select(.created_at > \"$TRIGGERED_AT\")
              | select(.conclusion != \"skipped\")] | .[0]") \
-    || { echo "jq could not parse the runs payload:"; printf '%s' "$RAW" | head -c 400; echo; exit 1; }
+    || {
+      # Trailing X's, no suffix: BSD mktemp substitutes only a trailing run of
+      # X's, so a `-XXXXXX.json` template creates that name LITERALLY and the
+      # second call dies with "File exists" — on the retry path, where the
+      # whole point is to survive.
+      RAW_KEPT=$(mktemp "${TMPDIR:-/tmp}/ship-pr-runs.XXXXXX") \
+        && printf '%s' "$RAW" > "$RAW_KEPT" \
+        || RAW_KEPT=""
+      echo "WARN: could not parse the runs payload (attempt $i/10) — retrying."
+      [ -n "$RAW_KEPT" ] \
+        && echo "      Raw response kept at $RAW_KEPT ($(wc -c < "$RAW_KEPT" | tr -d ' ') bytes)." \
+        || echo "      (could not keep a copy of the raw response)"
+      sleep 5; continue
+    }
   if [ -n "$RUN_JSON" ] && [ "$RUN_JSON" != "null" ]; then
     RUN_ID=$(echo "$RUN_JSON" | jq -r '.id')
     break
