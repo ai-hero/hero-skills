@@ -3,24 +3,24 @@
 Fourteen skills accept `recalibrate`: ask me the questions that decide how this
 skill works, and write the answers. `scripts/hero-fields.sh` holds the map of
 which skill reads which fields, and `scripts/hero-fields.test.sh` ties the map
-and the skills to each other in both directions — a skill declaring the verb
+and the skills to each other in both directions, a skill declaring the verb
 with no rows, or rows with no skill, fails the suite.
 
 ## The principle
 
 A skill misbehaves for one of two reasons: the skill is wrong, or the config
 that drives it is wrong. The second is far more common and much cheaper to
-fix — and the moment you notice is the moment you know which field is wrong.
+fix, and the moment you notice is the moment you know which field is wrong.
 
 `recalibrate` puts the fix where the noticing happens. You do not re-run a
 repo-wide investigation because `ship-pr` merged with the wrong strategy; you
 run `hero-skills:ship-pr recalibrate`, which asks about the eight fields
-`ship-pr` reads across Repository, CI/CD and Deployment — and nothing else.
+`ship-pr` reads across Repository, CI/CD and Deployment, and nothing else.
 
 Three properties make it safe to reach for:
 
 1. **It is scoped.** A skill asks about the fields *it* reads and nothing
-   else. Whole-file convergence is `hero-skills:init-hero recalibrate` — one
+   else. Whole-file convergence is `hero-skills:init-hero recalibrate`, one
    skill's job, not every skill's.
 2. **It never does the work.** `recalibrate` ends when the config is written.
    It does not then push, merge, refactor, or plan. The user decides whether
@@ -31,7 +31,7 @@ Three properties make it safe to reach for:
 
 ## Recalibrate is not sync
 
-`recalibrate` changes `HERO.md` — the configuration that decides *how* a skill
+`recalibrate` changes `HERO.md`, the configuration that decides *how* a skill
 does its work. It is not how the work itself gets planned or converged, and it
 never touches the files those skills keep:
 
@@ -39,18 +39,18 @@ never touches the files those skills keep:
 | --- | --- | --- |
 | `recalibrate` | `HERO.md` | how this skill should behave |
 | `fleet sync` | `FLEET.md` | converge the map with the folder beside it |
-| `wayfare sync` | `.plans/` and `DESIGN.md` | converge the plan with the world — its architecture stage converges the design record on the way |
+| `wayfare sync` | `.plans/` and `DESIGN.md` | converge the plan with the world. Its architecture stage converges the design record on the way |
 
 `wayfare` has both: `sync` for the plan (and, through its architecture stage,
 `DESIGN.md`), `recalibrate` for the `HERO.md` fields that tell it and its
-stages — `architecture`, `harden` — how to run. Those two stages carry no
+stages (`architecture` and `harden`) and how to run. Those two stages carry no
 `recalibrate` of their own.
 
-Five skills read `HERO.md` and deliberately have no `recalibrate` — the two stages above, and three more. `fleet`
+Five skills read `HERO.md` and deliberately have no `recalibrate`, the two stages above, and three more. `fleet`
 runs at the fleet root, where there is no `HERO.md` to recalibrate.
 `audit-plugin` reads the file as the *subject* of its audit rather than as its
 own config. `think-it-through` is a dialogue with the user, and stopping it to
-ask about config fields is the interruption the verb exists to avoid —
+ask about config fields is the interruption the verb exists to avoid,
 recalibrate the skill that acts on its output instead.
 
 `hero-skills:init-hero recalibrate` is the whole-file pass, and the only one.
@@ -64,10 +64,10 @@ reading a field table.
 Four phases, in this order, in every skill.
 
 1. **Report.** Print the fields this skill reads, their current values, and
-   what each one decides for this skill — `scripts/hero-fields.sh SKILL` is
+   what each one decides for this skill. `scripts/hero-fields.sh SKILL` is
    that table. Anything in parentheses is a finding rather than a value:
    `(unset)`, `(no-section)`, `(refused)`, `(no-file)`, and `(absent)` for a
-   missing section. Then look at the repo for those rows — a field the tree
+   missing section. Then look at the repo for those rows, a field the tree
    can answer should reach the user as a proposal with its evidence, not as an
    open question. `(no-file)` on every row is not a recalibrate at all: send
    the user to `hero-skills:init-hero`.
@@ -76,13 +76,13 @@ Four phases, in this order, in every skill.
    ask in freeform prose, and never ask about a field that already holds the
    right value.
 3. **Write.** Only the confirmed answers, only into the sections this skill
-   reads. Leave the rest of `HERO.md` untouched — a scoped verb that rewrites
+   reads. Leave the rest of `HERO.md` untouched, a scoped verb that rewrites
    a whole file is a whole-file verb wearing a disguise.
 4. **Commit.** Config is a tracked artifact; stage and commit it without
    asking. Do not open a PR, and do not push.
 
 Then stop and say what changed. The next line the user reads is what to run
-now that the config is right — not the output of having run it.
+now that the config is right, not the output of having run it.
 
 ## Anti-patterns
 
@@ -95,8 +95,8 @@ now that the config is right — not the output of having run it.
   turns a four-line config change into a diff nobody reviews.
 - **Reaching for it when the answer is `sync`.** A stale `DESIGN.md`, a
   `FLEET.md` row for a repo that moved, a plan that no longer matches the
-  design — none of those are configuration, and no `HERO.md` field fixes
+  design, none of those are configuration, and no `HERO.md` field fixes
   them.
 - **Inventing an answer for an absent field.** A field the investigation
   could not resolve is a question, not a default. Writing the guess is how a
-  wrong value becomes permanent — nobody re-confirms a field that looks set.
+  wrong value becomes permanent, nobody re-confirms a field that looks set.

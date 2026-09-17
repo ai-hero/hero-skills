@@ -5,7 +5,7 @@
 <h3 align="center">Your dev workflow, automated end to end.</h3>
 
 <p align="center">
-  An opinionated development workflow for <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a> — customizable to <em>your</em> opinions.
+  An opinionated development workflow for <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a>, customizable to <em>your</em> opinions.
 </p>
 
 <p align="center">
@@ -25,14 +25,14 @@
 
 ## Why Hero Skills?
 
-Most dev work follows the same loop: grab a ticket, plan, implement, test, review, commit, push, monitor. But every team does it slightly differently — different PM tools, different CI, different deploy targets.
+Most dev work follows the same loop: grab a ticket, plan, implement, test, review, commit, push, monitor. But every team does it slightly differently, different PM tools, different CI, different deploy targets.
 
 Hero Skills gives you **slash commands for the entire dev lifecycle** that adapt to your stack. Configure once with `HERO.md`, then every skill knows your conventions, your tools, and your preferences.
 
-- **Plan and implement from tickets** — Fetch from Linear/Jira/GitHub Issues, grill the work into dependency-aware work-items, create branches, then implement on approval
-- **Verify changes** — Auto-detect project type (API, frontend, CLI, MCP) and run lint, typecheck, unit tests, and smoke tests
-- **Ship with confidence** — Pre-commit checks, conventional commits, draft PRs by default, automated parallel review before requesting human review
-- **Stay informed** — CI/CD status, cluster health, security scans
+- **Plan and implement from tickets**, Fetch from Linear/Jira/GitHub Issues, grill the work into dependency-aware work-items, create branches, then implement on approval
+- **Verify changes**, Auto-detect project type (API, frontend, CLI, MCP) and run lint, typecheck, unit tests, and smoke tests
+- **Ship with confidence**, Pre-commit checks, conventional commits, draft PRs by default, automated parallel review before requesting human review
+- **Stay informed**, CI/CD status, cluster health, security scans
 
 ## Install
 
@@ -44,9 +44,9 @@ Skills are immediately available in any Claude Code session. No restart needed.
 
 ### Companion installs (for full pipeline coverage)
 
-Three pieces ride along with one-shot — install them so Steps 4 (`push`, tests included), 5 (`self-review`), 8 (`respond`), and 9 (`ship`) work out of the box:
+Three pieces ride along with one-shot, install them so Steps 4 (`push`, tests included), 5 (`self-review`), 8 (`respond`), and 9 (`ship`) work out of the box:
 
-**1. GitHub CLI (`gh`)** — required by `push-pr`, `review-pr`, `respond-to-comments`, and `ship-pr` for every PR / comment / workflow operation. Without it, every step from `push` onward fails immediately.
+**1. GitHub CLI (`gh`)**, required by `push-pr`, `review-pr`, `respond-to-comments`, and `ship-pr` for every PR / comment / workflow operation. Without it, every step from `push` onward fails immediately.
 
 ```bash
 # macOS (Homebrew)
@@ -66,7 +66,7 @@ gh auth login -s repo
 
 `hero-skills:preflight` verifies both presence and the `repo` scope.
 
-**2. `pr-review-toolkit` plugin** — provides five of the six review agents that `hero-skills:review-pr` runs in parallel (code-reviewer, silent-failure-hunter, pr-test-analyzer, comment-analyzer, type-design-analyzer; the sixth, a security pass, needs no install). From inside Claude Code:
+**2. `pr-review-toolkit` plugin**, provides five of the six review agents that `hero-skills:review-pr` runs in parallel (code-reviewer, silent-failure-hunter, pr-test-analyzer, comment-analyzer, type-design-analyzer; the sixth, a security pass, needs no install). From inside Claude Code:
 
 ```
 /plugin install pr-review-toolkit
@@ -80,7 +80,7 @@ claude plugins add pr-review-toolkit@claude-plugins-official
 
 If you skip this, `hero-skills:review-pr` still runs but produces a much thinner review.
 
-**3. Playwright MCP server** — drives the browser smoke test in `hero-skills:push-pr`'s test phase (frontend smoke). Requires Node.js 18+ (check with `node --version`):
+**3. Playwright MCP server**, drives the browser smoke test in `hero-skills:push-pr`'s test phase (frontend smoke). Requires Node.js 18+ (check with `node --version`):
 
 ```bash
 claude mcp add playwright npx @playwright/mcp@latest
@@ -96,7 +96,7 @@ Three commands. Everything else is run by them.
 # 1. Configure your project (run once per repo)
 hero-skills:init-hero
 
-# 2. Converge the world into a plan — one round, eleven stages:
+# 2. Converge the world into a plan. One round, eleven stages:
 #    config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals
 #    Reads the mailbox from sibling repos (bug reports become bug items),
 #    reviews DESIGN.md (offers to converge it), audits dependency/container/
@@ -104,7 +104,7 @@ hero-skills:init-hero
 #    baseline + your fleet's overlay), runs the repo's own `wayfare: sync`
 #    skills, gathers the bots' open PRs, refreshes the design snapshot,
 #    reconciles source against design, plans every feature with you, then
-#    proposes goals bottom-up over what was planned — and re-cuts the ones
+#    proposes goals bottom-up over what was planned, and re-cuts the ones
 #    already there. Writes only what you confirm; your ready-mark is the gate.
 hero-skills:wayfare sync
 
@@ -116,10 +116,10 @@ hero-skills:wayfare sync
 hero-skills:wayfare next
 ```
 
-`hero-skills:wayfare do ID` advances one thing on its own — a feature through
+`hero-skills:wayfare do ID` advances one thing on its own, a feature through
 one-shot, a Dependabot PR to merged and deployed, or one goal turn. `improve`
-runs the compliance audit alone — in one repo, or across the whole fleet from
-its root — and drafts backports where this repo is ahead of the template.
+runs the compliance audit alone, in one repo, or across the whole fleet from
+its root, and drafts backports where this repo is ahead of the template.
 `recalibrate` tunes the config every stage reads.
 
 ### Or: one piece at a time
@@ -145,7 +145,7 @@ hero-skills:one-shot PROJ-123   # start a new ticket (or a plain-text descriptio
 hero-skills:one-shot            # resume the current goal to merged + reset branch
 ```
 
-This chains all nine steps end-to-end — `plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship` — with explicit user gates at plan-approval, mark-ready, and merge. `plan` resolves what you asked for against your `.plans/` store and this repo's tracker before it plans anything new, delegating to `hero-skills:think-it-through` only when nothing matches — and it re-checks a matched item against the codebase first, so already-finished work is reported rather than rebuilt. `simplify` runs the `/simplify` skill on the dirty diff so the commit lands clean. `push` tests first (lint/typecheck/unit tests plus a UI smoke check via Playwright MCP for routes affected by the diff, skipped automatically on backend-only PRs), then commits and opens the draft PR. `self-review` runs the review agents plus a security pass. `mark-ready` is the explicit draft → ready gate; `await-review` polls for your configured Code Review Agent (Copilot, CodeRabbit, Greptile, …) before `respond` addresses its feedback.
+This chains all nine steps end to end: `plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship`, with explicit user gates at plan-approval, mark-ready, and merge. `plan` resolves what you asked for against your `.plans/` store and this repo's tracker before it plans anything new, delegating to `hero-skills:think-it-through` only when nothing matches, and it re-checks a matched item against the codebase first, so already-finished work is reported rather than rebuilt. `simplify` runs the `/simplify` skill on the dirty diff so the commit lands clean. `push` tests first (lint/typecheck/unit tests plus a UI smoke check via Playwright MCP for routes affected by the diff, skipped automatically on backend-only PRs), then commits and opens the draft PR. `self-review` runs the review agents plus a security pass. `mark-ready` is the explicit draft → ready gate; `await-review` polls for your configured Code Review Agent (Copilot, CodeRabbit, Greptile, …) before `respond` addresses its feedback.
 
 At each step transition, one-shot prints a progress line so you always know where you are:
 
@@ -162,14 +162,14 @@ Each step maps to a skill you can run on its own when you don't want the whole p
 | 1 | `plan` | `hero-skills:think-it-through` (only when nothing resolves from `.plans/` or the tracker) |
 | 2 | `implement` | inline (executes the resolved work-item) |
 | 3 | `simplify` | `/simplify` (external skill) |
-| 4 | `push` | `hero-skills:push-pr` (tests — verification + UI smoke — then commits + pushes a draft PR) |
+| 4 | `push` | `hero-skills:push-pr` (tests, verification + UI smoke, then commits + pushes a draft PR) |
 | 5 | `self-review` | `hero-skills:review-pr --no-mark-ready` |
 | 6 | `mark-ready` | `hero-skills:review-pr`'s own Step 9 gate, or `gh pr ready` |
 | 7 | `await-review` | inline poll (no separate skill) |
 | 8 | `respond` | `hero-skills:respond-to-comments` |
 | 9 | `ship` | `hero-skills:ship-pr` |
 
-Re-running `hero-skills:one-shot` mid-flow is safe: it inspects git + the open PR for that branch and resumes from the inferred step deterministically — no confirmation prompt. With no arguments, that resume behavior is the whole point. On the default branch with work to preserve, one-shot auto-branches off (no prompt) before resuming. It exits cleanly with a hand-off hint only when there's nothing left to do (e.g., after the PR has merged) or when state can't be inferred safely (e.g., a failed `git fetch`).
+Re-running `hero-skills:one-shot` mid-flow is safe: it inspects git + the open PR for that branch and resumes from the inferred step deterministically, no confirmation prompt. With no arguments, that resume behavior is the whole point. On the default branch with work to preserve, one-shot auto-branches off (no prompt) before resuming. It exits cleanly with a hand-off hint only when there's nothing left to do (e.g., after the PR has merged) or when state can't be inferred safely (e.g., a failed `git fetch`).
 
 See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
@@ -189,7 +189,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:push-pr` | Test (lint, typecheck, unit tests + smoke incl. UI via Playwright MCP), commit + push + draft PR + CI status — or `test` for a test-only run, or a target branch to merge into |
+| `hero-skills:push-pr` | Test (lint, typecheck, unit tests + smoke incl. UI via Playwright MCP), commit + push + draft PR + CI status, or `test` for a test-only run, or a target branch to merge into |
 
 ### Code Review
 
@@ -210,14 +210,14 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:wayfare` | Five verbs. `sync` runs one round of convergence — `config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals` — writing every `.plans/` item (features, architecture, polish, security, bugs, feedback, goals) and proposing goals bottom-up while re-cutting the `todo` ones; `next` picks the next runnable goal, reads its `## Permissions` (mark-ready, respond, auto-approve, merge, deploy, absorb) for your in-session authorization, and prints the `/goal` line; `do ID` builds one feature via one-shot, carries one Dependabot PR to merged and deployed, or runs one goal turn (up to `concurrency` items in parallel worktrees); `improve` audits this repo — or the whole fleet from its root — against the compliance register and proposes the fixes and backports; `recalibrate` tunes every field the stages read. Features are SLC vertical slices (user stories, never layers) carrying subtasks, a definition of done, comments, design feedback back to the design team, and staleness flags |
+| `hero-skills:wayfare` | Five verbs. `sync` runs one round of convergence (`config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals`, writing every `.plans/` item (features, architecture, polish, security, bugs, feedback, goals) and proposing goals bottom-up while re-cutting the `todo` ones; `next` picks the next runnable goal, reads its `## Permissions` (mark-ready, respond, auto-approve, merge, deploy, absorb) for your in-session authorization, and prints the `/goal` line; `do ID` builds one feature via one-shot, carries one Dependabot PR to merged and deployed, or runs one goal turn (up to `concurrency` items in parallel worktrees); `improve` audits this repo, or the whole fleet from its root, against the compliance register and proposes the fixes and backports; `recalibrate` tunes every field the stages read. Features are SLC vertical slices (user stories, never layers) carrying subtasks, a definition of done, comments, design feedback back to the design team, and staleness flags |
 
-Two skills are stages of `sync` and hidden from the slash menu (`user-invocable: false`) — you never call them, but they still own their procedures:
+Two skills are stages of `sync` and hidden from the slash menu (`user-invocable: false`). You never call them, but they still own their procedures:
 
 | Stage | Skill | What it does |
 | --- | --- | --- |
-| `architecture` | `hero-skills:architecture` | Create + converge a single root `DESIGN.md` — tech stack, boundaries, dependency rules, invariants, users, flows, interaction standards, append-only decisions; never restates what the code says. `review` reports drift read-only; `sync` converges |
-| `harden` | `hero-skills:harden` | Audit read-only for hardening — dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness — and emit execution-ready plans as `.plans/` security items |
+| `architecture` | `hero-skills:architecture` | Create + converge a single root `DESIGN.md`, tech stack, boundaries, dependency rules, invariants, users, flows, interaction standards, append-only decisions; never restates what the code says. `review` reports drift read-only; `sync` converges |
+| `harden` | `hero-skills:harden` | Audit read-only for hardening, dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness, and emit execution-ready plans as `.plans/` security items |
 
 ### Operations
 
@@ -225,14 +225,14 @@ Two skills are stages of `sync` and hidden from the slash menu (`user-invocable:
 | --- | --- |
 | `hero-skills:think-it-through` | Brainstorm + grill an idea one question at a time into shared understanding and dependency-aware work-items |
 | `hero-skills:my-humanizer` | Strip AI-writing patterns from prose (Wikipedia's "Signs of AI writing"). Runs inline inside the pipeline on everything a person reads: code comments, docs, commit bodies, and the PR body in `push-pr`, review comments in `review-pr`, thread replies in `respond-to-comments`; standalone on any text |
-| `hero-skills:fleet` | Create + converge `FLEET.md` — the local, unversioned map of the repos checked out beside each other (group, port). `sync` scans the folder and proposes rows, `review` reports drift read-only. Every repo skill run from the fleet root fans out to the repos you pick (see `docs/FLEET-MD.md`) |
+| `hero-skills:fleet` | Create + converge `FLEET.md`, the local, unversioned map of the repos checked out beside each other (group, port). `sync` scans the folder and proposes rows, `review` reports drift read-only. Every repo skill run from the fleet root fans out to the repos you pick (see `docs/FLEET-MD.md`) |
 | `hero-skills:handoff` | Distill the current conversation into one self-contained work-item for a downstream agent (optionally filed to the tracker, or to **another repo** with `--repo OWNER/NAME`) |
 
 ### Utilities
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:abandon` | Abandon or pause an unmerged branch — stash uncommitted work, switch to default, clear context |
+| `hero-skills:abandon` | Abandon or pause an unmerged branch, stash uncommitted work, switch to default, clear context |
 | `hero-skills:audit-plugin` | Audit the hero-skills plugin itself for quality and consistency |
 
 ## Updating vendored assets in a downstream repo
@@ -256,7 +256,7 @@ diff .claude/hooks/check-design-tokens.sh{,.new}
 
 **Read that diff in both directions before taking `.new`.** Drift is not always
 upstream-is-newer. A consuming repo can carry a genuine improvement that was
-never back-ported, and blindly accepting `.new` silently reverts it — for a
+never back-ported, and blindly accepting `.new` silently reverts it, for a
 *check*, that reads as "still installed" while no longer catching what it used
 to. Back-port the downstream improvement here first, then re-vendor, so both
 sides converge on one version instead of alternating.
@@ -266,8 +266,8 @@ Exit 2 means "you have a decision to make", not "it failed".
 **Auto-approve is the exception: always take `.new`, never merge it.** The two
 files are not two versions of one thing. The existing file is the old inline
 copy of the review *logic*; `.new` is a ~40-line caller into the shared
-workflow. Reconciling them the way you would a design-system hook — keeping the
-local improvement — is exactly how the fleet ended up with a private copy per
+workflow. Reconciling them the way you would a design-system hook, keeping the
+local improvement, is exactly how the fleet ended up with a private copy per
 repo, several of them missing security fixes made here. A job holding both
 `uses:` and `steps:` is also an invalid workflow file, and because the trigger
 is `issue_comment` nothing surfaces that until someone tries to ship.
@@ -284,13 +284,13 @@ Three consequences worth internalising:
 - That file has a blast radius no other file here has. Review it accordingly.
 - **`main`'s branch protection is the only gate.** Not a formality: approval
   required, stale approvals dismissed on push, and last-push approval required
-  — without that last pair, an approval collected on a benign diff survives a
+ , without that last pair, an approval collected on a benign diff survives a
   force-push and ships fleet-wide seconds later.
 - Roll back by reverting on `main`. That is the whole procedure.
 
 This replaced a moving `v1` tag. The tag needed a release workflow to move it,
 an App to be allowed to move it past a ruleset, and a carve-out in the fleet's
-pin rule — and its one distinctive feature, a manual lever to point the tag at
+pin rule, and its one distinctive feature, a manual lever to point the tag at
 an arbitrary commit, turned out to be a way around the very branch protection
 the design depended on. A branch ref cannot be aimed anywhere; there is nothing
 to aim.
@@ -302,15 +302,15 @@ with what `auto-approve.yaml` declares.
 
 ## HERO.md
 
-Every skill reads `HERO.md` from your repo root. It declares your stack so skills don't have to guess. **HERO.md is committed to the repo** — it's team-shared, so every developer and every skill works from the same config.
+Every skill reads `HERO.md` from your repo root. It declares your stack so skills don't have to guess. **HERO.md is committed to the repo**. It's team-shared, so every developer and every skill works from the same config.
 
-When project config drifts (new deps, CI changes, switched task runner), skills detect the staleness and remind you to run `hero-skills:init-hero recalibrate` to refresh. There is no auto-pre-commit hook for this — it was too slow. Run the refresh on demand.
+When project config drifts (new deps, CI changes, switched task runner), skills detect the staleness and remind you to run `hero-skills:init-hero recalibrate` to refresh. There is no auto-pre-commit hook for this. It was too slow. Run the refresh on demand.
 
 **`recalibrate` is on fourteen skills.** When a skill does the wrong thing
 because its config is wrong, you fix it where you noticed:
 `hero-skills:ship-pr recalibrate` asks about the eight fields `ship-pr` reads
 across Repository, CI/CD and Deployment, writes what you confirm, commits, and
-stops — it does not then ship. `hero-skills:init-hero recalibrate` is the
+stops. It does not then ship. `hero-skills:init-hero recalibrate` is the
 whole-file pass. `scripts/hero-fields.sh SKILL` prints the fields of any skill
 that carries the verb, with their current values. See
 [docs/RECALIBRATE.md](docs/RECALIBRATE.md).
@@ -344,19 +344,19 @@ Here's what a minimal config looks like:
 - Dev command: uvicorn main:app --reload
 ```
 
-No `HERO.md`? Skills fall back to auto-detection. Run `hero-skills:init-hero` to generate one — it investigates your repo and asks smart questions to fill in what it can't detect.
+No `HERO.md`? Skills fall back to auto-detection. Run `hero-skills:init-hero` to generate one. It investigates your repo and asks smart questions to fill in what it can't detect.
 
 <details>
 <summary><strong>Full config reference</strong></summary>
 
 `HERO.md` supports these sections:
 
-- **Project Management** — Linear, Jira, Asana, GitHub Issues
-- **Code Review Agent** — Greptile, CodeRabbit, Copilot (trigger, poll method, bot username)
-- **CI/CD** — GitHub Actions, GitLab CI, Jenkins, CircleCI
-- **Deployment** — Kubernetes, Vercel, ECS, Fly.io, container registries
-- **Code Quality** — pre-commit, linters, formatters, type checkers
-- **Projects** — per-subproject language, framework, test/dev commands, ports
+- **Project Management**, Linear, Jira, Asana, GitHub Issues
+- **Code Review Agent**, Greptile, CodeRabbit, Copilot (trigger, poll method, bot username)
+- **CI/CD**, GitHub Actions, GitLab CI, Jenkins, CircleCI
+- **Deployment**, Kubernetes, Vercel, ECS, Fly.io, container registries
+- **Code Quality**, pre-commit, linters, formatters, type checkers
+- **Projects**, per-subproject language, framework, test/dev commands, ports
 
 </details>
 
@@ -368,14 +368,14 @@ Skills are markdown files in the `skills/` directory. Each is a structured promp
 
 ## License
 
-MIT — built by [AI Hero](https://aihero.studio).
+MIT, built by [AI Hero](https://aihero.studio).
 
 ## Compliance register
 
 `scripts/audit.py` computes (check × repo) results live, from a register in
 two halves: the generic **baseline** in `assets/compliance/`, shipped here,
-and your fleet's private **overlay** — reference repos, incident history,
-`known_violations` — in the register checkout FLEET.md names (`register:
+and your fleet's private **overlay**, reference repos, incident history,
+`known_violations`, in the register checkout FLEET.md names (`register:
 .fleet/`). Inside a fleet the family is FLEET.md's rows whose group is not
 `none`; anywhere else, the current repo alone against the baseline.
 `scripts/consistency.py` writes the fleet's human table into that checkout.
