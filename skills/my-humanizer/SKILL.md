@@ -393,7 +393,7 @@ Before returning the final rewrite, scan it for `—` and `–`. Any hit means t
 
 **Words to watch:** third-party, cross-functional, client-facing, data-driven, decision-making, well-known, high-quality, real-time, long-term, end-to-end
 
-**Problem:** AI hyphenates these uniformly, including in predicate position (`the report is high-quality`). Humans hyphenate inconsistently — typically only when the compound is attributive (`a high-quality report`) and often dropping the hyphen otherwise (`the report is high quality`). Keep attributive-position hyphens; drop them when the compound follows the noun.
+**Problem:** AI hyphenates these uniformly, including in predicate position (`the report is high-quality`). Humans hyphenate inconsistently, typically only when the compound is attributive (`a high-quality report`) and often dropping the hyphen otherwise (`the report is high quality`). Keep attributive-position hyphens; drop them when the compound follows the noun.
 
 **Before:**
 > The cross-functional team delivered a high-quality, data-driven report. The team is cross-functional, the report is high-quality, and the methodology is data-driven.
@@ -496,7 +496,7 @@ Before returning the final rewrite, scan it for `—` and `–`. Any hit means t
 A clean human writer can hit several of the patterns above without any AI involvement. Before rewriting, sanity-check that you are not gutting legitimate prose. The following are *not* reliable indicators on their own:
 
 - **Perfect grammar and consistent style.** Many writers are professionals or have been edited. Polish does not equal AI.
-- **Mixed casual and formal registers.** This often signals a person in a technical field, a young writer, or someone with neurodivergent prose habits — not a chatbot.
+- **Mixed casual and formal registers.** This often signals a person in a technical field, a young writer, or someone with neurodivergent prose habits, not a chatbot.
 - **"Bland" or "robotic" prose.** AI prose has *specific* tells. Generic dryness without those tells is just dry writing.
 - **Formal or academic vocabulary.** AI overuses *specific* fancy words (see §7), not all fancy words. Don't flatten "ostensibly" or "constituent" just because they sound brainy.
 - **Letter-style opening or closing on a comment.** Salutations and sign-offs predate ChatGPT by centuries.
@@ -513,7 +513,7 @@ When in doubt, look for **clusters** of tells, not isolated ones. A single em da
 
 ### Signs of human writing (preserve these)
 
-When you see these, lean toward leaving the prose alone — they are evidence of a real person writing, and over-editing will destroy what makes the piece sound human:
+When you see these, lean toward leaving the prose alone. They are evidence of a real person writing, and over-editing destroys what makes the piece sound human:
 
 - **Specific, unusual, hard-to-fabricate detail.** A real address. A weird quote. The phrase "the lawyer who used to work upstairs from my dentist." LLMs round off specifics; humans hoard them.
 - **Mixed feelings and unresolved tension.** "I think this is mostly good, but it bothers me, and I can't fully explain why." LLMs default to clean takes.
@@ -581,13 +581,13 @@ Deliver the draft, the brief "still-AI" bullets, the final rewrite, and (optiona
 
 **Changes made:** Kept the first-person travel recap and roughly the same level of detail, but removed the chatbot framing, significance inflation, promotional language, forced enthusiasm, em dashes, rule-of-three cadence, generic upbeat conclusion, and emoji. Rebuilt the piece around concrete friction, mixed feelings, uneven rhythm, and specific scenes.
 
-## Inline mode — `hero-skills:my-humanizer inline`
+## Inline mode: `hero-skills:my-humanizer inline`
 
-A pipeline step calls this with the first argument `inline` and a body or a diff scope. In that mode: apply the final rewrite in place, print a one-line count of what changed, and skip the draft / "still-AI" / final deliverable — that is for standalone use. Limits: edit only the lines the caller named (for a diff, the lines it touches — never reflow prose it left alone); a code comment that survives must still pass the repo's comment rule (`.claude/rules/comments.md` where present) — humanizing never adds a comment or pads one out.
+A pipeline step calls this with the first argument `inline` and a body or a diff scope. In that mode: apply the final rewrite in place, print a one-line count of what changed, and skip the draft, the "still-AI" bullets, and the final deliverable, which are for standalone use. Limits: edit only the lines the caller named (for a diff, the lines it touches, and never reflow prose it left alone). A code comment that survives must still pass the repo's comment rule (`.claude/rules/comments.md` where present), because humanizing never adds a comment or pads one out.
 
 ## Next step
 
-Inline mode returns to the calling step; it continues on its own. Standalone, there is no next skill — the final rewrite is the deliverable.
+Inline mode returns to the calling step; it continues on its own. Standalone, there is no next skill. The final rewrite is the deliverable.
 
 ## Reference
 
