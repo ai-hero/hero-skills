@@ -102,10 +102,14 @@ check "malformed JSON -> distinct WARN naming installed_plugins.json" "installed
 # so no directory in the rebuilt PATH can resolve jq.
 SHADOW_ROOT="$TMP/shadow-no-jq"
 NO_JQ_PATH=""
-OLD_IFS="$IFS"
-IFS=':'
 i=0
-for dir in $PATH; do
+# `IFS=` scopes to the read, so the global stays untouched: a global IFS=':'
+# changes how EVERY later unquoted expansion in this file splits, and the
+# restore only runs if nothing between here and it exits first.
+# The here-doc (not a pipe) keeps the loop in this shell — a `|` would run it
+# in a subshell and NO_JQ_PATH would come back empty, silently rebuilding the
+# PATH as "" and testing nothing.
+while IFS= read -r dir; do
   i=$((i + 1))
   if [ -n "$dir" ] && [ -x "$dir/jq" ]; then
     shadow="$SHADOW_ROOT/$i"
@@ -118,8 +122,9 @@ for dir in $PATH; do
     dir="$shadow"
   fi
   NO_JQ_PATH="${NO_JQ_PATH:+$NO_JQ_PATH:}$dir"
-done
-IFS="$OLD_IFS"
+done <<EOF
+$(printf '%s' "$PATH" | tr ':' '\n')
+EOF
 FAKE_HOME_5="$TMP/no-jq"
 mkdir -p "$FAKE_HOME_5/.claude/plugins"
 printf '{"plugins": {"pr-review-toolkit@claude-plugins-official": [{"scope": "user", "installPath": "x"}]}}' \
