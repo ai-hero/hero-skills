@@ -214,7 +214,11 @@ HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-
 OWNER_REPO=$(gh repo view --json owner,name --jq '"\(.owner.login) \(.name)"')
 OWNER=$(echo "$OWNER_REPO" | awk '{print $1}')
 REPO=$(echo "$OWNER_REPO" | awk '{print $2}')
-PR_AUTHOR=$(gh api "/repos/$OWNER/$REPO/pulls/$PR_NUMBER" --jq '.user.login')
+# login and type in one call — 3d needs both, and they are fields of the same
+# object.
+PR_AUTHOR_JSON=$(gh api "/repos/$OWNER/$REPO/pulls/$PR_NUMBER" --jq '"\(.user.login) \(.user.type)"')
+PR_AUTHOR=${PR_AUTHOR_JSON%% *}
+PR_AUTHOR_TYPE=${PR_AUTHOR_JSON##* }
 
 # 3a — Prior review present (self-review OR reviewer review OR bot inline)
 # Branch on the rc: an empty count summed below reads as 0, "no review".
@@ -266,14 +270,35 @@ ACTIVE_CHANGES=$(gh api graphql -f query='
 # comment from a non-author with no later comment from the author is a
 # question the author has not answered. We flag any such comment whose
 # id is greater than the author's most recent comment id.
-LAST_AUTHOR_COMMENT_ID=$(gh api "/repos/$OWNER/$REPO/issues/$PR_NUMBER/comments" \
-  --jq "[.[] | select(.user.login == \"$PR_AUTHOR\")] | (last // {id: 0}) | .id")
-UNANSWERED_QUESTIONS=$(gh api "/repos/$OWNER/$REPO/issues/$PR_NUMBER/comments" \
-  --jq "[.[]
-    | select(.user.login != \"$PR_AUTHOR\")
-    | select((.user.type != \"Bot\") and ((.user.login | test(\"(coderabbit|greptile|copilot|sonarcloud|codeball|github-actions)\"; \"i\")) | not))
-    | select(.id > ${LAST_AUTHOR_COMMENT_ID:-0})
-  ] | length")
+#
+# The heuristic assumes the author participates in the thread, so it does not
+# hold for a bot PR: Dependabot never posts top-level comments on its own PRs,
+# LAST_AUTHOR_COMMENT_ID falls through to 0, and EVERY non-bot comment then
+# scores as unanswered forever. The comment that trips it is usually the
+# `@dependabot rebase` that wayfare deps was told to post — and Dependabot
+# answers that by moving the head, never by commenting, so nothing can ever
+# clear the gate. Skip it for a bot author, and say so rather than skipping
+# in silence.
+if [ "$PR_AUTHOR_TYPE" = "Bot" ]; then
+  UNANSWERED_QUESTIONS=0
+  UNANSWERED_SKIPPED="author is a bot — no author voice to measure against"
+else
+  UNANSWERED_SKIPPED=""
+  ME=$(gh api user --jq '.login')
+  LAST_AUTHOR_COMMENT_ID=$(gh api "/repos/$OWNER/$REPO/issues/$PR_NUMBER/comments" \
+    --jq "[.[] | select(.user.login == \"$PR_AUTHOR\")] | (last // {id: 0}) | .id")
+  # `$ME` is excluded because the gate exists to stop US merging past SOMEONE
+  # ELSE's question. A comment written by the account running this skill is
+  # not a question awaiting our answer — we wrote it — yet it satisfies
+  # `.user.login != $PR_AUTHOR` and trips the gate on any PR we did not author.
+  UNANSWERED_QUESTIONS=$(gh api "/repos/$OWNER/$REPO/issues/$PR_NUMBER/comments" \
+    --jq "[.[]
+      | select(.user.login != \"$PR_AUTHOR\")
+      | select(.user.login != \"$ME\")
+      | select((.user.type != \"Bot\") and ((.user.login | test(\"(coderabbit|greptile|copilot|sonarcloud|codeball|github-actions)\"; \"i\")) | not))
+      | select(.id > ${LAST_AUTHOR_COMMENT_ID:-0})
+    ] | length")
+fi
 
 # 3e — CI green on the head commit. The workflow's own CI gate fails CLOSED
 # on a pending check rather than polling (polling would burn the runner
@@ -322,6 +347,7 @@ Pre-flight gates for PR #PR_NUMBER:
   Unresolved threads:         UNRESOLVED   (must be 0)
   Active CHANGES_REQUESTED:   ACTIVE_CHANGES (must be 0 — re-request review or push fixes)
   Unanswered reviewer Qs:     UNANSWERED_QUESTIONS (must be 0 — reply to each)
+                              [or: skipped — UNANSWERED_SKIPPED]
   CI on head commit:          CI_FAILED failed, CI_PENDING pending (both must be 0)
 ```
 
@@ -330,7 +356,7 @@ Pre-flight gates for PR #PR_NUMBER:
 - `(SELF_REVIEW + OTHER_REVIEWS + BOT_INLINE) == 0` — no prior review at all. Run `hero-skills:review-pr`.
 - `UNRESOLVED > 0` — inline review threads still open. Run `hero-skills:respond-to-comments` to address them and resolve the threads.
 - `ACTIVE_CHANGES > 0` — a reviewer's latest review still says CHANGES_REQUESTED. Address the change request, push fixes, then ask the reviewer to dismiss it or submit a fresh review (a subsequent APPROVED review supersedes it in `latestReviews`).
-- `UNANSWERED_QUESTIONS > 0` — top-level questions from human reviewers with no author reply. List each one (`gh api .../issues/$PR_NUMBER/comments --jq '.[] | select(.id > LAST_AUTHOR_COMMENT_ID) | {user: .user.login, body: .body[0:200], url: .html_url}'`) and tell the user to reply to each before re-running.
+- `UNANSWERED_QUESTIONS > 0` — top-level questions from human reviewers with no author reply. List each one (`gh api .../issues/$PR_NUMBER/comments --jq '.[] | select(.id > LAST_AUTHOR_COMMENT_ID) | {user: .user.login, body: .body[0:200], url: .html_url}'`) and tell the user to reply to each before re-running. When `UNANSWERED_SKIPPED` is non-empty the gate did not run — print that line in the table instead of a count, so a skip is visible rather than reading as a clean pass.
 - `CI_FAILED > 0` — a check on the head commit failed. List them (`gh pr checks $PR_NUMBER`), fix, push, and re-run. The workflow's CI gate would REQUEST_CHANGES on this anyway; failing here saves the run.
 - `CI_PENDING > 0` after the 30-minute wait — a check is hung or queued behind a full runner pool. Report it; do not post `@auto-approve` into a pending build.
 
