@@ -5,47 +5,47 @@ description: The front door. sync converges architecture, design, hardening, com
 argument-hint: "[sync [CONTEXT] | next | do ID | improve | recalibrate]"
 ---
 
-# Wayfare — The Route from Source to Target
+# Wayfare: the route from source to target
 
 **Wayfare is the one skill a person runs.** Five verbs: `sync` reads the
-world and converges everything into `.plans/` — the architecture record, the
+world and converges everything into `.plans/`: the architecture record, the
 design snapshot, the hardening audit, the compliance register, the
 dependency bots' PRs, the roadmap, and the goals over it; `next` hands out
 the next goal and the `/goal` line that runs it; `do ID` advances one item,
 or runs one turn of one goal; `improve` runs the compliance audit alone, for
 this repo or the whole fleet, and drafts the backports; `recalibrate` tunes
-the config. The skills `sync` stitches together —
+the config. The skills `sync` stitches together,
 `hero-skills:architecture`, `hero-skills:harden`,
-`hero-skills:think-it-through` — still exist and still own their procedures,
+`hero-skills:think-it-through`, still exist and still own their procedures,
 but they are run *by* wayfare, in order, and hidden from the slash menu
 (`user-invocable: false`). Nobody has to remember which one to call.
 
-**Wayfare works in one repo at a time — the one it runs in.** Work that
+**Wayfare works in one repo at a time: the one it runs in.** Work that
 belongs to another repo (an upstream design system, a sibling app, the
 template) is never done from here: the most wayfare does across that line
-is deposit a message into the other repo's `.plans/inbox/` — a bug report,
-an ask — per `docs/MESSAGES.md`, or deliver feedback through its own channel
+is deposit a message into the other repo's `.plans/inbox/`, either a bug report
+or an ask, per `docs/MESSAGES.md`, or deliver feedback through its own channel
 (`references/feedback-channels.md`), for that repo's own `wayfare sync` to
 promote and that repo's own agent to build. The fleet-root fan-out is not an
 exception: it starts a wayfare *in* each chosen repo, which then works only
 there. The fleet's register checkout (`.fleet/`) is fleet state, not a
 sibling repo, which is why `improve` may commit its table there.
 
-Source is the product as it is; Target is the product as it should be — a
+Source is the product as it is; Target is the product as it should be: a
 claude.ai/design project configured in HERO.md, read through the `DesignSync`
 tool. Target is optional: with no design project configured, `sync` reconciles
-Source against itself instead — DESIGN.md, its own gaps, its own hardening —
+Source against itself instead, against DESIGN.md, its own gaps and its own hardening,
 a **self-review** (see `sync` below). Every **feature** is one leg of the
-route between them — one whole leg, planned and built in a single run: a
+route between them: one whole leg, planned and built in a single run, a
 `.plans/` item naming the source paths it changes and the target paths it
 satisfies. `/wayfare sync` reads whichever ends are configured and converges
-the roadmap — shipped work folds back into Source, target changes (when there
+the roadmap. Shipped work folds back into Source, target changes (when there
 is a target) surface as new or stale features, and nothing goes false
 silently.
 
 The route runs both ways. Target changes reach the roadmap as stale and
 uncovered features; what **building** teaches about the design travels back
-the other way as **feedback** — captured on the feature, promoted to a
+the other way as **feedback**: captured on the feature, promoted to a
 feedback item, delivered on your word. Wayfare reads the target; it never
 writes it.
 
@@ -56,16 +56,16 @@ moves into `planning`. The `.plans/` store (private, git-ignored, managed by
 wayfare item**: think-it-through, one-shot, handoff and harden all write
 `kind: feature` (or `architecture`), whether or not the repo has a
 `## Wayfare` block or a design target. A feature with no target is still a
-feature — `target:` and `target_ref:` are absent, and nothing here treats that
+feature. `target:` and `target_ref:` are absent, and nothing here treats that
 absence as a defect unless a design project is configured. Items without a
 `kind` are legacy; they still list, and nothing writes one now.
 
 ## Three layers, nine kinds
 
-The source repo sits between two things it does not own — the **design
+The source repo sits between two things it does not own: the **design
 system** it consumes upstream, and the **app design** it is built toward. A
 sync is one round of reconciliation across all three. Wayfare's items come in
-nine kinds, and `sync` writes every one of them — the first six from the
+nine kinds, and `sync` writes every one of them. The first six come from the
 reconciliation lanes, the seventh proposed over what it planned, the eighth
 from the hardening audit and the dependency bots' open PRs, the ninth from
 the mailbox:
@@ -73,50 +73,50 @@ the mailbox:
 | `kind` | What it is | Class | Ends at |
 | --- | --- | --- | --- |
 | `feature` | an SLC slice of the app design, built end to end | build | `done` |
-| `architecture` | a structural change the design implies that is not a user story — a boundary move, a dependency direction, an invariant | build | `done` |
-| `polish` | a measured visual divergence on a screen that already ships — spacing, alignment, overflow, a missing state, a broken breakpoint | build | `done` |
+| `architecture` | a structural change the design implies that is not a user story: a boundary move, a dependency direction, an invariant | build | `done` |
+| `polish` | a measured visual divergence on a screen that already ships: spacing, alignment, overflow, a missing state, a broken breakpoint | build | `done` |
 | `design-feedback` | a screen/flow divergence to carry to the app design | feedback | `delivered` / `rejected` |
 | `architecture-feedback` | a boundary or invariant the design assumes and the code disproves | feedback | `delivered` / `rejected` |
 | `design-system-feedback` | a token, component API, or specimen divergence to carry to the design system | feedback | `delivered` / `rejected` |
 | `goal` | several features that add up to one outcome, with a Definition of Done spanning them | goal | `done` |
 | `security` | a dependency bump or hardening fix; with `bot:`, a dependency bot's PR that `do` carries to merged and deployed | build | `done` |
-| `bug` | a defect in a surface that already ships — found here, or reported by a sibling repo as a `type: bug` message (`docs/MESSAGES.md`) | build | `done` |
+| `bug` | a defect in a surface that already ships, found here or reported by a sibling repo as a `type: bug` message (`docs/MESSAGES.md`) | build | `done` |
 
 A **goal** is the same idea as a feature, one level up: an outcome that is
 Simple, Lovable and Complete but too big for one PR. It holds the features that
 make it up and a Definition of Done written across them, and that DoD is what
-a goal's turns loop against. A goal is never built directly — one-shot builds
-features — so it is never handed out READY. `next` hands out goals; `do
+a goal's turns loop against. A goal is never built directly, because one-shot builds
+features, so it is never handed out READY. `next` hands out goals; `do
 GOAL_ID` runs one turn of one.
 
 **Build kinds are built; feedback kinds are delivered.** They share the store
 and the id sequence, and `hero_ready_items` never hands a feedback item out as
-READY — nothing builds one. `references/feedback-channels.md` owns the three
+READY, because nothing builds one. `references/feedback-channels.md` owns the three
 lanes; `references/reconciliation.md` owns how the round reads.
 
 **Read `references/reconciliation.md` before any sync.** It carries the
 direction of authority, the evidence rules, and the rule that a target element
-resolves to a *source symbol* — a route in the router, a registry entry, a
-token in the stylesheet — not to a path whose text can be diffed. A sync that
+resolves to a *source symbol*, such as a route in the router, a registry entry, or a
+token in the stylesheet, not to a path whose text can be diffed. A sync that
 compares paths answers "did these files move" and nothing a reviewer cares
 about.
 
 **The target design is not the same thing as a component registry.** The
 design project shows what a screen should look like; a shadcn/registry-based
-design system — when the source repo has one, per its own design-system rule
-— is what it gets *built from*, and it is the upstream layer
+design system, when the source repo has one per its own design-system rule,
+is what it gets *built from*, and it is the upstream layer
 `design-system-feedback` travels back to. Wayfare does not configure the
 registry and never will; but reading the target without also naming the
 registry components it implies is how that connection gets left to whichever
 agent happens to touch the file later, instead of to the plan. So every read
 of the target (Investigate, and grilling during planning) also checks the
-source repo for a configured registry and records the correspondence — see
+source repo for a configured registry and records the correspondence; see
 Investigate and Item formats below.
 
-## Slices, not layers — every feature is SLC
+## Slices, not layers: every feature is SLC
 
 **A feature is a vertical slice through the whole system, shaped like a user
-story — never a layer of one.** This is the shaping rule the rest of the skill
+story, never a layer of one.** This is the shaping rule the rest of the skill
 serves, and it is the one wayfare gets asked to break most often.
 
 Every feature must be **S**imple, **L**ovable, and **C**omplete:
@@ -129,7 +129,7 @@ Every feature must be **S**imple, **L**ovable, and **C**omplete:
   one currency completely is complete; one that handles all six currencies
   except that nothing renders is not.
 
-So the roadmap is a sequence of stories — `AS_A user I_CAN do X SO_THAT Y` —
+So the roadmap is a sequence of stories, shaped `AS_A user I_CAN do X SO_THAT Y`,
 each cutting through every layer it needs (schema, service, route, UI, tests)
 to make that one story work. It is **not** a sequence of layers that only add
 up to something usable at the end.
@@ -140,27 +140,27 @@ up to something usable at the end.
 | "Trips API routes" | "I can rename a saved trip" |
 | "Trips frontend" | "I can share a trip with a link that opens read-only" |
 
-The architecture still matters — but it orders the **subtasks inside** a
+The architecture still matters, but it orders the **subtasks inside** a
 slice (schema → structs → routes → frontend), never the features themselves.
 Layer names belong on `## Subtasks` lines; a feature *titled* for a layer is
 the smell that a slice was sliced the wrong way.
 
 **Complete is verified by looking, not by reading.** A slice can read correct
-in source — right props, right component, right DoD line checked off — and
+in source, with the right props, the right component and the right DoD line checked off, and
 still fail Complete, because composition bugs (a crop that zooms into an
 illegible fragment, an overflow, a broken breakpoint) are invisible in code
-and only show up rendered. Any DoD line asserting a user-facing outcome —
-"matches the target design," "renders correctly," "a visitor sees X" — gets
+and only show up rendered. Any DoD line asserting a user-facing outcome,
+"matches the target design," "renders correctly," "a visitor sees X", gets
 verified by actually rendering the page and looking, not by re-reading the
 component that was just written. See *Visual verification* under Step 0.
 
 `depends_on` between features follows the **story**, not the stack: "edit a
 saved trip" depends on "save a trip" because the earlier story must exist for
 the later one to mean anything. It never encodes "the data model should come
-first" — inside a slice, it already does. A roadmap where nearly every feature
+first". Inside a slice, it already does. A roadmap where nearly every feature
 depends on the one before it has usually been cut horizontally; say so.
 
-## Polish — the fine-tuning pass
+## Polish: the fine-tuning pass
 
 Coverage and fidelity are different questions, and a sync that only asks the
 first one declares a screen `done` while it looks wrong. **Coverage asks
@@ -174,16 +174,16 @@ visible in a diff, and none of it is what `uncovered` means.
 So `sync` runs a **visual pass** over the screens that already ship, and what
 it finds becomes `kind: polish` items. Polish is exempt from the SLC test for
 the opposite reason architecture is: it is not a story because the story
-already shipped — it is the refinement of a surface that exists. A polish
+already shipped. It is the refinement of a surface that exists. A polish
 item that could have been written as a user story is an `uncovered` feature
 that was mis-filed.
 
 **Two sections own this pass and neither is optional.**
 `references/reconciliation.md`'s *Reading a screen visually* owns **what to
-look for** — the defect checklist and the three rules that keep the pass from
+look for**: the defect checklist and the three rules that keep the pass from
 becoming a taste argument: compare like for like, a gap is a value and not an
 adjective, and authority decides the direction before the row is written.
-*Visual verification* under Step 0 owns **how to render** — extract the target
+*Visual verification* under Step 0 owns **how to render**: extract the target
 with `git -C "$SNAP" archive`, never `git checkout` in `$SNAP`, serve from a
 throwaway server, one browser context per agent. Read both before the pass;
 what follows is only what the pass *writes*.
@@ -193,7 +193,7 @@ work:** `polish` when the code is wrong, `design-feedback` when the shipped
 surface is the better answer, `design-system-feedback` when the same wrong
 value comes out of an upstream token or component and every consumer
 therefore has it (fixing that one locally is the fork this skill forbids).
-Never let it default to the first — a round that files every pixel difference
+Never let it default to the first. A round that files every pixel difference
 as our bug is reconciling against a design the product has legitimately
 overtaken.
 
@@ -203,21 +203,21 @@ findings for a screen into one item whose Definition of Done is the list of
 measured assertions, ordered by how visible they are. Split only when two
 regions of the screen would be fixed by different people in different files.
 
-**Polish never gates coverage — and nothing enforces that but you.**
+**Polish never gates coverage, and nothing enforces that but you.**
 `hero_ready_items` groups by status and never by kind, so a `ready` polish item
 with no `depends_on` lists as READY next to any feature and one-shot will offer
 it. The ordering is therefore a rule about *authoring*: a screen that is
 half-built does not need its padding audited, and a roadmap that spends its
 next three PRs on 4px is one that has stopped shipping. So give a polish item a
 `depends_on` naming the features it must not jump, and propose it after the
-coverage rows in the same report — the sequencing has to be written into the
+coverage rows in the same report, so the sequencing has to be written into the
 item, because the listing will not supply it. A screen whose own feature is
 still open needs no polish item at all: its drift belongs in that feature's
 Definition of Done.
 
 ## Lifecycle
 
-`new → todo → planning → ready → implementing → reviewing → done` — with who
+`new → todo → planning → ready → implementing → reviewing → done`, with who
 flips what. Not every item visits every state; `planning` in particular is
 skipped for work that does not need it (see below).
 
@@ -226,40 +226,40 @@ skipped for work that does not need it (see below).
 | `new` | Created, not yet triaged | the default for any item with no `status:` line |
 | `todo` | On the roadmap, not yet planned | `sync` writes accepted features as `todo`, and the goals it proposes over them |
 | `planning` | Being planned via think-it-through | `sync`'s planning postflight, as each feature's grill starts (`hero-skills:think-it-through FEATURE_ID`, Feature mode) |
-| `ready` | Plan approved — eligible to build | **The user, only ever explicitly** — never wayfare |
+| `ready` | Plan approved and eligible to build | **The user, only ever explicitly**, never wayfare |
 | `implementing` | Being built | one-shot, at its first edit |
 | `reviewing` | PR open, awaiting review/merge | one-shot, when the PR opens |
 | `suspended` | Waiting on a sibling repo's reply (`awaiting:` message ids, `suspended_from:` the status it left, `suspended_at:` the date) | one-shot Step 2a when it sends an awaited message; `sync`'s `inbox` stage restores `suspended_from` when the last reply lands or the wait lapses (confirmed) |
 | `done` | Merged; folded back into Source | one-shot when the last PR merges, or `sync` when Source satisfies Target (confirmed) |
 
-`hero_ready_items` understands this enum for the **build kinds** — `feature`,
-`architecture`, `polish`, `security`, and `bug` — and lists them as `backlog` / `plan` / `READY` /
+`hero_ready_items` understands this enum for the **build kinds** (`feature`,
+`architecture`, `polish`, `security`, and `bug`) and lists them as `backlog` / `plan` / `READY` /
 `active` / `review` / `suspended` / `done`. `ready` is the only READY-eligible build status,
 dep-gated like any other item. `suspended` is the one extra state, from
 `docs/MESSAGES.md`: the item asked a sibling repo something and waits on the
 reply; it is never READY, never `done`, and anything that `depends_on` it
 stays blocked. `bug` rides this lifecycle like `polish` and is exempt from
-the slice rule for the same reason — it is not a story, it is a surface
+the slice rule for the same reason: it is not a story, it is a surface
 that exists and is wrong; its Definition of Done is the repro no longer
 reproducing, pinned by a test.
 
 `architecture` and `polish` run this same lifecycle, for the same reason: both
 are planned by think-it-through, built by one-shot, and reviewed on a PR. They
-differ only in what makes them Complete — an architecture item's Definition of
+differ only in what makes them Complete. An architecture item's Definition of
 Done asserts a **structural** property (a dependency direction now holds, an
 invariant is enforced at the boundary) and a polish item's asserts a
 **measured visual** one, neither of which is a user story, so both are exempt
 from the SLC test above and from the horizontal-slices finding. Both
 exemptions are narrow: an item of either kind that could have been written as
 a user story was written wrong. A polish item's `planning` visit is usually
-short — the measurements *are* the plan, so the run writes a one-line approach
-and lifts the Definition of Done from the pass — but it is not skipped: the
+short, because the measurements *are* the plan, so the run writes a one-line approach
+and lifts the Definition of Done from the pass, but it is not skipped. The
 ready-mark is the user's and every documented route to it goes through
 `planning`, so an item parked at `todo` expecting to be picked up is one that
 never will be.
 
-The **feedback kinds** carry their own enum — `new → todo → queued →
-delivered` or `rejected` — and list as `feedback` while open, `done` when
+The **feedback kinds** carry their own enum, `new → todo → queued →
+delivered` or `rejected`, and list as `feedback` while open, `done` when
 terminal. Terminal
 counts for dependency purposes, so a feature waiting on an answered upstream
 question unblocks. See `references/feedback-channels.md`.
@@ -267,7 +267,7 @@ question unblocks. See `references/feedback-channels.md`.
 **`new` is the default, and it is not `todo`.** An item written with no
 `status:` line was just created and nobody has decided it should be worked on.
 That used to default to `todo`, which for a plain item means "ready to pick
-up" — so an item someone jotted down went straight to one-shot. `new` is never
+up", so an item someone jotted down went straight to one-shot. `new` is never
 READY. Moving `new → todo` is an explicit act: for a feature, `sync` accepting
 it onto the roadmap; for anything else, the user saying so.
 
@@ -278,12 +278,12 @@ Run it when any of these hold:
 - more than one reasonable approach, and the choice matters;
 - the change cuts across several areas, or changes a shared contract;
 - the requirements are unclear enough that building would guess;
-- getting it wrong is expensive to undo — data, migrations, auth, money.
+- getting it wrong is expensive to undo: data, migrations, auth, money.
 
 Skip it when the work is small, has one obvious approach, and touches one
 area. Then the item goes `todo → ready` with a one-line approach and no
 planning run. Grilling a two-line change produces a plan nobody reads and
-costs more than the change. Say which way you went and why, in one line — a
+costs more than the change. Say which way you went and why, in one line. A
 skipped planning run should be a visible decision, not an omission.
 
 The line loops on multi-PR features: a merge that covered part of the
@@ -305,12 +305,12 @@ failure this rule exists to stop: a sync triggered by a design release
 legitimately carries every source-side finding forward unread while the source
 repo moves twenty commits underneath it, security batches included. The
 document stays internally consistent and becomes badly wrong about the world.
-**A row's age is measured in commits, never in rounds** — so `sync` reports
+**A row's age is measured in commits, never in rounds**, so `sync` reports
 source-stale rows even when the design has not moved at all, and a target with
 its own round-numbered reconciliation document never has that number used as
 an anchor.
 
-## Configuration — the `## Wayfare` block in HERO.md
+## Configuration: the `## Wayfare` block in HERO.md
 
 ```markdown
 ## Wayfare
@@ -326,7 +326,7 @@ an anchor.
 
 **Read the bound copy before pulling a second project.** An app design project
 that consumes a design system typically **vendors it into itself**, at
-`_ds/DESIGN_SYSTEM_SLUG-DESIGN_SYSTEM_UUID/` — stylesheets, the manifest, the
+`_ds/DESIGN_SYSTEM_SLUG-DESIGN_SYSTEM_UUID/`, holding stylesheets, the manifest, the
 component surface. When that directory exists in the target snapshot, it is the
 better read: the vendored copy is the version **the design is actually bound
 to**, whereas the upstream project head is whatever shipped most recently.
@@ -334,9 +334,9 @@ Reconciling the source against a design system the design itself has not
 adopted yet manufactures drift that is nobody's to fix.
 
 So the order is: use `_ds/` when the target snapshot has it; fall back to
-`$DS_SNAP` — the design system's own design project, read from
-`design-system-repo`'s HERO.md — when it does not; report the upstream lane as
-skipped when neither is available. Say which one was read — the two can
+`$DS_SNAP`, the design system's own design project read from
+`design-system-repo`'s HERO.md, when it does not. Report the upstream lane as
+skipped when neither is available. Say which one was read, because the two can
 disagree, and that disagreement is itself a finding (the design is behind its
 own system).
 
