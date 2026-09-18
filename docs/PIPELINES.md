@@ -91,13 +91,14 @@ in the DAG and pays a no-op cost on the second invocation.
 **A fan-out subagent is never a fork.** Every parallel launch in this
 plugin (simplify's review angles, review-pr's toolkit agents, harden's audit
 angles, wayfare's builders) uses the default agent type or a named one, and
-hands the agent only the diff and its angle; `subagent_type: "fork"` is never
-passed. A fork inherits the whole calling conversation, including every
-pipeline step still to run, and it runs them: twice, simplify's four forks
-each ran the tests, the commit, and `.plans/` edits concurrently with the
-parent. The agents return findings; the parent applies fixes and keeps the
-commit. `/simplify` ships outside this plugin and leaves the agent type to
-its caller, so the callers here say it.
+hands the agent only what its one task needs, such as the diff and an angle
+for a review; `subagent_type: "fork"` is never passed. A fork inherits the
+whole calling conversation, including every pipeline step still to run, and
+it runs them: twice, simplify's four forks each ran the tests, the commit,
+and `.plans/` edits concurrently with the parent. The agent does its task and
+returns; the pipeline's remaining steps stay with the parent. `/simplify`
+ships outside this plugin and leaves the agent type to its caller, so the
+callers here say it.
 
 **The work-item store closes this pipeline's loop.** `think-it-through`,
 `handoff`, `harden`, and `wayfare` write items into the git-ignored `.plans/`
