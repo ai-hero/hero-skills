@@ -2426,30 +2426,57 @@ memory between turns:
    fields and `## Turn log`, and a table written to the store would be a
    third copy of state that the other two already hold.
 
+   **One row per plan item, in `covers` order — every item, not just the
+   built ones.** That is what makes it a status table rather than a commit
+   log: the built rows say what was done, the unbuilt rows say what is left,
+   and both are visible at once. An item that honestly took two commits
+   lists both in its row, and a fix commit sits in the row of the item whose
+   failure it repaired, so no commit is orphaned from the work it served.
+   Statuses and commits are read back from the store and `git log`, not from
+   what this turn remembers doing: an item another session committed on this
+   branch reads as committed here.
+
    ```
-   goal 7 — A user can sign in with Google and land on their dashboard
-   branch feat/goal-7-google-sign-in · commit 3 of about 4, hard stop 8
+   Goal 164 — turn 2. 8 commits (expected 8, hard stop 16).
+   Branch feat/goal-164-every-shipped-surface-renders-as-drawn, local, unpushed, no PR.
 
-     #   item                                   status      commit    mistakes
-     12  I can sign in with my Google account   committed   a1b2c3d   2
-     13  My session survives a refresh          committed   d4e5f6a   1 (+1 fix b7c8d9e)
-     15  I can sign out again                   next        –         –
-     18  Existing email users are unaffected    ready       –         –
-     21  Consent is scoped to the account       admitted    –         –
+   | Item | Status | Commit | What was done | Verified by | Diff |
+   | ---- | ------ | ------ | ------------- | ----------- | ---- |
+   | 149 | committed | 7179f53 | Deleted all 11 `-chromium-darwin` baselines + both `toHaveScreenshot` sites; removed `--grep-invert` from `ci.yaml:467`. Un-hid 3 component-page tests that had never run on CI | Full suite 197 passed; axe/structural assertions all kept | 13 files, -55 |
+   | 143 | committed | 1bacaa3, fix 9c02a1e | Hover assertion now `expect.polls` the expected colour instead of waiting for stability, which a rest colour satisfies. Fixed the "grep-inverted out of CI" comment 149 falsified | Mutation → timeout-fail, not instant pass; 440/440 at `--repeat-each=20` | +46/-26 |
+   | 201 | committed | 67560e7 | Split the one `evaluate` that read `fill` before the click into two | Mutated `ink-note` → failed in 405ms | +14/-3 |
+   | 15 | next | – | – | – | – |
+   | 18 | ready | – | – | – | – |
+   | 21 | admitted | – | serves DoD line 2 "session survives a refresh" | – | – |
 
-     verified  after 12: npm test exit 0 · after 13: npm test exit 0
-     dod       0 of 3 — checked at step 6, once every feature is committed
-     stop      none
+   mistakes  149 → 2 recorded; 143 → 1
+   dod       0 of 3 — checked at step 6, once every feature is committed
+   stop      none
    ```
 
-   The rows are `covers` in build order, read from the store rather than
-   from what this turn remembers doing, so a feature another session
-   committed shows as committed here. `status` is the item's own field, plus
-   two the store does not carry: `next` for the one about to be launched,
-   and `admitted` for one this turn appended. A feature that stopped says so
-   in its row with the step it stopped at, and `stop` names the reason. The
-   `dod` line stays `0 of N` until step 6 runs, because ticking it earlier
-   is the inference this skill refuses everywhere else.
+   **`What was done` is the column the table exists for.** It names the
+   file, the symbol, the count — what a reader could check. "Implemented
+   feature 149" describes every commit ever made and tells nobody anything;
+   the row above says which baselines went, which flag left `ci.yaml`, and
+   that three tests had silently never run. That specificity is what lets
+   someone catch a wrong turn at item 2 instead of at the report. On an
+   unbuilt row it is `–`, except for an admitted one, where it carries the
+   DoD line the admission was justified by.
+
+   **`Verified by` is evidence, not a claim.** The command and its result: a
+   count, a mutation that failed the way it should, a route that loaded.
+   "Tests pass" with no number is not evidence, and a commit nothing was run
+   against says `not checked` — which the reader is entitled to see, and
+   which step 6 will have to answer for.
+
+   `Status` is the item's own field, plus two the store does not carry:
+   `next` for the one about to be launched, and `admitted` for one this turn
+   appended. An item that stopped says so with the step it stopped at, and
+   `stop` names the reason. The header line carries the turn number, the
+   commit count against `budget` and `budget_max`, and the branch with its
+   real state (`local, unpushed, no PR` until step 7, then the PR URL).
+   `dod` stays `0 of N` until step 6 runs, because ticking DoD lines from
+   committed features is the inference this skill refuses everywhere else.
 
 5. **Test the whole branch, not just the last feature.** After each commit,
    run the repo's verification over the branch as it now stands (push-pr's
@@ -3479,7 +3506,10 @@ Stamp `origin` with the producer that actually authored the item; never claim
 | Prompting from inside a goal turn | A headless run hangs on it. Stop with `stop: reauthorize` instead. |
 | A turn report that rounds up | The evaluator believes it. Say `not checked` and let it judge not-yet. |
 | A goal turn that only reports at the end | A dozen commits of silence, and the first status anyone sees is a report on work that is already done. Print the goal table after every feature. |
-| A goal table built from what the turn remembers | It is read from the store, so a feature another session committed shows as committed. A table of this turn's memory is the transcript again, not state. |
+| A goal table built from what the turn remembers | Statuses and commits are read back from the store and `git log`, so an item another session committed appears too. A table of this turn's memory is the transcript again, not state. |
+| A `What was done` that restates the item title | It describes every commit ever made. Name the file, the symbol, the count — something a reader can check, and catch a wrong turn on at item 2. |
+| A goal table listing only the built items | Then it is a commit log. Every item in `covers` gets a row; the unbuilt ones are how the table says where this is, not just what was done. |
+| `Verified by: tests pass` | Not evidence. A count, a mutation that failed correctly, a route that loaded — or `not checked`, which the reader is entitled to see. |
 | Skipping a failed item to keep a goal moving | The goal gets reported done with a hole nobody can see afterwards. Stop instead. |
 | Calling a goal done because its features are | Verify the goal's own DoD by running it. All-features-done is not the outcome. |
 | Merging past a human comment | Someone is engaging with the PR. The loop stops; it does not out-run review. |
