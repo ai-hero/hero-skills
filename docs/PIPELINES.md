@@ -217,12 +217,15 @@ verifies. A goal turn runs the same steps for each bot item it covers, on the bo
 branch. A bot item never joins the goal's own branch: its PR is the bot's and
 has to stay bot-authored.
 
-### Goals: `wayfare next`, then `/goal`
+### Goals: `wayfare next` runs the turn; `/goal` only re-runs it
 
 `hero-skills:wayfare next` picks the next goal in bottom-up order, reads its
 `## Permissions` aloud (`mark-ready`, `respond`, `auto-approve`, `merge`,
-`deploy`, `absorb`), takes the user's in-session authorization, and prints
-the `/goal` line whose turn is `hero-skills:wayfare do GOAL_ID`.
+`deploy`, `absorb`), takes the user's in-session authorization, and runs
+one turn of the goal in that session; `hero-skills:wayfare do GOAL_ID` is
+that same turn on its own. A turn that ends on a stop line prints the
+`/goal` line that would re-run it unattended, for the person to paste;
+wayfare cannot set `/goal` itself.
 
 **A goal is one branch, one PR, and one commit per feature.** The turn builds
 its covered features one after another on the goal's branch, in `covers`
