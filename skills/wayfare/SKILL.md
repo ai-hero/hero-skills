@@ -230,7 +230,7 @@ skipped for work that does not need it (see below).
 | `implementing` | Being built | one-shot, at its first edit |
 | `reviewing` | PR open, awaiting review/merge | one-shot, when the PR opens |
 | `suspended` | Waiting on a sibling repo's reply (`awaiting:` message ids, `suspended_from:` the status it left, `suspended_at:` the date) | one-shot Step 2a when it sends an awaited message; `sync`'s `inbox` stage restores `suspended_from` when the last reply lands or the wait lapses (confirmed) |
-| `done` | Merged; folded back into Source | one-shot when the last PR merges, or `sync` when Source satisfies Target (confirmed) |
+| `done` | Merged; folded back into Source. **Under a goal, `done` means committed on the goal's branch, not yet merged**, and the merge is the goal's *One turn* step 7 | one-shot when the last PR merges, one-shot's commit-only mode when a goal feature commits, or `sync` when Source satisfies Target (confirmed) |
 
 `hero_ready_items` understands this enum for the **build kinds** (`feature`,
 `architecture`, `polish`, `security`, and `bug`) and lists them as `backlog` / `plan` / `READY` /
@@ -1601,7 +1601,14 @@ follows):
   or whose `## Permissions` changed while `active`; a `budget_max` that is absent, not a positive
   integer, or below `budget`; a `concurrency` key left over from the
   per-feature-PR model, which nothing reads any more and which sync removes; an `active` goal holding a `covers`
-  id its `## Comments` do not account for. Every admission opens a dated
+  id its `## Comments` do not account for; and a `done` build item whose
+  `## Comments` carry a `[goal-commit: SHA on BRANCH, unmerged]` marker where
+  that SHA is not an ancestor of the default branch and BRANCH no longer
+  exists. That last one is the residue of a goal whose branch was abandoned:
+  the item claims work the repo does not have, and nothing else re-opens it,
+  because a goal's features are marked `done` when they commit rather than
+  when they merge. Report it with the SHA and offer to return the item to
+  `ready`. Every admission opens a dated
   entry with a fixed prefix (*Admitting discovered work*), so a `covers` that
   grew without one is a hand-edit under an authorization, reported and never
   silently adopted. `budget` is not checked this way: it is an expectation
@@ -2286,6 +2293,13 @@ memory between turns:
    last one.** A bot item taken between two features leaves the checkout on
    the bot's branch, and the next feature is built on top of it.
 
+   Each bot item ends in a merge to the base, so after the last one, fetch and
+   rebase the goal branch onto `origin/$BASE` before checking it out again.
+   Otherwise every feature this turn is built, and step 5's local test run
+   against a base the turn itself moved, which is the stale head this repo
+   refuses to judge on. A conflict there is `stop: failure`, not something to
+   resolve on the user's behalf.
+
    **One feature's failure stops the goal.** It never skips to the next one.
    Because the build is sequential, a stop leaves the branch exactly as the
    last good commit left it, which is a state a person can read, rebuild
@@ -2294,6 +2308,12 @@ memory between turns:
    A report missing the commit SHA is `stop: failure` naming the feature:
    one-shot's commit-only mode has exactly one artifact, and a run that
    produced none did not build anything.
+
+   **Record the commit before launching the next feature.** Append the
+   reported SHA to the goal's `commits:` with the feature it served. That is
+   the only writer of that field, and it is what lets a later reader say which
+   commit belonged to which feature; the budget count still comes from `git
+   log`, never from here.
 
    **Each feature is closed out by its own run, not by the goal.** A
    successful commit-only run writes `status: done` on its feature before it
@@ -2631,26 +2651,45 @@ that needs triple stops and asks. Raising `budget_max` is not a turn's to do;
 that is `wayfare next`, a person, and a fresh gate.
 
 The spend itself is a set, not a count. Each commit appends its SHA to
-`commits`; a turn reads `len(commits)` against `budget`. With a
-fungible budget one feature may spend two commits, so the spend can no longer
-be re-derived from item statuses, and `git log` alone cannot say which commit
-belonged to which feature.
+`commits` as it lands, with the feature it served. That set is a record for a
+reader: with a fungible budget one feature may spend two commits, so the spend
+can no longer be re-derived from item statuses, and `git log` alone cannot say
+which commit belonged to which feature. **Never count it against the budget.**
+The count comes from `git log --oneline "origin/$BASE..$GOAL_BRANCH"` and
+nowhere else, because after step 7 merges that range is empty while `commits`
+still holds every SHA, and a turn reading the field would stop with
+`stop: budget` on a branch with nothing on it.
 
 ### Advancing one item
 
-One procedure, two callers: `do ID` names the item; a goal turn selects
-the next one in its `covers` (a bot item in `covers` goes to *Carrying a
-bot's PR* instead). It takes a **planned** feature as far
-as the gates allow in a single run (one-shot). It never plans, because planning is
-`sync`'s postflight, and the ready-mark was given there.
+One procedure, one caller: `do ID` names the item. It takes a **planned**
+feature as far as the gates allow in a single run (one-shot). It never plans,
+because planning is `sync`'s postflight, and the ready-mark was given there.
+
+**A goal turn does not route through here.** *One turn* step 4 owns its own
+selection: it drains bot items before the feature loop rather than in `covers`
+order, and launches a subagent per feature. Both callers shared this procedure
+once and no longer do. An agent that reaches a goal's bot item through this
+section takes it mid-loop, which leaves the checkout on the bot's branch under
+the next feature.
 
 1. **Select.** Run `hero_ready_items "$STORE"`. If it fails (a missing or unset
    store), STOP and name the path; a failed listing is not an empty roadmap.
    For `do`, the feature is the given id: find its row and act on its tier.
    For a goal turn, take the first non-empty tier among `covers`, lowest id
    within it, finishing what is started before starting more:
+   **A `done` feature whose `## Comments` carry an unmerged `[goal-commit:]`
+   marker is not a satisfied dependency.** Its code is on a goal branch, not
+   on the default branch, so anything that `depends_on` it would be built
+   against a tree that lacks it. `hero_ready_items` has one notion of `done`
+   and cannot see this, so check the marker here before acting on a tier, and
+   report the blocking goal instead of building. `wayfare next` is already
+   safe (the goal stays `active` until its PR merges, and a goal's derived
+   `depends_on` holds the order), so this is the gap `do ID` has to cover.
+
    1. `active` feature, mid-build: check out its branch if one exists (its
-      `## Comments` records the branch/PR from previous runs), then invoke
+      `branch:` field names it, which is what `resume-state.sh` matches on;
+      `## Comments` records the PR from previous runs), then invoke
       `hero-skills:one-shot` (via the Skill tool); resume detection takes
       over.
    2. `review` feature: its PR is recorded in `## Comments` (one-shot
