@@ -922,6 +922,9 @@ jobs:
           echo "verdict_token=${VERDICT_TOKEN:-(none)}"
 
       - name: Post result
+        # The crash reporter downstream keys on this step's outcome, so it
+        # needs an id to be addressable at all.
+        id: post_result
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
@@ -938,8 +941,11 @@ jobs:
           *Verified using hero-skills ($CLAUDE_MODEL) • $TIMESTAMP*"
 
           # Update existing or create new
-          EXISTING=$(gh api \
-            /repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
+          # --paginate: an unpaginated read returns only the first 30 comments,
+          # so on a PR with more than that the existing verdict reads as absent
+          # and this posts a second one beside it.
+          EXISTING=$(gh api --paginate \
+            "/repos/${{ github.repository }}/issues/$PR_NUMBER/comments?per_page=100" \
             --jq '.[] | select(.body | startswith("<!-- claude-approve -->")) | .id' \
             | head -1)
 
@@ -1011,21 +1017,29 @@ jobs:
         # the 👀. ship-pr then polls a "failed run with no verdict". Say so
         # on the PR, with the run URL, so the failure is where the author is
         # looking.
-        if: failure()
+        #
+        # Keyed on Post result's outcome, not on failure() alone: any step
+        # AFTER it can fail the job — React with result calls the reactions
+        # API and carries no continue-on-error — and this step would then
+        # PATCH a real APPROVE into "crashed before reaching a verdict",
+        # sending the author to hunt for feedback that does not exist. An
+        # outcome of "" (the step never ran) still reports, which is the case
+        # this step was written for. cancelled() is here because the job's
+        # timeout-minutes is how a hung model call ends, and failure() does
+        # not fire on that.
+        if: (failure() || cancelled()) && steps.post_result.outcome != 'success'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          # github.event.* rather than steps.pr.outputs.*, because the step
-          # that sets those may be the one that died. On a trigger that is not
-          # an issue_comment both are empty, and the URLs below would 404 into
-          # continue-on-error's silence.
-          if [ -z "$PR_NUMBER" ]; then
-            echo "::error::no PR number in the event payload — cannot report the crash"
-            exit 0
-          fi
+          # github.event.* rather than steps.pr.outputs.*: the step that sets
+          # those may be the one that died.
+          REPO="${{ github.repository }}"
+
+          # test: begin crash-notice
           # A step that failed for a reason it could name leaves it in
           # lane_error.txt. Without this the author reads only "crashed" and
           # has to open the run to learn that, say, the commit list came back
@@ -1039,23 +1053,39 @@ jobs:
           ## Verdict
           REQUEST_CHANGES
           The auto-approve run crashed before reaching a verdict — see $RUN_URL. Fix the cause (or re-run if it was transient) and post \`@auto-approve\` again.$REASON"
-          EXISTING=$(gh api \
-            /repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
-            --jq '.[] | select(.body | startswith("<!-- claude-approve -->")) | .id' \
-            | head -1)
+
           POSTED=1
+          # Guarded, and --paginate: this shell has no pipefail, so `head`
+          # swallows gh's status and a failed read is indistinguishable from
+          # "nothing to patch" — which posts a duplicate verdict and reports
+          # success. Unpaginated it reads only the first 30 comments, which
+          # does the same thing on any PR longer than that.
+          if ! COMMENT_IDS=$(gh api --paginate \
+               "/repos/$REPO/issues/$PR_NUMBER/comments?per_page=100" \
+               --jq '.[] | select(.body | startswith("<!-- claude-approve -->")) | .id'); then
+            echo "::error::could not read the comments on PR #$PR_NUMBER — a notice posted now may duplicate the verdict already there"
+            COMMENT_IDS=
+          fi
+          EXISTING=$(printf '%s\n' "$COMMENT_IDS" | head -1)
+
+          # POST is the fallback, not the alternative: the comment can be
+          # deleted between the read and the write, and stopping there would
+          # lose the notice on the one channel that reaches the author.
           if [ -n "$EXISTING" ]; then
-            gh api --method PATCH /repos/${{ github.repository }}/issues/comments/$EXISTING -f body="$BODY" || POSTED=
+            gh api --method PATCH "/repos/$REPO/issues/comments/$EXISTING" -f body="$BODY" \
+              || gh api --method POST "/repos/$REPO/issues/$PR_NUMBER/comments" -f body="$BODY" \
+              || POSTED=
           else
-            gh api --method POST /repos/${{ github.repository }}/issues/$PR_NUMBER/comments -f body="$BODY" || POSTED=
+            gh api --method POST "/repos/$REPO/issues/$PR_NUMBER/comments" -f body="$BODY" || POSTED=
           fi
           # continue-on-error is what keeps this step from masking the failure
-          # it reports, and it would mask this one just as well: a PR left
-          # with no verdict is exactly what ship-pr reports as a failed run
-          # with no cause. A vendored caller.yaml missing a scope this file
-          # declares is the way that happens in practice.
+          # it reports, and it would mask this one just as well: a PR left with
+          # no verdict is what ship-pr reports as a failed run with no cause.
+          # A secondary rate limit or a locked conversation is how the write
+          # fails on a run that got this far.
           [ -n "$POSTED" ] || echo "::error::could not post the crash notice on PR #$PR_NUMBER — the PR has no verdict; see this run's logs"
-          gh api --method POST \
-            /repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+
+          gh api --method POST "/repos/$REPO/issues/comments/$COMMENT_ID/reactions" \
             -f content="-1" \
             || echo "::warning::could not react to the trigger comment"
+          # test: end crash-notice
