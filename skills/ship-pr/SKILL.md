@@ -1029,7 +1029,7 @@ else
   # A probe taken while the merge commit's own workflow runs are still going
   # measures the PREVIOUS deploy. This step NEVER waits for them: it is
   # advisory, it cannot un-merge what Step 7a landed, and a sleep here is paid
-  # on every merged PR and multiplied by a goal's concurrency.
+  # on every merged PR.
   if [ "$DEPLOY_PLATFORM" != "none" ]; then
     MERGE_COMMIT=$(gh pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid // empty') \
       || { MERGE_COMMIT=""; DEPLOY_CAVEAT="could not read the merge commit — the health result may be the previous deploy's"; }

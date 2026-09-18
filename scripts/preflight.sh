@@ -66,7 +66,7 @@ HERO_LIB="$(cd "$(dirname "$SELF")" && pwd)/hero-lib.sh"
 # shellcheck source=/dev/null
 . "$HERO_LIB"
 command -v hero_root >/dev/null 2>&1 \
-  || { echo "preflight: sourced $HERO_LIB but hero_root is undefined — library is corrupt" >&2; exit 2; }
+  || { echo "preflight: sourced $HERO_LIB but hero_root is undefined; library is corrupt" >&2; exit 2; }
 
 # ---------- arg parsing ----------------------------------------------------
 
@@ -125,7 +125,7 @@ if [ "$AUTO_SCOPE" = "true" ]; then
   else
     AS_BASE_OK=false
     [ "$QUIET" = "true" ] || {
-      echo "auto-scope: origin/$AS_DEFAULT does not resolve — cannot derive scope from the diff." >&2
+      echo "auto-scope: origin/$AS_DEFAULT does not resolve; cannot derive scope from the diff." >&2
       echo "auto-scope: checking ALL projects instead. Fix with: git fetch origin $AS_DEFAULT" >&2
     }
   fi
@@ -153,11 +153,11 @@ if [ "$AUTO_SCOPE" = "true" ]; then
      && [ "$AS_BRANCH" = "$AS_DEFAULT" ] && [ -z "$AS_DIRTY" ]; then
     if [ "$BUCKET" = "all" ]; then
       BUCKET=no-runtime
-      [ "$QUIET" = "true" ] || echo "auto-scope: fresh start — skipping runtime bucket"
+      [ "$QUIET" = "true" ] || echo "auto-scope: fresh start, skipping runtime bucket"
     else
       # Printing "skipping runtime bucket" here and then running it (because
       # --bucket was explicit) is a lie that gets believed later.
-      [ "$QUIET" = "true" ] || echo "auto-scope: fresh start, but --bucket $BUCKET was requested explicitly — running it anyway"
+      [ "$QUIET" = "true" ] || echo "auto-scope: fresh start, but --bucket $BUCKET was requested explicitly, so running it anyway"
     fi
   elif [ -n "$PROJECT_SCOPE" ]; then
     [ "$QUIET" = "true" ] || echo "auto-scope: runtime checks scoped to '$PROJECT_SCOPE'"
@@ -242,7 +242,7 @@ check_tooling() {
     if [ "${node_major:-0}" -ge 18 ] 2>/dev/null; then
       emit OK "tooling: node $(node --version) (>=18)"
     else
-      emit WARN "tooling: node $(node --version 2>/dev/null || echo missing) — Playwright MCP needs >=18"
+      emit WARN "tooling: node $(node --version 2>/dev/null || echo missing); Playwright MCP needs >=18"
     fi
   else
     emit WARN "tooling: 'node' not installed — push-pr's test-phase UI smoke will be unavailable"
@@ -625,10 +625,10 @@ esac
 
 echo ""
 if [ "$BLOCKERS" -gt 0 ]; then
-  echo "preflight: $BLOCKERS blocker(s), $WARNINGS warning(s) — pipeline will fail. Fix blockers above before running hero-skills:one-shot."
+  echo "preflight: $BLOCKERS blocker(s), $WARNINGS warning(s); pipeline will fail. Fix blockers above before running hero-skills:one-shot."
   exit 1
 elif [ "$WARNINGS" -gt 0 ]; then
-  echo "preflight: 0 blockers, $WARNINGS warning(s) — safe to proceed; warnings are advisory."
+  echo "preflight: 0 blockers, $WARNINGS warning(s): safe to proceed, warnings are advisory."
   exit 0
 else
   echo "preflight: all checks passed."

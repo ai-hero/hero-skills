@@ -164,7 +164,7 @@ ROOT="${2:-$(hero_root)}"
 # argument reported another skill's fields and recalibrate wrote them.
 SKILL_ROWS=$(rows | awk -F'|' -v s="$SKILL" '$1 == s')
 if [ -z "$SKILL_ROWS" ]; then
-  echo "hero-fields: no map entry for '$SKILL' — run --list for the skills that have one" >&2
+  echo "hero-fields: no map entry for '$SKILL'; run --list for the skills that have one" >&2
   exit 2
 fi
 

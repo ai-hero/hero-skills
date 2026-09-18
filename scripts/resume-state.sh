@@ -66,7 +66,7 @@ if ! . "$HERO_LIB" 2>/dev/null; then
   # row could not match and the run proceeded on garbage.
   echo "STATE_OK=false"
   echo "STATE_ERRORS=lib"
-  echo "echo 'resume-state: cannot source hero-lib.sh — reinstall the plugin.' >&2"
+  echo "echo 'resume-state: cannot source hero-lib.sh; reinstall the plugin.' >&2"
   exit 0
 fi
 
@@ -233,10 +233,14 @@ fi
 # script is read-only.
 #
 # Which active item is THIS branch's: the one whose `branch:` matches (one-shot
-# Step 2 writes it at the first edit). Under a wayfare goal turn every worktree's
-# feature is `implementing` in the shared store, so "the single active item"
-# is not a rule that holds there. Items without `branch:` predate the field;
-# for those, a single one is taken and two is a claim conflict.
+# Step 2 writes it at the first edit). "The single active item" is not a rule
+# that holds: a goal's features all sit in the shared store, so several can be
+# active at once. What keeps this unambiguous is that a goal's features share
+# ONE branch and each is closed out to `done` by its own commit-only run before
+# the next one starts, so at most one is ever active on a given branch. Two
+# matches means that close-out did not happen; it is a real conflict, not a
+# case to guess at. Items without `branch:` predate the field; for those, a
+# single one is taken and two is a claim conflict.
 ITEM_INFLIGHT=0
 ITEM_FILE=""
 SUBTASKS_OPEN=""; SUBTASKS_TOTAL=""; DOD_OPEN=""; DOD_TOTAL=""

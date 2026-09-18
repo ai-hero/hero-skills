@@ -1,8 +1,8 @@
 ---
 name: push-pr
 # prettier-ignore
-description: Test (verify + smoke), commit, push, and open a draft PR with a CI report. Pass test to run only the test phase, ready for a non-draft PR, or a target branch to merge into.
-argument-hint: "[recalibrate | test [MODIFIER...] | ready | target-branch]"
+description: Test (verify + smoke), commit, push, and open a draft PR with a CI report. Pass test for the test phase only, commit to stop before pushing, ready for a non-draft PR, or a target branch to merge into.
+argument-hint: "[recalibrate | test [MODIFIER...] | commit | ready | target-branch]"
 ---
 
 # Push: test, commit, push, open a draft PR, or merge
@@ -13,12 +13,13 @@ The test phase (Step 2) absorbed the former `hero-skills:test-changes` skill. Ru
 
 ## Arguments
 
-- `$ARGUMENTS` - Optional mode keyword or target branch. Only the **first** whitespace-separated token is matched against the keywords below, and it must match exactly rather than by prefix. A branch literally named `test` or `ready` cannot be targeted this way, and needs a rename or a manual `git merge` instead:
+- `$ARGUMENTS` - Optional mode keyword or target branch. Only the **first** whitespace-separated token is matched against the keywords below, and it must match exactly rather than by prefix. A branch literally named `test`, `commit` or `ready` cannot be targeted this way, and needs a rename or a manual `git merge` instead:
   - `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before every other form.
   - (none, default) - Test, commit if dirty, push, and create a **draft** PR
   - `test [MODIFIER...]` - Run only Step 2 (verification plus smoke tests) and stop. No commit, no push. Optional trailing tokens narrow the run: `verify` (static checks + unit tests only), `smoke` (skip verification), `backend`, `frontend [routes...]` (routes must start with `/`), `cli`, `mcp`, or free text (a test description to focus on)
+  - `commit` - Run Step 2, then Step 3 (smart commit), and stop. No push, no PR. This is what a wayfare goal turn calls per feature: the goal lands one commit per feature on its own branch and opens a single PR at the end.
   - `ready` - Test, commit if dirty, push, and create a non-draft PR (ready for review immediately). Only use this when you have already self-reviewed, or for trivial changes
-  - Any other first token - Treated as a target branch name (e.g., `main`, `develop`): test, commit if dirty, push, then merge into that branch (no PR). A branch literally named `recalibrate`, `test`, or `ready` cannot be targeted this way and needs a rename or a manual `git merge`
+  - Any other first token - Treated as a target branch name (e.g., `main`, `develop`): test, commit if dirty, push, then merge into that branch (no PR). A branch literally named `recalibrate`, `test`, `commit`, or `ready` cannot be targeted this way and needs a rename or a manual `git merge`
 
 ## `recalibrate`
 
@@ -82,6 +83,8 @@ Parse only the first whitespace-separated token. A target branch that happens to
 **If `$FIRST_ARG` is exactly `recalibrate`, none of this step runs.** Go to the `recalibrate` section above and stop there. The catch-all below treats any unrecognized first token as a branch to merge into, so missing this dispatch merges the work into a branch named `recalibrate`.
 
 **If `$FIRST_ARG` is exactly `test`, skip this step.** A test-only run commits nothing, so it may run on any branch, including the default.
+
+**If `$FIRST_ARG` is exactly `commit`, skip this step too, but for the opposite reason:** the caller has already put this checkout on the branch it wants the commit on. A goal turn owns its branch, and branching here would move the commit off it.
 
 Never commit or push directly to the default branch.
 
@@ -698,6 +701,11 @@ Commits Created: N
 Pre-commit: PASSED (or SKIPPED)
 ```
 
+**If `$FIRST_ARG` is exactly `commit`, STOP here.** Print the commit SHA as
+the deliverable and do not continue. The caller (a wayfare goal turn, through
+one-shot's commit-only mode) pushes and opens the PR once, after every feature
+is in and the branch has passed locally.
+
 Proceed to Step 4.
 
 ### Step 4: Determine Workflow
@@ -706,6 +714,7 @@ Proceed to Step 4.
 | --- | --- |
 | (none, default) | Push + **Draft** PR |
 | `test` | Already stopped after Step 2 (test-only) |
+| `commit` | Stop after Step 3: the commit is the deliverable. Report the SHA and stop; do not reach Workflow A or B. |
 | `ready` | Push + non-draft PR |
 | `main`/`master` | Push + Merge to main |
 | Other branch | Push + Merge to target |
@@ -971,7 +980,13 @@ This may take a few minutes.
 
 ## Large PR Warning
 
-If diff >1000 lines or >50 files, warn and suggest breaking into smaller PRs.
+Report the size of a large diff (over 1000 lines or 50 files) so the author
+knows what the reviewer is about to get. Do **not** suggest splitting the PR.
+A PR is as big as the work it does, and one of this skill's callers is a
+wayfare goal, whose whole shape is one branch and one PR carrying every
+feature in `covers`. Advising a split there is advising the author to undo
+the grouping on purpose. Commits are where the work is separated, and the
+goal already puts one per feature.
 
 ## Examples
 
@@ -979,6 +994,7 @@ If diff >1000 lines or >50 files, warn and suggest breaking into smaller PRs.
 hero-skills:push-pr                                       # Test, commit, push, draft PR
 hero-skills:push-pr ready                                 # Test, commit, push, non-draft PR
 hero-skills:push-pr test                                  # Test only (verification + smoke), no commit
+hero-skills:push-pr commit                                # Test and commit, stop before pushing
 hero-skills:push-pr test verify                           # Only lint, typecheck, unit tests
 hero-skills:push-pr test frontend /dashboard /settings    # Smoke-test specific routes (verbatim)
 hero-skills:push-pr test cli run the export command       # Smoke-test a specific CLI command
