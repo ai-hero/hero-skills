@@ -2164,10 +2164,13 @@ be the first one after a resume or a compaction, so nothing is carried in
 memory between turns:
 
 1. **Read the store, not the transcript.** Load the goal item; run
-   `hero_ready_items`; derive from the store which of `covers` are done,
-   which is in flight, and how many commits the branch carries against
-   `budget`. `git log --oneline "origin/$BASE..$GOAL_BRANCH"` is that count;
-   the `## Turn log` says what the last turn did. Also read
+   `hero_ready_items`; derive from the store which of `covers` are done and
+   which is in flight, and count the branch's commits against `budget` with
+   `git log --oneline "origin/$BASE..$GOAL_BRANCH"`. **Git is the one source
+   for that count.** The `commits:` field is a record for a reader, appended
+   as each commit lands; never compute the budget from it, because after step
+   7 merges the branch that range is empty while `commits:` still holds N.
+   The `## Turn log` says what the last turn did. Also read
    `hero_deploy_pending`, the deploy probes earlier merges deferred instead
    of waiting on. The goal drains them at step 6, and a deferred probe is
    never a reason to hold a build.
@@ -2202,9 +2205,12 @@ memory between turns:
      were written before the previous feature landed. Refresh `source_ref`.
    Any hit → report it and end the turn. Do not start work past a stop.
 4. **Make sure the goal branch exists, then build one feature at a time.**
-   The branch is recorded in the goal's `## Comments` and named by
-   `hero_branch_policy` from the goal's title, prefixed `goal/GOAL_ID-`. On
-   the first turn, cut it from the base:
+   The branch name lives in the goal's `branch:` frontmatter field, written
+   by the first turn and read by every later one. It is `goal/GOAL_ID-SLUG`,
+   where SLUG is the goal's title slugified the way `hero_branch_policy`
+   slugifies a subject. Do not run `hero_branch_policy` for it: that function
+   emits `TYPE/SLUG` for a feature branch, and prefixing its output would give
+   `goal/7-feat/google-sign-in`. On the first turn, cut it from the base:
 
    ```bash
    git checkout -b "$GOAL_BRANCH" "origin/$BASE"
@@ -2241,6 +2247,20 @@ memory between turns:
    line`. On a stop, report the reason and the step it stopped at.
    ```
 
+   **Check `budget_max` before each launch, not just at turn start.** A
+   turn now builds the whole goal, so a start-of-turn check is a check that
+   happens once for a run that may land a dozen commits. Before each feature,
+   and before each fix commit at step 5, re-count the branch and stop at
+   `budget_max` with `stop: budget`, reporting which features are done and
+   which are not. Without this the ceiling the item advertises is one nothing
+   enforces.
+
+   **Re-check the premise for each feature, not just the first.** Step 3
+   checks the next feature's `source` paths at the current head; under a
+   sequential turn every later feature faces a tree the previous one changed,
+   which is the condition that invalidates a plan. Run that same check at the
+   top of this loop for each feature and refresh its `source_ref`.
+
    **One at a time, and wait for each.** Every subagent works in this one
    checkout on this one branch, so two at once would collide in the working
    tree. Sequential is not a performance compromise here; it is what makes
@@ -2260,7 +2280,11 @@ memory between turns:
 
    A bot item in `covers` never joins the goal's branch: its PR is the bot's
    and must stay bot-authored, so it runs *Carrying a bot's PR* on its own,
-   with the same permissions line, and is reported separately.
+   with the same permissions line, and is reported separately. That procedure
+   checks this one checkout out onto the bot's branch, so **drain every bot
+   item before the feature loop, and `git checkout "$GOAL_BRANCH"` after the
+   last one.** A bot item taken between two features leaves the checkout on
+   the bot's branch, and the next feature is built on top of it.
 
    **One feature's failure stops the goal.** It never skips to the next one.
    Because the build is sequential, a stop leaves the branch exactly as the
@@ -2270,6 +2294,15 @@ memory between turns:
    A report missing the commit SHA is `stop: failure` naming the feature:
    one-shot's commit-only mode has exactly one artifact, and a run that
    produced none did not build anything.
+
+   **Each feature is closed out by its own run, not by the goal.** A
+   successful commit-only run writes `status: done` on its feature before it
+   returns. Read that back from the store before launching the next one: a
+   feature still `active` after a reported commit means the close-out did not
+   happen, and the next run will stop with `item-claim-conflict` because two
+   active items claim this branch. Treat it as `stop: failure` naming the
+   feature rather than launching into it. The goal's own `done` is separate
+   and comes at step 7, when the PR merges.
 
 5. **Test the whole branch, not just the last feature.** After each commit,
    run the repo's verification over the branch as it now stands (push-pr's
@@ -2336,21 +2369,29 @@ memory between turns:
    review, respond, ship. One PR, one review pass, one auto-approve, one
    merge, for the whole goal. Nothing here is wayfare's to do by hand.
 
-   When that returns merged, write `status: done` on the goal. A STOP from
-   it (a declined gate, REQUEST_CHANGES, a failed workflow) is the turn's
-   stop too, reported with the gate it rested at; the goal stays `active` and
-   the next turn resumes from the same branch.
+   When that returns merged, run step 8 first, then write `status: done` on
+   the goal — and only if step 8 admitted nothing. Admitted work is work this
+   goal still owes, so a goal that absorbed an item is not done; it stays
+   `active` for the next turn. A STOP from one-shot (a declined gate,
+   REQUEST_CHANGES, a failed workflow) is the turn's stop too, reported with
+   the gate it rested at; the goal stays `active` and the next turn resumes
+   from the same branch.
 8. **Admit what the turn discovered, before deciding the goal is done.**
    Each feature's run reports the items its Step 2a wrote, each with the goal
    DoD line it serves. Run *Admitting discovered work* on that list now, in
    this turn: an item left for `sync` to group is the orphan the next goal
-   gets built around. An admitted item joins `covers` and is built by a later
-   turn like any other, as another commit on the same branch; one that is not
-   admitted is named in the report as follow-up ground, and `sync` groups it.
+   gets built around. An item that is not admitted is named in the report as
+   follow-up ground, and `sync` groups it.
 
-   Admitting after step 7 has merged is too late for this PR. When an
-   admission lands on a turn whose branch is already merged, the goal cuts a
-   fresh branch for the remainder and ships a second PR.
+   Where an admitted item lands depends on whether this turn reached step 7:
+
+   - **The turn stopped before step 7** (a stop condition, a failure, a
+     declined gate). The branch is unmerged, so the admitted item joins
+     `covers` and a later turn builds it as another commit on that same
+     branch, like any other feature.
+   - **The turn merged at step 7.** That PR is gone, so the goal cuts a fresh
+     branch for the remainder and ships a second PR. Write the new name to
+     `branch:`, replacing the merged one.
 
    **One PR per goal is the default, not a guarantee the goal will contort to
    keep.** A goal ships a second PR when what is left is a *different
@@ -2925,8 +2966,8 @@ Re-read every turn. The defaults are always on; add to them per goal.
 - 2026-08-27 (rahul): dated, append-only entries — never rewrite or delete one
 ```
 
-`covers` is the build order; a turn launches from its head as far as
-`budget` and the dependency gate allow. It does not
+`covers` is the build order; a turn works from its head as far as
+`budget_max` and the dependency gate allow. It does not
 replace the features' own `depends_on`, which still gates them individually; a
 `covers` order that contradicts `depends_on` is a defect for `sync` to report.
 A goal's `depends_on` names goals, not features, and is derived: it holds

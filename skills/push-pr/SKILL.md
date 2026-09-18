@@ -1,8 +1,8 @@
 ---
 name: push-pr
 # prettier-ignore
-description: Test (verify + smoke), commit, push, and open a draft PR with a CI report. Pass test to run only the test phase, ready for a non-draft PR, or a target branch to merge into.
-argument-hint: "[recalibrate | test [MODIFIER...] | ready | target-branch]"
+description: Test (verify + smoke), commit, push, and open a draft PR with a CI report. Pass test for the test phase only, commit to stop before pushing, ready for a non-draft PR, or a target branch to merge into.
+argument-hint: "[recalibrate | test [MODIFIER...] | commit | ready | target-branch]"
 ---
 
 # Push: test, commit, push, open a draft PR, or merge
@@ -980,7 +980,13 @@ This may take a few minutes.
 
 ## Large PR Warning
 
-If diff >1000 lines or >50 files, warn and suggest breaking into smaller PRs.
+Report the size of a large diff (over 1000 lines or 50 files) so the author
+knows what the reviewer is about to get. Do **not** suggest splitting the PR.
+A PR is as big as the work it does, and one of this skill's callers is a
+wayfare goal, whose whole shape is one branch and one PR carrying every
+feature in `covers`. Advising a split there is advising the author to undo
+the grouping on purpose. Commits are where the work is separated, and the
+goal already puts one per feature.
 
 ## Examples
 
@@ -988,6 +994,7 @@ If diff >1000 lines or >50 files, warn and suggest breaking into smaller PRs.
 hero-skills:push-pr                                       # Test, commit, push, draft PR
 hero-skills:push-pr ready                                 # Test, commit, push, non-draft PR
 hero-skills:push-pr test                                  # Test only (verification + smoke), no commit
+hero-skills:push-pr commit                                # Test and commit, stop before pushing
 hero-skills:push-pr test verify                           # Only lint, typecheck, unit tests
 hero-skills:push-pr test frontend /dashboard /settings    # Smoke-test specific routes (verbatim)
 hero-skills:push-pr test cli run the export command       # Smoke-test a specific CLI command

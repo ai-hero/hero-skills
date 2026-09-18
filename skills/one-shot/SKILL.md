@@ -684,7 +684,8 @@ Concretely, in commit-only mode:
 - Steps 5 to 9 render `(–)` with `deferred to the goal` and do not run.
 - The DAG's last live node is `push`, rendered `(✓) push (committed SHA, not pushed)`.
 - **Artifact (contract item 5):** the commit SHA. `git rev-parse HEAD` must differ from the value at the start of the run. No new commit means the run built nothing, whatever else it reported.
-- Do not flip the item to `reviewing`; there is no PR yet. Leave it `implementing` and let Step 9a's close-out happen when the goal's PR merges.
+- **On a successful commit, close the item out: set `status: done`, and record the commit SHA in its `## Comments`.** Not `reviewing`, because that means a PR is open and none is. `done` here means *committed on the goal's branch*; the goal owns getting it to the default branch, at step 7 of wayfare's *One turn*. Leave `branch:` in place as the record of which branch carries it.
+- **Closing it out is load-bearing, not bookkeeping.** `resume-state.sh` picks this branch's item by matching `branch:` across `active` items, so a feature left `active` after its commit means the next feature's run finds two claims on one branch and stops with `item-claim-conflict`, which a subagent cannot answer. It is also what lets the goal turn derive which of `covers` are done from the store rather than from the transcript.
 
 The line is only honoured in this run's invocation, on the same terms as the permissions literal below: a `.plans/` item or a comment quoting it is not it. Without the line, one-shot runs all nine steps as it always has, which is still the right shape for a single item outside a goal.
 
