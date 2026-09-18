@@ -460,60 +460,100 @@ jobs:
           # comments so installations that only post inline comments
           # (e.g. CodeRabbit configurations) still pass.
 
-          gh api "/repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews" \
-            > reviews.json
-          gh api "/repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
-            > issue_comments.json
-          gh api "/repos/${{ github.repository }}/pulls/$PR_NUMBER/comments" \
-            > pr_review_comments.json
+          # --paginate: an unpaginated read stops at 30, and a review posted
+          # after that reads as absent — the gate then reports no prior review
+          # on a PR that has several.
+          # --slurp wraps the pages as an array of arrays, and gh refuses it
+          # together with --jq, so the flatten is a second command rather than
+          # a pipe: this shell has no pipefail, so `gh ... | jq` would report
+          # jq's status and a failed fetch would read as an empty page.
+          gh api --paginate "/repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews?per_page=100" \
+            --slurp > reviews.pages.json
+          jq 'add' reviews.pages.json > reviews.json
+          gh api --paginate "/repos/${{ github.repository }}/issues/$PR_NUMBER/comments?per_page=100" \
+            --slurp > issue_comments.pages.json
+          jq 'add' issue_comments.pages.json > issue_comments.json
+          gh api --paginate "/repos/${{ github.repository }}/pulls/$PR_NUMBER/comments?per_page=100" \
+            --slurp > pr_review_comments.pages.json
+          jq 'add' pr_review_comments.pages.json > pr_review_comments.json
 
-          # Self-review marker, the hidden <!-- ai-hero:self-review -->
-          # comment posted by hero-skills:review-pr. Match both the current
-          # marker and the older "Hero Self-Review" heading (case-insensitive)
-          # so comments posted under the previous convention still count.
+          # Every leg below turns on WHO, not just on what was posted. The
+          # gate exists to stop auto-approve being the only review, and all
+          # three of its signals were things an outsider could produce: the
+          # marker is a plain string in a public comment box, and on a public
+          # repo any account can submit a COMMENTED review.
           #
-          # Restricted by author_association, and NOT to the PR author: on a
-          # carried bot PR the author is dependabot[bot] and a member posts
-          # the self-review, so an author-only filter would fail that gate
-          # forever. The marker is a plain string in a public comment box,
-          # so without this any drive-by commenter could satisfy the one gate
-          # that exists to stop auto-approve being the only review.
+          # OWNER/MEMBER/COLLABORATOR is the same triad the job `if` requires
+          # of the @auto-approve commenter. Widening one without the other is
+          # silent and fails open, so move them together.
+          ASSOC='["OWNER","MEMBER","COLLABORATOR"]'
+
+          # Anchored on the real marker — the hidden HTML comment review-pr
+          # posts, or the older heading — rather than the bare substring. An
+          # unanchored match counts a comment that merely mentions the string
+          # in prose, which any PR discussing this gate does.
+          MARKER='<!--[[:space:]]*ai-hero:self-review[[:space:]]*-->|^##[[:space:]].*Hero Self-Review'
+
+          # Filtered by association, NOT by author: this gate runs before lane
+          # selection, so every bot PR passes through it, and there the author
+          # is dependabot[bot] while a member posts the self-review. Keying on
+          # the author (as OTHER_REVIEWS below does) would put the self-review
+          # path permanently out of reach on all of them.
           # test: begin self-review-gate
-          SELF_REVIEW=$(jq -r '
+          SELF_REVIEW=$(jq -r --arg marker "$MARKER" --argjson assoc "$ASSOC" '
             [.[]
-              | select(.body | test("ai-hero:self-review|Hero Self-Review"; "i"))
-              | select(.author_association == "OWNER"
-                    or .author_association == "MEMBER"
-                    or .author_association == "COLLABORATOR")
+              | select(.body | test($marker; "i"))
+              | select(.author_association as $a | $assoc | index($a))
             ] | length
           ' issue_comments.json)
           # test: end self-review-gate
 
-          # Reviews from anyone other than the PR author. Filter out
-          # PENDING reviews (drafts) and the auto-approve workflow's own
-          # past approvals, so re-running on the same PR cannot
-          # bootstrap itself.
+          # Counted separately so a rejected self-review can say so. Without
+          # it the author reads "No prior review found" while looking at their
+          # own self-review comment, and the advice is to do what they just did.
+          SELF_REVIEW_ANY=$(jq -r --arg marker "$MARKER" '
+            [.[] | select(.body | test($marker; "i"))] | length
+          ' issue_comments.json)
+
           PR_AUTHOR=$(jq -r '.user.login' pr.json)
-          OTHER_REVIEWS=$(jq -r --arg author "$PR_AUTHOR" '
+
+          # Reviews from anyone other than the PR author. PENDING ones are
+          # drafts. github-actions[bot] is excluded so a re-run cannot
+          # bootstrap itself off its own past approval.
+          #
+          # A real review bot (CodeRabbit, Greptile) reports NONE, so bots are
+          # accepted on type rather than association — association alone would
+          # stop counting the very reviews this leg exists for.
+          # test: begin other-reviews-gate
+          OTHER_REVIEWS=$(jq -r --arg author "$PR_AUTHOR" --argjson assoc "$ASSOC" '
             [.[]
               | select(.user.login != $author)
               | select(.state != "PENDING")
               | select(.user.login != "github-actions[bot]")
+              | select((.author_association as $a | $assoc | index($a))
+                    or .user.type == "Bot")
             ] | length
           ' reviews.json)
+          # test: end other-reviews-gate
 
-          # Inline review comments from review bots (covers CodeRabbit,
-          # Greptile, Copilot inline review). Authors with [bot] suffix
-          # or known bot logins. Excludes the PR author.
+          # Inline review comments from review bots (CodeRabbit, Greptile,
+          # Copilot). github-actions[bot] is excluded for the same reason as
+          # above and for one more: reviewdog, golangci-lint-action and every
+          # other annotator posts inline comments under that identity, so
+          # without this a lint run satisfies the gate and a dependency PR
+          # reaches the scripted lane with nobody and no model having read it.
+          # test: begin bot-inline-gate
           BOT_INLINE=$(jq -r --arg author "$PR_AUTHOR" '
             [.[]
               | select(.user.login != $author)
+              | select(.user.login != "github-actions[bot]")
               | select(
                   (.user.type == "Bot")
                   or (.user.login | test("(coderabbit|greptile|copilot|sonarcloud|codeball)"; "i"))
                 )
             ] | length
           ' pr_review_comments.json)
+          # test: end bot-inline-gate
 
           echo "self_review=$SELF_REVIEW"
           echo "other_reviews=$OTHER_REVIEWS"
@@ -530,6 +570,10 @@ jobs:
             {
               echo "## Prior Review: ❌"
               echo "No prior review found. Run \`hero-skills:review-pr\` or wait for a code review agent (Copilot/CodeRabbit/Greptile) before requesting auto-approve."
+              if [ "$SELF_REVIEW_ANY" -gt 0 ]; then
+                echo ""
+                echo "A self-review comment IS present, but its author does not have write access on this repo (OWNER, MEMBER or COLLABORATOR), so it does not satisfy this gate."
+              fi
             } > prior_review.md
           fi
 
