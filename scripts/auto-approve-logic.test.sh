@@ -51,7 +51,7 @@ run_block() { # NAME [env assignments...] -> runs in $WORK under bash -e
   ( cd "$WORK" && env "$@" bash -e "$WORK/$name.sh" )
 }
 
-for name in classify diff-filter go-pkgs claims ci-decision verdict-parse bot-lane submit-verdict; do
+for name in classify diff-filter go-pkgs claims ci-decision verdict-parse bot-lane submit-verdict crash-notice; do
   extract "$name" > "$WORK/$name.sh"
   check "extract: $name non-empty" "yes" "$([[ -s "$WORK/$name.sh" ]] && echo yes || echo no)"
   check "extract: $name parses" "0" "$(bash -n "$WORK/$name.sh" 2>/dev/null; echo $?)"
@@ -344,6 +344,84 @@ svbody() {
 svhas() { case "$(svbody)" in *"$1"*) echo yes ;; *) echo no ;; esac; }
 check "submit-verdict: approval names the SHA" "yes" "$(svhas deadbee)"
 check "submit-verdict: approval names the run" "yes" "$(svhas https://example.test/run/1)"
+
+# --- crash-notice -----------------------------------------------------------
+# The gh calls ARE the subject here (bot-lane's model, not submit-verdict's):
+# every behaviour this block has is a call that did or did not happen, so the
+# stub dispatches on the request and each case sets its own exit code.
+# Call COUNT, method and body content are pinned; the full argv is not, because
+# unlike bot-lane's arity bug the exact string is not the regression.
+crash() { # RC_LIST RC_PATCH RC_POST RC_REACT [EXISTING_ID] [LANE_ERROR]
+  mkdir -p "$WORK/bin"
+  printf '%s' "${5-}" > "$WORK/gh_list"
+  { echo '#!/usr/bin/env bash'
+    echo "printf '%s\n' \"\$*\" >> $WORK/gh_argv"
+    echo "printf '%s' \"\$*\" > $WORK/gh_last"
+    echo "case \"\$*\" in"
+    echo "  *reactions*)      exit $4 ;;"
+    echo "  *'--method PATCH'*) printf '%s\n' \"\$*\" >> $WORK/gh_patch; exit $2 ;;"
+    echo "  *'--method POST'*)  printf '%s\n' \"\$*\" >> $WORK/gh_post;  exit $3 ;;"
+    echo "  *)                cat $WORK/gh_list; exit $1 ;;"
+    echo "esac"
+  } > "$WORK/bin/gh"
+  chmod +x "$WORK/bin/gh"
+  : > "$WORK/gh_argv"; : > "$WORK/gh_patch"; : > "$WORK/gh_post"
+  rm -f "$WORK/lane_error.txt"
+  [ -n "${6-}" ] && printf '%s' "$6" > "$WORK/lane_error.txt"
+  local log rc
+  log=$( cd "$WORK" && PATH="$WORK/bin:$PATH" \
+    REPO=o/r PR_NUMBER=7 COMMENT_ID=42 RUN_URL=https://example.test/run/1 \
+    bash -e "$WORK/crash-notice.sh" 2>&1 ); rc=$?
+  printf '%s|%s' "$rc" "$log"
+}
+ann() { case "$1" in *"$2"*) echo yes ;; *) echo no ;; esac; }
+# Count the calls, not the lines: the notice body is multi-line, so each
+# logged argv spans several lines and `wc -l` counts the body.
+calls() { grep -c -e "--method $2" "$WORK/$1" || true; }
+
+# Happy path: no existing verdict comment, everything succeeds.
+OUT=$(crash 0 0 0 0)
+check "crash-notice: clean run exits 0" "0" "${OUT%%|*}"
+check "crash-notice: clean run posts no error" "no" "$(ann "$OUT" '::error::')"
+check "crash-notice: clean run POSTs the notice" "1" "$(calls gh_post POST)"
+check "crash-notice: clean run does not PATCH" "0" "$(calls gh_patch PATCH)"
+check "crash-notice: the notice carries the run URL" "yes" \
+  "$(ann "$(cat "$WORK/gh_post")" 'https://example.test/run/1')"
+
+# An existing verdict comment is PATCHed in place, not duplicated.
+OUT=$(crash 0 0 0 0 555)
+check "crash-notice: existing comment is PATCHed" "1" "$(calls gh_patch PATCH)"
+check "crash-notice: existing comment is not duplicated" "0" "$(calls gh_post POST)"
+
+# A deleted comment 404s the PATCH; POST is the fallback, and it is silent
+# because the notice still reached the PR.
+OUT=$(crash 0 1 0 0 555)
+check "crash-notice: failed PATCH falls back to POST" "1" "$(calls gh_post POST)"
+check "crash-notice: the fallback is not reported as a failure" "no" "$(ann "$OUT" '::error::could not post')"
+
+# Both writes fail: the PR has no verdict and that must be said.
+OUT=$(crash 0 1 1 0 555)
+check "crash-notice: both writes failing is reported" "yes" "$(ann "$OUT" '::error::could not post')"
+check "crash-notice: a failed write still exits 0" "0" "${OUT%%|*}"
+
+# The read is the hole this suite exists to hold shut: `head` swallows gh's
+# status where there is no pipefail, so an unguarded failure reads as
+# "nothing to patch" and silently posts a duplicate.
+OUT=$(crash 1 0 0 0)
+check "crash-notice: a failed read is reported" "yes" "$(ann "$OUT" '::error::could not read')"
+check "crash-notice: a failed read still posts the notice" "1" "$(calls gh_post POST)"
+
+# A missing reaction is cosmetic; it must not cost the notice or the exit code.
+OUT=$(crash 0 0 0 1)
+check "crash-notice: a failed reaction warns" "yes" "$(ann "$OUT" '::warning::')"
+check "crash-notice: a failed reaction still exits 0" "0" "${OUT%%|*}"
+check "crash-notice: a failed reaction still posts the notice" "1" "$(calls gh_post POST)"
+
+# lane_error.txt is written by the bot lane and asserted there; this is the
+# other half of that contract — that it is actually read into the notice.
+OUT=$(crash 0 0 0 0 "" "the commit list came back truncated")
+check "crash-notice: lane_error.txt reaches the notice" "yes" \
+  "$(ann "$(cat "$WORK/gh_post")" 'came back truncated')"
 
 echo ""
 echo "auto-approve-logic.test.sh: $PASS passed, $FAIL failed"
