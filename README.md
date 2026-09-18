@@ -198,7 +198,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 | --- | --- |
 | `hero-skills:review-pr` | Review a PR with the review agents plus a security pass: your draft → applies fixes, asks before marking ready. Others' PR → inline comments only. |
 | `hero-skills:respond-to-comments` | Fix PR review comments, resolve threads, optionally loop with external review agent |
-| `hero-skills:ship-pr` | Trigger gated `@auto-approve`, wait for the verdict, merge if it passes, reset to the default branch, and run a post-merge deploy-health check |
+| `hero-skills:ship-pr` | Trigger gated `@auto-approve`, wait for the verdict, merge if it passes, reset to the default branch, and wait for the merge commit's runs to report post-merge CI and deployment health |
 
 ### Pipelines (orchestrators)
 

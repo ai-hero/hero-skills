@@ -1002,11 +1002,12 @@ hero_path_forbidden() { # PATH
 
 # A post-merge deploy check that could not be answered without waiting.
 #
-# The check is advisory and never un-merges anything, so blocking a session
-# on it buys nothing and costs a sleep per merged PR. Instead the merge
-# commit is recorded here and probed by the next thing that runs in this
-# repo, which pays no wait at all. Same shape as one-shot's await-review:
-# cap the wait, then hand the enforcement to whatever runs next.
+# ship-pr waits for the merge commit's runs, with a cap (Step 7e). What is
+# still in flight when the cap expires is recorded here and probed by the
+# next thing that runs in this repo, which pays no wait at all. Same shape
+# as one-shot's await-review: cap the wait, then hand the enforcement to
+# whatever runs next. The check is advisory and never un-merges anything,
+# so the cap is a real bound, not a retry budget.
 #
 # One line per pending merge: SHA<TAB>PR<TAB>DATE.
 
