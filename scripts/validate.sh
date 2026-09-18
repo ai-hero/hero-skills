@@ -187,8 +187,8 @@ else
         "$SKILL_REL" \
         "2" \
         "Add 'name: $SKILL_NAME' to the frontmatter block"
-    elif [[ ! "$FM_NAME" =~ ^[a-z][a-z0-9-]*$ ]]; then
-      error "Name '$FM_NAME' is not kebab-case (must be lowercase + hyphens)" \
+    elif [[ ${#FM_NAME} -gt 64 || ! "$FM_NAME" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+      error "Name '$FM_NAME' breaks the Agent Skills name rules (1-64 chars, lowercase letters, digits and single hyphens, none leading or trailing)" \
         "$SKILL_REL" \
         "$NAME_LINE" \
         "Change to: name: $(echo "$FM_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g')"
@@ -268,20 +268,23 @@ else
       pass "$SKILL_NAME: $WORD_COUNT words"
     fi
 
-    # 8. Supplementary file references
-    SUPP_FILES=$(echo "$FRONTMATTER" | awk '/^supplementary-files:/,/^[^ -]/' | grep -E '^\s*-\s*' | sed 's/.*-[[:space:]]*//' || true)
-    if [[ -n "$SUPP_FILES" ]]; then
-      SUPP_LINE=$(grep -n 'supplementary-files:' "$SKILL_FILE" | head -1 | cut -d: -f1 || true)
+    # 8. references/ paths the body names must exist. Scoped to skills that
+    # ship a references/ directory: create-skill names references/ paths as
+    # examples and ships none, and a check there would fail on the guide.
+    if [[ -d "$skill_dir/references" ]]; then
+      REF_PATHS=$(grep -oE 'references/[A-Za-z0-9._-]+' "$SKILL_FILE" | sort -u || true)
       while IFS= read -r ref; do
+        [[ -n "$ref" ]] || continue
         if [[ ! -f "$skill_dir/$ref" ]]; then
-          error "Supplementary file '$ref' referenced but not found" \
+          REF_LINE=$(grep -nF "$ref" "$SKILL_FILE" | head -1 | cut -d: -f1 || true)
+          error "'$ref' is named in the body but does not exist" \
             "$SKILL_REL" \
-            "$SUPP_LINE" \
-            "Create the file at skills/$SKILL_NAME/$ref or remove it from supplementary-files"
+            "$REF_LINE" \
+            "Create skills/$SKILL_NAME/$ref or fix the path in the body"
         else
           pass "$SKILL_NAME: $ref exists"
         fi
-      done <<< "$SUPP_FILES"
+      done <<< "$REF_PATHS"
     fi
 
     # 9. Empty subdirectories

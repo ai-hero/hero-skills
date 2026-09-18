@@ -60,7 +60,7 @@ STRUCTURE CONSISTENCY
 
 Flag skills that are too large or too small:
 
-- **Over 500 lines**: Should split into supplementary files
+- **Over 500 lines**: Move reference material to `references/`, each file linked from the body with the condition under which to read it. Pipeline skills (see `PIPELINE_SKILLS` in `scripts/validate.sh`) carry a larger budget on purpose
 - **Over 5000 words**: Consuming too much context window
 - **Under 20 lines** (body only): Probably too thin to be useful
 - **Deep nesting** (h4+ headings beyond investigation sub-steps): May need restructuring
@@ -102,7 +102,7 @@ DRY VIOLATIONS
      Suggestion: Consider moving to references/ if init exceeds 500 lines
 ```
 
-**Important:** not all repetition is bad. Skills run independently and cannot share runtime state. Only flag repetition you could remove with a supplementary file or a shared reference.
+**Important:** not all repetition is bad. Skills run independently and cannot share runtime state. Only flag repetition you could remove with a shared reference file.
 
 #### 2d: HERO.md Field Coverage
 

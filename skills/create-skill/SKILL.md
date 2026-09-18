@@ -60,7 +60,9 @@ wayfare: sync
 ---
 ```
 
-Only `name` and `description` are required by the spec:
+Only `name` and `description` are required by the spec. `argument-hint`
+and `disable-model-invocation` are Claude Code fields, and `wayfare` is
+hero-skills' own; a skill meant to be portable carries neither.
 
 - `name`: 1-64 chars, lowercase letters, digits and hyphens; no leading,
   trailing or doubled hyphen; must equal the folder name. Use verb-object.

@@ -26,8 +26,8 @@ if [[ -z "$SKILL_NAME" ]]; then
 fi
 
 # Validate kebab-case
-if [[ ! "$SKILL_NAME" =~ ^[a-z][a-z0-9-]*$ ]]; then
-  echo "Error: skill name must be kebab-case (lowercase, hyphens). Got: $SKILL_NAME"
+if [[ ${#SKILL_NAME} -gt 64 || ! "$SKILL_NAME" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+  echo "Error: skill name must be 1-64 chars of lowercase letters, digits and single hyphens, none leading or trailing. Got: $SKILL_NAME"
   exit 1
 fi
 

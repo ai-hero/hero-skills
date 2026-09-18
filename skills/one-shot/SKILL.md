@@ -458,7 +458,7 @@ State the verdict explicitly before advancing, as in "verified outstanding: SUCC
 
 Invoke `hero-skills:think-it-through` via the Skill tool, passing `$ARGUMENTS`. It grills the idea one question at a time and emits dependency-aware work-items into `.plans/`. It gates on the user confirming shared understanding, and one-shot does not bypass that gate.
 
-Skip the grill and plan inline only when the task is one think-it-through itself calls out as not worth grilling (`think-it-through`'s "When to Use": a typo, a copy tweak, a dependency bump). Say which exemption applied. For anything else, grill.
+Skip the grill and plan inline only when the task is one think-it-through itself calls out as not worth grilling (`think-it-through`'s frontmatter description: a typo, a copy tweak, a dependency bump). Say which exemption applied. For anything else, grill.
 
 When think-it-through returns, re-run the readiness query and pick the item to implement.
 
