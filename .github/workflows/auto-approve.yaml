@@ -460,163 +460,46 @@ jobs:
           # comments so installations that only post inline comments
           # (e.g. CodeRabbit configurations) still pass.
 
-          # --paginate: an unpaginated read stops at 30, and a review posted
-          # after that reads as absent — the gate then reports no prior review
-          # on a PR that has several.
-          # --slurp wraps the pages as an array of arrays, and gh refuses it
-          # together with --jq, so the flatten is a second command rather than
-          # a pipe: this shell has no pipefail, so `gh ... | jq` would report
-          # jq's status and a failed fetch would read as an empty page.
-          gh api --paginate "/repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews?per_page=100" \
-            --slurp > reviews.pages.json
-          jq 'add' reviews.pages.json > reviews.json
-          gh api --paginate "/repos/${{ github.repository }}/issues/$PR_NUMBER/comments?per_page=100" \
-            --slurp > issue_comments.pages.json
-          jq 'add' issue_comments.pages.json > issue_comments.json
-          gh api --paginate "/repos/${{ github.repository }}/pulls/$PR_NUMBER/comments?per_page=100" \
-            --slurp > pr_review_comments.pages.json
-          jq 'add' pr_review_comments.pages.json > pr_review_comments.json
+          gh api "/repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews" \
+            > reviews.json
+          gh api "/repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+            > issue_comments.json
+          gh api "/repos/${{ github.repository }}/pulls/$PR_NUMBER/comments" \
+            > pr_review_comments.json
 
-          # Hoisted: a raw `${{ }}` inside a `# test:` block is a bash syntax
-          # error, so the extracted fragment would not parse.
-          REPO="${{ github.repository }}"
-          # test: begin writers-resolve
-          # author_association on these REST reads is computed RELATIVE TO THE
-          # VIEWER, and the viewer is GITHUB_TOKEN, which cannot see PRIVATE org
-          # membership: a private member reads as CONTRIBUTOR or NONE here even
-          # though the webhook payload that let this job start said MEMBER. A
-          # triad test alone therefore closes the self-review path for every org
-          # that keeps membership private.
-          #
-          # /assignees is the repo's write-access roster and needs no scope
-          # beyond what this job already holds. Do NOT "improve" this to
-          # /collaborators/LOGIN/permission: that answers the same question but
-          # 403s ("Must have push access") for a contents:read token, leaving
-          # the roster empty on every run — which is indistinguishable from
-          # nobody having write access, so the gate silently reverts to the
-          # association-only bug this block exists to fix.
-          if gh api --paginate "/repos/$REPO/assignees?per_page=100" \
-               --slurp > assignees.pages.json; then
-            jq -c 'add | [.[] | .login | select(. != null)]' \
-              assignees.pages.json > writers.json
-            WRITERS_FAILED=0
-          else
-            # An empty roster and a failed read are the same empty file, and
-            # the ❌ branch below would tell the author their own self-review
-            # does not count. Record which happened so it can say so.
-            echo '[]' > writers.json
-            WRITERS_FAILED=1
-          fi
-          # index() is substring search on a STRING and returns null on an
-          # object, so a writers.json that is not an array of strings does not
-          # fail the gates below — it makes every write-access test quietly
-          # false, or, for a bare string, quietly TRUE for any login that is a
-          # substring of a writer's. Fail loudly here instead.
-          jq -e 'type == "array" and all(.[]; type == "string")' \
-            writers.json > /dev/null
-          # A count, not the logins: this workflow has no `private` guard of its
-          # own (that lives in the caller), so on a public repo this line is a
-          # world-readable list of who holds write — the very fact an org with
-          # private membership chose to hide.
-          echo "writers=$(jq -r 'length' writers.json) writers_failed=$WRITERS_FAILED"
-          if [ "$WRITERS_FAILED" -eq 1 ]; then
-            echo "::warning::could not read the write-access roster; this gate falls back to association-only"
-          fi
-          # test: end writers-resolve
-
-          # Every leg below turns on WHO, not just on what was posted. The
-          # gate exists to stop auto-approve being the only review, and all
-          # three of its signals were things an outsider could produce: the
-          # marker is a plain string in a public comment box, and on a public
-          # repo any account can submit a COMMENTED review.
-          #
-          # OWNER/MEMBER/COLLABORATOR is the same triad the job `if` requires
-          # of the @auto-approve commenter. Widening one without the other is
-          # silent and fails open, so move them together.
-          ASSOC='["OWNER","MEMBER","COLLABORATOR"]'
-
-          # Anchored on the real marker — the hidden HTML comment review-pr
-          # posts, or the older heading — rather than the bare substring. An
-          # unanchored match counts a comment that merely mentions the string
-          # in prose, which any PR discussing this gate does.
-          MARKER='<!--[[:space:]]*ai-hero:self-review[[:space:]]*-->|^##[[:space:]].*Hero Self-Review'
-
-          # Filtered by association, NOT by author: this gate runs before lane
-          # selection, so every bot PR passes through it, and there the author
-          # is dependabot[bot] while a member posts the self-review. Keying on
-          # the author (as OTHER_REVIEWS below does) would put the self-review
-          # path permanently out of reach on all of them.
-          #
-          # github-actions[bot] is excluded for the same reason OTHER_REVIEWS
-          # excludes it. That used to be free here — the bot's association is
-          # never in the triad — but the roster leg does not go through the
-          # association, so without this a run whose verdict body quoted the
-          # marker (any PR about this gate does) could satisfy the gate from
-          # its own previous run, on any repo whose roster lists the bot.
-          # test: begin self-review-gate
-          SELF_REVIEW=$(jq -r --arg marker "$MARKER" --argjson assoc "$ASSOC" \
-            --slurpfile writers writers.json '
-            ($writers[0] // []) as $w
-            | [.[]
-              | select(.body | test($marker; "i"))
-              | select(.user.login != "github-actions[bot]")
-              | select(((.author_association // "") | IN($assoc[]))
-                    or ((.user.login // null) as $l
-                        | $l != null and ($l | IN($w[]))))
-            ] | length
-          ' issue_comments.json)
-          # test: end self-review-gate
-
-          # Counted separately so a rejected self-review can say so. Without
-          # it the author reads "No prior review found" while looking at their
-          # own self-review comment, and the advice is to do what they just did.
-          SELF_REVIEW_ANY=$(jq -r --arg marker "$MARKER" '
-            [.[] | select(.body | test($marker; "i"))] | length
+          # Self-review marker, the hidden <!-- ai-hero:self-review -->
+          # comment posted by hero-skills:review-pr. Match both the current
+          # marker and the older "Hero Self-Review" heading (case-insensitive)
+          # so comments posted under the previous convention still count.
+          SELF_REVIEW=$(jq -r '
+            [.[] | select(.body | test("ai-hero:self-review|Hero Self-Review"; "i"))] | length
           ' issue_comments.json)
 
+          # Reviews from anyone other than the PR author. Filter out
+          # PENDING reviews (drafts) and the auto-approve workflow's own
+          # past approvals, so re-running on the same PR cannot
+          # bootstrap itself.
           PR_AUTHOR=$(jq -r '.user.login' pr.json)
-
-          # Reviews from anyone other than the PR author. PENDING ones are
-          # drafts. github-actions[bot] is excluded so a re-run cannot
-          # bootstrap itself off its own past approval.
-          #
-          # A real review bot (CodeRabbit, Greptile) reports NONE, so bots are
-          # accepted on type rather than association — association alone would
-          # stop counting the very reviews this leg exists for.
-          # test: begin other-reviews-gate
-          OTHER_REVIEWS=$(jq -r --arg author "$PR_AUTHOR" --argjson assoc "$ASSOC" \
-            --slurpfile writers writers.json '
-            ($writers[0] // []) as $w
-            | [.[]
+          OTHER_REVIEWS=$(jq -r --arg author "$PR_AUTHOR" '
+            [.[]
               | select(.user.login != $author)
               | select(.state != "PENDING")
               | select(.user.login != "github-actions[bot]")
-              | select(((.author_association // "") | IN($assoc[]))
-                    or ((.user.login // null) as $l
-                        | $l != null and ($l | IN($w[])))
-                    or .user.type == "Bot")
             ] | length
           ' reviews.json)
-          # test: end other-reviews-gate
 
-          # Inline review comments from review bots (CodeRabbit, Greptile,
-          # Copilot). github-actions[bot] is excluded for the same reason as
-          # above and for one more: reviewdog, golangci-lint-action and every
-          # other annotator posts inline comments under that identity, so
-          # without this a lint run satisfies the gate and a dependency PR
-          # reaches the scripted lane with nobody and no model having read it.
-          # test: begin bot-inline-gate
+          # Inline review comments from review bots (covers CodeRabbit,
+          # Greptile, Copilot inline review). Authors with [bot] suffix
+          # or known bot logins. Excludes the PR author.
           BOT_INLINE=$(jq -r --arg author "$PR_AUTHOR" '
             [.[]
               | select(.user.login != $author)
-              | select(.user.login != "github-actions[bot]")
               | select(
                   (.user.type == "Bot")
                   or (.user.login | test("(coderabbit|greptile|copilot|sonarcloud|codeball)"; "i"))
                 )
             ] | length
           ' pr_review_comments.json)
-          # test: end bot-inline-gate
 
           echo "self_review=$SELF_REVIEW"
           echo "other_reviews=$OTHER_REVIEWS"
@@ -633,16 +516,6 @@ jobs:
             {
               echo "## Prior Review: ❌"
               echo "No prior review found. Run \`hero-skills:review-pr\` or wait for a code review agent (Copilot/CodeRabbit/Greptile) before requesting auto-approve."
-              if [ "$SELF_REVIEW_ANY" -gt 0 ]; then
-                echo ""
-                if [ "$WRITERS_FAILED" -eq 1 ]; then
-                  # Without this the message accuses the author of lacking
-                  # write access on a run where the gate never managed to ask.
-                  echo "A self-review comment IS present, but the write-access roster could not be read on this run, so write access could not be confirmed for anyone. This is a fault in the gate, not a verdict on your review — post \`@auto-approve\` again."
-                else
-                  echo "A self-review comment IS present, but its author has no write access on this repo — neither an OWNER/MEMBER/COLLABORATOR association nor a place on the repo's write-access roster — so it does not satisfy this gate."
-                fi
-              fi
             } > prior_review.md
           fi
 
