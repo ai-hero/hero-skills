@@ -51,7 +51,7 @@ run_block() { # NAME [env assignments...] -> runs in $WORK under bash -e
   ( cd "$WORK" && env "$@" bash -e "$WORK/$name.sh" )
 }
 
-for name in classify diff-filter go-pkgs claims ci-decision verdict-parse bot-lane submit-verdict crash-notice; do
+for name in classify diff-filter go-pkgs claims ci-decision verdict-parse bot-lane submit-verdict crash-notice self-review-gate; do
   extract "$name" > "$WORK/$name.sh"
   check "extract: $name non-empty" "yes" "$([[ -s "$WORK/$name.sh" ]] && echo yes || echo no)"
   check "extract: $name parses" "0" "$(bash -n "$WORK/$name.sh" 2>/dev/null; echo $?)"
@@ -422,6 +422,28 @@ check "crash-notice: a failed reaction still posts the notice" "1" "$(calls gh_p
 OUT=$(crash 0 0 0 0 "" "the commit list came back truncated")
 check "crash-notice: lane_error.txt reaches the notice" "yes" \
   "$(ann "$(cat "$WORK/gh_post")" 'came back truncated')"
+# --- self-review-gate -------------------------------------------------------
+# The marker is a plain string anyone can type into a public comment box, so
+# the gate that keeps auto-approve from being the only review on a PR turns on
+# author_association and nothing else.
+MARKER='## Self-Review <!-- ai-hero:self-review -->'
+srg() { # AUTHOR_ASSOCIATION [BODY] -> the count the gate would see
+  jq -n --arg assoc "$1" --arg body "${2:-$MARKER}" \
+    '[{author_association: $assoc, body: $body}]' > "$WORK/issue_comments.json"
+  ( cd "$WORK" && . "$WORK/self-review-gate.sh" && printf '%s' "$SELF_REVIEW" )
+}
+check "self-review-gate: OWNER counts" "1" "$(srg OWNER)"
+check "self-review-gate: MEMBER counts" "1" "$(srg MEMBER)"
+check "self-review-gate: COLLABORATOR counts" "1" "$(srg COLLABORATOR)"
+# The whole point: a drive-by commenter cannot satisfy the gate by typing the
+# marker, which is what made auto-approve able to be the only review.
+check "self-review-gate: NONE does not count" "0" "$(srg NONE)"
+check "self-review-gate: CONTRIBUTOR does not count" "0" "$(srg CONTRIBUTOR)"
+check "self-review-gate: FIRST_TIME_CONTRIBUTOR does not count" "0" "$(srg FIRST_TIME_CONTRIBUTOR)"
+# The older heading still counts for a member, so PRs reviewed under the
+# previous convention do not suddenly fail the gate.
+check "self-review-gate: legacy heading still counts" "1" "$(srg MEMBER '## Hero Self-Review')"
+check "self-review-gate: a member comment without the marker does not count" "0" "$(srg MEMBER 'looks good to me')"
 
 echo ""
 echo "auto-approve-logic.test.sh: $PASS passed, $FAIL failed"

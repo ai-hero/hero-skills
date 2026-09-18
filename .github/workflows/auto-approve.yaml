@@ -471,9 +471,23 @@ jobs:
           # comment posted by hero-skills:review-pr. Match both the current
           # marker and the older "Hero Self-Review" heading (case-insensitive)
           # so comments posted under the previous convention still count.
+          #
+          # Restricted by author_association, and NOT to the PR author: on a
+          # carried bot PR the author is dependabot[bot] and a member posts
+          # the self-review, so an author-only filter would fail that gate
+          # forever. The marker is a plain string in a public comment box,
+          # so without this any drive-by commenter could satisfy the one gate
+          # that exists to stop auto-approve being the only review.
+          # test: begin self-review-gate
           SELF_REVIEW=$(jq -r '
-            [.[] | select(.body | test("ai-hero:self-review|Hero Self-Review"; "i"))] | length
+            [.[]
+              | select(.body | test("ai-hero:self-review|Hero Self-Review"; "i"))
+              | select(.author_association == "OWNER"
+                    or .author_association == "MEMBER"
+                    or .author_association == "COLLABORATOR")
+            ] | length
           ' issue_comments.json)
+          # test: end self-review-gate
 
           # Reviews from anyone other than the PR author. Filter out
           # PENDING reviews (drafts) and the auto-approve workflow's own
