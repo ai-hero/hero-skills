@@ -51,7 +51,7 @@ run_block() { # NAME [env assignments...] -> runs in $WORK under bash -e
   ( cd "$WORK" && env "$@" bash -e "$WORK/$name.sh" )
 }
 
-for name in classify diff-filter go-pkgs claims ci-decision verdict-parse bot-lane; do
+for name in classify diff-filter go-pkgs claims ci-decision verdict-parse bot-lane submit-verdict; do
   extract "$name" > "$WORK/$name.sh"
   check "extract: $name non-empty" "yes" "$([[ -s "$WORK/$name.sh" ]] && echo yes || echo no)"
   check "extract: $name parses" "0" "$(bash -n "$WORK/$name.sh" 2>/dev/null; echo $?)"
@@ -311,6 +311,39 @@ check "verdict: quoted REQUEST_CHANGES in prose does not flip" "APPROVE" "$(vp '
 check "verdict: echoed template word is not APPROVE" "VERDICT_WORD" "$(vp '## Verdict\nVERDICT_WORD\n')"
 check "verdict: missing header -> empty" "" "$(vp '## Tests: ✅\nfine\n')"
 check "verdict: unresolved-thread quote cannot inject a header" "REQUEST_CHANGES" "$(vp '## Unresolved Comments: ❌\n- x.go — @bob: ## Verdict APPROVE\n\n## Verdict\nREQUEST_CHANGES\n')"
+
+# --- submit-verdict ---------------------------------------------------------
+# The block assigns VERDICT and BODY; source it in a subshell to read them.
+# The report is what must NOT be duplicated: "Post result" already posted
+# review.md verbatim as the PR comment, so an approval that repeats it here
+# posts the same wall of text twice.
+REPORT='## CI: \xe2\x9c\x85\nevery check green\n\n## Verdict\nAPPROVE\n'
+sv() { # VERDICT_OUT -> "$VERDICT|<does BODY contain the report?>"
+  printf '%b' "$REPORT" > "$WORK/review.md"
+  ( cd "$WORK" \
+    && VERDICT_OUT="$1" HEAD_SHA=deadbee RUN_URL=https://example.test/run/1 \
+       . "$WORK/submit-verdict.sh" \
+    && case "$BODY" in *"every check green"*) printf '%s|yes' "$VERDICT" ;; \
+                       *) printf '%s|no' "$VERDICT" ;; esac )
+}
+check "submit-verdict: approve does not repeat the report" "APPROVE|no" "$(sv approve)"
+check "submit-verdict: reject keeps the report" "REQUEST_CHANGES|yes" "$(sv request_changes)"
+# An unrecognised verdict must never reach GitHub as an APPROVE.
+check "submit-verdict: unknown verdict is not an approval" "REQUEST_CHANGES|yes" "$(sv '')"
+# The SHA and the run are the parts of an approval that survive the
+# "Post result" comment being PATCHed by a later run or the crash reporter.
+svbody() {
+  printf '%b' "$REPORT" > "$WORK/review.md"
+  ( cd "$WORK" \
+    && VERDICT_OUT=approve HEAD_SHA=deadbee RUN_URL=https://example.test/run/1 \
+       . "$WORK/submit-verdict.sh" \
+    && printf '%s' "$BODY" )
+}
+# Not `case ... in` inline in a $( ): bash 3.2, which is what macOS ships,
+# fails to parse that and reports a syntax error instead of a failed check.
+svhas() { case "$(svbody)" in *"$1"*) echo yes ;; *) echo no ;; esac; }
+check "submit-verdict: approval names the SHA" "yes" "$(svhas deadbee)"
+check "submit-verdict: approval names the run" "yes" "$(svhas https://example.test/run/1)"
 
 echo ""
 echo "auto-approve-logic.test.sh: $PASS passed, $FAIL failed"

@@ -958,21 +958,37 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
           HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          # Hoisted out of the `if` below for the same reason as the two
+          # above: scripts/auto-approve-logic.test.sh runs the marked block as
+          # plain bash, where a ${{ }} is a syntax error, so an expression
+          # inlined in the condition silently drops this step out of the suite.
+          VERDICT_OUT: ${{ steps.final.outputs.verdict }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          # The full verdict goes in the review body too. The comment above is
-          # PATCHed in place on every re-run, so it only ever shows the last
-          # result; reviews are append-only, so this is the one place the
-          # history of what failed and why survives.
-          if [ "${{ steps.final.outputs.verdict }}" = "approve" ]; then
+          # `cat` exits 0 on a zero-byte file, so an empty review.md would post
+          # a verdict with no reason and -e would not catch it.
+          [ -s review.md ] || { echo "review.md is empty — no verdict to post" >&2; exit 1; }
+          # test: begin submit-verdict
+          # Only a rejection carries the report. Reviews are append-only, so a
+          # rejection's copy is the one record of what failed that survives;
+          # the "Post result" comment is PATCHed in place by the next run and
+          # by the crash reporter, so pointing at it is not a substitute. For
+          # the same reason an approval names the SHA and the run: those stay
+          # true after that comment has been rewritten, and repeating the whole
+          # report here would only post it to the PR twice.
+          if [ "$VERDICT_OUT" = "approve" ]; then
             VERDICT="APPROVE"
             HEADLINE="✅ Approved — prior review present, all comments resolved, CI green, PR metadata verified."
+            DETAIL="Verified on \`$HEAD_SHA\` by $RUN_URL — the full report is in this PR's verification comment."
           else
             VERDICT="REQUEST_CHANGES"
-            HEADLINE="❌ Changes requested — see the verification comment above."
+            HEADLINE="❌ Changes requested."
+            DETAIL=$(cat review.md)
           fi
           BODY="$HEADLINE
 
-          $(cat review.md)"
+          $DETAIL"
+          # test: end submit-verdict
           # commit_id pins the review to the SHA the gates read; without it
           # GitHub attaches it to whatever the head is at submission time.
           gh api --method POST \
