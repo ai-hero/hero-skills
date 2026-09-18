@@ -52,7 +52,7 @@ run_block() { # NAME [env assignments...] -> runs in $WORK under bash -e
 }
 
 for name in classify diff-filter go-pkgs claims ci-decision verdict-parse bot-lane submit-verdict crash-notice \
-            self-review-gate other-reviews-gate bot-inline-gate; do
+            writers-resolve self-review-gate other-reviews-gate bot-inline-gate; do
   extract "$name" > "$WORK/$name.sh"
   check "extract: $name non-empty" "yes" "$([[ -s "$WORK/$name.sh" ]] && echo yes || echo no)"
   check "extract: $name parses" "0" "$(bash -n "$WORK/$name.sh" 2>/dev/null; echo $?)"
@@ -435,11 +435,73 @@ check "gate: ASSOC still assigned in the workflow" "yes" \
 check "gate: MARKER still assigned in the workflow" "yes" \
   "$([[ -n "$MARKER_WF" ]] && echo yes || echo no)"
 
+# --- writers-resolve --------------------------------------------------------
+# The producer and the consumers are coupled by a FILENAME that nothing else
+# asserts. Rename the artifact at either end and every check below still passes
+# while the live gate dies on `Could not open writers.json` — in ~25 repos at
+# once, including the one whose PR would fix it. Same discipline as ASSOC/MARKER
+# above: read the coupling out of the workflow rather than trusting it.
+check "gate: the workflow still produces writers.json" "yes" \
+  "$(grep -qE '> *writers\.json' "$WF" && echo yes || echo no)"
+check "gate: both legs still read writers.json" "2" \
+  "$(grep -c -- '--slurpfile writers writers.json' "$WF")"
+# The endpoint itself is the regression risk: /collaborators/LOGIN/permission
+# reads as the more precise question and 403s ("Must have push access") for
+# this job's contents:read token, leaving the roster empty on every run — which
+# looks exactly like nobody having write access. A stubbed gh answers any URL,
+# so only reading the endpoint out of the workflow can catch a swap back.
+check "writers-resolve: the roster comes from /assignees" "yes" \
+  "$(grep -q 'assignees?per_page=100' "$WF" && echo yes || echo no)"
+check "writers-resolve: nothing asks /collaborators for a permission" "0" \
+  "$(grep -c '^[^#]*collaborators/[^ ]*/permission' "$WF")"
+
+# The roster read is the authority the whole gate rests on, and it is the only
+# network I/O in the step. `wres RC BODY` stubs gh and reports the resolved
+# roster plus the step's exit code.
+wres() { # RC BODY -> "RC|WRITERS_JSON|LOG"
+  mkdir -p "$WORK/bin"
+  printf '%s' "$2" > "$WORK/gh_stdout"
+  { echo '#!/usr/bin/env bash'
+    echo "cat $WORK/gh_stdout"
+    echo "exit $1"
+  } > "$WORK/bin/gh"
+  chmod +x "$WORK/bin/gh"
+  rm -f "$WORK/writers.json"
+  local log rc
+  log=$( cd "$WORK" && PATH="$WORK/bin:$PATH" REPO=o/r \
+    bash -e "$WORK/writers-resolve.sh" 2>&1 ); rc=$?
+  printf '%s|%s|%s' "$rc" "$(cat "$WORK/writers.json" 2>/dev/null)" "$log"
+}
+wlog() { printf '%s' "$1" | cut -d'|' -f3- ; }
+wjson() { printf '%s' "$1" | head -1 | cut -d'|' -f2 ; }
+ROSTER='[[{"login":"alice"},{"login":"bob"}]]'
+OUT=$(wres 0 "$ROSTER")
+check "writers-resolve: a good read yields the roster" '["alice","bob"]' "$(wjson "$OUT")"
+check "writers-resolve: a good read exits 0" "0" "${OUT%%|*}"
+# The 403 this block exists to avoid (/collaborators needs push access). It
+# must degrade to association-only WITHOUT aborting the step, and must say so —
+# an empty roster and a failed read are otherwise the same empty file.
+OUT=$(wres 1 "")
+check "writers-resolve: a failed read degrades to an empty roster" "[]" "$(wjson "$OUT")"
+check "writers-resolve: a failed read does not abort the step" "0" "${OUT%%|*}"
+check "writers-resolve: a failed read is announced" "yes" "$(ann "$(wlog "$OUT")" '::warning::')"
+GOOD=$(wres 0 "$ROSTER")
+check "writers-resolve: a good read is not announced" "no" "$(ann "$(wlog "$GOOD")" '::warning::')"
+# The roster is a count in the log, never the logins: this workflow has no
+# `private` guard of its own, so on a public repo that line is world-readable.
+check "writers-resolve: the log carries a count, not the logins" "no" "$(ann "$(wlog "$GOOD")" 'alice')"
+check "writers-resolve: the log carries the count" "yes" "$(ann "$(wlog "$GOOD")" 'writers=2')"
+check "writers-resolve: a null login is dropped" '["alice"]' \
+  "$(wjson "$(wres 0 '[[{"login":"alice"},{"login":null}]]')")"
+check "writers-resolve: an empty roster is an empty array" "[]" \
+  "$(wjson "$(wres 0 '[[]]')")"
+
 # --- self-review-gate -------------------------------------------------------
 SR_MARKER='## Self-Review
 <!-- ai-hero:self-review -->'
 srg() { # JSON_ARRAY -> the count the gate would see
   printf '%s' "$1" > "$WORK/issue_comments.json"
+  printf '%s' "${WRITERS:-[]}" > "$WORK/writers.json"
   ( cd "$WORK" && ASSOC="$ASSOC_WF" MARKER="$MARKER_WF" \
     bash -e -c '. ./self-review-gate.sh; printf "%s" "$SELF_REVIEW"' )
 }
@@ -467,6 +529,27 @@ check "self-review: no comments at all" "0" "$(srg '[]')"
 check "self-review: a NONE marker beside member chatter does not count" "0" \
   "$(srg "$(jq -n --arg m "$SR_MARKER" '[{author_association:"NONE",body:$m},{author_association:"MEMBER",body:"nice"}]')")"
 
+# author_association is relative to the VIEWER: a private org member reads as
+# CONTRIBUTOR on a REST read by GITHUB_TOKEN, while the webhook that started
+# the job saw MEMBER. Write access is the authority; the association is only
+# the cheap path. Without this leg the self-review gate is unreachable for
+# every org that keeps membership private.
+member_with_write() { jq -n --arg m "$SR_MARKER" --arg l "$1" \
+  '[{author_association:"CONTRIBUTOR",user:{login:$l},body:$m}]'; }
+check "self-review: CONTRIBUTOR association WITH write access counts" "1" \
+  "$(WRITERS='["member"]' srg "$(member_with_write member)")"
+check "self-review: CONTRIBUTOR association WITHOUT write access does not" "0" \
+  "$(WRITERS='["member"]' srg "$(member_with_write stranger)")"
+check "self-review: an empty writers list changes nothing" "0" \
+  "$(WRITERS='[]' srg "$(member_with_write member)")"
+# Our own verdict comment quotes the PR's diff, so on any PR about this gate
+# that body contains the marker. The association never let it through; the
+# roster leg does not go through the association, so the exclusion has to be
+# in the filter, exactly as the other-reviews leg has it.
+check "self-review: our own verdict does not count, even on the roster" "0" \
+  "$(WRITERS='["github-actions[bot]"]' srg "$(jq -n --arg m "$SR_MARKER" \
+      '[{author_association:"NONE",user:{login:"github-actions[bot]"},body:$m}]')")"
+
 # --- other-reviews-gate -----------------------------------------------------
 # On a public repo any account can submit a COMMENTED review, so this leg
 # needs the same association test — but a real review bot reports NONE, and
@@ -474,6 +557,7 @@ check "self-review: a NONE marker beside member chatter does not count" "0" \
 org() { # JSON_ARRAY -> the count the gate would see
   printf '%s' "$1" > "$WORK/reviews.json"
   printf '%s' '{"user":{"login":"author"}}' > "$WORK/pr.json"
+  printf '%s' "${WRITERS:-[]}" > "$WORK/writers.json"
   ( cd "$WORK" && ASSOC="$ASSOC_WF" PR_AUTHOR=author \
     bash -e -c '. ./other-reviews-gate.sh; printf "%s" "$OTHER_REVIEWS"' )
 }
@@ -489,6 +573,16 @@ check "other-reviews: the PR author's own review does not count" "0" "$(org "$(r
 # Re-running must not bootstrap off the approval the last run left.
 check "other-reviews: our own past approval does not count" "0" \
   "$(org "$(rev 'github-actions[bot]' NONE Bot APPROVED)")"
+check "other-reviews: CONTRIBUTOR association with write access counts" "1" \
+  "$(WRITERS='["reviewer"]' org "$(rev reviewer CONTRIBUTOR)")"
+# Every other negative on this leg runs with an EMPTY roster, so they prove the
+# clause opens the gate but never that it does not open it too far.
+check "other-reviews: a non-writer does not count when the roster is populated" "0" \
+  "$(WRITERS='["someone-else"]' org "$(rev stranger CONTRIBUTOR)")"
+# The author filter runs before the roster clause. Folded into the same
+# or-chain it would let a writer approve their own PR, with the suite green.
+check "other-reviews: the author's own review does not count even on the roster" "0" \
+  "$(WRITERS='["author"]' org "$(rev author CONTRIBUTOR)")"
 
 # --- bot-inline-gate --------------------------------------------------------
 bil() { # JSON_ARRAY -> the count the gate would see
