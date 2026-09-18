@@ -212,8 +212,10 @@ Say which tier you picked and why, in one line, before launching. A review that
 silently ran two agents reads identically to one that ran six and found
 nothing.
 
-Then launch the tier's agents simultaneously in a single message. For the full
-six, the five pr-review-toolkit agents plus the security agent:
+Then launch the tier's agents simultaneously in a single message, each with
+the named type below and never `subagent_type: "fork"` (see *A fan-out
+subagent is never a fork* in `docs/PIPELINES.md`). For the full six, the five
+pr-review-toolkit agents plus the security agent:
 
 ```
 Agent(subagent_type="pr-review-toolkit:code-reviewer", ...)

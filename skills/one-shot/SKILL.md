@@ -581,6 +581,8 @@ Render DAG with `simplify` active. Invoke the `simplify` skill via the Skill too
 
 `simplify` is **not** part of this plugin. It ships separately (see the user-invocable skills list). `hero-skills:push-pr` also invokes it internally when it commits, so running it here makes simplification visible as its own DAG step *and* the second invocation inside push-pr is a fast no-op once nothing is left to simplify.
 
+Launch its review agents as fresh subagents scoped to the diff and their angle, never forks: see *A fan-out subagent is never a fork* in `PIPELINES.md`.
+
 If the `simplify` skill is unavailable in this environment, render `(–) simplify` and continue, since push-pr's own commit step will catch anything we missed via its inline fallback checklist.
 
 The humanizer pass on the diff's prose belongs to push-pr's Step 3c and runs there at commit time, so do not run it here as well.

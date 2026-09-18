@@ -597,6 +597,8 @@ For each changed file: read the diff, understand its purpose, assess quality.
 
 Invoke the `simplify` skill via the Skill tool. `simplify` is **not** part of this plugin. It ships separately (see the user-invocable skills list in the current session). It reviews the current diff for reuse, quality, and efficiency and fixes any issues found before the commit lands. Step 3g below handles the post-fix pre-push dry-run.
 
+Launch its review agents as fresh subagents scoped to the diff and their angle, never forks: see *A fan-out subagent is never a fork* in `docs/PIPELINES.md`.
+
 If the `simplify` skill is unavailable in this environment, report `NO_SIMPLIFY_SKILL: falling back to inline checklist` and apply this check before continuing:
 
 - [ ] No premature abstractions
