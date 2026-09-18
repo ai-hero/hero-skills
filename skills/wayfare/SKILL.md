@@ -1010,7 +1010,7 @@ half of `harden`) renders `(–)` and says why in one line, never silently.
 
 **The roadmap view**, which is how every verb reports. Run `hero_ready_items "$STORE"`
 and print the items grouped by row state (new → backlog → plan →
-READY/blocked → active → review → suspended → done, then goal, then
+READY/blocked → active → review → committed → suspended → done, then goal, then
 feedback), each with:
 
 - its dependencies (and which are unmet, from the listing's blocked rows),
@@ -1607,7 +1607,7 @@ follows):
   integer, or below `budget`; a `concurrency` key left over from the
   per-feature-PR model, which nothing reads any more and which sync removes; an `active` goal holding a `covers`
   id its `## Comments` do not account for; and a `committed` build item that
-  no `active` goal covers (`hero_ready_items` warns on it). That is the
+  no open goal covers (`hero_ready_items` warns on it). That is the
   residue of a goal whose branch was abandoned: the item claims work the
   repo does not have, and nothing else re-opens it, because only the goal's
   step 7 moves a feature from `committed` to `done`. Report it with the SHA
@@ -2183,8 +2183,8 @@ be the first one after a resume or a compaction, so nothing is carried in
 memory between turns:
 
 1. **Read the store, not the transcript.** Load the goal item; run
-   `hero_ready_items`; derive from the store which of `covers` are done and
-   which is in flight, and count the branch's commits against `budget` with
+   `hero_ready_items`; derive from the store which of `covers` are
+   `committed` (or `done`, after a merge) and which is in flight, and count the branch's commits against `budget` with
    `git log --oneline "origin/$BASE..$GOAL_BRANCH"`. **Git is the one source
    for that count.** The `commits:` field is a record for a reader, appended
    as each commit lands; never compute the budget from it, because after step
@@ -2228,8 +2228,8 @@ memory between turns:
    by the first turn and read by every later one. It is
    `feat/goal-GOAL_ID-SLUG`, where SLUG is the goal's title slugified the
    way `hero_branch_policy` slugifies a subject. The `feat/` prefix is
-   load-bearing: consumer repos' `no-commit-to-branch` hook admits only the
-   `hero_branch_policy` types (`ci|chore|docs|feat|feature|fix|refactor|test`),
+   load-bearing: consumer repos' `no-commit-to-branch` hook carries a
+   branch-name allowlist (`ci|chore|docs|feat|feature|fix|refactor|test`),
    so a bare `goal/` branch cannot take a commit there. Do not run
    `hero_branch_policy` for it: that function derives TYPE and SLUG from a
    diff or a description, and a goal's are fixed. On the first turn, cut it
@@ -2737,6 +2737,9 @@ the next feature.
       verify Subtasks/DoD per one-shot Step 9a and flip to `done` (or back to
       `implementing` if the merge covered part of the checklist); no PR found → treat as `active` (tier 1).
    3. `READY` feature, planned, marked and unblocked: invoke one-shot on it.
+      A `committed` feature is not a tier: its work is on the goal branch
+      its `branch:` names, and the goal that covers it owns the merge.
+      Report that goal and suggest `wayfare do GOAL_ID`.
    4. `plan` or `backlog` feature, not planned. STOP with
       `Next step: wayfare sync, whose postflight plans the set`. Never invoke
       think-it-through from here: the decisions that cut across features are
