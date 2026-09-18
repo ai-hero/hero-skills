@@ -253,7 +253,7 @@ else
       warn "SKILL.md is $LINE_COUNT lines (recommended: under $LIMIT_LINES)" \
         "$SKILL_REL" \
         "" \
-        "Move detailed content to references/ or examples/ subdirectories and link via supplementary-files"
+        "Move detailed content to references/ and link it from the body with the condition under which to read it"
     else
       pass "$SKILL_NAME: $LINE_COUNT lines"
     fi
@@ -263,7 +263,7 @@ else
       warn "SKILL.md is $WORD_COUNT words (recommended: under $LIMIT_WORDS)" \
         "$SKILL_REL" \
         "" \
-        "Large skills consume context window. Split into references/ loaded on-demand via supplementary-files"
+        "Large skills consume context window. Split into references/ loaded on demand, each linked from the body with a load condition"
     else
       pass "$SKILL_NAME: $WORD_COUNT words"
     fi

@@ -8,43 +8,43 @@ disable-model-invocation: true
 
 # Create Skill: build Claude Code components
 
-Create skills and other components that extend Claude's capabilities.
+A skill is a folder with a `SKILL.md` in it, following the open
+[Agent Skills](https://agentskills.io/specification) format. This skill writes
+one, or the subagent, rule, or hook that fits better.
 
 ## Arguments
 
 - `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before the description.
 - `$ARGUMENTS` - Description of what you want the skill to do
 
-## Core Principles
-
-**Context is precious.** Only add what the agent cannot work out for itself: your project's schemas, its workflows, its domain knowledge, its tool integrations.
-
-**Match Freedom to Fragility:**
-
-| Freedom Level | When to Use | Example |
-| --- | --- | --- |
-| High (prose) | Multiple valid approaches | "Review code for security issues" |
-| Medium (pseudocode) | Preferred pattern, some variation OK | "Run pre-commit, then commit" |
-| Low (exact scripts) | Fragile ops, consistency critical | "Execute this exact migration" |
-
 ## Component Types
 
 | Type | Location | Use When |
 | --- | --- | --- |
-| **Skill** | `.claude/skills/[name]/SKILL.md` | Workflows, guidelines |
-| **Subagent** | `.claude/agents/[name].md` | Isolated execution |
-| **Rule** | `.claude/rules/[name].md` | Always-on constraints |
+| **Skill** | `.claude/skills/NAME/SKILL.md` | Workflows, guidelines |
+| **Subagent** | `.claude/agents/NAME.md` | Isolated execution |
+| **Rule** | `.claude/rules/NAME.md` | Always-on constraints |
 | **Hook** | `settings.json` | Event-triggered automation |
 
 User-level skills go in `~/.claude/skills/` for cross-project availability.
 
-## Frontmatter
+## The format
+
+```
+skill-name/
+├── SKILL.md              # Required: frontmatter + instructions
+├── scripts/              # Optional: code the agent runs
+├── references/           # Optional: docs loaded on demand
+└── assets/               # Optional: templates, data
+```
+
+### Frontmatter
 
 ```yaml
 ---
 name: verb-object
 # prettier-ignore
-description: What it does AND when to trigger it. (50-200 chars)
+description: What it does AND when to use it. Imperative, keyword-rich, pushy.
 argument-hint: [args]
 # Omit for skills an orchestrator like one-shot needs to chain. Setting it
 # makes the skill user-only, so nothing can call it automatically.
@@ -60,20 +60,52 @@ wayfare: sync
 ---
 ```
 
-## Body Guidelines
+Only `name` and `description` are required by the spec:
 
-- **Target**: Under 500 lines, under 5k words
-- **Include**: procedures the agent cannot work out, decision trees, tool integrations
-- **Exclude**: explanations a competent engineer already knows
+- `name`: 1-64 chars, lowercase letters, digits and hyphens; no leading,
+  trailing or doubled hyphen; must equal the folder name. Use verb-object.
+- `description`: 1-1024 chars. Say what the skill does and when to use it,
+  phrased as an instruction ("Use when the user..."). Name the user's intent,
+  not the mechanics, and list the cases where they won't say the keyword.
+  It is the only thing the agent reads before deciding to load the skill.
 
-## Anti-patterns
+Optional spec fields: `license`, `compatibility` (only when the skill needs
+specific tools or network), `metadata`, `allowed-tools`.
+
+### Body
+
+The agent loads the whole `SKILL.md` on activation, so every line competes
+with the conversation for attention. Three rules:
+
+1. **Add what the agent lacks.** Project conventions, non-obvious edge cases,
+   the exact tool to use. Not what a PDF is. Ask of each line: "would the
+   agent get this wrong without it?" If no, cut it.
+2. **Keep it under 500 lines.** Longer material goes in `references/`, with
+   the instruction saying *when* to read each file ("read
+   `references/api-errors.md` if the API returns non-200"), not a bare
+   "see references/".
+3. **Match specificity to fragility.** Prose where several approaches are
+   fine; exact commands where the sequence matters. Give a default and
+   mention alternatives briefly, never a menu.
+
+Patterns that earn their place: a **Gotchas** list (facts that defy
+reasonable assumptions), a **template** for any output that must have a
+shape, a **checklist** for multi-step work, and a **validate-then-proceed**
+loop (run the check, fix, re-run, only then continue).
+
+Scripts in `scripts/` must never prompt for input, must answer `--help`, and
+should print structured output to stdout and diagnostics to stderr.
+Reference them by path relative to the skill root.
+
+### Anti-patterns
 
 | Don't | Do Instead |
 | --- | --- |
-| "When to Use" section in body | Put triggers in frontmatter description |
-| 1000-line SKILL.md | Split into supplementary reference files |
+| "When to Use" section in body | Put triggers in the frontmatter description |
+| 1000-line SKILL.md | Split into `references/` with load conditions |
 | Duplicate info across files | Single source of truth |
 | Lowercase angle bracket placeholders | Use UPPER_CASE (e.g., PROJECT_NAME) |
+| Generic advice ("handle errors well") | The specific correction the agent needs |
 
 ## `recalibrate`
 
@@ -119,17 +151,18 @@ Ask for:
 2. When should it trigger? (what signals or user requests)
 3. What does success look like?
 
+Ground the content in real expertise, not general knowledge: a task just
+completed in this conversation, a runbook, a style guide, review comments,
+recent fixes. A skill written from nothing says "follow best practices" and
+helps nobody.
+
 ### Step 2: Plan the Component
 
-Identify what files are needed:
-
-```
-skill-name/
-├── SKILL.md              # Required: frontmatter + instructions
-├── scripts/              # Deterministic, reusable code
-├── references/           # Domain docs loaded on-demand
-└── assets/               # Output templates
-```
+Pick the component type from the table above. For a skill, decide what goes
+in `SKILL.md` (the core procedure, every run) and what goes in
+`references/`, `scripts/` or `assets/` (loaded only when a step needs it).
+Scope it as one coherent unit of work: narrow enough to trigger precisely,
+wide enough that one task does not need three skills.
 
 ### Step 3: Create the Files
 
@@ -137,15 +170,20 @@ skill-name/
 mkdir -p .claude/skills/SKILL_NAME
 ```
 
-Write `SKILL.md` with frontmatter and instructions.
+Write `SKILL.md` with frontmatter and instructions, then any referenced files.
 
 ### Step 4: Validate
 
-- Name follows verb-object pattern (e.g., `deploy-service`)
-- Description has trigger context (50-200 chars)
-- Body is under 500 lines
+- `name` meets the spec rules above and matches the folder
+- `description` says what and when, under 1024 chars
+- `SKILL.md` is under 500 lines
 - No lowercase angle bracket placeholders
-- Referenced files in `supplementary-files` exist
+- Every file the body references exists, one level deep from the skill root
+- No empty `scripts/`, `references/` or `assets/` folder
+
+Then run the skill once on a real task and fold the corrections back in.
+When the agent makes a mistake you have to correct, that correction is a
+Gotchas entry.
 
 ### Step 5: Summary
 
