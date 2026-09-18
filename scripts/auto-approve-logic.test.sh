@@ -60,8 +60,11 @@ done
 # --- classify ---------------------------------------------------------------
 # shellcheck disable=SC1091
 source "$WORK/classify.sh"
-while IFS='|' read -r path want; do
-  check "classify: $path" "$want" "$(classify "$path")"
+# Not `path`: in zsh that name is bound to $PATH as an array, so reading a
+# fixture into it wipes PATH for the rest of the run. The suite then reports
+# dozens of unrelated failures whose real cause is that `grep` is gone.
+while IFS='|' read -r fpath_case want; do
+  check "classify: $fpath_case" "$want" "$(classify "$fpath_case")"
 done <<'EOF'
 .env|secret
 .env.production|secret
