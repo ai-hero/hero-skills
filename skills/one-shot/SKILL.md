@@ -283,6 +283,7 @@ Use the decision tree below to pick the **resume step** (1 to 9). Each row is th
 | Feature branch, `UNCOMMITTED == 0`, `UNPUSHED > 0` | Step 4 (push) | committed but not pushed (covers both the "no PR yet" case and the "pushed-once + local follow-up" case). After push updates the PR, advance to Step 5 normally. |
 | Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "true"`, `SELF_REVIEW_DONE == 0` | Step 5 (self-review) | PR up but never reviewed |
 | Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "true"`, `SELF_REVIEW_DONE >= 1` | Step 6 (mark-ready) | self-review already ran on this draft, so go straight to the mark-ready gate |
+| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW != APPROVED`, `SELF_REVIEW_DONE == 0` | Step 5 (self-review), after `gh pr ready --undo` | a PR that reached ready-for-review with no self-review on it. Before this row existed it matched the await-review row below and skipped Step 5 entirely, so the PR sat ready with no prior review, the review bot got pulled in against code the self-review was about to change, and auto-approve's prior-review gate failed a run. Convert it back to draft, say so, and review it. |
 | Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW != APPROVED`, `BOT_REPLIED=false` | Step 7 (await-review) | a ready PR with no bot reply yet. Step 7's poll will wait |
 | Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW != APPROVED`, `BOT_REPLIED=true` | Step 8 (respond) | bot has commented, run respond-to-comments |
 | Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW == APPROVED` | Step 9 (ship) | go straight to auto-approve + merge |
@@ -605,7 +606,15 @@ The two exceptions, both narrow: Step 0.4's `git checkout -b`, because branching
 
 Because the test phase runs inside push-pr on every push, resumed runs are re-tested at push time, so there is no stale-test window between sessions.
 
-Once the PR exists: if the work-item is a build kind, flip it to `status: reviewing` and append a dated entry with the PR URL to its `## Comments`. Wayfare's roadmap shows it as in review from here, and wayfare (`do`, or a goal turn) uses that recorded URL to find its way back to the branch.
+**Once the PR exists, confirm it is a draft before anything else reads it:**
+
+```bash
+gh pr view "$PR_NUMBER" --json isDraft --jq '.isDraft'
+```
+
+`true` continues. `false` means the PR was opened ready-for-review, which only happens when push-pr was passed `ready` or bypassed with a bare `gh pr create`. Do not carry on into Step 5 with it: run `gh pr ready --undo`, render `push` with `(✓) push (opened ready; reverted to draft)`, and continue. Ready-for-review is Step 6's decision, made after the self-review has posted and its fixes have landed. A PR that is ready before that pulls the review bot in against code Step 5 is about to change, re-triggers it on every fix pushed afterwards, and fails auto-approve's prior-review gate, which costs a workflow run and a Claude call to learn what this one line would have said.
+
+Then, if the work-item is a build kind, flip it to `status: reviewing` and append a dated entry with the PR URL to its `## Comments`. Wayfare's roadmap shows it as in review from here, and wayfare (`do`, or a goal turn) uses that recorded URL to find its way back to the branch.
 
 Test-phase failure semantics (owned by push-pr, surfaced here):
 

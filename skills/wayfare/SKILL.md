@@ -2412,6 +2412,11 @@ memory between turns:
    and resumes at Step 4: push, open the PR, self-review, mark-ready, await
    review, respond, ship. One PR, one review pass, one auto-approve, one
    merge, for the whole goal. Nothing here is wayfare's to do by hand.
+   The PR opens as a draft and stays one until one-shot's mark-ready step,
+   after the self-review and its fixes: one-shot's Step 4 reverts a PR
+   that arrives ready, and its resume routing sends a ready PR with no
+   self-review back to Step 5. A `mark-ready` grant on the permissions
+   line is answered at Step 6, never earlier.
 
    When that returns merged, write `status: done` on every covered feature
    at `committed` and rewrite its `[goal-commit:]` marker from `unmerged` to
