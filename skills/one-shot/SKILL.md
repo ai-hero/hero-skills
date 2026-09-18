@@ -1,7 +1,7 @@
 ---
 name: one-shot
 # prettier-ignore
-description: Drive a task end to end: plan, implement, simplify, push (tests included), self-review, mark ready, await review, respond, ship. No args: resume the current goal (gated). Small, low-risk PRs only.
+description: Drive a task end to end: plan, implement, simplify, push (tests included), self-review, mark ready, await review, respond, ship. No args: resume the current goal (gated). Use for small, low-risk PRs only; larger work goes through wayfare.
 argument-hint: "[ISSUE_ID [additional-context] | DESCRIPTION | recalibrate]"
 ---
 

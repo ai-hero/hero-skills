@@ -1,7 +1,7 @@
 ---
 name: think-it-through
 # prettier-ignore
-description: Brainstorm and grill an idea one question at a time into principal-level shared understanding, captured as dependency-aware work-items.
+description: Brainstorm and grill an idea one question at a time into principal-level shared understanding, captured as dependency-aware work-items. Use when starting a feature, refactor or migration bigger than a one-liner, when a task arrives vague, or before a decision that is expensive to reverse. Skip it for typos, copy tweaks and dependency bumps.
 argument-hint: "[IDEA_OR_TASK]"
 ---
 
@@ -25,16 +25,6 @@ because unexamined assumptions are where wasted work comes from.
 reached explicit shared understanding.** The user signals this. You do not
 declare it yourself. Interview relentlessly up to that point. When in doubt,
 ask one more question rather than assume.
-
-## When to Use
-
-- Starting a feature, refactor, or migration that is more than a one-line change.
-- A task that arrived vague ("make onboarding better", "clean up billing").
-- Any decision that is expensive to reverse (schema, public API, data model, auth).
-- Whenever you catch yourself about to build on an assumption you have not stated.
-
-Skip it for the genuinely trivial, such as a typo, a copy tweak, or a dependency bump.
-grilling those is theater.
 
 ## The Method
 

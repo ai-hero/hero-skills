@@ -1,7 +1,7 @@
 ---
 name: respond-to-comments
 # prettier-ignore
-description: Read PR review comments, fix the code issues they raise, and resolve the conversations on GitHub. Handles the full respond-to-feedback cycle.
+description: Read PR review comments, fix the code issues they raise, and resolve the conversations on GitHub. Handles the full respond-to-feedback cycle. Use when a reviewer or review bot has left comments on your PR, or when asked to address feedback.
 argument-hint: "[pr-number | recalibrate]"
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: push-pr
 # prettier-ignore
-description: Test (verify + smoke), commit, push, and open a draft PR with a CI report. Pass test for the test phase only, commit to stop before pushing, ready for a non-draft PR, or a target branch to merge into.
+description: Test (verify + smoke), commit, push, and open a draft PR with a CI report. Use when work is ready to commit or share. Pass test for the test phase only, commit to stop before pushing, ready for a non-draft PR, or a target branch to merge into.
 argument-hint: "[recalibrate | test [MODIFIER...] | commit | ready | target-branch]"
 ---
 

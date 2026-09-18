@@ -1,7 +1,7 @@
 ---
 name: setup-dev
 # prettier-ignore
-description: Set up a developer's local environment. Reads HERO.md, checks required tools, guides through git config, CLI auth, and missing dependencies. Per-developer, and never modifies shared files.
+description: Set up a developer's local environment. Reads HERO.md, checks required tools, guides through git config, CLI auth, and missing dependencies. Per-developer, and never modifies shared files. Use on a fresh machine or clone, or when a tool or login is missing.
 argument-hint: "[--check | recalibrate]"
 disable-model-invocation: true
 ---

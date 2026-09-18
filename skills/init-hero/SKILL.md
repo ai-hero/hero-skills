@@ -1,7 +1,7 @@
 ---
 name: init-hero
 # prettier-ignore
-description: Initialize Hero for a project. Investigates the repo, auto-detects the stack, confirms findings with smart questions, and creates HERO.md that all skills use.
+description: Initialize Hero for a project. Investigates the repo, auto-detects the stack, confirms findings with smart questions, and creates HERO.md that all skills use. Use on a repo with no HERO.md, or with recalibrate when the config has gone stale.
 argument-hint: "[recalibrate]"
 disable-model-invocation: true
 ---

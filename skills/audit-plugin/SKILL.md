@@ -144,8 +144,8 @@ Projects → dependency-file     | init    | scan, test
 Check every skill's frontmatter `description` for:
 
 - **Trigger clarity**: Does it say when to use the skill? ("Use when...", "Use for...", "Use before...")
-- **Length**: Should be 50-200 chars. Too short = unclear triggers. Too long = wastes context.
-- **Specificity**: Vague descriptions like "helps with code" are useless for Claude's skill matching.
+- **Length**: One to three sentences. The Agent Skills spec caps it at 1024 chars; past about 350 it is padding, and under 50 it cannot carry a trigger.
+- **Specificity**: Vague descriptions like "helps with code" are useless for Claude's skill matching. Name the user's intent, not the skill's mechanics.
 
 Report template:
 
@@ -153,7 +153,7 @@ Report template:
 DESCRIPTION QUALITY
 ───────────────────
 [OK] commit: "Create a smart git commit..." (85 chars, clear trigger)
-[!!] audit: description is 190 chars — consider trimming
+[!!] audit: description is 410 chars — consider trimming
 [??] create-skill: no trigger phrase — add "Use when..." or "Use for..."
 ```
 

@@ -1,7 +1,7 @@
 ---
 name: abandon
 # prettier-ignore
-description: Abandon or pause work on a branch that hasn't merged. Stashes uncommitted changes, switches to the default branch, and clears conversation context.
+description: Abandon or pause work on a branch that hasn't merged. Stashes uncommitted changes, switches to the default branch, and clears conversation context. Use when dropping or parking a branch, or when asked to reset to main.
 argument-hint: "[recalibrate]"
 disable-model-invocation: true
 ---

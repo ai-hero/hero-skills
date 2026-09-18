@@ -1,17 +1,11 @@
 ---
 name: my-humanizer
-version: 2.8.2
 # prettier-ignore
 description: Remove signs of AI-generated writing from text so it reads as human-written; based on Wikipedia's "Signs of AI writing". Use when editing or reviewing prose, or as `inline` from a pipeline step.
 license: MIT
-compatibility: any-agent
-allowed-tools:
-  - Read
-  - Write
-  - Edit
-  - Grep
-  - Glob
-  - AskUserQuestion
+metadata:
+  version: "2.8.2"
+allowed-tools: Read Write Edit Grep Glob AskUserQuestion
 ---
 
 # Humanizer: Remove AI Writing Patterns
