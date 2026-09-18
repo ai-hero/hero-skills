@@ -2417,6 +2417,40 @@ memory between turns:
    7 when the PR merges: a feature is not done while the default branch
    lacks it.
 
+   **Print the goal table after every feature, before launching the next.**
+   A turn now builds a whole goal, so without it the run goes quiet for a
+   dozen commits and the only status anyone sees is the report at the end,
+   by which time nothing can be redirected. Print it after each feature's
+   close-out, after each fix commit at step 5, and after each admission at
+   step 8. It is transcript-only — the durable records are the item's
+   fields and `## Turn log`, and a table written to the store would be a
+   third copy of state that the other two already hold.
+
+   ```
+   goal 7 — A user can sign in with Google and land on their dashboard
+   branch feat/goal-7-google-sign-in · commit 3 of about 4, hard stop 8
+
+     #   item                                   status      commit    mistakes
+     12  I can sign in with my Google account   committed   a1b2c3d   2
+     13  My session survives a refresh          committed   d4e5f6a   1 (+1 fix b7c8d9e)
+     15  I can sign out again                   next        –         –
+     18  Existing email users are unaffected    ready       –         –
+     21  Consent is scoped to the account       admitted    –         –
+
+     verified  after 12: npm test exit 0 · after 13: npm test exit 0
+     dod       0 of 3 — checked at step 6, once every feature is committed
+     stop      none
+   ```
+
+   The rows are `covers` in build order, read from the store rather than
+   from what this turn remembers doing, so a feature another session
+   committed shows as committed here. `status` is the item's own field, plus
+   two the store does not carry: `next` for the one about to be launched,
+   and `admitted` for one this turn appended. A feature that stopped says so
+   in its row with the step it stopped at, and `stop` names the reason. The
+   `dod` line stays `0 of N` until step 6 runs, because ticking it earlier
+   is the inference this skill refuses everywhere else.
+
 5. **Test the whole branch, not just the last feature.** After each commit,
    run the repo's verification over the branch as it now stands (push-pr's
    Step 2, invoked as `hero-skills:push-pr test`). Two features that each
@@ -2539,7 +2573,11 @@ memory between turns:
    Say which it is in the turn report, and why, so a second PR reads as a
    decision rather than an accident.
 9. **Write the turn report**: to the transcript for the evaluator, and as one
-   line to the item's `## Turn log` for the next session. Fixed shape:
+   line to the item's `## Turn log` for the next session. This is the
+   end-of-turn record, not a substitute for the goal table step 4 prints as
+   it goes: the table says where the run is while it can still be
+   redirected, the report says what the turn did once it cannot. Fixed
+   shape:
 
    ```
    wayfare turn, goal 7
@@ -3440,6 +3478,8 @@ Stamp `origin` with the producer that actually authored the item; never claim
 | Carrying goal state in memory between turns | `/goal` compacts and resumes; the store and `## Turn log` are the state. Every turn reads cold. |
 | Prompting from inside a goal turn | A headless run hangs on it. Stop with `stop: reauthorize` instead. |
 | A turn report that rounds up | The evaluator believes it. Say `not checked` and let it judge not-yet. |
+| A goal turn that only reports at the end | A dozen commits of silence, and the first status anyone sees is a report on work that is already done. Print the goal table after every feature. |
+| A goal table built from what the turn remembers | It is read from the store, so a feature another session committed shows as committed. A table of this turn's memory is the transcript again, not state. |
 | Skipping a failed item to keep a goal moving | The goal gets reported done with a hole nobody can see afterwards. Stop instead. |
 | Calling a goal done because its features are | Verify the goal's own DoD by running it. All-features-done is not the outcome. |
 | Merging past a human comment | Someone is engaging with the PR. The loop stops; it does not out-run review. |
