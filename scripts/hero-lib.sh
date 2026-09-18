@@ -1493,6 +1493,7 @@ TYPE — pick from the change's dominant intent:
   feat      new functionality
   fix       bug fix
   refactor  restructuring with no behavior change
+  perf      performance improvement with no behavior change
   docs      documentation only
   test      tests only
   chore     tooling, CI, dependency bumps
