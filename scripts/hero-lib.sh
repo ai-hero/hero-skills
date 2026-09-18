@@ -1174,6 +1174,11 @@ hero_norm_id() {
 #            roadmap, not yet planned; annotated `[deps unmet]` when a
 #            dependency isn't done
 #   review   build kinds only, status reviewing: PR open, awaiting merge
+#   committed build kinds only, status committed: committed on a goal's branch
+#            that has not merged. Never READY and never a satisfied
+#            dependency, because the default branch lacks the code; a
+#            dependent's row names it as `[committed dep: ID…]` so a goal turn
+#            can tell "already on my branch" from a real block
 #   feedback feedback kinds only, status todo or queued: a divergence
 #            written but not yet landed upstream. Never READY, because a
 #            feedback item is DELIVERED and never built, so handing one to
@@ -1191,9 +1196,9 @@ hero_norm_id() {
 #             existing stores keep listing; dropping it would demote every
 #             pre-rule item to backlog with a stderr line as the only trace
 #   build     feature / architecture / polish / security: new | todo | planning | ready |
-#             implementing | reviewing | done, mapped here as
+#             implementing | committed | reviewing | done, mapped here as
 #             new | backlog | plan | READY-eligible |
-#             active | review | done. For a build kind, `ready` (not `todo`) is
+#             active | committed | review | done. For a build kind, `ready` (not `todo`) is
 #             the state eligible to become READY: `todo` means "identified,
 #             unplanned", and handing an unplanned one to one-shot would skip
 #             planning entirely
@@ -1233,7 +1238,7 @@ hero_norm_id() {
 # Runs in a subshell: it cds, and leaking that into a sourced caller's shell
 # silently reroutes every later relative path.
 hero_ready_items() (
-  local store f d raw deps ready title id state kind class enum row all_ids done_ids covered_ids missing awaiting since
+  local store f d raw deps ready title id state kind class enum row all_ids done_ids covered_ids committed_ids committed missing awaiting since
   store="${1:-$(hero_work_store)}" || return 1
   cd "$store" 2>/dev/null || { echo "hero_ready_items: no store at ${store}" >&2; return 1; }
   # zsh errors out on an unmatched glob (bash leaves it literal for the
@@ -1250,6 +1255,7 @@ hero_ready_items() (
   # hand-written item must not erase or corrupt the whole listing.
   all_ids=" "
   done_ids=" "
+  committed_ids=" "
   covered_ids=" "
   for f in *.md; do
     [ -e "$f" ] || continue
@@ -1281,6 +1287,9 @@ hero_ready_items() (
     case "$class:$state" in
       feedback:delivered|feedback:rejected) done_ids="$done_ids$id " ;;
       feedback:*) ;;
+      # NOT done: the commit sits on a goal branch the default branch lacks,
+      # so a dependent built against it merges onto a tree missing it.
+      build:committed) committed_ids="$committed_ids$id " ;;
       *:done) done_ids="$done_ids$id " ;;
     esac
     # Only an OPEN goal counts as cover. `new` is untriaged and an
@@ -1341,6 +1350,14 @@ EOF
           *" $id "*) ;;
           *) echo "hero_ready_items: $f is $state and no open goal covers it; wayfare sync groups it into a goal" >&2 ;;
         esac ;;
+      # A committed item outside every open goal is the residue of an
+      # abandoned goal branch: it claims work the repo does not have, and
+      # only sync's store-defect report re-opens it.
+      build:committed)
+        case "$covered_ids" in
+          *" $id "*) ;;
+          *) echo "hero_ready_items: $f is committed and no open goal covers it; its goal branch was abandoned, and wayfare sync reports it" >&2 ;;
+        esac ;;
     esac
     # One CLASS-keyed table, not a case block per kind: shared states appear
     # once, and only the genuinely divergent arms name a class (see the state
@@ -1372,6 +1389,9 @@ EOF
       goal:active|build:implementing|build:in-progress|plain:in-progress|unknown:in-progress)
                                         echo "active  $f — $title"; continue ;;
       build:reviewing)                  echo "review  $f — $title"; continue ;;
+      # Its own row word rather than `done`, so no caller has to read comment
+      # markers to learn whether the default branch has the code (it does not).
+      build:committed)                  echo "committed $f — $title"; continue ;;
       # Suspended: waiting on a sibling repo's reply (docs/MESSAGES.md). Never
       # READY and never in done_ids, so a dependent stays blocked while the
       # question is open. The row carries the ids and the date it suspended
@@ -1398,7 +1418,7 @@ EOF
         # ready-mark, silently defeating the gate the planning state exists to
         # enforce. Treat it like a rejected id: name it loudly, never READY.
         case "$class" in
-          build)    enum="new/todo/planning/ready/implementing/reviewing/suspended/done (kind: $kind; suspended needs awaiting:)" ;;
+          build)    enum="new/todo/planning/ready/implementing/committed/reviewing/suspended/done (kind: $kind; suspended needs awaiting:)" ;;
           feedback) enum="new/todo/queued/delivered/rejected (kind: $kind)" ;;
           goal)     enum="new/todo/active/done (kind: goal)" ;;
           *)        enum="new/planning/todo/in-progress/done" ;;
@@ -1410,6 +1430,7 @@ EOF
     deps=$(hero_item_deps "$f")
     ready=1
     missing=""
+    committed=""
     # Heredoc keeps the loop in this shell (so `ready` persists) and works under
     # both bash and zsh, which does not word-split unquoted vars.
     while IFS= read -r raw; do
@@ -1428,7 +1449,9 @@ EOF
           ready=0
           continue ;;
       esac
-      case "$done_ids" in *" $d "*) ;; *) ready=0 ;; esac
+      case "$done_ids" in *" $d "*) continue ;; esac
+      ready=0
+      case "$committed_ids" in *" $d "*) committed="$committed $d" ;; esac
     done <<EOF
 $deps
 EOF
@@ -1441,12 +1464,12 @@ EOF
       if [ "$ready" = 1 ]; then
         echo "backlog $f — $title"
       else
-        echo "backlog $f — $title [deps unmet${missing:+; missing dep:$missing}]"
+        echo "backlog $f — $title [deps unmet${missing:+; missing dep:$missing}${committed:+; committed dep:$committed}]"
       fi
     elif [ "$ready" = 1 ]; then
       echo "READY   $f — $title"
     else
-      echo "blocked $f — $title${missing:+ [missing dep:$missing]}"
+      echo "blocked $f — $title${missing:+ [missing dep:$missing]}${committed:+ [committed dep:$committed]}"
     fi
   done
 )

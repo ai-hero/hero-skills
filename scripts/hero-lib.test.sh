@@ -544,6 +544,14 @@ item 048-badkind.md 48 "Typo kind" "todo" "[]" "features"
 # not be invisible.
 fitem 049-fwait.md 49 "Backlog waiting on dep" "todo" "[30]"
 fitem 050-fdangle.md 50 "Backlog dangling dep" "todo" "[999]"
+# `committed` is a goal feature's commit on the goal branch, unmerged: its own
+# row, never READY, never a satisfied dependency (the default branch lacks the
+# code), and the dependent's row must NAME it so a goal turn can tell a
+# dependency already on its own branch from a real block.
+fitem 195-fcommit.md 195 "Committed on goal branch" "committed" "[]"
+fitem 196-fafter.md 196 "Ready, waiting on committed" "ready" "[195]"
+fitem 197-fafterlog.md 197 "Backlog, waiting on committed" "todo" "[195]"
+item 198-plaincommit.md 198 "Plain item claiming committed" "committed" "[]"
 OUTF="$(hero_ready_items "$W" 2>/dev/null)"
 # A todo feature is on the roadmap but UNPLANNED, never READY.
 check "feature: todo lists as backlog, not READY" "backlog" "$(state_of 030-backlog.md "$OUTF")"
@@ -577,6 +585,13 @@ printf '%s' "$OUTF" | grep -q '049-fwait.md.*\[deps unmet'
 check "feature: backlog unmet deps are annotated" "0" "$?"
 printf '%s' "$OUTF" | grep -q '050-fdangle.md.*missing dep: 999'
 check "feature: backlog dangling dep is annotated" "0" "$?"
+check "feature: committed lists as committed"     "committed" "$(state_of 195-fcommit.md "$OUTF")"
+check "feature: dep on committed is blocked, not READY" "blocked" "$(state_of 196-fafter.md "$OUTF")"
+printf '%s' "$OUTF" | grep -q '196-fafter.md.*\[committed dep: 195\]'
+check "feature: blocked row names its committed dep" "0" "$?"
+printf '%s' "$OUTF" | grep -q '197-fafterlog.md.*\[deps unmet; committed dep: 195\]'
+check "feature: backlog row names its committed dep" "0" "$?"
+check "feature: plain item with committed is invalid" "invalid" "$(state_of 198-plaincommit.md "$OUTF")"
 ERRF="$(hero_ready_items "$W" 2>&1 >/dev/null)"
 printf '%s' "$ERRF" | grep -q "unrecognized status 'in-review'.*kind: feature"
 check "feature: unknown status names the feature enum on stderr" "0" "$?"
@@ -737,6 +752,15 @@ status: ready
 depends_on: []
 ---
 ITEM
+cat > "$C/009-commit.md" <<'ITEM'
+---
+id: 9
+kind: feature
+title: Committed on a branch no goal owns
+status: committed
+depends_on: []
+---
+ITEM
 cat > "$C/013-newgoal.md" <<'ITEM'
 ---
 id: 13
@@ -810,6 +834,8 @@ printf '%s' "$ERRC" | grep -q "007-rev.md is reviewing and no open goal covers i
 check "covers: a new goal's covers do not count" "0" "$?"
 printf '%s' "$ERRC" | grep -q "008-ws.md is ready and no open goal covers it"
 check "covers: a two-token covers entry covers nothing" "0" "$?"
+printf '%s' "$ERRC" | grep -q "009-commit.md is committed and no open goal covers it"
+check "covers: uncovered committed item warns as an abandoned branch" "0" "$?"
 printf '%s' "$ERRC" | grep -q "014-wsgoal.md covers '8 99', which is not one id"
 check "covers: a two-token covers entry warns" "0" "$?"
 OUTC="$(hero_ready_items "$C" 2>/dev/null)"

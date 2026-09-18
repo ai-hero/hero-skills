@@ -334,7 +334,7 @@ is built from.
 `security` / `bug`):
 
 ```text
-new | todo | planning | ready | implementing | reviewing | suspended | done
+new | todo | planning | ready | implementing | committed | reviewing | suspended | done
 ```
 
 It must be all three of these, and dropping any one reintroduces a defect:
