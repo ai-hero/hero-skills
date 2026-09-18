@@ -1602,13 +1602,17 @@ follows):
   integer, or below `budget`; a `concurrency` key left over from the
   per-feature-PR model, which nothing reads any more and which sync removes; an `active` goal holding a `covers`
   id its `## Comments` do not account for; and a `done` build item whose
-  `## Comments` carry a `[goal-commit: SHA on BRANCH, unmerged]` marker where
-  that SHA is not an ancestor of the default branch and BRANCH no longer
-  exists. That last one is the residue of a goal whose branch was abandoned:
-  the item claims work the repo does not have, and nothing else re-opens it,
-  because a goal's features are marked `done` when they commit rather than
-  when they merge. Report it with the SHA and offer to return the item to
-  `ready`. Every admission opens a dated
+  `## Comments` still carry an `unmerged` `[goal-commit:]` marker while no
+  `active` goal covers it. That is the residue of a goal whose branch was
+  abandoned: the item claims work the repo does not have, and nothing else
+  re-opens it, because a goal's features are marked `done` when they commit
+  rather than when they merge. Report it with the SHA and offer to return the
+  item to `ready`. **Do not test the SHA against the default branch.** The
+  default merge method is squash, so a feature's commit is never an ancestor
+  of the default branch even when the goal shipped perfectly, and a check
+  built on ancestry reports every feature of every completed goal and offers
+  to re-open finished work. A live `active` goal is likewise not a defect:
+  its features are committed and unmerged by design until its step 7. Every admission opens a dated
   entry with a fixed prefix (*Admitting discovered work*), so a `covers` that
   grew without one is a hand-edit under an authorization, reported and never
   silently adopted. `budget` is not checked this way: it is an expectation
@@ -2164,7 +2168,10 @@ That is the point of the shape. A goal used to open a PR per feature, which
 meant N reviews, N auto-approve runs and N merges for one outcome, and every
 one of them waiting on a server. Grouping the changesets into one PR pays
 those costs once. It also gives the reviewer the outcome rather than a
-fragment of it: the commits still separate the work, one per feature.
+fragment of it, with one commit per feature separating the work **in the
+PR**. Whether that survives the merge is the merge method's business, not
+this shape's: the default is squash, which lands the goal as a single commit
+on the default branch.
 
 Every turn starts cold and ends with everything written down. Any turn could
 be the first one after a resume or a compaction, so nothing is carried in
@@ -2243,7 +2250,8 @@ memory between turns:
    them is out of scope even if it looks correct; report it instead of
    making it.
 
-   Invoke hero-skills:one-shot N via the Skill tool with the exact line
+   Invoke hero-skills:one-shot with feature N's **store id** as the argument,
+   via the Skill tool, with the exact line
    `gates pre-authorized in-session for goal G: PERMISSIONS`, plus the exact
    line `commit only: goal G branch GOAL_BRANCH`. It builds, simplifies,
    tests and commits. It does not push, open a PR, review, or ship.
@@ -2389,7 +2397,11 @@ memory between turns:
    review, respond, ship. One PR, one review pass, one auto-approve, one
    merge, for the whole goal. Nothing here is wayfare's to do by hand.
 
-   When that returns merged, run step 8 first, then write `status: done` on
+   When that returns merged, rewrite each covered feature's `[goal-commit:]`
+   marker from `unmerged` to `merged in PR_URL`. Until that happens every
+   feature reads as committed-but-unshipped, which is what `sync` reports and
+   what the dependency check in *Advancing one item* refuses to build
+   against. Then run step 8, then write `status: done` on
    the goal — and only if step 8 admitted nothing. Admitted work is work this
    goal still owes, so a goal that absorbed an item is not done; it stays
    `active` for the next turn. A STOP from one-shot (a declined gate,
@@ -2675,15 +2687,17 @@ the next feature.
 
 1. **Select.** Run `hero_ready_items "$STORE"`. If it fails (a missing or unset
    store), STOP and name the path; a failed listing is not an empty roadmap.
-   For `do`, the feature is the given id: find its row and act on its tier.
-   For a goal turn, take the first non-empty tier among `covers`, lowest id
-   within it, finishing what is started before starting more:
+   The feature is the given id: find its row and act on its tier. A goal
+   turn does not reach this step at all (*One turn* step 4 owns its
+   selection), so there is no `covers` walk here:
    **A `done` feature whose `## Comments` carry an unmerged `[goal-commit:]`
    marker is not a satisfied dependency.** Its code is on a goal branch, not
    on the default branch, so anything that `depends_on` it would be built
    against a tree that lacks it. `hero_ready_items` has one notion of `done`
-   and cannot see this, so check the marker here before acting on a tier, and
-   report the blocking goal instead of building. `wayfare next` is already
+   and cannot see this. Before acting on a tier, read the markers on **the
+   selected item's `depends_on` entries**, not on the item itself (the item
+   is not `done`; its dependencies are), and report the blocking goal instead
+   of building. `wayfare next` is already
    safe (the goal stays `active` until its PR merges, and a goal's derived
    `depends_on` holds the order), so this is the gap `do ID` has to cover.
 
@@ -2955,7 +2969,7 @@ covers: [12, 13, 15, 18] # the features this goal is made of, in build order; an
 branch: goal/7-google-sign-in # the one branch every covered feature commits to; written by the first turn, read by every later one
 budget: 4 # COMMITS the goal is EXPECTED to take, not PRs and not one per feature. An expectation, not a gate: going over is ordinary and the turn just notes the count. Positive integer, REQUIRED; absent, zero or non-numeric is a store defect and the turn stops. Sync fills it with len(covers)
 budget_max: 8 # the "not too much" line, and the only hard one: at it the turn reports stop: budget and hands back. Positive integer >= budget, REQUIRED. This is the number a person authorized at the gate; a turn never moves it. Sync fills it with 2 * budget
-commits: [a1b2c3d, d4e5f6a] # the commits this goal landed, appended as each is made. A set, not a count: one feature may spend two commits when its changesets differ, so the spend cannot be re-derived from item statuses, and `git log` alone cannot say which commit belonged to which feature
+commits: ["a1b2c3d 12", "d4e5f6a 13"]  # SHA then the feature id it served, appended as each is made. A set, not a count: one feature may spend two commits when its changesets differ, so the spend cannot be re-derived from item statuses, and `git log` alone cannot say which commit belonged to which feature
 source_ref: FULL_COMMIT_SHA
 target_ref: FULL_COMMIT_SHA
 ---
