@@ -132,6 +132,19 @@ repos:
   # ===========================================================================
   # Local hooks (hero-skills specific)
   # ===========================================================================
+  # GitHub scans an entire `run:` block for Actions expressions, shell
+  # comments included, so an empty or malformed one rejects the WHOLE workflow
+  # at startup — no steps, no verdict, and for auto-approve.yaml that is every
+  # consumer calling it at @main. `check yaml` above parses such a file
+  # happily; only an Actions-aware linter sees it. Not `actionlint-system`:
+  # CI installs pre-commit but not actionlint, so that id would pass locally
+  # and fail there.
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+        args: [-shellcheck=, -pyflakes=]
+
   - repo: local
     hooks:
       - id: validate-plugin

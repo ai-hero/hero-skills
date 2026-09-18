@@ -477,8 +477,12 @@ jobs:
             --slurp > pr_review_comments.pages.json
           jq 'add' pr_review_comments.pages.json > pr_review_comments.json
 
-          # Hoisted: a raw `${{ }}` inside a `# test:` block is a bash syntax
-          # error, so the extracted fragment would not parse.
+          # Hoisted out of the `# test:` block below: an Actions expression is
+          # a bash syntax error in the extracted fragment, so the suite could
+          # not parse it. Do not write an empty Actions expression anywhere in
+          # this block, not even inside a shell comment — GitHub scans the whole
+          # `run:` string and rejects the WORKFLOW, which takes down every
+          # consumer calling it at @main.
           REPO="${{ github.repository }}"
           # test: begin writers-resolve
           # author_association on these REST reads is computed RELATIVE TO THE
