@@ -1018,6 +1018,14 @@ jobs:
           PR_NUMBER: ${{ github.event.issue.number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # github.event.* rather than steps.pr.outputs.*, because the step
+          # that sets those may be the one that died. On a trigger that is not
+          # an issue_comment both are empty, and the URLs below would 404 into
+          # continue-on-error's silence.
+          if [ -z "$PR_NUMBER" ]; then
+            echo "::error::no PR number in the event payload — cannot report the crash"
+            exit 0
+          fi
           # A step that failed for a reason it could name leaves it in
           # lane_error.txt. Without this the author reads only "crashed" and
           # has to open the run to learn that, say, the commit list came back
@@ -1035,11 +1043,19 @@ jobs:
             /repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
             --jq '.[] | select(.body | startswith("<!-- claude-approve -->")) | .id' \
             | head -1)
+          POSTED=1
           if [ -n "$EXISTING" ]; then
-            gh api --method PATCH /repos/${{ github.repository }}/issues/comments/$EXISTING -f body="$BODY"
+            gh api --method PATCH /repos/${{ github.repository }}/issues/comments/$EXISTING -f body="$BODY" || POSTED=
           else
-            gh api --method POST /repos/${{ github.repository }}/issues/$PR_NUMBER/comments -f body="$BODY"
+            gh api --method POST /repos/${{ github.repository }}/issues/$PR_NUMBER/comments -f body="$BODY" || POSTED=
           fi
+          # continue-on-error is what keeps this step from masking the failure
+          # it reports, and it would mask this one just as well: a PR left
+          # with no verdict is exactly what ship-pr reports as a failed run
+          # with no cause. A vendored caller.yaml missing a scope this file
+          # declares is the way that happens in practice.
+          [ -n "$POSTED" ] || echo "::error::could not post the crash notice on PR #$PR_NUMBER — the PR has no verdict; see this run's logs"
           gh api --method POST \
             /repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
-            -f content="-1"
+            -f content="-1" \
+            || echo "::warning::could not react to the trigger comment"
