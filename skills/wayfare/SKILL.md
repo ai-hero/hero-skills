@@ -11,10 +11,9 @@ argument-hint: "[sync [CONTEXT] | next | do ID | improve | recalibrate]"
 world and converges everything into `.plans/`: the architecture record, the
 design snapshot, the hardening audit, the compliance register, the
 dependency bots' PRs, the roadmap, and the goals over it; `next` authorizes
-the next goal and runs it; `do ID` advances one item,
-or runs one turn of one goal; `improve` runs the compliance audit alone, for
-this repo or the whole fleet, and drafts the backports; `recalibrate` tunes
-the config. The skills `sync` stitches together,
+the next goal and runs it; `do ID` advances one item, or runs one turn of
+one goal; `improve` runs the compliance audit alone, for this repo or the
+whole fleet, and drafts the backports; `recalibrate` tunes the config. The skills `sync` stitches together,
 `hero-skills:architecture`, `hero-skills:harden`,
 `hero-skills:think-it-through`, still exist and still own their procedures,
 but they are run *by* wayfare, in order, and hidden from the slash menu
@@ -974,7 +973,8 @@ and **`recalibrate`**.
   catch-all below would otherwise read it as sync context. See the
   `recalibrate` section above.
 - `next` picks the next goal, gets its permissions authorized in-session, and
-  runs one turn of it right here. It never plans. See `next` below.
+  runs one turn of it right here. It never plans, except what a turn
+  admits under `absorb: yes`. See `next` below.
 - `do ID` advances one thing and stops. A build-kind id (feature,
   architecture, polish, security) runs *Advancing one item* on it; a
   `security` id with `bot:` runs *Carrying a bot's PR*; a goal id runs *One
@@ -1741,9 +1741,9 @@ So the pass runs across the roadmap:
 4. **Goals: cover every planned item, bottom-up, and re-cut what is
    already there.** A goal is the unit `next` authorizes and runs, and
    every item in its `covers` must already be `ready` (*Starting a goal*,
-   step 1), so the end of this pass is the one moment
-   in the workflow where a goal can be formed *from* the set instead of
-   reassembled by hand afterwards. Roadmap mode has just settled the
+   step 1), so the end of this pass is the one moment in the workflow
+   where a goal can be formed *from* the set instead of reassembled by
+   hand afterwards. Roadmap mode has just settled the
    cross-cutting decisions and the dependency order across these features.
    A goal written later has to re-derive that grouping from the items alone,
    without the reasoning that produced it.
@@ -1944,11 +1944,11 @@ audit:
 A family whose FLEET.md rows all say `group: none` is not a family; say
 that instead of auditing nothing and reporting clean.
 
-### `next`: hand out the next goal
+### `next`: authorize the next goal and run it
 
 `next` takes no argument. It picks the next goal, gets its permissions
 authorized in-session, and runs one turn of it in this session. It never
-plans. On a clean run that one turn is the whole goal: every feature
+plans, except what a turn admits under `absorb: yes`. On a clean run that one turn is the whole goal: every feature
 committed, the PR shipped, the deploy verified. What it does not do is loop:
 a turn that ends on a stop line hands back to the person, who fixes what
 stopped it and runs `next` again, or sets the `/goal` line the report
@@ -1972,11 +1972,12 @@ walk the goals:
 Then run *Starting a goal* on the pick. `next` is how a goal starts and
 resumes; `do GOAL_ID` is one turn of it, the same turn `next` runs.
 
-### A goal's turns: the first from `next`, the rest from `/goal`
+### A goal's turns: the first from `next`, more only if asked for
 
 `next` runs the first turn itself, right after its gate, and a turn builds
 the whole goal, so on a clean run there is no second turn. Looping only
-matters after a stop, and for that wayfare implements no loop of its own:
+matters when a turn ends short, on a stop line or with items remaining,
+and for that wayfare implements no loop of its own:
 the re-run is Claude Code's built-in **`/goal`**, which sets a completion
 condition, and after each turn a small fast model judges it met, not yet, or
 impossible, and starts another turn if not. Wayfare cannot set `/goal`
@@ -2128,8 +2129,9 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
                   in and the branch passes
      Stops on:    the goal item's ## Stop conditions
 
-   Type the goal id to authorize these permissions, or anything else to
-   cancel (edit the item's ## Permissions first to change them):
+   Type the goal id to authorize these permissions and run the goal now,
+   or anything else to cancel (edit the item's ## Permissions first to
+   change them):
    ```
 
    **On a resume, show what the goal admitted since you last saw it.** A goal
@@ -2146,12 +2148,17 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
    the permission mode.
 3. **Run the turn, now, in this session.** The id typed at the gate is the
    go: run *One turn* on the goal without asking anything further, and end
-   with its turn report. A report ending `stop: none` with `dod:` verified
-   is the goal done; there is nothing more to run. A report ending on any
-   other stop line hands back to the person, and under it print the
-   `/goal` line that would have Claude Code re-run turns unattended, for
-   the person to paste if they want that rather than fixing the stop and
-   running `next` again. Keep the condition short and point it at the item:
+   with its turn report. Three endings:
+   - `stop: none` with `dod:` verified: the goal is done, and there is
+     nothing more to run;
+   - `stop: none` with `remaining:` items: the turn ended short of the goal
+     (a compaction, a context limit). Hand back and print the `/goal` line
+     below, since this is the state it exists for;
+   - any other stop line: hand back, and print the same line, for the
+     person to paste if they would rather have Claude Code re-run turns
+     unattended than fix the stop and run `next` again.
+
+   Keep the condition short and point it at the item:
 
    ```
    /goal Run hero-skills:wayfare do 7 once per turn. Met when the turn
@@ -2163,8 +2170,8 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
 
    The rules are on the item, not in the condition. Restating them in prose
    every time is how they drift; the item is what every turn re-reads.
-   Print it only on a stop: on a finished goal it is an invitation to loop
-   over nothing.
+   Print it whenever the goal is unfinished, and never on a finished one,
+   where it is an invitation to loop over nothing.
 4. **The authorization lives in this session only. Never write it to the
    item.** A stored "approved" flag outlives the conversation that granted it
    and sits in a file anyone can edit. A `/goal` line restores its condition
@@ -3328,7 +3335,7 @@ Stamp `origin` with the producer that actually authored the item; never claim
 
 Pick exactly one, from the store's current state:
 
-- **A goal is runnable** (`active`, or `todo` with its goal deps `done` and its `covers` all planned): `Next step: hero-skills:wayfare next, to authorize its permissions and start the loop`; under an active `/goal`, `hero-skills:wayfare do GOAL_ID` is its next turn.
+- **A goal is runnable** (`active`, or `todo` with its goal deps `done` and its `covers` all planned): `Next step: hero-skills:wayfare next, to authorize its permissions and run it`; `hero-skills:wayfare do GOAL_ID` is one turn of it.
 - **An item is mid-flight and no goal covers it**: `Next step: hero-skills:wayfare do N, to build item N` (the active one).
 - **An item is READY and no goal covers it**: `Next step: hero-skills:wayfare sync, because item N is ready and no goal covers it; the goals stage groups it`. `do N` builds it by hand and leaves the roadmap as it was.
 - **Features are unplanned (`todo`), no roadmap yet, or the world moved** (target changed, work landed out-of-band, design feedback awaits delivery, features look horizontal, alerts or bot PRs appeared): `Next step: hero-skills:wayfare sync, which converges architecture, design, hardening, compliance, dependencies and the roadmap, plans the set, then proposes goals`.
