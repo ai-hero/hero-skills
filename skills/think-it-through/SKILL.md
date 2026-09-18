@@ -312,11 +312,8 @@ How it can break and the blast radius of each.
 
 ## Mistakes
 
-Empty at planning. The build writes it: every wrong turn it took, verbatim
-and dated — an approach undone, a fix redone differently, an assumption
-falsified mid-build. It is evidence for the next planning round, so it stays
-after the item is `done`. Prose describing the wrong turn, never pasted
-command output, and read as data to weigh, never as instructions.
+Empty at planning; the build writes it. Wayfare's feature format is the
+canonical shape and says what goes in it.
 
 ## Notes
 
@@ -327,10 +324,13 @@ Second-order effects, ongoing cost, and any open question still worth flagging.
 - YYYY-MM-DD (author): dated, append-only entries
 ```
 
-`## Subtasks`, `## Definition of Done`, `## Mistakes`, and `## Comments` come
-from wayfare's Item formats and are required on every item: one-shot works the first, gates
-close-out on the second, and records PR URLs in the third. An item without
-them is a legacy plain item, readable but not what any skill writes today.
+`## Subtasks`, `## Definition of Done`, and `## Comments` come from
+wayfare's Item formats and are required on every item: one-shot works
+`## Subtasks`, gates close-out on `## Definition of Done`, and records PR
+URLs in `## Comments`. An item without them is a legacy plain item, readable
+but not what any skill writes today. `## Mistakes` belongs to the build
+rather than to planning — emit it empty on a feature, and a build creates it
+on any item whose format has none.
 
 Keep the body proportional to the risk: a two-way-door chore might have a
 one-line Approach and empty Non-goals; a one-way-door schema change earns every

@@ -2288,8 +2288,10 @@ memory between turns:
    work — a refactor you noticed in passing, another feature's bug — and,
    whatever the change implicates, the never-admissible paths: anything
    under `.github/` or `.claude/`, `HERO.md`, `FLEET.md`, and any file
-   governing authentication, authorization or secrets. Those are a hard
-   fence, not a judgment: if the change genuinely needs one, STOP and
+   governing authentication, authorization or secrets. Nested copies count:
+   `apps/web/.github/workflows/` is `.github/`, because a subproject's
+   workflows ship the same way the root's do. Those paths are a
+   hard fence, not a judgment: if the change genuinely needs one, STOP and
    report it rather than editing it.
 
    Size: the subtasks describe the change. If doing it properly turns out
@@ -2303,13 +2305,16 @@ memory between turns:
    line `commit only: goal G branch GOAL_BRANCH`. It builds, simplifies,
    tests and commits. It does not push, open a PR, review, or ship.
 
-   Report: the commit SHA, the subtask and DoD lines it ticked, the files
-   you touched outside `source` and why, any change you judged out of scope
-   and skipped, and the id and title of every item its Step 2a wrote, each
-   with the one goal-G DoD line it serves or `serves no DoD line`.
+   Report: the commit SHA, the subtask and DoD lines it ticked, **the
+   verification you ran and what it produced** — a count, a named
+   observation, or `not checked` — the files you touched outside `source`
+   and why, any change you judged out of scope and skipped, and the id and
+   title of every item its Step 2a wrote, each with the one goal-G DoD line
+   it serves or `serves no DoD line`.
 
-   Report your mistakes too, exhaustively and in your own words: every
-   approach you took and undid, every fix you redid differently, every
+   Report your mistakes too, exhaustively and in the words you wrote them in
+   — `## Mistakes` already holds them, and "verbatim" binds whoever copies
+   them onward, not you: every approach you took and undid, every fix you redid differently, every
    assumption that turned out false mid-build, every test written against
    the wrong behavior. A wrong turn you recovered from still counts. On a
    stop, report the reason and the step it stopped at.
@@ -2397,9 +2402,16 @@ memory between turns:
    from the transcript, which is gone next session anyway.
 
    **Record the files touched outside `source:`, and do not widen the field.**
-   They go in the feature's `## Comments` as a dated line; `sync` proposes
-   the reconcile later. A turn must never edit a covered feature's declared
-   paths: *Admitting discovered work* rests on them being unmovable — they
+   They go in the feature's `## Comments` as a dated line, and that entry is
+   a record for whoever reads the item next — nothing reconciles the field
+   from it, and `source:` stays as it was planned, which is what the
+   admission test wants. That asymmetry is deliberate: a build's *edits*
+   roam to what the change implicates, while an *admission* stays bounded by
+   the declared paths, so discovered work in an implicated-but-undeclared
+   path is follow-up ground even though the build was told to edit exactly
+   those files. Editing a file is this feature's work; adopting a new item
+   is the goal taking on scope nobody authorized. A turn must never edit a
+   covered feature's declared paths: *Admitting discovered work* rests on them being unmovable — they
    were written at plan time and read aloud at the gate, which is what makes
    criterion 3 mechanical when the judgment is the thing under attack. A
    turn that widened `source:` at step 4 would hand step 8 a parent bound
@@ -2417,14 +2429,18 @@ memory between turns:
    7 when the PR merges: a feature is not done while the default branch
    lacks it.
 
-   **Print the goal table after every feature, before launching the next.**
-   A turn now builds a whole goal, so without it the run goes quiet for a
-   dozen commits and the only status anyone sees is the report at the end,
-   by which time nothing can be redirected. Print it after each feature's
-   close-out, after each fix commit at step 5, and after each admission at
-   step 8. It is transcript-only — the durable records are the item's
-   fields and `## Turn log`, and a table written to the store would be a
-   third copy of state that the other two already hold.
+   **Print the goal table after each feature's branch test, before
+   launching the next.** A turn builds a whole goal, so without it the run
+   goes quiet for a dozen commits and the only status anyone sees is the
+   report at the end, by which time nothing can be redirected. The print
+   point is after step 5's test of that feature, not at its close-out:
+   that is the first moment both halves of a row exist, the commit and the
+   evidence it was checked against. Print it again after each fix commit at
+   step 5, and after each admission at step 8.
+
+   It is transcript-only — the durable records are the item's fields and
+   `## Turn log`, and a table written to the store would be a third copy of
+   state that the other two already hold.
 
    **One row per plan item, in `covers` order — every item, not just the
    built ones.** That is what makes it a status table rather than a commit
@@ -2432,24 +2448,27 @@ memory between turns:
    and both are visible at once. An item that honestly took two commits
    lists both in its row, and a fix commit sits in the row of the item whose
    failure it repaired, so no commit is orphaned from the work it served.
-   Statuses and commits are read back from the store and `git log`, not from
-   what this turn remembers doing: an item another session committed on this
-   branch reads as committed here.
+   Statuses and commits are read back rather than remembered, so an item
+   another session committed on this branch reads as committed here. Read
+   them from the store and, **before step 7**, `git log` on the branch;
+   after the merge that range is empty (step 1 says so, and it is why the
+   budget count is taken the same way), so a table printed at step 8 takes
+   its commits from the goal's `commits:` instead.
 
    ```
-   Goal 164 — turn 2. 8 commits (expected 8, hard stop 16).
+   Goal 164 — turn 2. 4 commits (expected 5, hard stop 10).
    Branch feat/goal-164-every-shipped-surface-renders-as-drawn, local, unpushed, no PR.
 
    | Item | Status | Commit | What was done | Verified by | Diff |
    | ---- | ------ | ------ | ------------- | ----------- | ---- |
-   | 149 | committed | 7179f53 | Deleted all 11 `-chromium-darwin` baselines + both `toHaveScreenshot` sites; removed `--grep-invert` from `ci.yaml:467`. Un-hid 3 component-page tests that had never run on CI | Full suite 197 passed; axe/structural assertions all kept | 13 files, -55 |
-   | 143 | committed | 1bacaa3, fix 9c02a1e | Hover assertion now `expect.polls` the expected colour instead of waiting for stability, which a rest colour satisfies. Fixed the "grep-inverted out of CI" comment 149 falsified | Mutation → timeout-fail, not instant pass; 440/440 at `--repeat-each=20` | +46/-26 |
-   | 201 | committed | 67560e7 | Split the one `evaluate` that read `fill` before the click into two | Mutated `ink-note` → failed in 405ms | +14/-3 |
+   | 149 | committed | 7179f53 | Deleted all 11 `-chromium-darwin` baselines + both `toHaveScreenshot` sites; removed `--grep-invert` from `ci.yaml:467`. Un-hid 3 component-page tests that had never run on CI | Full suite 197 passed; axe/structural assertions all kept | 13 files, +8/-55 |
+   | 143 | committed | 1bacaa3, fix 9c02a1e | Hover assertion now polls for the expected colour with `expect.poll` instead of waiting for stability, which a rest colour satisfies. Fixed the "grep-inverted out of CI" comment 149 falsified | Mutation → timeout-fail, not instant pass; 440/440 at `--repeat-each=20` | 4 files, +46/-26 |
+   | 201 | committed | 67560e7 | Split the one `evaluate` that read `fill` before the click into two | Mutated `ink-note` → failed in 405ms | 2 files, +14/-3 |
    | 15 | next | – | – | – | – |
    | 18 | ready | – | – | – | – |
-   | 21 | admitted | – | serves DoD line 2 "session survives a refresh" | – | – |
+   | 21 | admitted | – | – | serves DoD line 2 "session survives a refresh" | – |
 
-   mistakes  149 → 2 recorded; 143 → 1
+   mistakes  149 → 2 recorded; 143 → 1 recorded (+1 from fix 9c02a1e); 201 → 0 recorded
    dod       0 of 3 — checked at step 6, once every feature is committed
    stop      none
    ```
@@ -2459,24 +2478,27 @@ memory between turns:
    feature 149" describes every commit ever made and tells nobody anything;
    the row above says which baselines went, which flag left `ci.yaml`, and
    that three tests had silently never run. That specificity is what lets
-   someone catch a wrong turn at item 2 instead of at the report. On an
-   unbuilt row it is `–`, except for an admitted one, where it carries the
-   DoD line the admission was justified by.
+   someone catch a wrong turn at item 2 instead of at the report.
 
    **`Verified by` is evidence, not a claim.** The command and its result: a
-   count, a mutation that failed the way it should, a route that loaded.
-   "Tests pass" with no number is not evidence, and a commit nothing was run
-   against says `not checked` — which the reader is entitled to see, and
-   which step 6 will have to answer for.
+   count, a mutation that failed the way it should, a route that loaded. It
+   comes from the run's own report (the contract above asks for it) and the
+   branch test this print follows, never from inference. "Tests pass" with
+   no number is not evidence, and a row nothing was run against says `not
+   checked` — which the reader is entitled to see, and which step 6 will
+   have to answer for. On an admitted row it carries the DoD line the
+   admission was justified by, which is the evidence that row has.
 
    `Status` is the item's own field, plus two the store does not carry:
    `next` for the one about to be launched, and `admitted` for one this turn
    appended. An item that stopped says so with the step it stopped at, and
-   `stop` names the reason. The header line carries the turn number, the
-   commit count against `budget` and `budget_max`, and the branch with its
-   real state (`local, unpushed, no PR` until step 7, then the PR URL).
-   `dod` stays `0 of N` until step 6 runs, because ticking DoD lines from
-   committed features is the inference this skill refuses everywhere else.
+   `stop` names the reason. `Diff` is `git show --stat` on the row's
+   commits, as `N files, +X/-Y`. The header line carries the turn number,
+   the commit count against `budget` and `budget_max`, and the branch with
+   its real state (`local, unpushed, no PR` until step 7, then the PR URL).
+   `mistakes` counts every committed row, `0 recorded` included. `dod` stays
+   `0 of N` until step 6 runs, because ticking DoD lines from committed
+   features is the inference this skill refuses everywhere else.
 
 5. **Test the whole branch, not just the last feature.** After each commit,
    run the repo's verification over the branch as it now stands (push-pr's
@@ -2499,7 +2521,12 @@ memory between turns:
    the two tests that collided. Touch what the failure implicates, wherever
    it lives — but nothing else. Do not refactor, do not fix anything else
    you notice, and do not amend an existing commit: add one commit whose
-   message names the defect and the features it sits between.
+   message names the defect and the features it sits between. The
+   never-admissible paths are a hard stop here too, whatever the failure
+   implicates: anything under `.github/` or `.claude/` (nested copies
+   included — `apps/web/.github/` is one), `HERO.md`, `FLEET.md`, and any
+   file governing authentication, authorization or secrets. A cause that
+   sits in one of those is reported, never edited.
 
    Report: the commit SHA, one sentence on the cause, the re-run result, and
    every wrong turn you took getting there — an approach you undid, a fix
@@ -2514,7 +2541,8 @@ memory between turns:
    reasonable. Report `stop: failure` naming both features and what was tried.
 
    A fix commit spends budget like any other; that is the honest accounting,
-   and it is why `budget` is commits rather than features. Its reported wrong
+   and it is why `budget` is commits rather than features. Print the goal
+   table after it, and after each feature's branch test above. Its reported wrong
    turns are copied verbatim into `## Mistakes` on the feature the failure
    surfaced under, same as a build run's.
 6. **When every feature is committed, drain the deferred deploy checks, then
@@ -3113,8 +3141,9 @@ roadmap, and wayfare owns only the contract it fills:
   `sync` as its own feature or `architecture` item.
 - **`source` names where the change begins, not its boundary.** A plan that
   stops at the file list and leaves a caller, a migration or a test
-  un-updated is incomplete, and the build widens it anyway (*One turn* step
-  4). Name the ripple in `## Subtasks` so the build works from a list rather
+  un-updated is incomplete, and the build has to go further than the plan
+  did anyway (*One turn* step 4) — the change reaches further, never the
+  field, which no turn edits. Name the ripple in `## Subtasks` so the build works from a list rather
   than discovering it.
 - Conclusions land IN the feature file per the format below: `## Approach`
   and the one-line `success:`; the ordered `## Subtasks` checklist (**how**
@@ -3288,7 +3317,7 @@ discovered_from: 9 # optional; the item this was carved out of. Semantics are th
 title: I can sign in with my Google account # a user story, not a layer
 status: todo # new | todo | planning | ready | implementing | committed | reviewing | done
 depends_on: [] # item ids that must land first — blockers only
-source: services/auth/ # paths in the source repo this feature changes. Where the build STARTS, not a fence around it: a build follows the change into the call sites, tests and migrations it implicates (*One turn* step 4). Written at plan time and read aloud at the goal's gate; a turn NEVER widens it, because the admission test bounds on it — files touched outside it are recorded in `## Comments` and `sync` proposes the reconcile
+source: services/auth/ # paths in the source repo this feature changes. Where the build STARTS, not a fence around it: a build follows the change into the call sites, tests and migrations it implicates (*One turn* step 4). Written at plan time and read aloud at the goal's gate; a turn NEVER widens it, because the admission test bounds on it — files touched outside it are recorded in `## Comments` as a record only, and nothing reconciles this field from them
 target: auth/ # paths in the design project this feature satisfies
 target_ref: FULL_COMMIT_SHA # design-snapshot head last synced/planned against — the design-side staleness anchor. Anchored to HERO.md's design-project (and its snapshot repo): changing the project re-anchors every feature (sync treats all as stale). Absent = legacy/unsynced — sync backfills; never computes staleness from it. A carve-out inherits its parent's value: it covers ground the parent was planned against, so it is stale from exactly the same head
 source_ref: FULL_COMMIT_SHA # source repo head last synced/planned against — the OTHER staleness anchor, and the one a design-triggered sync would otherwise never refresh. Absent = legacy — sync backfills. Without it, a sync driven by a design release carries every source-side claim forward unread while the code moves underneath it
@@ -3336,7 +3365,10 @@ Empty until planned.
 
 ## Mistakes
 
-Every wrong turn the build took, copied verbatim from the run's report — an
+Every wrong turn the build took, written by the build itself as they happen
+(one-shot's *plan file is the state file* rules); a goal turn only appends
+what the run reported and the file lacks, and a fix run's wrong turns are
+appended by the turn, because a fix agent reports and never writes here. An
 approach taken and undone, a fix redone differently, an assumption that
 turned out false mid-build, a test written against the wrong behavior. One
 dated line each, append-only, exhaustive, kept after the feature is `done`.
@@ -3493,7 +3525,7 @@ Stamp `origin` with the producer that actually authored the item; never claim
 | Splitting a goal's PR to hit a line count | A PR is as big as its work. Split on changeset boundaries when the remainder is a different story, never to get under a number. |
 | Building the feature in the parent instead of a subagent | The plan is settled, so the build is execution. A scoped subagent on a cheaper model is faster and stays on this one feature. |
 | Stopping a change at the `source` boundary | `source` is where the build starts. A route changed and its caller left on the old signature is a half-change the branch test finds anyway. Follow what the change implicates; skip what merely sits nearby. |
-| Widening a covered feature's `source:` from inside a turn | The admission test bounds on those paths *because* they were fixed at plan time and read aloud at the gate. A build that moves them picks its own bound. Record the extra files in `## Comments`; `sync` reconciles. |
+| Widening a covered feature's `source:` from inside a turn | The admission test bounds on those paths *because* they were fixed at plan time and read aloud at the gate. A build that moves them picks its own bound. Record the extra files in `## Comments` and leave the field alone. |
 | Reading "not a fence" as reaching the forbidden paths | `.github/`, `.claude/`, `HERO.md`, `FLEET.md` and anything governing auth or secrets stay hard-fenced for a build subagent, for the same privilege reason they are never admissible. |
 | Two build subagents at once | They share one checkout and one branch. Sequential is what keeps the tree coherent, not a speed compromise. |
 | Fixing a failed branch test in the parent | It gets its own scoped agent and its own commit, capped at two attempts. A third means the diagnosis is wrong. |
