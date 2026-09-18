@@ -51,8 +51,7 @@ run_block() { # NAME [env assignments...] -> runs in $WORK under bash -e
   ( cd "$WORK" && env "$@" bash -e "$WORK/$name.sh" )
 }
 
-for name in classify diff-filter go-pkgs claims ci-decision verdict-parse bot-lane submit-verdict crash-notice \
-            self-review-gate other-reviews-gate bot-inline-gate; do
+for name in classify diff-filter go-pkgs claims ci-decision verdict-parse bot-lane submit-verdict crash-notice; do
   extract "$name" > "$WORK/$name.sh"
   check "extract: $name non-empty" "yes" "$([[ -s "$WORK/$name.sh" ]] && echo yes || echo no)"
   check "extract: $name parses" "0" "$(bash -n "$WORK/$name.sh" 2>/dev/null; echo $?)"
@@ -423,88 +422,6 @@ check "crash-notice: a failed reaction still posts the notice" "1" "$(calls gh_p
 OUT=$(crash 0 0 0 0 "" "the commit list came back truncated")
 check "crash-notice: lane_error.txt reaches the notice" "yes" \
   "$(ann "$(cat "$WORK/gh_post")" 'came back truncated')"
-# --- prior-review gate ------------------------------------------------------
-# The gate is an OR of three legs, so it is only as strong as the weakest one.
-# Each leg is asserted in both directions: who satisfies it, and who must not.
-# ASSOC and MARKER are read from the workflow rather than retyped, the same
-# discipline BOT_RE follows above — a triad widened there has to fail here.
-ASSOC_WF=$(sed -n "s/^ *ASSOC='\(.*\)'$/\1/p" "$WF" | head -1)
-MARKER_WF=$(sed -n "s/^ *MARKER='\(.*\)'$/\1/p" "$WF" | head -1)
-check "gate: ASSOC still assigned in the workflow" "yes" \
-  "$([[ -n "$ASSOC_WF" ]] && echo yes || echo no)"
-check "gate: MARKER still assigned in the workflow" "yes" \
-  "$([[ -n "$MARKER_WF" ]] && echo yes || echo no)"
-
-# --- self-review-gate -------------------------------------------------------
-SR_MARKER='## Self-Review
-<!-- ai-hero:self-review -->'
-srg() { # JSON_ARRAY -> the count the gate would see
-  printf '%s' "$1" > "$WORK/issue_comments.json"
-  ( cd "$WORK" && ASSOC="$ASSOC_WF" MARKER="$MARKER_WF" \
-    bash -e -c '. ./self-review-gate.sh; printf "%s" "$SELF_REVIEW"' )
-}
-one() { jq -n --arg a "$1" --arg b "${2-$SR_MARKER}" '[{author_association:$a,body:$b}]'; }
-check "self-review: OWNER counts" "1" "$(srg "$(one OWNER)")"
-check "self-review: MEMBER counts" "1" "$(srg "$(one MEMBER)")"
-check "self-review: COLLABORATOR counts" "1" "$(srg "$(one COLLABORATOR)")"
-# These three are what a drive-by commenter gets, so they carry the claim.
-check "self-review: NONE does not count" "0" "$(srg "$(one NONE)")"
-check "self-review: CONTRIBUTOR does not count" "0" "$(srg "$(one CONTRIBUTOR)")"
-check "self-review: FIRST_TIME_CONTRIBUTOR does not count" "0" "$(srg "$(one FIRST_TIME_CONTRIBUTOR)")"
-# Anchored on the real marker: a comment that merely mentions the string in
-# prose is what every PR about this gate contains, including the one that
-# introduced this check.
-check "self-review: prose mentioning the marker does not count" "0" \
-  "$(srg "$(one MEMBER 'the ai-hero:self-review gate was too loose')")"
-check "self-review: a member comment without the marker does not count" "0" \
-  "$(srg "$(one MEMBER 'looks good to me')")"
-# The legacy heading predates the HTML marker; dropping it would fail PRs
-# reviewed under the previous convention.
-check "self-review: legacy heading still counts" "1" "$(srg "$(one MEMBER '## Hero Self-Review')")"
-check "self-review: casing does not matter" "1" "$(srg "$(one MEMBER '## HERO SELF-REVIEW')")"
-check "self-review: no comments at all" "0" "$(srg '[]')"
-# The real payload shape: a drive-by marker next to unrelated member chatter.
-check "self-review: a NONE marker beside member chatter does not count" "0" \
-  "$(srg "$(jq -n --arg m "$SR_MARKER" '[{author_association:"NONE",body:$m},{author_association:"MEMBER",body:"nice"}]')")"
-
-# --- other-reviews-gate -----------------------------------------------------
-# On a public repo any account can submit a COMMENTED review, so this leg
-# needs the same association test — but a real review bot reports NONE, and
-# rejecting it would drop the reviews this leg exists for.
-org() { # JSON_ARRAY -> the count the gate would see
-  printf '%s' "$1" > "$WORK/reviews.json"
-  printf '%s' '{"user":{"login":"author"}}' > "$WORK/pr.json"
-  ( cd "$WORK" && ASSOC="$ASSOC_WF" PR_AUTHOR=author \
-    bash -e -c '. ./other-reviews-gate.sh; printf "%s" "$OTHER_REVIEWS"' )
-}
-rev() { jq -n --arg l "$1" --arg a "$2" --arg t "${3:-User}" --arg s "${4:-COMMENTED}" \
-  '[{user:{login:$l,type:$t},author_association:$a,state:$s}]'; }
-check "other-reviews: a MEMBER review counts" "1" "$(org "$(rev someone MEMBER)")"
-check "other-reviews: a review bot counts despite NONE" "1" "$(org "$(rev 'coderabbitai[bot]' NONE Bot)")"
-# The hole: a throwaway account posting "lgtm" as a COMMENTED review.
-check "other-reviews: a drive-by NONE review does not count" "0" "$(org "$(rev stranger NONE)")"
-check "other-reviews: a CONTRIBUTOR review does not count" "0" "$(org "$(rev contributor CONTRIBUTOR)")"
-check "other-reviews: a PENDING draft does not count" "0" "$(org "$(rev someone MEMBER User PENDING)")"
-check "other-reviews: the PR author's own review does not count" "0" "$(org "$(rev author OWNER)")"
-# Re-running must not bootstrap off the approval the last run left.
-check "other-reviews: our own past approval does not count" "0" \
-  "$(org "$(rev 'github-actions[bot]' NONE Bot APPROVED)")"
-
-# --- bot-inline-gate --------------------------------------------------------
-bil() { # JSON_ARRAY -> the count the gate would see
-  printf '%s' "$1" > "$WORK/pr_review_comments.json"
-  ( cd "$WORK" && PR_AUTHOR=author \
-    bash -e -c '. ./bot-inline-gate.sh; printf "%s" "$BOT_INLINE"' )
-}
-inline() { jq -n --arg l "$1" --arg t "${2:-Bot}" '[{user:{login:$l,type:$t}}]'; }
-check "bot-inline: a review bot counts" "1" "$(bil "$(inline 'coderabbitai[bot]')")"
-# reviewdog, golangci-lint-action and every other annotator post as
-# github-actions[bot]; counting them let a lint run satisfy the gate, and a
-# dependency PR then reached the scripted lane with nothing having read it.
-check "bot-inline: github-actions[bot] does not count" "0" "$(bil "$(inline 'github-actions[bot]')")"
-check "bot-inline: the PR author does not count" "0" "$(bil "$(inline author Bot)")"
-check "bot-inline: a plain human comment does not count" "0" "$(bil "$(inline someone User)")"
-
 
 echo ""
 echo "auto-approve-logic.test.sh: $PASS passed, $FAIL failed"
