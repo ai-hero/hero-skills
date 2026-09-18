@@ -1,7 +1,7 @@
 ---
 name: wayfare
 # prettier-ignore
-description: The front door. sync converges architecture, design, hardening, compliance, deps and the roadmap into .plans and proposes goals; next hands out a goal; do advances one item; improve audits the fleet. Use whenever asked what to work on next, to plan, or to build a feature.
+description: The front door. sync converges architecture, design, hardening, compliance, deps and the roadmap into .plans and proposes goals; next authorizes and runs the next goal; do advances one item; improve audits the fleet. Use whenever asked what to work on next, to plan, or to build a feature.
 argument-hint: "[sync [CONTEXT] | next | do ID | improve | recalibrate]"
 ---
 
@@ -10,11 +10,10 @@ argument-hint: "[sync [CONTEXT] | next | do ID | improve | recalibrate]"
 **Wayfare is the one skill a person runs.** Five verbs: `sync` reads the
 world and converges everything into `.plans/`: the architecture record, the
 design snapshot, the hardening audit, the compliance register, the
-dependency bots' PRs, the roadmap, and the goals over it; `next` hands out
-the next goal and the `/goal` line that runs it; `do ID` advances one item,
-or runs one turn of one goal; `improve` runs the compliance audit alone, for
-this repo or the whole fleet, and drafts the backports; `recalibrate` tunes
-the config. The skills `sync` stitches together,
+dependency bots' PRs, the roadmap, and the goals over it; `next` authorizes
+the next goal and runs it; `do ID` advances one item, or runs one turn of
+one goal; `improve` runs the compliance audit alone, for this repo or the
+whole fleet, and drafts the backports; `recalibrate` tunes the config. The skills `sync` stitches together,
 `hero-skills:architecture`, `hero-skills:harden`,
 `hero-skills:think-it-through`, still exist and still own their procedures,
 but they are run *by* wayfare, in order, and hidden from the slash menu
@@ -974,12 +973,13 @@ and **`recalibrate`**.
   catch-all below would otherwise read it as sync context. See the
   `recalibrate` section above.
 - `next` picks the next goal, gets its permissions authorized in-session, and
-  prints the `/goal` line that runs it. It never builds. See `next` below.
+  runs one turn of it right here. It never plans, except what a turn
+  admits under `absorb: yes`. See `next` below.
 - `do ID` advances one thing and stops. A build-kind id (feature,
   architecture, polish, security) runs *Advancing one item* on it; a
   `security` id with `bot:` runs *Carrying a bot's PR*; a goal id runs *One
-  turn* of that goal, the verb `/goal` re-invokes. `do` without an id prints
-  the roadmap view and asks which.
+  turn* of that goal, the same turn `next` runs after its gate. `do`
+  without an id prints the roadmap view and asks which.
 - `improve` runs the `compliance` stage on its own and adds the backport
   half `sync` never does; at a fleet root it audits the whole family. See
   `improve` below.
@@ -1739,11 +1739,11 @@ So the pass runs across the roadmap:
    until the next `sync` plans it. Nothing is silently deferred.
 
 4. **Goals: cover every planned item, bottom-up, and re-cut what is
-   already there.** A goal is the unit `next` hands out and `/goal` loops
-   against, and every item in its `covers` must already be `ready`
-   (*Starting a goal*, step 1), so the end of this pass is the one moment
-   in the workflow where a goal can be formed *from* the set instead of
-   reassembled by hand afterwards. Roadmap mode has just settled the
+   already there.** A goal is the unit `next` authorizes and runs, and
+   every item in its `covers` must already be `ready` (*Starting a goal*,
+   step 1), so the end of this pass is the one moment in the workflow
+   where a goal can be formed *from* the set instead of reassembled by
+   hand afterwards. Roadmap mode has just settled the
    cross-cutting decisions and the dependency order across these features.
    A goal written later has to re-derive that grouping from the items alone,
    without the reasoning that produced it.
@@ -1901,11 +1901,11 @@ before writing; zero-pad only the filename.
 - **A `security` item with `bot:`** runs *Carrying a bot's PR* below,
   there is nothing to build, only a bot's PR to carry to merged and
   deployed.
-- **A goal** runs *One turn* of it. This is the form the `/goal` line
-  `next` prints re-invokes every turn. A `todo` goal that has not been
-  authorized in this session routes to *Starting a goal*, the gate that
-  reads its permissions aloud, exactly as `next` would; no turn runs until
-  the id is typed there.
+- **A goal** runs *One turn* of it. This is what `next` runs once its gate
+  is passed, and what an optional `/goal` line re-invokes after a stop. A
+  `todo` goal that has not been authorized in this session routes to
+  *Starting a goal*, the gate that reads its permissions aloud, exactly as
+  `next` would; no turn runs until the id is typed there.
 
 ### `improve`: the compliance audit on its own, and the backports
 
@@ -1944,18 +1944,22 @@ audit:
 A family whose FLEET.md rows all say `group: none` is not a family; say
 that instead of auditing nothing and reporting clean.
 
-### `next`: hand out the next goal
+### `next`: authorize the next goal and run it
 
 `next` takes no argument. It picks the next goal, gets its permissions
-authorized in-session, and prints the `/goal` line, then stops. It never
-builds, and it never plans.
+authorized in-session, and runs one turn of it in this session. It never
+plans, except what a turn admits under `absorb: yes`. On a clean run that one turn is the whole goal: every feature
+committed, the PR shipped, the deploy verified. What it does not do is loop:
+a turn that ends on a stop line hands back to the person, who fixes what
+stopped it and runs `next` again, or sets the `/goal` line the report
+prints to have Claude Code re-run turns on its own.
 
 **Selection is deterministic, from the store.** Run `hero_ready_items` and
 walk the goals:
 
 1. An `active` goal: a run already under way (its branch may still be
-   there). Resume it: re-authorize per *Starting a goal* and print its
-   `/goal` line. Two active goals is a store defect to report, not a choice.
+   there). Resume it: re-authorize per *Starting a goal* and run its next
+   turn. Two active goals is a store defect to report, not a choice.
 2. Else the first `todo` goal in bottom-up order (its `depends_on` goals all
    `done`, lowest id among those) whose `covers` are all `ready` or further.
    A `todo` goal whose deps are met but whose `covers` hold an unplanned
@@ -1965,15 +1969,21 @@ walk the goals:
    them; that stage was skipped or cut short); every goal blocked on another
    (name the chain); every goal `done` (the route is complete).
 
-Then run *Starting a goal* on the pick. `next` is how a goal starts; `do
-GOAL_ID` is how it turns.
+Then run *Starting a goal* on the pick. `next` is how a goal starts and
+resumes; `do GOAL_ID` is one turn of it, the same turn `next` runs.
 
-### A goal's turns, driven by Claude Code's `/goal`
+### A goal's turns: the first from `next`, more only if asked for
 
-The looping is Claude Code's built-in **`/goal`**: it sets a completion
-condition, and after each turn a small fast model judges it met, not yet, or impossible,
-and starts another turn if not. Wayfare does not implement a
-loop of its own.
+`next` runs the first turn itself, right after its gate, and a turn builds
+the whole goal, so on a clean run there is no second turn. Looping only
+matters when a turn ends short, on a stop line or with items remaining,
+and for that wayfare implements no loop of its own:
+the re-run is Claude Code's built-in **`/goal`**, which sets a completion
+condition, and after each turn a small fast model judges it met, not yet, or
+impossible, and starts another turn if not. Wayfare cannot set `/goal`
+itself: nothing but a person typing it at the prompt does, so the turn
+report prints the line and the person decides whether to loop or to run
+`next` again by hand.
 
 | | Owns |
 | --- | --- |
@@ -2065,7 +2075,7 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
 `active` goal is frozen for the same reason `covers` is: change it and
 `next` re-asks.
 
-#### Starting a goal: `wayfare next` in a session with no `/goal` set
+#### Starting a goal: `wayfare next`, or `do GOAL_ID` on an unauthorized goal
 
 1. **Resolve the goal item.** `next` picked it (or the user named one by
    asking `do GOAL_ID` on a `todo` goal, which routes here). It arrives
@@ -2119,8 +2129,9 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
                   in and the branch passes
      Stops on:    the goal item's ## Stop conditions
 
-   Type the goal id to authorize these permissions, or anything else to
-   cancel (edit the item's ## Permissions first to change them):
+   Type the goal id to authorize these permissions and run the goal now,
+   or anything else to cancel (edit the item's ## Permissions first to
+   change them):
    ```
 
    **On a resume, show what the goal admitted since you last saw it.** A goal
@@ -2135,8 +2146,19 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
    The user types the id. It authorizes several merges, so `[y/N]` is too
    light. The turns run unattended only in auto mode. `/goal` does not change
    the permission mode.
-3. **Print the `/goal` line for the user to run.** Wayfare cannot set it
-   itself. Keep the condition short and point it at the item:
+3. **Run the turn, now, in this session.** The id typed at the gate is the
+   go: run *One turn* on the goal without asking anything further, and end
+   with its turn report. Three endings:
+   - `stop: none` with `dod:` verified: the goal is done, and there is
+     nothing more to run;
+   - `stop: none` with `remaining:` items: the turn ended short of the goal
+     (a compaction, a context limit). Hand back and print the `/goal` line
+     below, since this is the state it exists for;
+   - any other stop line: hand back, and print the same line, for the
+     person to paste if they would rather have Claude Code re-run turns
+     unattended than fix the stop and run `next` again.
+
+   Keep the condition short and point it at the item:
 
    ```
    /goal Run hero-skills:wayfare do 7 once per turn. Met when the turn
@@ -2148,14 +2170,16 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
 
    The rules are on the item, not in the condition. Restating them in prose
    every time is how they drift; the item is what every turn re-reads.
+   Print it whenever the goal is unfinished, and never on a finished one,
+   where it is an invitation to loop over nothing.
 4. **The authorization lives in this session only. Never write it to the
    item.** A stored "approved" flag outlives the conversation that granted it
-   and sits in a file anyone can edit. `/goal` restores the condition on resume,
-   not this, so a resumed goal re-asks (`wayfare next` finds it `active`
-   and runs this gate again). That re-ask is what keeps the authorization
-   attached to a person who is present.
+   and sits in a file anyone can edit. A `/goal` line restores its condition
+   on resume, not this, so a resumed goal re-asks (`wayfare next` finds it
+   `active` and runs this gate again before its turn). That re-ask is what
+   keeps the authorization attached to a person who is present.
 
-#### One turn: `wayfare do GOAL_ID` under an active `/goal`
+#### One turn: what `next` runs after its gate, and what `do GOAL_ID` re-runs
 
 **A goal is one branch, one PR, and one commit per feature.** The turn builds
 its features one after another, in `covers` order, committing each to the
@@ -2201,7 +2225,7 @@ memory between turns:
    can commit an item that says exactly that. If it is not present, whether
    in a resumed session or a fresh one, do not prompt from inside a turn: in
    a headless run that hangs. Stop with `stop: reauthorize`, and say to run
-   `wayfare next` again to re-authorize, then re-set `/goal`. When present,
+   `wayfare next` again: it re-authorizes and runs the turn. When present,
    and the goal is still `todo`, write `status: active`. This is the one
    writer of that transition. Then every launch below carries the
    permissions line from *Permissions*, `gates pre-authorized in-session for
@@ -3311,7 +3335,7 @@ Stamp `origin` with the producer that actually authored the item; never claim
 
 Pick exactly one, from the store's current state:
 
-- **A goal is runnable** (`active`, or `todo` with its goal deps `done` and its `covers` all planned): `Next step: hero-skills:wayfare next, to authorize its permissions and start the loop`; under an active `/goal`, `hero-skills:wayfare do GOAL_ID` is its next turn.
+- **A goal is runnable** (`active`, or `todo` with its goal deps `done` and its `covers` all planned): `Next step: hero-skills:wayfare next, to authorize its permissions and run it`; `hero-skills:wayfare do GOAL_ID` is one turn of it.
 - **An item is mid-flight and no goal covers it**: `Next step: hero-skills:wayfare do N, to build item N` (the active one).
 - **An item is READY and no goal covers it**: `Next step: hero-skills:wayfare sync, because item N is ready and no goal covers it; the goals stage groups it`. `do N` builds it by hand and leaves the roadmap as it was.
 - **Features are unplanned (`todo`), no roadmap yet, or the world moved** (target changed, work landed out-of-band, design feedback awaits delivery, features look horizontal, alerts or bot PRs appeared): `Next step: hero-skills:wayfare sync, which converges architecture, design, hardening, compliance, dependencies and the roadmap, plans the set, then proposes goals`.
