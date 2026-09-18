@@ -218,7 +218,8 @@ Definition of Done.
 ## Lifecycle
 
 `new → todo → planning → ready → implementing → reviewing → done`, with who
-flips what. Not every item visits every state; `planning` in particular is
+flips what. A feature under a goal takes `implementing → committed → done`
+instead, because its PR is the goal's. Not every item visits every state; `planning` in particular is
 skipped for work that does not need it (see below).
 
 | Status | Meaning | Flipped by |
@@ -230,11 +231,12 @@ skipped for work that does not need it (see below).
 | `implementing` | Being built | one-shot, at its first edit |
 | `reviewing` | PR open, awaiting review/merge | one-shot, when the PR opens |
 | `suspended` | Waiting on a sibling repo's reply (`awaiting:` message ids, `suspended_from:` the status it left, `suspended_at:` the date) | one-shot Step 2a when it sends an awaited message; `sync`'s `inbox` stage restores `suspended_from` when the last reply lands or the wait lapses (confirmed) |
-| `done` | Merged; folded back into Source. **Under a goal, `done` means committed on the goal's branch, not yet merged**, and the merge is the goal's *One turn* step 7 | one-shot when the last PR merges, one-shot's commit-only mode when a goal feature commits, or `sync` when Source satisfies Target (confirmed) |
+| `committed` | Committed on a goal's branch, not yet merged. Build kinds under a goal only. Never a satisfied dependency: the default branch lacks the code | one-shot's commit-only mode, when a goal feature's commit lands |
+| `done` | Merged with the deploy verified; folded back into Source. Under a goal, written on every covered feature at once when the goal's one PR merges | one-shot when the last PR merges, the goal's *One turn* step 7, or `sync` when Source satisfies Target (confirmed) |
 
 `hero_ready_items` understands this enum for the **build kinds** (`feature`,
 `architecture`, `polish`, `security`, and `bug`) and lists them as `backlog` / `plan` / `READY` /
-`active` / `review` / `suspended` / `done`. `ready` is the only READY-eligible build status,
+`active` / `review` / `committed` / `suspended` / `done`. `ready` is the only READY-eligible build status,
 dep-gated like any other item. `suspended` is the one extra state, from
 `docs/MESSAGES.md`: the item asked a sibling repo something and waits on the
 reply; it is never READY, never `done`, and anything that `depends_on` it
@@ -294,6 +296,9 @@ transitions).
 Two derived flags, never stored in `status`:
 
 - **blocked**: a `depends_on` id is not `done` (computed by `hero_ready_items`).
+  A `committed` dependency blocks like any other, and the row names it
+  (`[committed dep: ID]`) so a goal turn can tell a dependency already on
+  its own branch from a real block.
 - **stale**: either head moved past the item's anchor: the design snapshot
   head past `target_ref`, **or** the source head past `source_ref` (computed
   by the roadmap view and `sync`).
@@ -1005,7 +1010,7 @@ half of `harden`) renders `(–)` and says why in one line, never silently.
 
 **The roadmap view**, which is how every verb reports. Run `hero_ready_items "$STORE"`
 and print the items grouped by row state (new → backlog → plan →
-READY/blocked → active → review → suspended → done, then goal, then
+READY/blocked → active → review → committed → suspended → done, then goal, then
 feedback), each with:
 
 - its dependencies (and which are unmet, from the listing's blocked rows),
@@ -1068,7 +1073,7 @@ backlog reports untriaged jottings as roadmap; one that drops them repeats the
 invisibility the `new` default was added to end.
 
 **`goal` rows are their own group**, in bottom-up order (see *Goals* under
-`sync`), listing each goal's `covers` progress (done / total), its unmet goal
+`sync`), listing each goal's `covers` progress (committed / done / total), its unmet goal
 dependencies, and its next command (`wayfare next` for the first runnable
 one, `wayfare do ID` for an `active` one mid-run).
 
@@ -1601,13 +1606,13 @@ follows):
   or whose `## Permissions` changed while `active`; a `budget_max` that is absent, not a positive
   integer, or below `budget`; a `concurrency` key left over from the
   per-feature-PR model, which nothing reads any more and which sync removes; an `active` goal holding a `covers`
-  id its `## Comments` do not account for; and a `done` build item whose
-  `## Comments` still carry an `unmerged` `[goal-commit:]` marker while no
-  `active` goal covers it. That is the residue of a goal whose branch was
-  abandoned: the item claims work the repo does not have, and nothing else
-  re-opens it, because a goal's features are marked `done` when they commit
-  rather than when they merge. Report it with the SHA and offer to return the
-  item to `ready`. **Do not test the SHA against the default branch.** The
+  id its `## Comments` do not account for; and a `committed` build item that
+  no open goal covers (`hero_ready_items` warns on it). That is the
+  residue of a goal whose branch was abandoned: the item claims work the
+  repo does not have, and nothing else re-opens it, because only the goal's
+  step 7 moves a feature from `committed` to `done`. Report it with the SHA
+  from its `[goal-commit:]` marker and offer to return the item to `ready`.
+  **Do not test the SHA against the default branch.** The
   default merge method is squash, so a feature's commit is never an ancestor
   of the default branch even when the goal shipped perfectly, and a check
   built on ancestry reports every feature of every completed goal and offers
@@ -1664,7 +1669,7 @@ the feature's plan is already locked:
   `target_ref` to the new head, append a dated `## Comments` entry
   summarizing what moved, and (for `planning`) fold the new design into the
   in-flight planning run.
-- **`ready` or later** (`implementing`, `reviewing`, `done`): the plan is
+- **`ready` or later** (`implementing`, `committed`, `reviewing`, `done`): the plan is
   locked; never mutate it to chase the design. Propose a **new `todo`
   feature** covering the design delta, `depends_on` the existing one, with
   `target_ref` = the new head. The original keeps its `target_ref` and ships
@@ -2178,8 +2183,8 @@ be the first one after a resume or a compaction, so nothing is carried in
 memory between turns:
 
 1. **Read the store, not the transcript.** Load the goal item; run
-   `hero_ready_items`; derive from the store which of `covers` are done and
-   which is in flight, and count the branch's commits against `budget` with
+   `hero_ready_items`; derive from the store which of `covers` are
+   `committed` (or `done`, after a merge) and which is in flight, and count the branch's commits against `budget` with
    `git log --oneline "origin/$BASE..$GOAL_BRANCH"`. **Git is the one source
    for that count.** The `commits:` field is a record for a reader, appended
    as each commit lands; never compute the budget from it, because after step
@@ -2220,11 +2225,15 @@ memory between turns:
    Any hit → report it and end the turn. Do not start work past a stop.
 4. **Make sure the goal branch exists, then build one feature at a time.**
    The branch name lives in the goal's `branch:` frontmatter field, written
-   by the first turn and read by every later one. It is `goal/GOAL_ID-SLUG`,
-   where SLUG is the goal's title slugified the way `hero_branch_policy`
-   slugifies a subject. Do not run `hero_branch_policy` for it: that function
-   emits `TYPE/SLUG` for a feature branch, and prefixing its output would give
-   `goal/7-feat/google-sign-in`. On the first turn, cut it from the base:
+   by the first turn and read by every later one. It is
+   `feat/goal-GOAL_ID-SLUG`, where SLUG is the goal's title slugified the
+   way `hero_branch_policy` slugifies a subject. The `feat/` prefix is
+   load-bearing: consumer repos' `no-commit-to-branch` hook carries a
+   branch-name allowlist (`ci|chore|docs|feat|feature|fix|refactor|test`),
+   so a bare `goal/` branch cannot take a commit there. Do not run
+   `hero_branch_policy` for it: that function derives TYPE and SLUG from a
+   diff or a description, and a goal's are fixed. On the first turn, cut it
+   from the base:
 
    ```bash
    git checkout -b "$GOAL_BRANCH" "origin/$BASE"
@@ -2236,8 +2245,10 @@ memory between turns:
    the local test at step 5 meaningful, and it is why integration conflicts
    cannot happen — there is nothing to integrate.
 
-   For each item in `covers`, in order, that is READY or mid-flight
-   (`active`) and whose `depends_on` are all `done`, hand the build to **one
+   For each item in `covers`, in order, that is READY, or mid-flight
+   (`active`), or `blocked` only by `[committed dep:]` ids that this goal's
+   `covers` also names (their commits are already on this branch; any other
+   unmet dependency is a real block), hand the build to **one
    subagent, on a cheaper model** (Agent tool, `general-purpose`,
    `model: sonnet`):
 
@@ -2324,13 +2335,15 @@ memory between turns:
    log`, never from here.
 
    **Each feature is closed out by its own run, not by the goal.** A
-   successful commit-only run writes `status: done` on its feature before it
-   returns. Read that back from the store before launching the next one: a
-   feature still `active` after a reported commit means the close-out did not
-   happen, and the next run will stop with `item-claim-conflict` because two
-   active items claim this branch. Treat it as `stop: failure` naming the
-   feature rather than launching into it. The goal's own `done` is separate
-   and comes at step 7, when the PR merges.
+   successful commit-only run writes `status: committed` on its feature
+   before it returns. Read that back from the store before launching the
+   next one: a feature still `active` after a reported commit means the
+   close-out did not happen, and the next run will stop with
+   `item-claim-conflict` because two active items claim this branch. Treat
+   it as `stop: failure` naming the feature rather than launching into it.
+   `done` is the goal's to write, on every covered feature at once, at step
+   7 when the PR merges: a feature is not done while the default branch
+   lacks it.
 
 5. **Test the whole branch, not just the last feature.** After each commit,
    run the repo's verification over the branch as it now stands (push-pr's
@@ -2365,7 +2378,7 @@ memory between turns:
 
    A fix commit spends budget like any other; that is the honest accounting,
    and it is why `budget` is commits rather than features.
-6. **When every feature is done, drain the deferred deploy checks, then
+6. **When every feature is committed, drain the deferred deploy checks, then
    verify the goal's DoD directly.** The goal's own merge is usually already
    answered: ship-pr waited for the merge commit's runs and reported
    post-merge CI and deployment health inline. `hero_deploy_pending` holds
@@ -2400,11 +2413,13 @@ memory between turns:
    review, respond, ship. One PR, one review pass, one auto-approve, one
    merge, for the whole goal. Nothing here is wayfare's to do by hand.
 
-   When that returns merged, rewrite each covered feature's `[goal-commit:]`
-   marker from `unmerged` to `merged in PR_URL`. Until that happens every
-   feature reads as committed-but-unshipped, which is what `sync` reports and
-   what the dependency check in *Advancing one item* refuses to build
-   against. Then run step 8, then write `status: done` on
+   When that returns merged, write `status: done` on every covered feature
+   at `committed` and rewrite its `[goal-commit:]` marker from `unmerged` to
+   `merged in PR_URL`. Until that happens every feature lists as
+   `committed`, which is what `sync` reports and what the dependency check
+   in *Advancing one item* refuses to build against. A `merged, not
+   deployed` stop leaves them `committed` as well: `done` means the deploy
+   was verified. Then run step 8, then write `status: done` on
    the goal — and only if step 8 admitted nothing. Admitted work is work this
    goal still owes, so a goal that absorbed an item is not done; it stays
    `active` for the next turn. A STOP from one-shot (a declined gate,
@@ -2445,7 +2460,7 @@ memory between turns:
 
    ```
    wayfare turn, goal 7
-     branch:    goal/7-google-sign-in (local, not pushed)
+     branch:    feat/goal-7-google-sign-in (local, not pushed)
      did:       feature 12 → committed a1b2c3d
                 feature 13 → committed d4e5f6a
                 feature 15 → building
@@ -2693,16 +2708,14 @@ the next feature.
    The feature is the given id: find its row and act on its tier. A goal
    turn does not reach this step at all (*One turn* step 4 owns its
    selection), so there is no `covers` walk here:
-   **A `done` feature whose `## Comments` carry an unmerged `[goal-commit:]`
-   marker is not a satisfied dependency.** Its code is on a goal branch, not
-   on the default branch, so anything that `depends_on` it would be built
-   against a tree that lacks it. `hero_ready_items` has one notion of `done`
-   and cannot see this. Before acting on a tier, read the markers on **the
-   selected item's `depends_on` entries**, not on the item itself (the item
-   is not `done`; its dependencies are), and report the blocking goal instead
-   of building. `wayfare next` is already
-   safe (the goal stays `active` until its PR merges, and a goal's derived
-   `depends_on` holds the order), so this is the gap `do ID` has to cover.
+   **A `committed` dependency is not a satisfied one.** Its code is on a
+   goal branch, not on the default branch, so anything that `depends_on` it
+   would be built against a tree that lacks it. `hero_ready_items` lists
+   the dependent as `blocked` with a `[committed dep: ID]` annotation;
+   report the goal whose `covers` names that id instead of building.
+   `wayfare next` is already safe (the goal stays `active` until its PR
+   merges, and a goal's derived `depends_on` holds the order), so this is
+   the gap `do ID` has to cover.
 
    1. `active` feature, mid-build: check out its branch if one exists (its
       `branch:` field names it, which is what `resume-state.sh` matches on;
@@ -2724,6 +2737,9 @@ the next feature.
       verify Subtasks/DoD per one-shot Step 9a and flip to `done` (or back to
       `implementing` if the merge covered part of the checklist); no PR found → treat as `active` (tier 1).
    3. `READY` feature, planned, marked and unblocked: invoke one-shot on it.
+      A `committed` feature is not a tier: its work is on the goal branch
+      its `branch:` names, and the goal that covers it owns the merge.
+      Report that goal and suggest `wayfare do GOAL_ID`.
    4. `plan` or `backlog` feature, not planned. STOP with
       `Next step: wayfare sync, whose postflight plans the set`. Never invoke
       think-it-through from here: the decisions that cut across features are
@@ -2969,7 +2985,7 @@ title: A user can sign in with Google and land on their dashboard
 status: todo # new | todo | active | done
 depends_on: [5] # GOALS whose features this goal's features depend on — derived by sync from the items' own depends_on, never authored; `next` hands a goal out only when these are done
 covers: [12, 13, 15, 18] # the features this goal is made of, in build order; an active goal's set is frozen except for an admission (see Admitting discovered work)
-branch: goal/7-google-sign-in # the one branch every covered feature commits to; written by the first turn, read by every later one
+branch: feat/goal-7-google-sign-in # the one branch every covered feature commits to; written by the first turn, read by every later one
 budget: 4 # COMMITS the goal is EXPECTED to take, not PRs and not one per feature. An expectation, not a gate: going over is ordinary and the turn just notes the count. Positive integer, REQUIRED; absent, zero or non-numeric is a store defect and the turn stops. Sync fills it with len(covers)
 budget_max: 8 # the "not too much" line, and the only hard one: at it the turn reports stop: budget and hands back. Positive integer >= budget, REQUIRED. This is the number a person authorized at the gate; a turn never moves it. Sync fills it with 2 * budget
 commits: ["a1b2c3d 12", "d4e5f6a 13"]  # SHA then the feature id it served, appended as each is made. A set, not a count: one feature may spend two commits when its changesets differ, so the spend cannot be re-derived from item statuses, and `git log` alone cannot say which commit belonged to which feature
@@ -3012,7 +3028,7 @@ Re-read every turn. The defaults are always on; add to them per goal.
 
 ## Turn log
 
-- 2026-08-27 turn 1: branch goal/7-google-sign-in cut. 12 → a1b2c3d. 1 commit. stop: none
+- 2026-08-27 turn 1: branch feat/goal-7-google-sign-in cut. 12 → a1b2c3d. 1 commit. stop: none
 - 2026-08-27 turn 2: 13 → d4e5f6a; fix b7c8d9e (shared fixture). 3 commits. stop: none
 - 2026-08-27 turn 3: admitted 21 (from 13, DoD line 2). 15 → e0f1a2b. 4 commits. stop: none
 - 2026-08-27 turn 4: 21 → c3d4e5f. 5 of about 4, hard stop 8. branch green. PR #204 opened, merged. stop: none
@@ -3048,7 +3064,7 @@ id: 31
 kind: security
 origin: wayfare
 title: Bump lodash from 4.17.20 to 4.17.21
-status: todo # new | todo | ready | implementing | reviewing | done
+status: todo # new | todo | ready | implementing | committed | reviewing | done
 depends_on: []
 bot: dependabot # the only value handled today; any other value is a store defect, not a route. Set only on a bot's PR — this is what routes `do` to *Carrying a bot's PR*, and `bot:` without `pr:` is a store defect; `pr:` alone is just a record
 pr: https://github.com/OWNER/REPO/pull/41 # the bot's PR — the one that merges; never a copy of its diff
@@ -3097,7 +3113,7 @@ kind: feature
 origin: wayfare # provenance: the producer that authored this item (wayfare, or one-shot for a carve-out)
 discovered_from: 9 # optional; the item this was carved out of. Semantics are think-it-through's — provenance, never a blocker
 title: I can sign in with my Google account # a user story, not a layer
-status: todo # new | todo | planning | ready | implementing | reviewing | done
+status: todo # new | todo | planning | ready | implementing | committed | reviewing | done
 depends_on: [] # item ids that must land first — blockers only
 source: services/auth/ # paths in the source repo this feature changes
 target: auth/ # paths in the design project this feature satisfies

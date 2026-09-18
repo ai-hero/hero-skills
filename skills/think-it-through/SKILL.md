@@ -260,7 +260,7 @@ id: 7 # a plain integer; only the filename is zero-padded (007-slug.md) for sort
 kind: feature # feature | architecture — every item is a wayfare item; see that skill's Item formats
 origin: think-it-through # the producer that wrote this item
 title: I can sign in with the device flow # a user story for a feature; the structural change for an architecture item
-status: planning # new | todo | planning | ready | implementing | reviewing | suspended | done  (planning = awaiting the user's ready-mark; readiness is DERIVED, not stored; suspended = waiting on a sibling repo's reply, docs/MESSAGES.md)
+status: planning # new | todo | planning | ready | implementing | committed | reviewing | suspended | done  (planning = awaiting the user's ready-mark; readiness is DERIVED, not stored; committed = on a goal's branch, unmerged; suspended = waiting on a sibling repo's reply, docs/MESSAGES.md)
 depends_on: [3, 5] # ids that must be `done` before this can start — blockers only
 discovered_from: 4 # optional; the item this was found while working — provenance, never blocks
 one_way_door: false # true = expensive to reverse; got extra scrutiny

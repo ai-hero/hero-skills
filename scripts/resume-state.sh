@@ -236,7 +236,7 @@ fi
 # Step 2 writes it at the first edit). "The single active item" is not a rule
 # that holds: a goal's features all sit in the shared store, so several can be
 # active at once. What keeps this unambiguous is that a goal's features share
-# ONE branch and each is closed out to `done` by its own commit-only run before
+# ONE branch and each is closed out to `committed` by its own commit-only run before
 # the next one starts, so at most one is ever active on a given branch. Two
 # matches means that close-out did not happen; it is a real conflict, not a
 # case to guess at. Items without `branch:` predate the field; for those, a
