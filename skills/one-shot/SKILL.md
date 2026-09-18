@@ -135,8 +135,8 @@ ROOT=$(hero_root)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 hero_check_staleness
 hero_at_fleet_root && echo "FLEET_ROOT" || true
-# Mail from a sibling repo (docs/MESSAGES.md), and deploy probes an earlier
-# merge deferred rather than slept through (ship-pr Step 7e). Both are counts,
+# Mail from a sibling repo (docs/MESSAGES.md), and deploy probes whose runs
+# outlasted ship-pr Step 7e's wait cap. Both are counts,
 # not work: this run neither triages nor waits on them. A run that prints
 # nothing is indistinguishable from an empty inbox, which is the whole reason
 # the line exists.

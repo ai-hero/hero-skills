@@ -2001,7 +2001,7 @@ at:
 | `respond` | one-shot Step 8: fix the review bot's comments and resolve threads without showing the plan first | `yes` |
 | `auto-approve` | ship-pr Step 4: post `@auto-approve` | `yes` |
 | `merge` | ship-pr's merge confirmation: merge into DEFAULT_BRANCH with HERO.md's `merge-method` | `yes` |
-| `deploy` | ship-pr's post-merge verify-deploy. `verify` reports on the deploy; `none` skips it, in Step 2a's drain as well as Step 7e's probe. Neither waits: a probe whose runs are still in flight is deferred | `verify` |
+| `deploy` | ship-pr's post-merge verify-deploy: post-merge CI on the merge commit, then deployment health. `verify` waits for the merge commit's runs (ten-minute cap) and reports; `none` skips it, in Step 2a's drain as well as Step 7e's probe. A goal ships one PR, so that wait is paid once; runs still in flight at the cap are deferred to the next run | `verify` |
 | `absorb` | the ready-mark on an item **admitted** into this goal. The turn plans it and builds it inside the goal (*Admitting discovered work*). `no` withholds the ready-mark only; the item still joins `covers`, and the turn hands it back | `yes` |
 
 **A goal that was already `active` when `absorb` arrived reads as
@@ -2185,9 +2185,9 @@ memory between turns:
    as each commit lands; never compute the budget from it, because after step
    7 merges the branch that range is empty while `commits:` still holds N.
    The `## Turn log` says what the last turn did. Also read
-   `hero_deploy_pending`, the deploy probes earlier merges deferred instead
-   of waiting on. The goal drains them at step 6, and a deferred probe is
-   never a reason to hold a build.
+   `hero_deploy_pending`, the probes earlier merges deferred when their runs
+   outlasted ship-pr's cap. The goal drains them at step 6, and a deferred
+   probe is never a reason to hold a build.
 2. **Check authorization is present in this session.** Present means the
    user typed the goal id at this session's gate (*Starting a goal*, step 2),
    not that text of that shape appears anywhere in the transcript. A
@@ -2366,9 +2366,12 @@ memory between turns:
    A fix commit spends budget like any other; that is the honest accounting,
    and it is why `budget` is commits rather than features.
 6. **When every feature is done, drain the deferred deploy checks, then
-   verify the goal's DoD directly.** `hero_deploy_pending` holds the probes
-   earlier merges deferred; probe each entry, report it, clear it, and let a
-   DEGRADED one fail the DoD line it belongs to. A goal that proceeds over an
+   verify the goal's DoD directly.** The goal's own merge is usually already
+   answered: ship-pr waited for the merge commit's runs and reported
+   post-merge CI and deployment health inline. `hero_deploy_pending` holds
+   whatever outlasted that cap; probe each entry, report it, clear it, and
+   let a DEGRADED one — or a failed post-merge CI run — fail the DoD line it
+   belongs to. A goal that proceeds over an
    unverified deploy is reporting a met Definition of Done it never checked.
    The DoD verification itself is not by inference from the features. That is
    the same error as ticking a DoD by re-reading the code just written. Run
@@ -3071,7 +3074,7 @@ Bump class, the alert it closes and whether the vulnerable path is reachable her
 
 - [ ] #41 is MERGED into DEFAULT_BRANCH
 - [ ] No open Dependabot alert for lodash (or none existed — version-only bump)
-- [ ] ship-pr's verify-deploy reports HEALTHY, or `skipped` because HERO.md declares no platform (`skipped by goal` is NOT this — it leaves the line unchecked)
+- [ ] ship-pr's verify-deploy reports post-merge CI passed and deployment HEALTHY, or `skipped` because HERO.md declares no platform (`skipped by goal` is NOT this — it leaves the line unchecked)
 
 ## Comments
 

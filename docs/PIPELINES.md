@@ -32,8 +32,10 @@ When a step is **deferred** (it applies, but answering it now would mean
 waiting on something outside the pipeline, and nothing downstream depends on
 the answer), mark it `(⏸)` and name what will pick it up. `(–)` would claim
 the step did not apply, and `(✓)` would claim an answer nobody has. A
-deferred step is owed by whatever runs next in that repo, never by a sleep
-in this session; ship-pr's `verify-deploy` is the worked example.
+deferred step is owed by whatever runs next in that repo. A bounded wait is
+fine where the answer is worth it and paid once; an unbounded one is not.
+ship-pr's `verify-deploy` is the worked example: it waits ten minutes for the
+merge commit's runs, then defers the rest.
 
 When the pipeline **stops early** (user declined, hard gate, error), print a
 final DAG with `(✗)` on the failed/declined step and `( )` on remaining ones,
