@@ -461,18 +461,18 @@ check_runtime() {
 
   local matched=0
   for entry in "${projects[@]}"; do
-    IFS='|' read -r name path port depfile devcmd <<< "$entry"
-    [ -z "$path" ] && path="./"
+    IFS='|' read -r name proj_path port depfile devcmd <<< "$entry"
+    [ -z "$proj_path" ] && proj_path="./"
     [ -z "$name" ] && name="(unnamed)"
 
-    # Scope filter: skip projects whose name/path doesn't substring-match
+    # Scope filter: skip projects whose name/proj_path doesn't substring-match
     # any entry in --projects. Substring match is fine because monorepo
     # paths are already unique top-level dirs.
     if [ -n "$scope_list" ]; then
       local in_scope=false needle
       while IFS= read -r needle; do
         [ -z "$needle" ] && continue
-        case "$name $path" in
+        case "$name $proj_path" in
           *"$needle"*) in_scope=true; break ;;
         esac
       done <<< "$scope_list"
@@ -480,11 +480,11 @@ check_runtime() {
     fi
     matched=$((matched+1))
 
-    local proj_root="$ROOT/${path#./}"
+    local proj_root="$ROOT/${proj_path#./}"
     proj_root="${proj_root%/}"
 
     if [ ! -d "$proj_root" ]; then
-      emit WARN "runtime: project '$name' path '$path' does not exist"
+      emit WARN "runtime: project '$name' proj_path '$proj_path' does not exist"
       continue
     fi
 

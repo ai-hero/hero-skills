@@ -232,10 +232,25 @@ else
       pass "$SKILL_NAME: body content present"
     fi
 
-    # 6. Line count
+    # 6/7. Size budget, per skill.
+    #
+    # The one-shot pipeline's skills are executable specs, not prose guides:
+    # the procedure IS the content, and every guard sits inline with the step
+    # it constrains. Splitting one across files is how a step comes to be
+    # executed without its STOP. The list is wayfare plus one-shot and the
+    # skills its DAG nodes delegate to, and init-hero, which writes the config
+    # they all read. Everything else keeps the 500/5000 guideline, where a
+    # breach really does mean reference material has leaked into the
+    # instructions: my-humanizer warns today and should.
+    PIPELINE_SKILLS=" wayfare one-shot ship-pr push-pr review-pr respond-to-comments init-hero "
+    LIMIT_LINES=500; LIMIT_WORDS=5000
+    case "$PIPELINE_SKILLS" in
+      *" $SKILL_NAME "*) LIMIT_LINES=3500; LIMIT_WORDS=35000 ;;
+    esac
+
     LINE_COUNT=$(wc -l < "$SKILL_FILE" | tr -d ' ')
-    if [[ $LINE_COUNT -gt 500 ]]; then
-      warn "SKILL.md is $LINE_COUNT lines (recommended: under 500)" \
+    if [[ $LINE_COUNT -gt $LIMIT_LINES ]]; then
+      warn "SKILL.md is $LINE_COUNT lines (recommended: under $LIMIT_LINES)" \
         "$SKILL_REL" \
         "" \
         "Move detailed content to references/ or examples/ subdirectories and link via supplementary-files"
@@ -243,10 +258,9 @@ else
       pass "$SKILL_NAME: $LINE_COUNT lines"
     fi
 
-    # 7. Word count
     WORD_COUNT=$(wc -w < "$SKILL_FILE" | tr -d ' ')
-    if [[ $WORD_COUNT -gt 5000 ]]; then
-      warn "SKILL.md is $WORD_COUNT words (recommended: under 5000)" \
+    if [[ $WORD_COUNT -gt $LIMIT_WORDS ]]; then
+      warn "SKILL.md is $WORD_COUNT words (recommended: under $LIMIT_WORDS)" \
         "$SKILL_REL" \
         "" \
         "Large skills consume context window. Split into references/ loaded on-demand via supplementary-files"

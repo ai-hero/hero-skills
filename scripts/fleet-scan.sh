@@ -86,15 +86,15 @@ NL=$'\n'
 # A function, not an inline $( … ): bash 3.2 cannot parse an unparenthesised
 # `pat)` inside a command substitution.
 review() {
-  local name path group rport actual line ports
+  local name repo_path group rport actual line ports
   ports=""   # "PORT NAME" lines: every claim and every published port
-  while IFS="$TAB" read -r name path group rport; do
+  while IFS="$TAB" read -r name repo_path group rport; do
     [ -n "$name" ] || continue
-    [ -e "$path" ] || { printf 'MISSING\t%s\t%s\n' "$name" "$path"; continue; }
-    [ -e "$path/.git" ] || { printf 'NOT_GIT\t%s\t%s\n' "$name" "$path"; continue; }
+    [ -e "$repo_path" ] || { printf 'MISSING\t%s\t%s\n' "$name" "$repo_path"; continue; }
+    [ -e "$repo_path/.git" ] || { printf 'NOT_GIT\t%s\t%s\n' "$name" "$repo_path"; continue; }
     case "$LISTING" in
-      *"$TAB$path$TAB"*) actual=${LISTING#*"$TAB$path$TAB"}; actual=${actual%%"$NL"*} ;;
-      *) actual=$(hero_compose_port "$path" "$RANGE") ;;   # a row whose path is not a direct child
+      *"$TAB$repo_path$TAB"*) actual=${LISTING#*"$TAB$repo_path$TAB"}; actual=${actual%%"$NL"*} ;;
+      *) actual=$(hero_compose_port "$repo_path" "$RANGE") ;;   # a row whose repo_path is not a direct child
     esac
     if [ -n "$rport" ]; then
       case "$actual" in
@@ -107,19 +107,19 @@ review() {
     fi
     case "$actual" in -|'?'|"$rport") ;; *) ports="$ports$actual $name$NL" ;; esac
     [ "$group" != none ] || continue
-    [ -f "$path/HERO.md" ] || printf 'NO_HERO\t%s\t%s\n' "$name" "$path"
-    if [ -f "$path/AGENTS.md" ] || [ -f "$path/CLAUDE.md" ]; then
+    [ -f "$repo_path/HERO.md" ] || printf 'NO_HERO\t%s\t%s\n' "$name" "$repo_path"
+    if [ -f "$repo_path/AGENTS.md" ] || [ -f "$repo_path/CLAUDE.md" ]; then
       # CLAUDE.md is normally a symlink to AGENTS.md; read whichever resolves.
-      grep -qs '^## Fleet' "$path/AGENTS.md" "$path/CLAUDE.md" || printf 'NOT_FLEET_AWARE\t%s\t%s\n' "$name" "$path"
+      grep -qs '^## Fleet' "$repo_path/AGENTS.md" "$repo_path/CLAUDE.md" || printf 'NOT_FLEET_AWARE\t%s\t%s\n' "$name" "$repo_path"
     else
-      printf 'NO_AGENTS\t%s\t%s\n' "$name" "$path"
+      printf 'NO_AGENTS\t%s\t%s\n' "$name" "$repo_path"
     fi
   done <<< "$ROWS"
 
-  while IFS="$TAB" read -r name path actual; do
+  while IFS="$TAB" read -r name repo_path actual; do
     [ -n "$name" ] || continue
-    case "$ROWS" in *"$TAB$path$TAB"*) continue ;; esac
-    printf 'UNLISTED\t%s\t%s, port %s\n' "$name" "$path" "$actual"
+    case "$ROWS" in *"$TAB$repo_path$TAB"*) continue ;; esac
+    printf 'UNLISTED\t%s\t%s, port %s\n' "$name" "$repo_path" "$actual"
     case "$actual" in -|'?') ;; *) ports="$ports$actual $name$NL" ;; esac
   done <<< "$LISTING"
 
