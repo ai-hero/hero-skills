@@ -477,6 +477,35 @@ jobs:
             --slurp > pr_review_comments.pages.json
           jq 'add' pr_review_comments.pages.json > pr_review_comments.json
 
+          # author_association is computed RELATIVE TO THE VIEWER, and the
+          # viewer here is GITHUB_TOKEN. An org member whose membership is
+          # PRIVATE reads as CONTRIBUTOR on these REST reads, while the webhook
+          # payload that let this job start says MEMBER — computed server-side
+          # with full visibility. So a triad test alone silently closes the
+          # self-review path for every org that keeps membership private, and
+          # the PR author is told their own self-review does not count.
+          #
+          # Ask the question the triad stands in for: does this login have
+          # write access? The collaborators endpoint answers that for a token
+          # that cannot see the membership, so it is the authority and the
+          # association stays as the cheap path. A 404 is the ordinary answer
+          # for a non-collaborator, so a failed call must add nobody rather
+          # than abort the step.
+          jq -r '[.[] | .user.login] | unique | .[]' \
+            issue_comments.json reviews.json 2>/dev/null \
+            | sort -u > candidate_logins.txt || true
+          : > writers.txt
+          while read -r LOGIN; do
+            [ -n "$LOGIN" ] || continue
+            PERM=$(gh api "/repos/${{ github.repository }}/collaborators/$LOGIN/permission" \
+              --jq '.permission' 2>/dev/null) || continue
+            case "$PERM" in
+              admin|write|maintain) printf '%s\n' "$LOGIN" >> writers.txt ;;
+            esac
+          done < candidate_logins.txt
+          jq -R -s 'split("\n") | map(select(length > 0))' writers.txt > writers.json
+          echo "writers=$(jq -r 'join(",")' writers.json)"
+
           # Every leg below turns on WHO, not just on what was posted. The
           # gate exists to stop auto-approve being the only review, and all
           # three of its signals were things an outsider could produce: the
@@ -500,10 +529,13 @@ jobs:
           # the author (as OTHER_REVIEWS below does) would put the self-review
           # path permanently out of reach on all of them.
           # test: begin self-review-gate
-          SELF_REVIEW=$(jq -r --arg marker "$MARKER" --argjson assoc "$ASSOC" '
-            [.[]
+          SELF_REVIEW=$(jq -r --arg marker "$MARKER" --argjson assoc "$ASSOC" \
+            --slurpfile writers writers.json '
+            ($writers[0] // []) as $w
+            | [.[]
               | select(.body | test($marker; "i"))
-              | select(.author_association as $a | $assoc | index($a))
+              | select((.author_association as $a | $assoc | index($a))
+                    or (.user.login as $l | $l != null and ($w | index($l))))
             ] | length
           ' issue_comments.json)
           # test: end self-review-gate
@@ -525,12 +557,15 @@ jobs:
           # accepted on type rather than association — association alone would
           # stop counting the very reviews this leg exists for.
           # test: begin other-reviews-gate
-          OTHER_REVIEWS=$(jq -r --arg author "$PR_AUTHOR" --argjson assoc "$ASSOC" '
-            [.[]
+          OTHER_REVIEWS=$(jq -r --arg author "$PR_AUTHOR" --argjson assoc "$ASSOC" \
+            --slurpfile writers writers.json '
+            ($writers[0] // []) as $w
+            | [.[]
               | select(.user.login != $author)
               | select(.state != "PENDING")
               | select(.user.login != "github-actions[bot]")
               | select((.author_association as $a | $assoc | index($a))
+                    or (.user.login as $l | $l != null and ($w | index($l)))
                     or .user.type == "Bot")
             ] | length
           ' reviews.json)
@@ -572,7 +607,7 @@ jobs:
               echo "No prior review found. Run \`hero-skills:review-pr\` or wait for a code review agent (Copilot/CodeRabbit/Greptile) before requesting auto-approve."
               if [ "$SELF_REVIEW_ANY" -gt 0 ]; then
                 echo ""
-                echo "A self-review comment IS present, but its author does not have write access on this repo (OWNER, MEMBER or COLLABORATOR), so it does not satisfy this gate."
+                echo "A self-review comment IS present, but its author has no write access on this repo — neither an OWNER/MEMBER/COLLABORATOR association nor admin/write/maintain permission — so it does not satisfy this gate."
               fi
             } > prior_review.md
           fi

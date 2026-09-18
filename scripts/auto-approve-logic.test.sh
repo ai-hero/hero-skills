@@ -440,6 +440,7 @@ SR_MARKER='## Self-Review
 <!-- ai-hero:self-review -->'
 srg() { # JSON_ARRAY -> the count the gate would see
   printf '%s' "$1" > "$WORK/issue_comments.json"
+  printf '%s' "${WRITERS:-[]}" > "$WORK/writers.json"
   ( cd "$WORK" && ASSOC="$ASSOC_WF" MARKER="$MARKER_WF" \
     bash -e -c '. ./self-review-gate.sh; printf "%s" "$SELF_REVIEW"' )
 }
@@ -467,6 +468,20 @@ check "self-review: no comments at all" "0" "$(srg '[]')"
 check "self-review: a NONE marker beside member chatter does not count" "0" \
   "$(srg "$(jq -n --arg m "$SR_MARKER" '[{author_association:"NONE",body:$m},{author_association:"MEMBER",body:"nice"}]')")"
 
+# author_association is relative to the VIEWER: a private org member reads as
+# CONTRIBUTOR on a REST read by GITHUB_TOKEN, while the webhook that started
+# the job saw MEMBER. Write access is the authority; the association is only
+# the cheap path. Without this leg the self-review gate is unreachable for
+# every org that keeps membership private.
+member_with_write() { jq -n --arg m "$SR_MARKER" --arg l "$1" \
+  '[{author_association:"CONTRIBUTOR",user:{login:$l},body:$m}]'; }
+check "self-review: CONTRIBUTOR association WITH write access counts" "1" \
+  "$(WRITERS='["member"]' srg "$(member_with_write member)")"
+check "self-review: CONTRIBUTOR association WITHOUT write access does not" "0" \
+  "$(WRITERS='["member"]' srg "$(member_with_write stranger)")"
+check "self-review: an empty writers list changes nothing" "0" \
+  "$(WRITERS='[]' srg "$(member_with_write member)")"
+
 # --- other-reviews-gate -----------------------------------------------------
 # On a public repo any account can submit a COMMENTED review, so this leg
 # needs the same association test — but a real review bot reports NONE, and
@@ -474,6 +489,7 @@ check "self-review: a NONE marker beside member chatter does not count" "0" \
 org() { # JSON_ARRAY -> the count the gate would see
   printf '%s' "$1" > "$WORK/reviews.json"
   printf '%s' '{"user":{"login":"author"}}' > "$WORK/pr.json"
+  printf '%s' "${WRITERS:-[]}" > "$WORK/writers.json"
   ( cd "$WORK" && ASSOC="$ASSOC_WF" PR_AUTHOR=author \
     bash -e -c '. ./other-reviews-gate.sh; printf "%s" "$OTHER_REVIEWS"' )
 }
@@ -489,6 +505,8 @@ check "other-reviews: the PR author's own review does not count" "0" "$(org "$(r
 # Re-running must not bootstrap off the approval the last run left.
 check "other-reviews: our own past approval does not count" "0" \
   "$(org "$(rev 'github-actions[bot]' NONE Bot APPROVED)")"
+check "other-reviews: CONTRIBUTOR association with write access counts" "1" \
+  "$(WRITERS='["reviewer"]' org "$(rev reviewer CONTRIBUTOR)")"
 
 # --- bot-inline-gate --------------------------------------------------------
 bil() { # JSON_ARRAY -> the count the gate would see
