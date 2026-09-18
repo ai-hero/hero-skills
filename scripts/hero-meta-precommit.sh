@@ -38,7 +38,7 @@ OUTPUT=$(echo "$DIFF" | claude --model sonnet --max-turns 5 -p "$(cat <<'EOF'
 You are reviewing a diff to a Claude Code skills plugin. Only check what changed in this diff — do not audit the entire plugin.
 
 For the changed lines, verify:
-- Frontmatter fields (name, description) are present and description is 50-200 chars
+- Frontmatter fields (name, description) are present; description says what the skill does and when to use it, one to three sentences, under 1024 chars
 - Step/sub-step numbering is sequential and matches parent (e.g. Step 3 subs are 3a, 3b not 2a)
 - No angle bracket placeholders like <foo> (use UPPER_CASE instead)
 - Heading hierarchy is consistent with surrounding context

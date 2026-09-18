@@ -26,8 +26,8 @@ if [[ -z "$SKILL_NAME" ]]; then
 fi
 
 # Validate kebab-case
-if [[ ! "$SKILL_NAME" =~ ^[a-z][a-z0-9-]*$ ]]; then
-  echo "Error: skill name must be kebab-case (lowercase, hyphens). Got: $SKILL_NAME"
+if [[ ${#SKILL_NAME} -gt 64 || ! "$SKILL_NAME" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+  echo "Error: skill name must be 1-64 chars of lowercase letters, digits and single hyphens, none leading or trailing. Got: $SKILL_NAME"
   exit 1
 fi
 
@@ -94,20 +94,21 @@ TODO: First step of the skill.
 
 TODO: Second step.
 
+## Gotchas
+
+- TODO: facts about this environment the agent would get wrong without
+  being told. Delete the section if there are none.
+
 ## Examples
 
 \`\`\`
 /$SKILL_NAME                # TODO: example usage
 \`\`\`
-
-## Notes
-
-- TODO: important notes
 EOF
 
 echo "Created: $SKILLS_DIR/$SKILL_NAME/SKILL.md"
 echo ""
 echo "Next steps:"
-echo "  1. Edit $SKILLS_DIR/$SKILL_NAME/SKILL.md"
+echo "  1. Edit $SKILLS_DIR/$SKILL_NAME/SKILL.md (keep it under 500 lines; longer material goes in references/)"
 echo "  2. Run ./scripts/validate.sh to check"
 echo "  3. Commit and push"

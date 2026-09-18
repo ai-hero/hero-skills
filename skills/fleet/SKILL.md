@@ -1,7 +1,7 @@
 ---
 name: fleet
 # prettier-ignore
-description: Create and converge FLEET.md, the local unversioned map of sibling checkouts (group, port). sync scans the folder and proposes rows; review reports drift read-only.
+description: Create and converge FLEET.md, the local unversioned map of sibling checkouts (group, port). sync scans the folder and proposes rows; review reports drift read-only. Use from the folder that holds the repos, when adding a checkout or claiming a port.
 argument-hint: "[sync | review]"
 ---
 

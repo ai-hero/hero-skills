@@ -1,7 +1,7 @@
 ---
 name: handoff
 # prettier-ignore
-description: Distill the current conversation into one self-contained work-item covering context, decisions, remaining work and acceptance criteria, for a downstream agent with zero context from this session.
+description: Distill the current conversation into one self-contained work-item covering context, decisions, remaining work and acceptance criteria, for a downstream agent with zero context from this session. Use when stopping mid-task, handing work to someone else, or filing what was learned as a ticket.
 argument-hint: "[TITLE_OR_FOCUS] [--issue] [--repo OWNER/NAME] | recalibrate"
 ---
 

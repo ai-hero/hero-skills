@@ -60,7 +60,7 @@ STRUCTURE CONSISTENCY
 
 Flag skills that are too large or too small:
 
-- **Over 500 lines**: Should split into supplementary files
+- **Over 500 lines**: Move reference material to `references/`, each file linked from the body with the condition under which to read it. Pipeline skills (see `PIPELINE_SKILLS` in `scripts/validate.sh`) carry a larger budget on purpose
 - **Over 5000 words**: Consuming too much context window
 - **Under 20 lines** (body only): Probably too thin to be useful
 - **Deep nesting** (h4+ headings beyond investigation sub-steps): May need restructuring
@@ -102,7 +102,7 @@ DRY VIOLATIONS
      Suggestion: Consider moving to references/ if init exceeds 500 lines
 ```
 
-**Important:** not all repetition is bad. Skills run independently and cannot share runtime state. Only flag repetition you could remove with a supplementary file or a shared reference.
+**Important:** not all repetition is bad. Skills run independently and cannot share runtime state. Only flag repetition you could remove with a shared reference file.
 
 #### 2d: HERO.md Field Coverage
 
@@ -144,8 +144,8 @@ Projects → dependency-file     | init    | scan, test
 Check every skill's frontmatter `description` for:
 
 - **Trigger clarity**: Does it say when to use the skill? ("Use when...", "Use for...", "Use before...")
-- **Length**: Should be 50-200 chars. Too short = unclear triggers. Too long = wastes context.
-- **Specificity**: Vague descriptions like "helps with code" are useless for Claude's skill matching.
+- **Length**: One to three sentences. The Agent Skills spec caps it at 1024 chars; past about 350 it is padding, and under 50 it cannot carry a trigger.
+- **Specificity**: Vague descriptions like "helps with code" are useless for Claude's skill matching. Name the user's intent, not the skill's mechanics.
 
 Report template:
 
@@ -153,7 +153,7 @@ Report template:
 DESCRIPTION QUALITY
 ───────────────────
 [OK] commit: "Create a smart git commit..." (85 chars, clear trigger)
-[!!] audit: description is 190 chars — consider trimming
+[!!] audit: description is 410 chars — consider trimming
 [??] create-skill: no trigger phrase — add "Use when..." or "Use for..."
 ```
 

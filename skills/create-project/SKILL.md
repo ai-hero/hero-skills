@@ -1,7 +1,7 @@
 ---
 name: create-project
 # prettier-ignore
-description: Scaffold a new project. Supports standalone repos or monorepo subprojects. Creates Python (FastAPI/CLI/library), full-stack (FastAPI + Next.js/Vite), or Node.js projects with AGENTS.md.
+description: Scaffold a new project. Supports standalone repos or monorepo subprojects. Creates Python (FastAPI/CLI/library), full-stack (FastAPI + Next.js/Vite), or Node.js projects with AGENTS.md. Use when starting a repo or subproject from nothing.
 argument-hint: "PROJECT_NAME [description] | recalibrate"
 disable-model-invocation: true
 ---
