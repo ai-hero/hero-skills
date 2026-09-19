@@ -1,7 +1,7 @@
 ---
 name: architecture
 # prettier-ignore
-description: Run by wayfare plan. Creates and converges a single root DESIGN.md covering boundaries, invariants, users, flows and decisions the code cannot state. sync converges; review reports drift.
+description: Run by wayfare sync. Creates and converges a single root DESIGN.md covering boundaries, invariants, users, flows and decisions the code cannot state. sync converges; review reports drift.
 argument-hint: "[sync | review]"
 user-invocable: false
 ---
@@ -15,7 +15,7 @@ behave toward them, and why the one-way doors were walked through. This skill
 maintains that single file. `sync` converges it with the codebase, `review`
 reports drift without writing.
 
-**This is the stage of `hero-skills:wayfare plan` right after the mailbox,
+**This is the stage of `hero-skills:wayfare sync` right after the mailbox,
 not a skill a person runs.** Wayfare invokes `review` with the line `launched by wayfare` before it
 judges anything, and offers `sync` when the review reports `MISSING` or stale
 rows; the map this file holds is what orders every feature's subtasks. It has
@@ -69,7 +69,7 @@ What belongs, which is exactly what the code cannot say:
   stays checkable against the router. Where a target design project is
   configured, wayfare's `ux-flow` is authoritative for the _journey_ and this
   section records how that journey lands on this codebase's routes. The two
-  are not rival copies, and a disagreement is a finding for `wayfare plan`,
+  are not rival copies, and a disagreement is a finding for `wayfare sync`,
   not something to resolve by rewriting either one. **Error, empty, and
   expired branches are drawn, or the flow is rejected.** The happy path is
   the one that gets built unprompted. A terminal-state table beats a second
@@ -344,5 +344,5 @@ When wayfare launched this run (`launched by wayfare` in the invocation),
 print nothing terminal: return the findings table (or "holds", or the
 bootstrap result) to wayfare, which offers `sync` after a `review` with rows
 and then continues its own stages. Run standalone, the next step is always
-`hero-skills:wayfare plan`, because a changed map changes how each feature's slice
+`hero-skills:wayfare sync`, because a changed map changes how each feature's slice
 cuts through the layers, and that is where the map is consumed.

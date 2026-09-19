@@ -23,9 +23,9 @@ walk the goals:
 2. Else the first `accepted` goal in bottom-up order (its `depends_on` goals all
    `done`, lowest id among those) whose `parent` are all `ready` or further.
    A `accepted` goal whose deps are met but whose `parent` hold an unplanned
-   item is reported as blocked on planning: `Next step: wayfare plan`.
+   item is reported as blocked on planning: `Next step: wayfare sync`.
 3. Else say why there is nothing to hand out, in one line each: no goals
-   (tasks ready but ungrouped → `wayfare plan`'s goals stage covers
+   (tasks ready but ungrouped → `wayfare sync`'s goals stage covers
    them; that stage was skipped or cut short); every goal blocked on another
    (name the chain); every goal `done` (the route is complete).
 
@@ -70,7 +70,7 @@ the item's `## Permissions` section (*Item formats*); the grant is typed at
 `next`'s gate. Six permissions, each a gate the loop would otherwise stop
 at:
 
-| Permission | The gate it waives | The plan round writes |
+| Permission | The gate it waives | The sync writes |
 | --- | --- | --- |
 | `mark-ready` | one-shot Step 6: draft → ready for review | `yes` |
 | `respond` | one-shot Step 8: fix the review bot's comments and resolve threads without showing the plan first | `yes` |
@@ -81,22 +81,22 @@ at:
 
 **A goal that was already `active` when `absorb` arrived reads as
 `absorb: no`.** A required key plus a frozen section is otherwise a deadlock
-with no exit: `next` STOPs demanding the missing key, and `plan` cannot add it
+with no exit: `next` STOPs demanding the missing key, and `sync` cannot add it
 without committing the other defect, which is changing `## Permissions` while
 `active`. `no` is the conservative reading and the pre-`absorb` behaviour, so
 grandfathering it changes nothing about what that goal may do. It applies to
 this one key, only while the goal is `active`, and the gate says so aloud on
 the next resume; a `accepted` goal missing it is an ordinary store defect for
-`plan` to fix.
+`sync` to fix.
 
 `absorb` is wayfare's own gate, not one-shot's, so it is **not** on the
 pre-authorized literal below: that line names the gates one-shot and its
 children answer, and a name they do not know has no business travelling on
 it. The values are an enum (`yes` or `no`, and `verify` or `none` for
 `deploy`) and the section is required: a goal with no `## Permissions`, a missing
-key, or a value outside its enum is a **store defect** (`plan` reports it),
-and `next` STOPs on it with `Next step: wayfare plan` rather than reading
-anything aloud. "The plan round writes" is what `plan` puts on a new goal; it is never
+key, or a value outside its enum is a **store defect** (`sync` reports it),
+and `next` STOPs on it with `Next step: wayfare sync` rather than reading
+anything aloud. "The sync writes" is what `sync` puts on a new goal; it is never
 what an absent line means.
 
 `no` on a permission is not a failure; it is where the loop hands back. A
@@ -140,20 +140,20 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
 1. **Resolve the goal item.** `next` picked it (or the user named one by
    asking `do GOAL_ID` on a `accepted` goal, which routes here). It arrives
    `accepted` with `parent`, `depends_on`, `budget`, `## Permissions` and a DoD
-   already written by `plan`, needing only the authorization below. Every
+   already written by `sync`, needing only the authorization below. Every
    item in `parent` must already be planned (`ready` or further along): an
-   unplanned one is a STOP with `Next step: wayfare plan`, because planning is
-   `plan`'s postflight, and the loop never stops to plan halfway through.
+   unplanned one is a STOP with `Next step: wayfare sync`, because planning is
+   `sync`'s postflight, and the loop never stops to plan halfway through.
    The one unplanned item that is not a STOP is an **admission** a previous
    turn of this same goal wrote, whose `discovered_from` is in `parent` and
    whose entry the goal's `## Comments` names, under `absorb: yes`: that goal plans
    it in its own turn (*Admitting discovered work*). Under `absorb: no` it is
-   the ordinary STOP, and the goal resumes after `plan` plans it. A
+   the ordinary STOP, and the goal resumes after `sync` plans it. A
    goal whose `depends_on` goals are not all `done` is a STOP naming them;
    a `depends_on` entry that is not a goal is a store defect, same STOP. A
    missing or malformed `## Permissions` (see *Permissions*), or a `budget`
    or `budget_max` that is not a positive integer, is a STOP with
-   `Next step: wayfare plan`, because the gate reads the item aloud and cannot read
+   `Next step: wayfare sync`, because the gate reads the item aloud and cannot read
    what is not there.
 2. **Get the approval, and show the whole run.** Read `## Permissions`
    aloud; the approval grants exactly those, for every item in `parent`:
@@ -648,7 +648,7 @@ memory between turns:
    When that returns merged, write `status: done` on every member task
    at `committed` and rewrite its `[goal-commit:]` marker from `unmerged` to
    `merged in PR_URL`. Until that happens every task lists as
-   `committed`, which is what `plan` reports and what the dependency check
+   `committed`, which is what `sync` reports and what the dependency check
    in *Advancing one item* refuses to build against. A `merged, not
    deployed` stop leaves them `committed` as well: `done` means the deploy
    was verified. Then run step 8, then write `status: done` on
@@ -661,9 +661,9 @@ memory between turns:
 8. **Admit what the turn discovered, before deciding the goal is done.**
    Each task's run reports the items its Step 2a wrote, each with the goal
    DoD line it serves. Run *Admitting discovered work* on that list now, in
-   this turn: an item left for `plan` to group is the orphan the next goal
+   this turn: an item left for `sync` to group is the orphan the next goal
    gets built around. An item that is not admitted is named in the report as
-   follow-up ground, and `plan` groups it.
+   follow-up ground, and `sync` groups it.
 
    Where an admitted item lands depends on whether this turn reached step 7:
 
@@ -750,7 +750,7 @@ treats that as not yet met, which is the correct answer.
 
 A goal that files its discoveries instead of finishing them does not
 converge. Every filed item is one no goal has as a member; `next` walks goals and
-never items, so reaching it means another `plan`, another goal, and another
+never items, so reaching it means another `sync`, another goal, and another
 round of discoveries out of *that* goal. ("Carving" is one-shot's word for
 moving work out of a plan the user marked ready, and it is **not** available
 under a goal, and one-shot Step 2a says so. What reaches this test is discovered
@@ -778,7 +778,7 @@ the item was written, when all four hold:
    edits it is `stop: reauthorize`.
 
 Anything failing any of the four is **follow-up ground**: leave it
-uncovered, name it in the report with why, and let `plan` group it. An
+uncovered, name it in the report with why, and let `sync` group it. An
 incidental refactor is the ordinary case here, and it is correct that it
 waits.
 
@@ -829,7 +829,7 @@ flip is the ready-mark, which is otherwise the user's alone. `absorb` is
 what a person granted at the gate in place of it, and it reaches nothing
 outside an admission. With `absorb: no`, the item still joins `parent`, at
 `accepted`; the turn ends `stop: awaiting-human` naming it and the planning it
-needs. Either way the goal keeps the work: `wayfare plan` plans it, the user
+needs. Either way the goal keeps the work: `wayfare sync` plans it, the user
 marks it ready, and `wayfare next` resumes **this** goal. No new goal is
 minted for it in either branch, which is the whole point.
 
@@ -853,7 +853,7 @@ order, and the order is the whole of the safety:
 - then the `admitted:` line in the turn report.
 
 Reversed, a crash between the two wedges the goal permanently: `next`'s
-unplanned-item exception requires the comment, so it STOPs; `plan` sees a
+unplanned-item exception requires the comment, so it STOPs; `sync` sees a
 `parent` grown beyond what its comments account for and is told to report and
 never adopt; and only an out-of-band `done` may leave `parent`. Written in
 this order the worst case is a comment naming an item that is not in `parent`,
@@ -894,7 +894,7 @@ keep them small where small is natural. What breaks the PR is not a commit
 being too small, it is a commit that mixes unrelated work, or three tasks
 squashed into one blob a reviewer cannot take apart.
 
-**`budget` is an expectation, not a gate.** `plan` writes the member count
+**`budget` is an expectation, not a gate.** `sync` writes the member count
 because that is the size of the plan it can see, and plans are estimates. A
 task that turns out to need two commits, a fix commit after a failed branch
 test, an admitted item: each of those is ordinary, and each pushes the goal
@@ -917,7 +917,7 @@ commit by commit could run indefinitely on individually reasonable steps.
 `budget_max` does not care about the justification, which is the point. It
 catches the case where every local decision looked fine and the total did not.
 
-`plan` sets it to twice `budget`, which is the "type of fungible" range: a
+`sync` sets it to twice `budget`, which is the "type of fungible" range: a
 goal that needs half again as much as planned just gets on with it, and one
 that needs triple stops and asks. Raising `budget_max` is not a turn's to do;
 that is `wayfare next`, a person, and a fresh gate.

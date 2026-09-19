@@ -76,7 +76,7 @@ every planning run as the frame its proposals have to fit.
 ```
 
 `wayfare init` writes this file and is the only verb that creates it.
-`wayfare plan` updates `source.head`, `target.head` and `next_id`; nothing
+`wayfare sync` updates `source.head`, `target.head` and `next_id`; nothing
 else writes the frontmatter.
 
 **`next_id` is a hint, never the allocator.** Worktree subagents run
@@ -88,7 +88,7 @@ allocation moves behind a single writer. A local run that trusts it over the
 scan will collide.
 
 **Target is optional.** With no `target` key the plan is in **self-review
-mode**: `wayfare plan` reconciles the source against `DESIGN.md`, its own
+mode**: `wayfare sync` reconciles the source against `DESIGN.md`, its own
 gaps and its own hardening audit, and no item carries a target anchor. The
 absence is not a defect and nothing reports it as one.
 
@@ -158,8 +158,8 @@ new → accepted → planning → ready → active → committed → review → 
 | Status | Meaning | Flipped by |
 | --- | --- | --- |
 | `new` | created, nobody has decided it should be worked on | the default when `status` is absent |
-| `accepted` | on the roadmap, not yet planned | `wayfare plan`, accepting a proposal |
-| `planning` | a plan is being written, or is written and not yet approved | `wayfare plan`'s planning postflight |
+| `accepted` | on the roadmap, not yet planned | `wayfare sync`, accepting a proposal |
+| `planning` | a plan is being written, or is written and not yet approved | `wayfare sync`'s planning postflight |
 | `ready` | plan approved, eligible to build | **the user, only ever explicitly** |
 | `active` | being built or being delivered | one-shot at its first edit |
 | `committed` | committed on a goal's branch, absent from the default branch | one-shot's commit-only mode |
@@ -299,7 +299,7 @@ rules, kept consistent by hand. They are one section with a tag.
 | `mistake` | a wrong turn the build took, written as it happens | the next planning round |
 | `turn` | one goal turn: what was spent, what stopped it | the next turn |
 | `decision` | a choice made and the reason, where the file cannot show it | reviewers |
-| `signal` | a divergence captured mid-build, before `wayfare plan` promotes it to a `signal` item | `wayfare plan` |
+| `signal` | a divergence captured mid-build, before `wayfare sync` promotes it to a `signal` item | `wayfare sync` |
 
 Three rules carry over unchanged and all three are load-bearing:
 
@@ -357,7 +357,7 @@ made) and `branch`.
 where the order is genuinely free.
 
 The old schema stored the same edge twice — `covers` on the goal, ordered,
-plus `depends_on` re-encoding much of that order — and `wayfare plan` had to
+plus `depends_on` re-encoding much of that order — and `wayfare sync` had to
 reconcile them every round. Two goals naming the same task in `covers` was a
 store defect the sync had to detect. Under `parent` it is not representable.
 
@@ -386,7 +386,7 @@ internally consistent and becomes badly wrong about the world.
 A carve-out inherits its parent's anchors: it covers ground the parent was
 planned against, so it is stale from exactly the same head.
 
-Absent anchors mean legacy or unmigrated. `wayfare plan` backfills them and
+Absent anchors mean legacy or unmigrated. `wayfare sync` backfills them and
 never computes staleness from an absent value.
 
 ## The server-side mapping

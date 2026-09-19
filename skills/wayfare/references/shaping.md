@@ -1,7 +1,7 @@
 # How a task is shaped
 
 The slice rule and the fine-tuning pass. Read before proposing any item in
-`wayfare plan`, and before accepting one a person brings.
+`wayfare sync`, and before accepting one a person brings.
 
 ## Slices, not layers: every `story` task is SLC
 
@@ -58,7 +58,7 @@ depends on the one before it has usually been cut horizontally; say so.
 
 ## Polish: the fine-tuning pass
 
-Coverage and fidelity are different questions, and a plan round that only asks the
+Coverage and fidelity are different questions, and a sync that only asks the
 first one declares a screen `done` while it looks wrong. **Coverage asks
 whether the story ships; polish asks whether the shipped screen matches the
 design when you put the two side by side and look.** A task can satisfy
@@ -67,7 +67,7 @@ the design has 32, wrap a label the design keeps on one line, clip a card at
 the tablet breakpoint, and render no focus ring at all. None of that is
 visible in a diff, and none of it is what `uncovered` means.
 
-So `plan` runs a **visual pass** over the screens that already ship, and what
+So `sync` runs a **visual pass** over the screens that already ship, and what
 it finds becomes `shape: visual` tasks. Visual is exempt from the SLC test for
 the same reason `structural` is: it is not a story because the story
 already shipped. It is the refinement of a surface that exists. A `visual` task that could have been written as a user story is an `uncovered` task

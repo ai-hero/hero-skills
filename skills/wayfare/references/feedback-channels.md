@@ -30,10 +30,10 @@ state at any moment.
    `## Design Feedback` section. Mid-build is the wrong time to allocate a store
    id and author a full item, and this section is what one-shot's close-out gate
    reads when a Definition-of-Done line legitimately fails.
-2. **Promote, at `plan`.** Each undelivered entry becomes a feedback item of the
+2. **Promote, at `sync`.** Each undelivered entry becomes a feedback item of the
    right type (`origin: wayfare`, `discovered_from` = the task id). The
    entry's marker becomes `[item: ID]` and **the item owns the state from that
-   point on.** The plan round also authors feedback items directly from its own
+   point on.** The sync also authors feedback items directly from its own
    reconciliation findings — those never pass through a task at all, because
    nothing built them.
 
@@ -80,7 +80,7 @@ after the id, and the token never appears elsewhere in the entry:
 
 **`[item: ID]` is a reference, and it is checked.** `ID` must name an existing
 item whose `type` is one of the three feedback kinds, whose `entry:` is this
-entry's `DF-` id, and whose `discovered_from` is this task. `plan`'s
+entry's `DF-` id, and whose `discovered_from` is this task. `sync`'s
 **store defects** finding checks every marker against all four; a marker that
 fails any of them is reported, never counted. Without this, a dangling or
 mis-typed reference counts as neither `[undelivered]` nor a `feedback` row and
@@ -165,7 +165,7 @@ history that stops it being raised again next quarter.
 ## Delivery
 
 Delivery is **outward-facing** — it writes into someone else's repo. It happens
-on the user's explicit confirmation and never as a side effect of the plan round's other
+on the user's explicit confirmation and never as a side effect of sync's other
 work.
 
 Wayfare delivers **itself**. It does not route through `hero-skills:handoff`:
@@ -305,7 +305,7 @@ is the one field a reader never sees rendered in the body, and a title composed
 freely will reach for whatever context the session holds — the branch name, the
 PR number — which is the leak that dropping handoff was meant to close.
 
-Then the gate. It is its **own** gate, not folded into the plan round's proposal confirm:
+Then the gate. It is its **own** gate, not folded into sync's proposal confirm:
 
 ```
 Design feedback delivery
@@ -370,7 +370,7 @@ is what makes the channel recover instead of livelocking:
 
 Marking `already_covered` with the *new* issue's URL would misattribute them and
 break the reconciliation below. Skipping them entirely is worse: they stay
-`accepted`, are skipped again at every future plan round, and the backlog never drains
+`accepted`, are skipped again at every future sync, and the backlog never drains
 while the user is re-prompted forever.
 
 ### 6. Reconcile against a captured baseline
@@ -384,7 +384,7 @@ AFTER == BEFORE - (len(to_file) + len(already_covered))
 
 Re-deriving the baseline after marking compares a number to itself and always
 passes. A mismatch is a real finding: under-marking re-files the same feedback
-on someone else's repo next plan round, and over-marking freezes feedback that never
+on someone else's repo next sync, and over-marking freezes feedback that never
 left. On a mismatch, name the item ids on both sides and **unwind the status
 changes you just made** before reporting — an over-marked item cannot be
 corrected later, because delivered is frozen.
@@ -402,7 +402,7 @@ the path into `/.feedback/…`. If it is empty or unlistable, STOP and name it.
 
 Set those items `status: queued`, **not** `delivered`. Nothing reached the
 destination; a file in a git-ignored store carried nothing anywhere. A queued
-item stays in the backlog and re-surfaces every plan round.
+item stays in the backlog and re-surfaces every sync.
 
 **Queued → delivered** is the user's report that it landed: they name the issue
 URL, you validate it is `https://`-shaped and on the destination host, and the
@@ -416,7 +416,7 @@ disk — a snapshot mirrors its project and nothing else.
 
 ## Reading the history back
 
-The plan round's **feedback** finding collects `accepted` and `queued` items across all three
+The sync's **feedback** finding collects `accepted` and `queued` items across all three
 lanes. Two further obligations:
 
 - **Recording a rejection.** When the user reports that the other side declined

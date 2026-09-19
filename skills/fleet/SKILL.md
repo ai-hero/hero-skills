@@ -147,7 +147,7 @@ per the *Sending* procedure in `docs/MESSAGES.md`, with:
 
 Show the drafts and the list once, confirm once, then deposit with
 `hero_msg_deposit`. Report the repos that now have mail and the one line each
-runs to act on it (`hero-skills:wayfare plan`, whose `inbox` stage promotes
+runs to act on it (`hero-skills:wayfare sync`, whose `inbox` stage promotes
 the ask).
 
 A row whose `.plans/` does not exist cannot receive one: no mailbox, and no

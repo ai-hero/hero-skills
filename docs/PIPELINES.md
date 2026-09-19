@@ -110,7 +110,7 @@ Because nothing else observes the codebase on the store's behalf, Step 1 also
 re-checks a resolved item's `success` criteria against reality, because `status: accepted`
 only means nobody edited the file, not that the work is still outstanding.
 
-**Architecture and harden chain.** `wayfare plan`'s architecture stage runs
+**Architecture and harden chain.** `wayfare sync`'s architecture stage runs
 `hero-skills:architecture review`, and offers its `sync`, before judging
 the roadmap, its `harden` stage runs `hero-skills:harden all`, and
 `think-it-through` delegates a leading `arch` argument to the architecture
@@ -120,7 +120,7 @@ so wayfare is the only way a person reaches them.
 
 **The design return channel.** Every other edge flows target → source. One
 flows back: one-shot logs a divergence it found while building into the
-feature's `## Design Feedback`, and `wayfare plan` delivers it. Two
+feature's `## Design Feedback`, and `wayfare sync` delivers it. Two
 destinations, no third: a configured `feedback-repo` gets an issue wayfare
 files itself (entries verbatim plus a manifest, destination confirmed
 in-session), and everything else (`feedback-repo: none`, a rejected value,
@@ -172,19 +172,19 @@ skill's work. The
 field map is `scripts/hero-fields.sh`; the contract is
 [RECALIBRATE.md](./RECALIBRATE.md).
 
-### Pipeline 4: wayfare plan, one round of convergence
+### Pipeline 4: wayfare sync, one round of convergence
 
 ```
 config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals
 ```
 
-Owner: `hero-skills:wayfare plan`. Eleven stages: the config gate; the
+Owner: `hero-skills:wayfare sync`. Eleven stages: the config gate; the
 mailbox (`docs/MESSAGES.md`, every unread message through the fleet gate
 and the promotion gate, a `type: bug` message becoming a proposed `shape: defect` task);
 `hero-skills:architecture review` (offering its `sync`);
 `hero-skills:harden all`; the compliance audit
 (`scripts/audit.py --repo THIS`, baseline plus the fleet's register overlay)
-with each failing check proposed as an item; the repo's own `wayfare: plan`
+with each failing check proposed as an item; the repo's own `wayfare: sync`
 skills (discovered in `.claude/skills/`, run with the harden contract); the
 dependency bots' open PRs written as `security` items; the design snapshot
 refresh; the reconciliation lanes; the planning postflight

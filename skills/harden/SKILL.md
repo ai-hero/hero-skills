@@ -1,7 +1,7 @@
 ---
 name: harden
 # prettier-ignore
-description: Run by wayfare plan. Audits the codebase read-only for hardening: dependency CVEs, container CVEs (Scout and Trivy), and code-level robustness. Emits execution-ready plans as .plans security items. Never edits source.
+description: Run by wayfare sync. Audits the codebase read-only for hardening: dependency CVEs, container CVEs (Scout and Trivy), and code-level robustness. Emits execution-ready plans as .plans security items. Never edits source.
 argument-hint: "[deps|docker|code|all]"
 user-invocable: false
 ---
@@ -10,7 +10,7 @@ user-invocable: false
 
 Deeply audit the codebase for security and robustness hardening opportunities, then write plans precise enough that a downstream executor (a cheaper model, a fresh session, or `hero-skills:one-shot`) can apply, test, and verify them with **zero context from this session**.
 
-**This is a stage of `hero-skills:wayfare plan`, not a skill a person runs.** Wayfare invokes it with the line `launched by wayfare` after the architecture map is current and before the roadmap is judged; the items it writes are ready-marked in wayfare's planning postflight and grouped into a security goal there. It has no verbs of its own beyond the audit scope, no config to tune (wayfare's `recalibrate` carries the fields it reads), and no fleet fan-out (wayfare already ran in one repo by the time this starts). Every path into it is a Skill-tool chain from a skill that already ran the fleet-root test, which is why Step 0 has none.
+**This is a stage of `hero-skills:wayfare sync`, not a skill a person runs.** Wayfare invokes it with the line `launched by wayfare` after the architecture map is current and before the roadmap is judged; the items it writes are ready-marked in wayfare's planning postflight and grouped into a security goal there. It has no verbs of its own beyond the audit scope, no config to tune (wayfare's `recalibrate` carries the fields it reads), and no fleet fan-out (wayfare already ran in one repo by the time this starts). Every path into it is a Skill-tool chain from a skill that already ran the fleet-root test, which is why Step 0 has none.
 
 Inspired by [shadcn/improve](https://github.com/shadcn/improve): the expensive, high-ceiling model does the part where intelligence compounds (understanding, judging, specifying); cheaper models do the execution. **The plan is the product.** This skill absorbed the former `hero-skills:scan-vulns`. Its Dependabot and Docker CVE-scanning mechanics live in Parts A and B, but the *apply-and-commit* half now lands in the plan's execution recipe instead of this session's working tree.
 
@@ -302,7 +302,7 @@ back: every `skipped (unavailable)` and every `Deferred:` line becomes an
 `unverified` row in the sync report, and the emitted items are ready-marked
 in its planning postflight. Print no terminal next step of your own, because the
 stage after this one is wayfare's to announce. (Run standalone, the next
-step is `hero-skills:wayfare plan`, which is also what ready-marks the items.)
+step is `hero-skills:wayfare sync`, which is also what ready-marks the items.)
 
 ## Safety Notes
 
@@ -322,4 +322,4 @@ That phrase is a claim about upstream, and it has been wrong. Earn it:
 
 ### This audit is a snapshot, and pinned base tags rot between runs
 
-This runs once per `wayfare plan`, and it is typically wired into neither CI nor pre-commit. A pinned base tag accrues new CVEs with nothing watching: one image went from "0 CRITICAL, 2 HIGH" at audit time to "1 CRITICAL, 14 HIGH" shortly after, with no code change. A clean audit means clean **as of now**, never clean going forward. When a repo has no automated scanning, say so in the summary and note in the emitted plan(s) whether to add a scheduled CI gate (`trivy image --exit-code 1 --severity HIGH,CRITICAL` on a `schedule:` trigger). A push-only gate cannot catch rot, because rot happens without pushes.
+This runs once per `wayfare sync`, and it is typically wired into neither CI nor pre-commit. A pinned base tag accrues new CVEs with nothing watching: one image went from "0 CRITICAL, 2 HIGH" at audit time to "1 CRITICAL, 14 HIGH" shortly after, with no code change. A clean audit means clean **as of now**, never clean going forward. When a repo has no automated scanning, say so in the summary and note in the emitted plan(s) whether to add a scheduled CI gate (`trivy image --exit-code 1 --severity HIGH,CRITICAL` on a `schedule:` trigger). A push-only gate cannot catch rot, because rot happens without pushes.

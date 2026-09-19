@@ -3,7 +3,7 @@
 The compliance audit on its own, for this repo or the whole fleet.
 
 `improve` takes no argument. In a repo it runs the `compliance` stage
-exactly as `plan` does, with the same engine call, the same items and the same confirm flow, and then does the one thing `plan` never does: **the backport half**. Run
+exactly as `sync` does, with the same engine call, the same items and the same confirm flow, and then does the one thing `sync` never does: **the backport half**. Run
 the engine once more for the fleet's template (`--repo TEMPLATE`, the
 `template:` row in FLEET.md) and, for every check the template fails where
 this repo is the `reference`, draft a message into the template's

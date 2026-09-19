@@ -1,8 +1,8 @@
 ---
 name: wayfare
 # prettier-ignore
-description: The front door. plan converges architecture, design, hardening, compliance, deps and the roadmap into .plans and proposes goals; next authorizes and runs the next goal; do advances one item; improve audits the fleet. Use whenever asked what to work on next, to plan, or to build a feature.
-argument-hint: "[plan [CONTEXT] | next | do ID | improve | recalibrate]"
+description: The front door. sync converges architecture, design, hardening, compliance, deps and the roadmap into .plans and proposes goals; next authorizes and runs the next goal; do advances one item; improve audits the fleet. Use whenever asked what to work on next, to plan, or to build a feature.
+argument-hint: "[sync [CONTEXT] | next | do ID | improve | recalibrate]"
 ---
 
 # Wayfare: the route from source to target
@@ -38,14 +38,11 @@ there.
 
 | Verb | What it does | Procedure |
 | --- | --- | --- |
-| `plan [CONTEXT]` | Reads the world and converges everything into `.plans/`: the architecture record, the design snapshot, the hardening audit, the compliance register, the dependency bots' PRs, the roadmap, and the goals over it | `references/sync.md` |
+| `sync [CONTEXT]` | Reads the world and converges everything into `.plans/`: the architecture record, the design snapshot, the hardening audit, the compliance register, the dependency bots' PRs, the roadmap, and the goals over it | `references/sync.md` |
 | `next` | Authorizes the next goal at a gate a person types, then runs its first turn | `references/goals.md` |
 | `do ID` | Advances one item as far as the gates allow, or runs one turn of one goal | `references/advancing.md` |
 | `improve` | Runs the compliance audit alone, for this repo or the whole fleet, and drafts the backports | `references/improve.md` |
 | `recalibrate` | Tunes the `## Wayfare` block in HERO.md | `references/configuration.md` |
-
-`plan` was called `sync`. The verb is the same; the name now says what it
-produces.
 
 ## The shaping rule
 
@@ -89,13 +86,13 @@ Progress:
 - [ ] 2. Config gate — the `## Wayfare` block (`references/configuration.md`)
 - [ ] 3. Store read — `hero_ready_items`, the inbox, the plan object
 - [ ] 4. Snapshot — pull the design snapshot, resolve both heads
-- [ ] 5. Local stages — this repo's own `wayfare: plan` skills, at the trust gate
+- [ ] 5. Local stages — this repo's own `wayfare: sync` skills, at the trust gate
 
 An unset sentinel (`SOURCE_HEAD`, `UX_FLOW`, `DS_REPO`, `RECON`) **stops the
 run**, on every verb. A store that is not at schema 1 stops it too:
 `hero_ready_items` refuses one and names the migrator.
 
-## `plan`: converge the roadmap with the world
+## `sync`: converge the roadmap with the world
 
 The longest procedure here and the one with the most ways to be quietly
 wrong. **Read `references/sync.md` in full before starting**, and
@@ -145,7 +142,7 @@ runs *Advancing one item*; a `shape: dependency` task with `bot:` runs
 *Carrying a bot's PR*; a goal id runs one turn.
 
 `do` never plans. An item that is not `ready` or further is refused with
-`Next step: wayfare plan`; an item with unmet deps is refused naming them.
+`Next step: wayfare sync`; an item with unmet deps is refused naming them.
 
 ## `improve`
 
@@ -171,7 +168,7 @@ Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
 `(refused)`, `(absent)`, `(no-file)`. Also ask about any row the user says is
 wrong. A row that already holds the right value is not a question.
 
-The table covers more than the `## Wayfare` block: because `plan` runs
+The table covers more than the `## Wayfare` block: because `sync` runs
 `hero-skills:architecture` and `hero-skills:harden`, the fields those two read
 are wayfare's rows too. A person who never calls those skills directly still
 has one place to fix their config.

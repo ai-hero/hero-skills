@@ -70,7 +70,7 @@ before it reaches `DesignSync`.
 **Why `reconciliation` exists.** A target project may already run its own
 numbered reconciliation rounds: a rolling document naming what it read, what
 converged, and what it wants from downstream. When it does, that document is
-the best starting point a plan round has, and re-deriving those findings from
+the best starting point a sync has, and re-deriving those findings from
 scratch is building a second, weaker copy of a loop that already exists. It is
 a *starting point*: `references/reconciliation.md`'s **The document is not the
 world** says why it is read and then read past, and why the round marker in it
@@ -95,9 +95,9 @@ product, as a prototype flow, a screen sequence, or a guided tour. That
 journey is where slices come from: a task is one path through the flow,
 which is what makes it possible to cut work that is Complete rather than
 merely layered. A design without one can still be roadmapped, but the slices
-are guesses, so `plan` reports its absence rather than quietly proceeding.
+are guesses, so `sync` reports its absence rather than quietly proceeding.
 Unset means "never looked"; `none` means "looked, there isn't one" and stops
-`plan` from re-proposing it every run.
+`sync` from re-proposing it every run.
 
 The path is resolved from the **design project root**, so it is project-relative,
 exactly as `DesignSync list_files` reports paths.
@@ -108,8 +108,8 @@ so its only sanitizer is the extraction itself: a configured value must be
 `none`, `ask`, or text containing exactly one project UUID, and anything
 else disables the target loudly rather than silently. **A design target is
 optional.** A missing block or `design-project: none` offers to set one up.
-A design target sharpens the roadmap, but declining does not stop `plan`;
-it runs in self-review mode instead (source only, see `plan` below). That
+A design target sharpens the roadmap, but declining does not stop `sync`;
+it runs in self-review mode instead (source only, see `sync` below). That
 offer is re-asked every run, unlike every other key in the config gate: a
 confirmed `design-system-repo: none` is a settled answer because there is
 nothing more to check for, but a design project can simply show up later, and
@@ -120,14 +120,14 @@ structurally cannot have one (no product, no UI; the reason belongs in the
 comment) opts out for good. That marker is prose for the reader, not a value
 `hero_field` returns, because it strips comments, so honoring it is something only
 the agent reading the raw line does, the same way it reads every other
-human-authored note in HERO.md; write it once, by hand or when `plan`'s
+human-authored note in HERO.md; write it once, by hand or when `sync`'s
 config gate writes the confirmed `none` and the user says why, never inferred
 from silence. `ask` is for repos that must not pin a project
 (or users who prefer to paste the link): each session asks for the
 claude.ai/design link and nothing is written to HERO.md; declining that
 prompt self-reviews for the session. `design-transport: manual` still works
 exactly as before. The target is the snapshot the user fills, and no
-project id is required (the link, when present, is only quoted in the plan round
+project id is required (the link, when present, is only quoted in the sync
 instructions).
 
 `feedback-repo` is the design-feedback delivery destination
@@ -155,7 +155,7 @@ Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
 `(refused)`, `(absent)`, `(no-file)`. Also ask about any row the user says is
 wrong. A row that already holds the right value is not a question.
 
-The table covers more than the `## Wayfare` block: because `plan` runs
+The table covers more than the `## Wayfare` block: because `sync` runs
 `hero-skills:architecture` and `hero-skills:harden`, the fields those two read
 (repository type, deployment platform and registry, the linters already in
 the gate, the project list) are wayfare's rows too. A person who never calls

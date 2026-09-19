@@ -1,20 +1,20 @@
 # Planning a task
 
-`plan`'s postflight, not a verb of its own: how a task moves from
+`sync`'s postflight, not a verb of its own: how a task moves from
 `accepted` through `planning` to the user's ready-mark.
 
 Planning is `hero-skills:think-it-through FEATURE_ID`, whose **Feature mode**
-plans the task in place, invoked by `plan`'s *Plan the set* over the whole
+plans the task in place, invoked by `sync`'s *Plan the set* over the whole
 roadmap, and wayfare owns only the contract it fills:
 
 - The flip `accepted → planning` happens as the run starts (an
   already-`planning` task resumes; `ready` and later are refused,
-  replanning those goes through `plan`).
+  replanning those goes through `sync`).
 - Grilling runs against the task's `source` paths, the source
-  architecture (`DESIGN.md`, when present; see the plan round's *Map the
+  architecture (`DESIGN.md`, when present; see sync's *Map the
   source*), the target design, the UX flow (`ux-flow`) for the steps this
   task's story covers, the source repo's configured component registry
-  (when one exists; see the plan round's Investigate), the repo's `wayfare: recipe`
+  (when one exists; see sync's Investigate), the repo's `wayfare: recipe`
   skills (a recipe that fits is named in `## Approach`, and one-shot invokes
   it instead of hand-rolling the procedure), and the task's own
   `## Comments` and `## Design Feedback`.
@@ -22,7 +22,7 @@ roadmap, and wayfare owns only the contract it fills:
   still passes the SLC test: name what a person can do when it ships, and
   whether it works every time for that path. A task that turns out to be a
   layer, or that cannot be made Complete without swallowing three more
-  stories, is a shaping problem. Say so and route it to `plan`'s
+  stories, is a shaping problem. Say so and route it to `sync`'s
   **horizontal slices** finding rather than planning around it.
 - **Plan it the way a principal architect would.** think-it-through's
   *Principal Checklist* is the bar, and *Right fix, honestly sized* is the
@@ -34,7 +34,7 @@ roadmap, and wayfare owns only the contract it fills:
 - **Bounded by effort, not ambition.** Right-sized is a handful of subtasks
   one build run lands as one changeset. When the correct fix is bigger than
   that, plan the smallest correct step this slice needs and route the rest to
-  `plan` as its own task or `architecture` item.
+  `sync` as its own task or `architecture` item.
 - **`source` names where the change begins, not its boundary.** A plan that
   stops at the file list and leaves a caller, a migration or a test
   un-updated is incomplete, and the build has to go further than the plan

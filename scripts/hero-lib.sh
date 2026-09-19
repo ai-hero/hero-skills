@@ -1149,7 +1149,7 @@ hero_deploy_pending_clear() { # STORE SHA
 # Repo-local skills that plug into wayfare: every .claude/skills/*/SKILL.md
 # whose frontmatter carries `wayfare: HOOK`, as `name<TAB>hook<TAB>path`, one
 # per line; HOOK filters to one hook. The three hooks are sync (a stage of
-# `wayfare plan`), verify (a Definition-of-Done verifier) and recipe (a way to
+# `wayfare sync`), verify (a Definition-of-Done verifier) and recipe (a way to
 # build that planning may name). Discovery, not configuration: a list of these
 # in HERO.md would be a copy of the directory and would go stale.
 hero_local_skills() { # ROOT [HOOK]
@@ -1405,7 +1405,7 @@ hero_ready_items() (
         parent=$(hero_norm_id "$(hero_item_field "$f" parent)")
         case "$open_goals" in
           *" ${parent:-__none__} "*) ;;
-          *) echo "hero_ready_items: $f is $state and no open goal has it as a member; wayfare plan groups it into a goal" >&2 ;;
+          *) echo "hero_ready_items: $f is $state and no open goal has it as a member; wayfare sync groups it into a goal" >&2 ;;
         esac ;;
     esac
 

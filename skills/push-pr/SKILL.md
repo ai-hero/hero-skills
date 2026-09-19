@@ -835,7 +835,7 @@ Next step: hero-skills:review-pr — self-review, runs pr-review-toolkit agents 
 
 If the PR was created with `ready` (non-draft), report `PR created` instead of `Draft PR created`, skip the self-review hint, and pick exactly one next step instead:
 
-- **This PR touched dependency files** (`package.json`, `pyproject.toml`, lockfiles, `.github/workflows/*.yml` version pins, or `Dockerfile*`, since harden covers Docker image hardening too): `Next step: hero-skills:wayfare plan, whose harden stage audits the new dependency surface and writes any fix as a security item` (print only).
+- **This PR touched dependency files** (`package.json`, `pyproject.toml`, lockfiles, `.github/workflows/*.yml` version pins, or `Dockerfile*`, since harden covers Docker image hardening too): `Next step: hero-skills:wayfare sync, whose harden stage audits the new dependency surface and writes any fix as a security item` (print only).
 - **Otherwise**: `Next step: hero-skills:ship-pr, which once green posts @auto-approve, merges, verifies the deploy, and resets` (offer to auto-run).
 
 ### A5: Report CI Status

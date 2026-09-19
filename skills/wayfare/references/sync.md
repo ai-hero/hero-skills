@@ -1,4 +1,4 @@
-# `plan`: converge the roadmap with the world
+# `sync`: converge the roadmap with the world
 
 The reconciliation round. Read in full before running it; it is the longest
 procedure here and the one with the most ways to be quietly wrong.
@@ -96,11 +96,11 @@ plan stops re-proposing it.
 
 **Architecture is not a key.** Wayfare's structural input is the root
 `DESIGN.md`, kept by `hero-skills:architecture`; the `architecture` stage
-below runs its `review` and offers its `plan`. A file's presence is not configuration,
+below runs its `review` and offers its `sync`. A file's presence is not configuration,
 so nothing about it is written to HERO.md.
 
 **Mode detection.** The roadmap exists iff `.plans/` holds at least one item
-whose **frontmatter** `type` is one of wayfare's six `plan`-written kinds,
+whose **frontmatter** `type` is one of wayfare's six `sync`-written kinds,
 read it with `hero_item_field "$f" type` per `"$STORE"/*.md`, never a raw grep (a body
 mentioning `type: task` would trip it). First confirm the store lists
 (`ls "$STORE"` succeeds): a clean pass with no task item means bootstrap; a
@@ -158,7 +158,7 @@ which exist and how they depend. That map is `hero-skills:architecture`'s job
 (the root `DESIGN.md`, its Boundaries section), not a wayfare-private format.
 Invoke `hero-skills:architecture review` via the Skill tool with the line
 `launched by wayfare` (staleness is its call, never a `Source ref` comparison
-done here). When it reports `MISSING` or stale rows, offer its `plan`, the
+done here). When it reports `MISSING` or stale rows, offer its `sync`, the
 same skill with the same launch line, before going on. If the user declines, derive
 the layering from a direct read of the source instead, say it is unverified,
 and carry the review's findings into this run's report: a declined refresh
@@ -218,8 +218,8 @@ the checker broke, which is a finding about the engine, not about this
 repo, and never a proposed item. A repo outside any fleet says so in one
 line and audits against the baseline only.
 
-**The `local` stage: this repo's own `wayfare: plan` skills.** For each
-line `hero_local_skills "$ROOT" plan` printed **and accepted at the trust
+**The `local` stage: this repo's own `wayfare: sync` skills.** For each
+line `hero_local_skills "$ROOT" sync` printed **and accepted at the trust
 prompt** (Step 0), invoke that skill via the Skill tool with the line
 `launched by wayfare`, in the order the listing gives. The contract is
 harden's: read-only over the world, findings as proposed items in this
@@ -357,7 +357,7 @@ PRs → `(–)` and one line saying so.
    (self-review mode resolved no target head, so leave it absent). Ids
    continue the store's single sequence (think-it-through's numbering
    rules).
-6. **Plan the set: the postflight.** See *Plan the set* below. `plan` is
+6. **Plan the set: the postflight.** See *Plan the set* below. `sync` is
    not finished when the rows are written; it is finished when every task
    that needs a plan has one and the user has marked what they mark.
 
@@ -369,7 +369,7 @@ rather than `design-project`, and still runs from `$DS_SNAP` when that key is
 configured; see its own header below for exactly which source it reads and
 when it, too, is skipped. Shipped tasks change the source, so `DESIGN.md` can
 trail reality: the `architecture` stage above already ran its review and
-offered its `plan`; the refreshed map (or, if declined, the stale one, said
+offered its `sync`; the refreshed map (or, if declined, the stale one, said
 so) is what the rows below are judged against.
 
 **Findings are reported in three lanes, and every finding carries its status
@@ -392,7 +392,7 @@ same as any other missing-source case when it is not):
   (`_ds/` or `$DS_SNAP`), and the report says which. Three outcomes only: **adopt** (the system covers it,
   replace ours), **propose** (a real gap: keep ours and raise it as a
   `design-system-feedback` item, naming the file it would live in), **diverge**
-  (a named exception with a reason, re-justified every plan round). Never fork a
+  (a named exception with a reason, re-justified every sync). Never fork a
   system component into the source; a fork silently stops receiving upstream
   fixes, and that is what makes this a finding rather than a preference.
 - **ds-gap**: the design system is missing something the source needs and
@@ -464,7 +464,7 @@ follows):
   fires **independently of the design**, and it is the finding a design-driven
   plan would otherwise never produce: re-read the item's `source` paths at the
   new head before trusting anything the item asserts about them. Report how
-  many commits, not how many plan rounds.
+  many commits, not how many syncs.
 - **already-satisfied**: a `accepted` or `planning` item whose work has landed
   out-of-band. Propose `done` with the evidence, exactly as **covered** does.
   See also the pre-planning check, which exists because planning finished
@@ -548,12 +548,12 @@ follows):
   looks identical here. What guards that is the path scope and the never-admissible
   list (*Admitting discovered work*), the gate re-display (*Starting a goal*,
   step 2), and `budget_max`, not this listing. A goal the check does
-  flag cannot be repaired by `plan`, because only an out-of-band `done` may leave an
+  flag cannot be repaired by `sync`, because only an out-of-band `done` may leave an
   `active` goal's `parent`, so report it with its one exit: the user
-  re-authorizes, which drops the goal to `accepted`, lets the next `plan` re-cut
+  re-authorizes, which drops the goal to `accepted`, lets the next `sync` re-cut
   it, and sends it back through `next`'s gate. Also a `accepted` item sitting in
   an `active` goal's `parent` under `absorb: no`, which is waiting on a
-  person and shows here on every plan round until someone plans it; a build item
+  person and shows here on every sync until someone plans it; a build item
   at `ready` or further, not `done`,
   that no `accepted` or `active` goal has as a member (the listing warns on stderr; the
   fix is the goals stage of this same run, never a hand-written `parent`);
@@ -597,11 +597,11 @@ the task's plan is already locked:
   (`superseded by task N for the vN design changes`). A task mid-flight
   is information, not interruption.
 
-**Plan the set: `plan`'s postflight, in both modes.** After the confirmed rows
+**Plan the set: `sync`'s postflight, in both modes.** After the confirmed rows
 are written (bootstrap step 6; the last thing update-mode does once its
-findings are written), `plan` runs one planning pass over every `accepted`
+findings are written), `sync` runs one planning pass over every `accepted`
 task that needs one, doing the grilling, the questions and the decisions, so a
-task leaves `plan` planned and marked, and `do` only ever builds.
+task leaves `sync` planned and marked, and `do` only ever builds.
 This is the *postflight* of plan, not a preflight of building: planning used
 to happen lazily, one task at a time, at the moment each was about to be
 built, and that is exactly the shape being retired.
@@ -656,7 +656,7 @@ So the pass runs across the roadmap:
    either. A no leaves the item where it was, named in the report.
 3. **Report what is left.** The user can stop the pass at any task. What
    was not planned stays `accepted` and is named in the report; `do` refuses it
-   until the next `plan` plans it. Nothing is silently deferred.
+   until the next `sync` plans it. Nothing is silently deferred.
 
 4. **Goals: cover every planned item, bottom-up, and re-cut what is
    already there.** A goal is the unit `next` authorizes and runs, and
@@ -746,13 +746,13 @@ So the pass runs across the roadmap:
      `## Comments`; every change is a dated comment naming what moved and
      why. Each proposed change is a row in the same confirm flow as a new
      goal, and a declined row leaves that goal exactly as it was.
-   - **`active` goals are frozen, and `plan` never re-cuts one.** Their
+   - **`active` goals are frozen, and `sync` never re-cuts one.** Their
      `parent` and `## Permissions` were shown at `next`'s gate and
      authorized as a set; changing either from outside changes what was
-     authorized. Two edits an active goal takes, neither of them the plan round's: a
+     authorized. Two edits an active goal takes, neither of them sync's: a
      dropped task that went `done` out-of-band (that shrinks what was
      authorized, never grows it), and an **admission** written by the goal's
-     own turn (*Admitting discovered work*). The plan round treats an admitted item as
+     own turn (*Admitting discovered work*). The sync treats an admitted item as
      covered, because it is in a `parent`, and never proposes a goal for it.
      Everything else that belongs to an active goal's outcome is a
      **follow-up goal** with `depends_on` the active one, and a comment on
@@ -762,7 +762,7 @@ So the pass runs across the roadmap:
 
    Each proposal goes through the same confirm flow as any other row, and is
    written in **the full goal item format** (*Item formats* below), not the
-   subset this paragraph happens to discuss. The plan round decides five of its
+   subset this paragraph happens to discuss. The sync decides five of its
    values: `status: accepted`, `parent` in dependency order, `depends_on` as
    derived above, `budget` = the member count, `budget_max` = `2 * budget`. The rest of
    the format is not optional. `anchors.source` and `anchors.target` are anchored
@@ -782,25 +782,25 @@ So the pass runs across the roadmap:
    another goal's `parent`. Overlapping `parent` is a store defect: two
    goals pre-authorizing merges on one task.
 
-   **The plan round writes the item and stops there. It never authorizes.** The
+   **The sync writes the item and stops there. It never authorizes.** The
    approval that grants a goal's `## Permissions` is typed by a person at
    `wayfare next`'s gate, in-session, and is never written to the item; a
    plan that carried it would put into a file exactly the flag *Starting a
    goal* step 4 forbids. A user may decline a proposed goal; the item it
    would have covered is then named in the report as uncovered, with the
-   `do N` line that builds it by hand, and the next plan round proposes it again.
+   `do N` line that builds it by hand, and the next sync proposes it again.
    End the run with the roadmap view; when a goal is runnable, the last line
    is `Next step: hero-skills:wayfare next`.
 
 **This is not a gate on building.** The roadmap does not have to be fully
 planned before the first task ships. That would be waterfall, and it
 contradicts slicing the work so each piece stands alone. Plan the set as far
-as it is understood, build with `do`, and the next `plan` re-runs the pass
+as it is understood, build with `do`, and the next `sync` re-runs the pass
 over what it adds. What is being avoided is *deferring the thinking to
 implementation time*, not batching the work.
 
-**Hand-adding a task is a plan round edit, not a verb.** An idea the user brings
-(as `plan`'s trailing context, or during confirmation) is a row added to the
+**Hand-adding a task is a sync edit, not a verb.** An idea the user brings
+(as `sync`'s trailing context, or during confirmation) is a row added to the
 proposal table: investigate its source paths and target design first, because a
 task captures conclusions rather than guesses, and it is written with the same
 confirm flow, same format, same `status: accepted`. Ids continue the store's

@@ -39,7 +39,7 @@ never touches the files those skills keep:
 | --- | --- | --- |
 | `recalibrate` | `HERO.md` | how this skill should behave |
 | `fleet sync` | `FLEET.md` | converge the map with the folder beside it |
-| `wayfare plan` | `.plans/` and `DESIGN.md` | converge the plan with the world. Its architecture stage converges the design record on the way |
+| `wayfare sync` | `.plans/` and `DESIGN.md` | converge the plan with the world. Its architecture stage converges the design record on the way |
 
 `wayfare` has both: `sync` for the plan (and, through its architecture stage,
 `DESIGN.md`), `recalibrate` for the `HERO.md` fields that tell it and its

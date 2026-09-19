@@ -8,7 +8,7 @@ Wayfare's roadmap sits between three things the source repo does not own:
   them;
 - **downstream**, the **code** that ships.
 
-Every `plan` is a round of reconciliation across those three. This file covers
+Every `sync` is a round of reconciliation across those three. This file covers
 how to read: who decides what, what counts as evidence, and how a design
 element maps to a source symbol instead of a path. `../SKILL.md` covers the
 verbs and the store.
@@ -49,7 +49,7 @@ own middle ground, and it is where tasks come from.
 
 ## Evidence rules
 
-These are the rules that decide whether a `plan` finding is a fact or a guess.
+These are the rules that decide whether a `sync` finding is a fact or a guess.
 A finding that cannot satisfy them is reported as `unverified`, never dropped
 and never promoted.
 
@@ -83,7 +83,7 @@ and never promoted.
 ## The document is not the world
 
 A target project that keeps a rolling reconciliation document is the best
-starting point a `plan` has — and it is a **starting point**, not a substitute
+starting point a `sync` has — and it is a **starting point**, not a substitute
 for the read.
 
 Two failure modes, both observed:
@@ -112,7 +112,7 @@ Two failure modes, both observed:
 
 ## Resolve to symbols, not to paths
 
-The weakest version of this plan round compares a design path to a source path and
+The weakest version of this sync compares a design path to a source path and
 diffs the text. That answers "did these files move" and nothing a reviewer
 cares about. Coverage is a claim about **the code**, so resolve each target
 element down to the source symbol that would satisfy it, and judge *there*:
@@ -125,7 +125,7 @@ element down to the source symbol that would satisfy it, and judge *there*:
 | A control's states | rest / hover / press / focus / disabled rules | the stylesheet, not the specimen |
 | A behaviour the screen implies | the handler, service, or endpoint | the source, never the design |
 
-Two consequences worth stating, because both change what `plan` proposes:
+Two consequences worth stating, because both change what `sync` proposes:
 
 - **A design element with no source symbol is not automatically uncovered
   ground.** It may be a proposal the design is deliberately ahead on. Uncovered
@@ -209,7 +209,7 @@ can reach, and exactly what this pass, run against the live app, can.
 
 ## Status vocabulary — these values, no others
 
-A `plan` finding's status comes from this list. The bands matter more than the
+A `sync` finding's status comes from this list. The bands matter more than the
 words: green is settled, blue is in motion, red is wrong or absent.
 
 **Settled:** `built` · `converged` · `settled` · `adopted`
