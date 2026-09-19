@@ -9,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="#how-it-works">How it works</a> &bull;
   <a href="#install">Install</a> &bull;
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#commands">Commands</a> &bull;
@@ -33,6 +34,79 @@ Hero Skills gives you **slash commands for the entire dev lifecycle** that adapt
 - **Verify changes**: auto-detect project type (API, frontend, CLI, MCP) and run lint, typecheck, unit tests, and smoke tests
 - **Ship with confidence**: pre-commit checks, conventional commits, draft PRs by default, automated parallel review before requesting human review
 - **Stay informed**: CI/CD status, cluster health, security scans
+
+## How it works
+
+Wayfare is the one skill you run. It reads the world, converges it into a
+plan, and hands tasks to the build chain — which folds the result back into
+the world it read.
+
+```mermaid
+flowchart TB
+  SRC["<b>Source</b> · this repo<br/>code + DESIGN.md"]
+  TGT["<b>Target</b> · claude.ai/design<br/>optional"]
+  PLAN["<b>wayfare plan</b><br/>reconcile · audit · propose"]
+  STORE[("<b>.plans/</b><br/>PLAN.md + items/")]
+  NEXT["<b>wayfare next</b><br/>authorize a goal"]
+  DO["<b>wayfare do ID</b><br/>advance one item"]
+  BUILD["one-shot → push-pr<br/>→ review-pr → ship-pr"]
+
+  SRC -- read --> PLAN
+  TGT -- read --> PLAN
+  PLAN --> STORE
+  STORE --> NEXT
+  STORE --> DO
+  NEXT --> BUILD
+  DO --> BUILD
+  BUILD -- merged --> SRC
+  STORE -. signal .-> TGT
+
+  classDef verb fill:#7C3AED,stroke:#5B21B6,color:#fff
+  classDef store fill:#1E293B,stroke:#0F172A,color:#fff
+  classDef end_ fill:#FEF3C7,stroke:#D97706,color:#78350F
+  class PLAN,NEXT,DO verb
+  class STORE store
+  class SRC,TGT end_
+```
+
+With no design project configured the target end is simply absent, and
+`wayfare plan` reconciles the repo against `DESIGN.md`, its own gaps and its
+own hardening instead — a self-review.
+
+### The plan store
+
+`.plans/` is the system of record: one `PLAN.md` per repo and one file per
+item. Items come in three types, and a task's `shape` decides what its
+Definition of Done has to assert.
+
+| Type | What it is | Ends at |
+| --- | --- | --- |
+| `task` | a change to this repo, shipped on a PR | `done` |
+| `signal` | a finding delivered where this repo cannot write | `done` |
+| `goal` | an ordered set of tasks with one Definition of Done | `done` |
+
+Every item runs one lifecycle. `ready` is the only state a person sets, and
+it is the gate: nothing is built without it.
+
+```mermaid
+stateDiagram-v2
+  [*] --> new
+  new --> accepted: plan accepts it
+  accepted --> planning: think-it-through
+  planning --> ready: your ready-mark
+  ready --> active: one-shot starts
+  active --> committed: on a goal branch
+  active --> review: PR opens
+  committed --> review: goal's PR opens
+  review --> done: merged, deploy verified
+  active --> dropped: wayfare drop
+  done --> [*]
+  dropped --> [*]
+```
+
+`done` unblocks whatever depends on the item; `dropped` deliberately does
+not, because the prerequisite was abandoned. The full specification is
+[docs/PLAN.md](./docs/PLAN.md).
 
 ## Install
 
