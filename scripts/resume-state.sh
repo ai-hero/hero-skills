@@ -246,7 +246,10 @@ ITEM_FILE=""
 SUBTASKS_OPEN=""; SUBTASKS_TOTAL=""; DOD_OPEN=""; DOD_TOTAL=""
 
 STORE=$(hero_store_path 2>/dev/null)
-if [ -n "$STORE" ] && [ -d "$STORE" ]; then
+# Items live in `.plans/items/` under schema 1 (docs/PLAN.md); the listing
+# prints bare filenames, so every read below joins them to ITEMS, not STORE.
+ITEMS="$STORE/items"
+if [ -n "$STORE" ] && [ -d "$ITEMS" ]; then
   # stderr stays visible: it carries hero_ready_items' reason for each invalid
   # row, and the caller's eval consumes stdout only.
   if ROWS=$(hero_ready_items "$STORE"); then
@@ -262,11 +265,10 @@ invalid"*) fail_source "store-invalid-item" ;; esac
       # in-progress (plain) and implementing (build). A goal at active is a
       # set of features, not the item on this branch; a `bot:` item is a
       # dependency bot's PR that wayfare's bot-PR procedure carries, never one-shot's.
-      kind=$(hero_item_field "$STORE/$f" kind | tr '[:upper:]' '[:lower:]')
-      [ "$(hero_item_class "$kind" "$f" 2>/dev/null)" = goal ] && continue
-      [ -n "$(hero_item_field "$STORE/$f" bot)" ] && continue
+      [ "$(hero_item_type "$ITEMS/$f")" = goal ] && continue
+      [ -n "$(hero_item_field "$ITEMS/$f" bot)" ] && continue
       ITEM_INFLIGHT=$((ITEM_INFLIGHT + 1))
-      branch=$(hero_item_field "$STORE/$f" branch)
+      branch=$(hero_item_field "$ITEMS/$f" branch)
       if [ -n "$branch" ]; then
         [ "$branch" = "$CURRENT_BRANCH" ] && MATCHED="$MATCHED$f "
       else
@@ -277,11 +279,11 @@ $ROWS
 EOF
     set -- $MATCHED
     if [ $# -eq 1 ]; then
-      ITEM_FILE="$STORE/$1"
+      ITEM_FILE="$ITEMS/$1"
     elif [ $# -gt 1 ]; then
       fail_source "item-claim-conflict"
     elif [ "$LEGACY_N" -eq 1 ]; then
-      ITEM_FILE="$STORE/$LEGACY"
+      ITEM_FILE="$ITEMS/$LEGACY"
     elif [ "$LEGACY_N" -gt 1 ]; then
       # Two unbranched claims on the store is not a choice this script makes.
       fail_source "item-claim-conflict"

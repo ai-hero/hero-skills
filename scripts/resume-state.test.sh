@@ -189,12 +189,13 @@ OUT="$(run)"
 check "no store: no in-flight item"     "0" "$(val ITEM_INFLIGHT)"
 check "no store: counts are empty, not 0" "" "$(val SUBTASKS_OPEN)"
 
-mkdir -p "$REPO/.plans"
-cat > "$REPO/.plans/003-foo.md" <<'ITEM'
+mkdir -p "$REPO/.plans/items"
+printf -- '---\nschema: 1\ndefault_branch: main\nnext_id: 99\n---\n' > "$REPO/.plans/PLAN.md"
+cat > "$REPO/.plans/items/003-foo.md" <<'ITEM'
 ---
 id: 3
-kind: feature
-status: implementing
+type: task
+status: active
 ---
 ## Subtasks
 - [x] 1. done
@@ -206,11 +207,11 @@ status: implementing
 ## Comments
 - [ ] a tick outside the two sections is not a checklist line
 ITEM
-cat > "$REPO/.plans/004-bar.md" <<'ITEM'
+cat > "$REPO/.plans/items/004-bar.md" <<'ITEM'
 ---
 id: 4
-kind: feature
-status: todo
+type: task
+status: accepted
 ---
 ## Subtasks
 - [ ] not in flight, must not be picked
@@ -218,24 +219,25 @@ ITEM
 OUT="$(run)"
 check "one in-flight item is found"      "1" "$(val ITEM_INFLIGHT)"
 # basename: hero_root resolves symlinks (/private/var vs /var on macOS).
-check "in-flight item path is emitted"   ".plans/003-foo.md" "$(val ITEM_FILE | sed 's|.*/\(\.plans/\)|\1|')"
+check "in-flight item path is emitted"   ".plans/items/003-foo.md" "$(val ITEM_FILE | sed 's|.*/\(\.plans/items/\)|\1|')"
 check "subtasks: open count"             "2" "$(val SUBTASKS_OPEN)"
 check "subtasks: total count"            "3" "$(val SUBTASKS_TOTAL)"
 check "dod: open count"                  "1" "$(val DOD_OPEN)"
 check "dod: total count"                 "2" "$(val DOD_TOTAL)"
 
-# Plain items carry `in-progress`; a section that is absent is 0 0, which
-# TOTAL tells apart from an all-ticked one.
-cat > "$REPO/.plans/003-foo.md" <<'ITEM'
+# A section that is ABSENT is 0 0, which TOTAL tells apart from an all-ticked
+# one (0 N). The close-out gate reads the difference.
+cat > "$REPO/.plans/items/003-foo.md" <<'ITEM'
 ---
 id: 3
-status: in-progress
+type: task
+status: active
 ---
 ## Subtasks
 - [x] all done
 ITEM
 OUT="$(run)"
-check "plain in-progress item is found"  "1" "$(val ITEM_INFLIGHT)"
+check "all-ticked item is still in flight" "1" "$(val ITEM_INFLIGHT)"
 check "all-ticked subtasks: open is 0"   "0" "$(val SUBTASKS_OPEN)"
 check "all-ticked subtasks: total kept"  "1" "$(val SUBTASKS_TOTAL)"
 check "absent DoD section: total is 0"   "0" "$(val DOD_TOTAL)"
@@ -244,7 +246,7 @@ check "absent DoD section: total is 0"   "0" "$(val DOD_TOTAL)"
 # is `0 N`, the shape the close-out gate reads as "verified".
 # printf, not a heredoc: the trailing space after `Subtasks` is the point of
 # the case, and the whitespace hook strips it from a literal.
-printf -- '---\nid: 3\nstatus: in-progress\n---\n## Subtasks \n- [ ] a\n- [x] has a [ ] later in the text\n## Definition of Done\n- [x] a\n' > "$REPO/.plans/003-foo.md"
+printf -- '---\nid: 3\ntype: task\nstatus: active\n---\n## Subtasks \n- [ ] a\n- [x] has a [ ] later in the text\n## Definition of Done\n- [x] a\n' > "$REPO/.plans/items/003-foo.md"
 OUT="$(run)"
 check "heading with trailing space still counts" "2" "$(val SUBTASKS_TOTAL)"
 check "a [ ] later in a ticked line is not open"  "1" "$(val SUBTASKS_OPEN)"
@@ -252,17 +254,17 @@ check "all-ticked DoD: open 0"                    "0" "$(val DOD_OPEN)"
 check "all-ticked DoD: total kept"                "1" "$(val DOD_TOTAL)"
 
 # A goal at `active` and a bot PR item are never this branch's item.
-printf -- '---\nid: 9\nkind: goal\nstatus: active\n---\n## Subtasks\n- [ ] not a branch item\n' > "$REPO/.plans/009-goal.md"
-printf -- '---\nid: 10\nkind: security\nbot: dependabot\nstatus: implementing\n---\n## Subtasks\n- [ ] bot\n' > "$REPO/.plans/010-bot.md"
+printf -- '---\nid: 9\ntype: goal\nstatus: active\n---\n## Subtasks\n- [ ] not a branch item\n' > "$REPO/.plans/items/009-goal.md"
+printf -- '---\nid: 10\ntype: task\nshape: dependency\nbot: dependabot\nstatus: active\n---\n## Subtasks\n- [ ] bot\n' > "$REPO/.plans/items/010-bot.md"
 OUT="$(run)"
 check "active goal and bot item are not counted" "1" "$(val ITEM_INFLIGHT)"
-check "active goal never becomes ITEM_FILE"      ".plans/003-foo.md" "$(val ITEM_FILE | sed 's|.*/\(\.plans/\)|\1|')"
-rm -f "$REPO/.plans/009-goal.md" "$REPO/.plans/010-bot.md"
+check "active goal never becomes ITEM_FILE"      ".plans/items/003-foo.md" "$(val ITEM_FILE | sed 's|.*/\(\.plans/items/\)|\1|')"
+rm -f "$REPO/.plans/items/009-goal.md" "$REPO/.plans/items/010-bot.md"
 
 # Two unbranched in-flight items: the script must not pick one, and the
 # conflict must reach STATE_OK so the table's guard row catches it.
-sed 's/status: todo/status: implementing/' "$REPO/.plans/004-bar.md" > "$REPO/.plans/004-bar.tmp" \
-  && mv "$REPO/.plans/004-bar.tmp" "$REPO/.plans/004-bar.md"
+sed 's/status: accepted/status: active/' "$REPO/.plans/items/004-bar.md" > "$REPO/.plans/items/004-bar.tmp" \
+  && mv "$REPO/.plans/items/004-bar.tmp" "$REPO/.plans/items/004-bar.md"
 OUT="$(run)"
 check "two in-flight items: count is 2"  "2" "$(val ITEM_INFLIGHT)"
 check "two in-flight items: no file"     ""  "$(val ITEM_FILE)"
@@ -274,10 +276,10 @@ esac
 
 # `branch:` binds an item to its branch: under a goal, several features are
 # implementing at once and the one for this branch is the resume point.
-printf -- '---\nid: 4\nkind: feature\nstatus: implementing\nbranch: other-branch\n---\n## Subtasks\n- [ ] b\n' > "$REPO/.plans/004-bar.md"
-printf -- '---\nid: 3\nkind: feature\nstatus: implementing\nbranch: %s\n---\n## Subtasks\n- [ ] a\n' "$(git -C "$REPO" branch --show-current)" > "$REPO/.plans/003-foo.md"
+printf -- '---\nid: 4\ntype: task\nstatus: active\nbranch: other-branch\n---\n## Subtasks\n- [ ] b\n' > "$REPO/.plans/items/004-bar.md"
+printf -- '---\nid: 3\ntype: task\nstatus: active\nbranch: %s\n---\n## Subtasks\n- [ ] a\n' "$(git -C "$REPO" branch --show-current)" > "$REPO/.plans/items/003-foo.md"
 OUT="$(run)"
-check "branch-bound: this branch's item is picked" ".plans/003-foo.md" "$(val ITEM_FILE | sed 's|.*/\(\.plans/\)|\1|')"
+check "branch-bound: this branch's item is picked" ".plans/items/003-foo.md" "$(val ITEM_FILE | sed 's|.*/\(\.plans/items/\)|\1|')"
 check "branch-bound: both still count as in flight" "2" "$(val ITEM_INFLIGHT)"
 # The scratch repo has no remote, so STATE_OK is false for fetch reasons;
 # assert the conflict source specifically.
@@ -288,8 +290,8 @@ esac
 
 # An invalid row may be the item being built; dropping it would read as
 # "nothing in flight" and route past its unchecked subtasks.
-printf -- '---\nid: 3\nkind: feature\nstatus: in_progress\n---\n## Subtasks\n- [ ] a\n' > "$REPO/.plans/003-foo.md"
-rm -f "$REPO/.plans/004-bar.md"
+printf -- '---\nid: 3\ntype: task\nstatus: in_progress\n---\n## Subtasks\n- [ ] a\n' > "$REPO/.plans/items/003-foo.md"
+rm -f "$REPO/.plans/items/004-bar.md"
 OUT="$(run)"
 check "invalid row: STATE_OK false" "false" "$(val STATE_OK)"
 case "$(val STATE_ERRORS)" in
