@@ -321,7 +321,7 @@ fi
 # Keep this list in sync with one-shot's step→skill mapping AND
 # a goal turn's tiers. `one-shot` is here because re-adding its flag
 # would silently break every goal turn. `architecture` is chained three
-# ways: wayfare sync runs its review/sync in both modes, and
+# ways: wayfare plan runs its review/sync in both modes, and
 # think-it-through's `arch` dispatch
 # delegates to it. `handoff` is deliberately NOT here: wayfare's
 # design-feedback delivery files its issue directly rather than routing

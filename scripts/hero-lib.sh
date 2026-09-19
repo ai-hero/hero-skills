@@ -1149,7 +1149,7 @@ hero_deploy_pending_clear() { # STORE SHA
 # Repo-local skills that plug into wayfare: every .claude/skills/*/SKILL.md
 # whose frontmatter carries `wayfare: HOOK`, as `name<TAB>hook<TAB>path`, one
 # per line; HOOK filters to one hook. The three hooks are sync (a stage of
-# `wayfare sync`), verify (a Definition-of-Done verifier) and recipe (a way to
+# `wayfare plan`), verify (a Definition-of-Done verifier) and recipe (a way to
 # build that planning may name). Discovery, not configuration: a list of these
 # in HERO.md would be a copy of the directory and would go stale.
 hero_local_skills() { # ROOT [HOOK]

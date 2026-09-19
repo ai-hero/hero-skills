@@ -26,15 +26,15 @@ channel is how the architectural ones get triaged as visual nitpicks.
 Feedback is written twice on purpose, and exactly one of the two forms owns its
 state at any moment.
 
-1. **Capture, during the build.** one-shot appends a bullet to the feature's
+1. **Capture, during the build.** one-shot appends a bullet to the task's
    `## Design Feedback` section. Mid-build is the wrong time to allocate a store
    id and author a full item, and this section is what one-shot's close-out gate
    reads when a Definition-of-Done line legitimately fails.
-2. **Promote, at `sync`.** Each undelivered entry becomes a feedback item of the
-   right kind (`origin: wayfare`, `discovered_from` = the feature id). The
+2. **Promote, at `plan`.** Each undelivered entry becomes a feedback item of the
+   right type (`origin: wayfare`, `discovered_from` = the task id). The
    entry's marker becomes `[item: ID]` and **the item owns the state from that
-   point on.** Sync also authors feedback items directly from its own
-   reconciliation findings — those never pass through a feature at all, because
+   point on.** The plan round also authors feedback items directly from its own
+   reconciliation findings — those never pass through a task at all, because
    nothing built them.
 
 The `[item: ID]` marker is what hands ownership over. Without it, the entry and
@@ -42,7 +42,7 @@ the item both carry a state and they drift apart.
 
 ## The entry (capture form)
 
-Entries live in a feature's `## Design Feedback` section. Each is one bullet
+Entries live in a task's `## Design Feedback` section. Each is one bullet
 whose **header line** carries an id and a state marker in fixed position,
 followed by indented continuation lines:
 
@@ -59,11 +59,11 @@ followed by indented continuation lines:
 ### The id
 
 `DF-FEATURE_ID-YYYY-MM-DD-ORDINAL`, where ORDINAL starts at 1 and increments
-for each entry written on the same feature on the same day. It is assigned at
+for each entry written on the same task on the same day. It is assigned at
 write time and never changes.
 
 The ordinal is not decoration: one-shot appends one entry per divergence found
-during a build, and two divergences on one feature in one day is ordinary.
+during a build, and two divergences on one task in one day is ordinary.
 Without it, two entries share a key, and the delivery check below cannot tell
 them apart — it would skip one as already-covered and that entry would never
 leave.
@@ -79,8 +79,8 @@ after the id, and the token never appears elsewhere in the entry:
 | `[item: ID]` | Promoted; the item owns the state | The entry is frozen; edit the item |
 
 **`[item: ID]` is a reference, and it is checked.** `ID` must name an existing
-item whose `kind` is one of the three feedback kinds, whose `entry:` is this
-entry's `DF-` id, and whose `discovered_from` is this feature. `sync`'s
+item whose `type` is one of the three feedback kinds, whose `entry:` is this
+entry's `DF-` id, and whose `discovered_from` is this task. `plan`'s
 **store defects** finding checks every marker against all four; a marker that
 fails any of them is reported, never counted. Without this, a dangling or
 mis-typed reference counts as neither `[undelivered]` nor a `feedback` row and
@@ -119,17 +119,17 @@ log, and it is dropped, not followed.
 ```markdown
 ---
 id: 61
-kind: design-feedback # or architecture-feedback | design-system-feedback
+type: design-feedback # or architecture-feedback | design-system-feedback
 origin: wayfare
-discovered_from: 12 # the feature this was found while building; absent when sync authored it directly
-entry: DF-12-2026-07-25-1 # the capture entry this was promoted from; absent when sync authored it directly. Makes the [item: ID] link checkable from both ends
+discovered_from: 12 # the task this was found while building; absent when plan authored it directly
+entry: DF-12-2026-07-25-1 # the capture entry this was promoted from; absent when plan authored it directly. Makes the [item: ID] link checkable from both ends
 title: Consent is ordered before account linking
-status: todo # new | todo | queued | delivered | rejected
+status: accepted # new | todo | queued | delivered | rejected
 depends_on: []
 subject: design/auth/sign-in.md # the path this is about — in the app design for design-feedback, in the design system for design-system-feedback; for architecture-feedback, a DESIGN.md section or absent (the source: line carries the evidence)
 source: services/auth/link.go # the source file that disproves it
-target_ref: FULL_COMMIT_SHA # head of the snapshot `subject` lives in: $SNAP for design-/architecture-feedback, $DS_SNAP for design-system-feedback
-source_ref: FULL_COMMIT_SHA # source head this was found against
+anchors.target: FULL_COMMIT_SHA # head of the snapshot `subject` lives in: $SNAP for design-/architecture-feedback, $DS_SNAP for design-system-feedback
+anchors.source: FULL_COMMIT_SHA # source head this was found against
 delivered_to: "" # issue URL, or the path written into the design-system store
 ---
 
@@ -153,8 +153,8 @@ code.
 ```
 
 `status` is the delivery lifecycle, and `hero_ready_items` knows it: `new`
-lists as `new`; `todo` and `queued` list as `feedback`; `delivered` and
-`rejected` list as `done` and count as terminal, so a feature that
+lists as `new`; `accepted` and `queued` list as `feedback`; `delivered` and
+`rejected` list as `done` and count as terminal, so a task that
 `depends_on` an answered question unblocks. **A feedback item is never
 READY** — nothing builds it.
 
@@ -165,7 +165,7 @@ history that stops it being raised again next quarter.
 ## Delivery
 
 Delivery is **outward-facing** — it writes into someone else's repo. It happens
-on the user's explicit confirmation and never as a side effect of sync's other
+on the user's explicit confirmation and never as a side effect of the plan round's other
 work.
 
 Wayfare delivers **itself**. It does not route through `hero-skills:handoff`:
@@ -176,7 +176,7 @@ into a third party's tracker. The body is the items and nothing else.
 
 ### 1. Resolve the destination
 
-Which key applies is decided by the item's **kind**, never by which key happens
+Which key applies is decided by the item's **type**, never by which key happens
 to be set. Delivering an `architecture-feedback` item to `design-system-repo`
 because `feedback-repo` was `none` is a misroute, not a fallback.
 
@@ -228,7 +228,7 @@ immediately before writing. Zero-pad only the filename.
 
 ### 2. Collect and key the items
 
-Collect every `todo` and `queued` feedback item of the kinds this delivery
+Collect every `accepted` and `queued` feedback item of the kinds this delivery
 covers. **One delivery per destination** — never one issue carrying both design
 and design-system feedback, because they are answered by different people.
 
@@ -305,7 +305,7 @@ is the one field a reader never sees rendered in the body, and a title composed
 freely will reach for whatever context the session holds — the branch name, the
 PR number — which is the leak that dropping handoff was meant to close.
 
-Then the gate. It is its **own** gate, not folded into sync's proposal confirm:
+Then the gate. It is its **own** gate, not folded into the plan round's proposal confirm:
 
 ```
 Design feedback delivery
@@ -370,12 +370,12 @@ is what makes the channel recover instead of livelocking:
 
 Marking `already_covered` with the *new* issue's URL would misattribute them and
 break the reconciliation below. Skipping them entirely is worse: they stay
-`todo`, are skipped again at every future sync, and the backlog never drains
+`accepted`, are skipped again at every future plan round, and the backlog never drains
 while the user is re-prompted forever.
 
 ### 6. Reconcile against a captured baseline
 
-Capture `BEFORE` — the `todo`-plus-`queued` count — in step 2, **before**
+Capture `BEFORE` — the `accepted`-plus-`queued` count — in step 2, **before**
 anything changes. After marking, re-scan and assert:
 
 ```
@@ -384,7 +384,7 @@ AFTER == BEFORE - (len(to_file) + len(already_covered))
 
 Re-deriving the baseline after marking compares a number to itself and always
 passes. A mismatch is a real finding: under-marking re-files the same feedback
-on someone else's repo next sync, and over-marking freezes feedback that never
+on someone else's repo next plan round, and over-marking freezes feedback that never
 left. On a mismatch, name the item ids on both sides and **unwind the status
 changes you just made** before reporting — an over-marked item cannot be
 corrected later, because delivered is frozen.
@@ -402,7 +402,7 @@ the path into `/.feedback/…`. If it is empty or unlistable, STOP and name it.
 
 Set those items `status: queued`, **not** `delivered`. Nothing reached the
 destination; a file in a git-ignored store carried nothing anywhere. A queued
-item stays in the backlog and re-surfaces every sync.
+item stays in the backlog and re-surfaces every plan round.
 
 **Queued → delivered** is the user's report that it landed: they name the issue
 URL, you validate it is `https://`-shaped and on the destination host, and the
@@ -416,7 +416,7 @@ disk — a snapshot mirrors its project and nothing else.
 
 ## Reading the history back
 
-Sync's **feedback** finding collects `todo` and `queued` items across all three
+The plan round's **feedback** finding collects `accepted` and `queued` items across all three
 lanes. Two further obligations:
 
 - **Recording a rejection.** When the user reports that the other side declined

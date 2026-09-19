@@ -50,13 +50,13 @@ argument-hint: [args]
 # makes the skill user-only, so nothing can call it automatically.
 disable-model-invocation: true
 # Omit unless this skill plugs into hero-skills:wayfare. If it does, say
-# where: `sync` (a stage of `wayfare sync`), `verify` (a Definition-of-Done
+# where: `plan` (a stage of `wayfare plan`), `verify` (a Definition-of-Done
 # checker whose last stdout line is
 # `verdict: PASS | FAIL | UNVERIFIED — reason`), or `recipe` (a way to
 # build that planning can name). Wayfare
 # finds this by itself, so never list the skill in HERO.md. It asks once
 # per session before running one.
-wayfare: sync
+wayfare: plan
 ---
 ```
 

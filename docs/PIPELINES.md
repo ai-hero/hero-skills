@@ -107,10 +107,10 @@ one-shot alone does is *execute* an item and close it out: Step 1 resolves
 against the store before grilling anything new, and Step 9a marks the merged
 item `done`, no other skill does that automatically.
 Because nothing else observes the codebase on the store's behalf, Step 1 also
-re-checks a resolved item's `success` criteria against reality, because `status: todo`
+re-checks a resolved item's `success` criteria against reality, because `status: accepted`
 only means nobody edited the file, not that the work is still outstanding.
 
-**Architecture and harden chain.** `wayfare sync`'s architecture stage runs
+**Architecture and harden chain.** `wayfare plan`'s architecture stage runs
 `hero-skills:architecture review`, and offers its `sync`, before judging
 the roadmap, its `harden` stage runs `hero-skills:harden all`, and
 `think-it-through` delegates a leading `arch` argument to the architecture
@@ -120,7 +120,7 @@ so wayfare is the only way a person reaches them.
 
 **The design return channel.** Every other edge flows target → source. One
 flows back: one-shot logs a divergence it found while building into the
-feature's `## Design Feedback`, and `wayfare sync` delivers it. Two
+feature's `## Design Feedback`, and `wayfare plan` delivers it. Two
 destinations, no third: a configured `feedback-repo` gets an issue wayfare
 files itself (entries verbatim plus a manifest, destination confirmed
 in-session), and everything else (`feedback-repo: none`, a rejected value,
@@ -134,7 +134,7 @@ numbers into a third party's tracker. See
 
 **one-shot authors only Step 2a items.** Step 2a pushes discovered or
 mis-scoped work out of the running item into its own `.plans/` item, a
-`kind: feature` carve when it satisfies target-design paths
+`type: task` carve when it satisfies target-design paths
 (`origin: one-shot`), an ordinary `status: planning` work-item otherwise,
 which is how the one-item-one-PR scope guard survives contact with
 implementation. Everything else in the store is authored by the producers
@@ -172,19 +172,19 @@ skill's work. The
 field map is `scripts/hero-fields.sh`; the contract is
 [RECALIBRATE.md](./RECALIBRATE.md).
 
-### Pipeline 4: wayfare sync, one round of convergence
+### Pipeline 4: wayfare plan, one round of convergence
 
 ```
 config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals
 ```
 
-Owner: `hero-skills:wayfare sync`. Eleven stages: the config gate; the
+Owner: `hero-skills:wayfare plan`. Eleven stages: the config gate; the
 mailbox (`docs/MESSAGES.md`, every unread message through the fleet gate
-and the promotion gate, a `type: bug` becoming a proposed `kind: bug`);
+and the promotion gate, a `type: bug` message becoming a proposed `shape: defect` task);
 `hero-skills:architecture review` (offering its `sync`);
 `hero-skills:harden all`; the compliance audit
 (`scripts/audit.py --repo THIS`, baseline plus the fleet's register overlay)
-with each failing check proposed as an item; the repo's own `wayfare: sync`
+with each failing check proposed as an item; the repo's own `wayfare: plan`
 skills (discovered in `.claude/skills/`, run with the harden contract); the
 dependency bots' open PRs written as `security` items; the design snapshot
 refresh; the reconciliation lanes; the planning postflight
@@ -228,7 +228,7 @@ that same turn on its own. A turn that ends on a stop line prints the
 wayfare cannot set `/goal` itself.
 
 **A goal is one branch, one PR, and one commit per feature.** The turn builds
-its covered features one after another on the goal's branch, in `covers`
+its member tasks one after another on the goal's branch, in member
 order, running the test phase after each commit. Each build is handed to one
 subagent on a cheaper model, scoped to that feature's `source` paths, one at a
 time because they share the checkout; a failing branch test gets its own
@@ -242,7 +242,7 @@ Every one-shot invocation carries the granted permissions as one literal line.
 A gate the goal was not granted rests the goal at its PR and ends the loop with
 `stop: awaiting-human`. Work a turn finds inside a covered feature does not
 become a new goal: if it serves a line of this goal's Definition of Done it is
-**admitted** into the goal's `covers`, planned and built in the same run under
+**admitted** into the goal (its `parent` is set), planned and built in the same run under
 `absorb`. `budget` is what the goal is expected to take in commits, not a gate:
 going over is ordinary and the report says so, and `budget_max` is the hard
 line a person authorized. A goal ships a second PR only when what is left is a

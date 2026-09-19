@@ -4,7 +4,7 @@ How an agent working in one checkout asks something of another, and why,
 once this exists, it may never again reach into that checkout and change it.
 
 `scripts/hero-lib.sh` reads the mailbox and carries the send half
-(*Sending*), `hero-skills:wayfare sync`'s `inbox` stage triages, one-shot's
+(*Sending*), `hero-skills:wayfare plan`'s `inbox` stage triages, one-shot's
 Step 2a and `fleet sync` send, and the Step 0 of wayfare, one-shot and
 think-it-through reports what is waiting.
 
@@ -188,8 +188,8 @@ but a suspension waiting on a reply that may never come is the wrong
 mechanism for that. `awaited: true` is for a bug the sender cannot route
 around and wants an answer on by `expires:`.
 
-**Promotion.** The recipient's `wayfare sync` (its `inbox` stage) proposes
-a `kind: bug` item from it: `origin: message`, `msg_id` as provenance, the
+**Promotion.** The recipient's `wayfare plan` (its `inbox` stage) proposes
+a `shape: defect` task from it: `origin: message`, `msg_id` as provenance, the
 four sections carried in as `## Context`, and a Definition of Done of "the
 repro no longer reproduces, and a test pins it". `bug` rides the build
 lifecycle like `polish` and is exempt from the slice rule for the same
@@ -272,12 +272,12 @@ Two gates, and neither is optional:
    destroys the only provenance the recipient has.
 2. **The promotion gate.** An inbound message **never becomes work by
    itself.** An agent reads it, weighs it, and *promotes* it to an ordinary
-   item: `kind: bug` for a bug report, `kind: feature` or whatever it
+   item: `shape: defect` for a bug report, `shape: story` or whatever it
    actually is for an ask, `origin: message`, recording `msg_id` as
    provenance. Capture-then-promote, exactly as the feedback lane does it.
 
-Skip the promotion gate and a sibling can write `kind: feature` into this
-repo's roadmap: one-shot builds it, and `wayfare sync` reads it as existing
+Skip the promotion gate and a sibling can write a task straight into this
+repo's roadmap: one-shot builds it, and `wayfare plan` reads it as existing
 coverage and suppresses the `uncovered` finding that would have caught it.
 Additive to the branch, subtractive from detection, the worst shape a
 defect can take.
@@ -446,8 +446,8 @@ sessions in one repo is ordinary.
 - **Editing the sibling because it is faster.** The whole point. A change
   made in a repo whose agent did not make it lands in no PR, is reviewed by
   nobody, and surfaces as a dirty working tree someone else has to explain.
-- **Promoting an inbound message straight to `kind: feature`.** That is a
-  sibling writing this repo's roadmap, and `wayfare sync` will then treat the
+- **Promoting an inbound message straight to a planned task.** That is a
+  sibling writing this repo's roadmap, and `wayfare plan` will then treat the
   ground as covered.
 - **Blocking on a reply.** Nothing runs in the other repo until someone opens
   a session there. An await that is not durable state is a hang.

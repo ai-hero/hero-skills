@@ -190,12 +190,12 @@ none of them stops this run:
   7e reports it, name quoted and escaped, and caveats a HEALTHY probe for the
   same reason.
   A DEGRADED result is reported loudly here and, under wayfare, is **proposed**
-  as a `kind: bug` item through the ordinary confirm flow, never written
+  as a `shape: defect` task through the ordinary confirm flow, never written
   unasked, since this is a pre-flight step in a session the user opened for
   something else.
 - **older than 7 days**: the probe is never going to be answered. Do not
   clear it silently: that is the one thing this step must not do. Report it,
-  and promote it first: a `kind: bug` item saying deployment health for PR N
+  and promote it first: a `shape: defect` task saying deployment health for PR N
   at SHA was never verified, proposed like any other. Then clear the entry
   once the item exists or the user declines it. The finding has to outlive
   the list, or a DEGRADED production deploy leaves no trace but one line in

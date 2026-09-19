@@ -101,12 +101,12 @@ hero-skills:init-hero
 #    Reads the mailbox from sibling repos (bug reports become bug items),
 #    reviews DESIGN.md (offers to converge it), audits dependency/container/
 #    code hardening, checks the repo against the compliance register (generic
-#    baseline + your fleet's overlay), runs the repo's own `wayfare: sync`
+#    baseline + your fleet's overlay), runs the repo's own `wayfare: plan`
 #    skills, gathers the bots' open PRs, refreshes the design snapshot,
 #    reconciles source against design, plans every feature with you, then
 #    proposes goals bottom-up over what was planned, and re-cuts the ones
 #    already there. Writes only what you confirm; your ready-mark is the gate.
-hero-skills:wayfare sync
+hero-skills:wayfare plan
 
 # 3. Take the next goal. It reads the goal's permissions aloud (mark-ready,
 #    respond, auto-approve, merge, deploy, absorb), you authorize them
@@ -318,7 +318,7 @@ that carries the verb, with their current values. See
 [docs/RECALIBRATE.md](docs/RECALIBRATE.md).
 
 Note that `recalibrate` is not `sync`: `fleet sync` converges `FLEET.md`,
-and `wayfare sync` converges the plan (and, through its architecture stage,
+and `wayfare plan` converges the plan (and, through its architecture stage,
 `DESIGN.md`). Those keep their own verbs, and none of them is configuration.
 
 Here's what a minimal config looks like:
@@ -381,5 +381,5 @@ and your fleet's private **overlay**, reference repos, incident history,
 .fleet/`). Inside a fleet the family is FLEET.md's rows whose group is not
 `none`; anywhere else, the current repo alone against the baseline.
 `scripts/consistency.py` writes the fleet's human table into that checkout.
-`wayfare sync` runs the audit as its `compliance` stage; `wayfare improve`
+`wayfare plan` runs the audit as its `compliance` stage; `wayfare improve`
 runs it alone. See `assets/compliance/README.md`.
