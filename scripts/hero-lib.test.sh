@@ -683,6 +683,59 @@ check "goal: bad status names the goal enum"    "0" "$?"
 printf '%s' "$ERRK" | grep -q "060-dfbad.md has unrecognized status 'committed'"
 check "signal: bad status names its own enum"   "0" "$?"
 
+# ---------- ideas: the parking lot -------------------------------------------
+#
+# An idea is not work. The two rules that keep it out of the roadmap are the
+# ones with a silent failure behind them: listed as anything but `idea` it
+# mixes into the actionable rows, and depended on it blocks a real item
+# forever behind something nobody decided to do.
+
+mkdir -p "$TMP/ideas/.plans/items"; I="$TMP/ideas/.plans"; plan "$I"
+iitem() { # file id status [type]
+  printf -- '---\nid: %s\ntype: %s\ntitle: idea %s\nstatus: %s\n---\n' \
+    "$2" "${4:-idea}" "$2" "$3" > "$I/items/$1"
+}
+iitem 001-jotted.md   1 new
+iitem 002-parked.md   2 accepted
+iitem 003-promoted.md 3 "done"
+iitem 004-binned.md   4 dropped
+iitem 005-bad.md      5 ready
+printf -- '---\nid: 6\ntype: task\nshape: story\ntitle: Depends on an idea\nstatus: ready\ndepends_on: [2]\n---\n' > "$I/items/006-dep.md"
+printf -- '---\nid: 7\ntype: task\nshape: story\ntitle: Depends on a promoted idea\nstatus: ready\ndepends_on: [3]\n---\n' > "$I/items/007-depdone.md"
+OUTI="$(hero_ready_items "$I" 2>/dev/null)"
+ERRI="$(hero_ready_items "$I" 2>&1 >/dev/null)"
+
+# `*:new` would otherwise swallow `idea:new` and print a parked thought as an
+# untriaged item, which is exactly what the collapse exists to avoid.
+check "idea: new lists as idea, not new"      "idea"    "$(state_of 001-jotted.md "$OUTI")"
+check "idea: accepted lists as idea"          "idea"    "$(state_of 002-parked.md "$OUTI")"
+check "idea: promoted lists as done"          "done"    "$(state_of 003-promoted.md "$OUTI")"
+check "idea: dropped lists as dropped"        "dropped" "$(state_of 004-binned.md "$OUTI")"
+# An idea has no `ready` state; claiming one must be loud, never READY.
+check "idea: claiming ready is invalid"       "invalid" "$(state_of 005-bad.md "$OUTI")"
+printf '%s' "$ERRI" | grep -q "unrecognized status 'ready'.*new/accepted/done/dropped"
+check "idea: bad status names the idea enum"  "0" "$?"
+
+# The dependency rule. An idea cannot be built, so nothing will ever mark it
+# done that way: the block is permanent and reads as ordinary waiting.
+check "idea: a dependent of an open idea is blocked" "blocked" "$(state_of 006-dep.md "$OUTI")"
+printf '%s' "$ERRI" | grep -q "006-dep.md depends_on '2', which is an idea"
+check "idea: the dependency is named on stderr" "0" "$?"
+# Still a defect after promotion: the dependent was written against the
+# parking-lot entry, not against the work it became.
+check "idea: a dependent of a promoted idea is also blocked" "blocked" "$(state_of 007-depdone.md "$OUTI")"
+printf '%s' "$ERRI" | grep -q "007-depdone.md depends_on '3', which is an idea"
+check "idea: a promoted idea's dependency still warns" "0" "$?"
+
+# The count the roadmap view collapses to: open ideas only.
+check "idea count: open ideas only"  "2" "$(hero_idea_count "$I")"
+check "idea count: no store is 0"    "0" "$(hero_idea_count "$TMP/definitely-not-a-store")"
+
+# An idea must never be credited as goal coverage, or a parked thought
+# suppresses the uncovered finding for ground nobody has planned.
+printf '%s' "$ERRI" | grep -q "001-jotted.md is .* and no open goal"
+check "idea: never warned about as an uncovered task" "1" "$?"
+
 # ---------- goal membership (parent, not covers) ------------------------------
 #
 # `wayfare next` walks goals, never items, so a planned task outside every

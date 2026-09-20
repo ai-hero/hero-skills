@@ -806,3 +806,38 @@ task captures conclusions rather than guesses, and it is written with the same
 confirm flow, same format, same `status: accepted`. Ids continue the store's
 sequence per think-it-through's numbering rules, re-checked immediately
 before writing; zero-pad only the filename.
+
+**Parking something instead is the other half of that.** Not everything a
+person brings is ready to be a task, and forcing it to be one produces a row
+with invented source paths and a Definition of Done nobody can check. When
+what arrives is a direction rather than a change — "we should probably do
+something about calendar sync" — write a `type: idea` instead
+(`docs/PLAN.md`, *`idea`: the parking lot*): title, `## Context`, `status: new`, and
+nothing else. It costs one file and it stops the proposal table filling with
+guesses.
+
+**The parking lot is reported as a count, never as rows.** End the roadmap
+view with one line, `N ideas parked (wayfare sync ideas to review)`, from
+`hero_idea_count`. Printing one row per idea puts a growing list between the
+reader and the READY set, which is how the actionable rows stop being read.
+
+**`sync ideas` walks them, and only when asked.** Ideas are not re-triaged
+every round: a parking lot whose entries are re-litigated each sync is a
+parking lot nobody puts anything in. When the trailing context is `ideas`,
+or the user asks, walk the open ones (`new` and `accepted`) and offer three
+outcomes per entry, in the ordinary confirm flow:
+
+- **Promote** → it becomes one or more items, written with the full format
+  and the usual investigation, each carrying `discovered_from: IDEA_ID`. The
+  idea then goes `status: done`, `resolution: promoted`, with a `## Log`
+  line naming the ids it became. A promoted idea that became a group of
+  tasks is a candidate for a goal at the goals stage like any other.
+- **Park with intent** → `new` becomes `accepted`: we mean to do this, just
+  not yet. This is the only edit that leaves it in the lot.
+- **Bin it** → `status: dropped`. Keep the file. "We considered this and
+  said no" is the history that stops it being raised again next quarter,
+  and it is the same reason a `rejected` signal is kept.
+
+**Never promote an idea unasked, and never count one as coverage.** An idea
+credited as coverage suppresses the `uncovered` finding for ground nobody
+has planned, which is the failure that lane exists to catch.

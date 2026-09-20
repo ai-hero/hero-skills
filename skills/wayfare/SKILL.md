@@ -2,7 +2,7 @@
 name: wayfare
 # prettier-ignore
 description: The front door. sync converges architecture, design, hardening, compliance, deps and the roadmap into .plans and proposes goals; next authorizes and runs the next goal; do advances one item; improve audits the fleet. Use whenever asked what to work on next, to plan, or to build a feature.
-argument-hint: "[sync [CONTEXT] | next | do ID | improve | recalibrate]"
+argument-hint: "[sync [CONTEXT|ideas] | next | do ID | improve | recalibrate]"
 ---
 
 # Wayfare: the route from source to target
@@ -39,6 +39,7 @@ there.
 | Verb | What it does | Procedure |
 | --- | --- | --- |
 | `sync [CONTEXT]` | Reads the world and converges everything into `.plans/`: the architecture record, the design snapshot, the hardening audit, the compliance register, the dependency bots' PRs, the roadmap, and the goals over it | `references/sync.md` |
+| `sync ideas` | Walks the parked ideas and promotes, parks or bins each one. Only when asked — ideas are not re-triaged every round | `references/sync.md` |
 | `next` | Authorizes the next goal at a gate a person types, then runs its first turn | `references/goals.md` |
 | `do ID` | Advances one item as far as the gates allow, or runs one turn of one goal | `references/advancing.md` |
 | `improve` | Runs the compliance audit alone, for this repo or the whole fleet, and drafts the backports | `references/improve.md` |
@@ -112,7 +113,7 @@ Progress:
 - [ ] 7. Write the accepted items at `status: accepted` (`docs/PLAN.md` format)
 - [ ] 8. Propose goals over what was planned; sync writes them, never authorizes
 - [ ] 9. Planning postflight (`references/planning.md`)
-- [ ] 10. End with the roadmap view and one `Next step:` line
+- [ ] 10. End with the roadmap view, the parked-idea count, and one `Next step:` line
 
 **This is not a gate on building.** The roadmap does not have to be fully
 planned before the first task ships; that would be waterfall, and it
@@ -174,6 +175,28 @@ are wayfare's rows too. A person who never calls those skills directly still
 has one place to fix their config.
 
 `references/configuration.md` has every field and what a bad value does.
+
+## Ideas: the parking lot
+
+A thought worth keeping that nobody has committed to is a `type: idea`. It
+carries no shape, no paths, no Definition of Done — **an idea that can state
+a Definition of Done is a task that was mis-filed** — and two rules keep it
+out of the roadmap:
+
+- **Never READY**, because nothing builds an idea.
+- **Nothing may `depends_on` an idea.** The listing reports it as a defect.
+  An idea cannot be built, so no route exists to mark it `done` that way:
+  the dependent blocks permanently, and it reads as ordinary waiting.
+
+The roadmap view collapses them to one line (`hero_idea_count`), never one
+row each: a parking lot is meant to grow, and forty rows of it between a
+reader and the READY set is how the actionable rows stop being read. Walk
+them only when asked. Promotion is a confirm-flow row like any other: the
+idea goes `done` with `resolution: promoted`, and what it became carries
+`discovered_from: IDEA_ID`.
+
+Never count an idea as coverage. Doing so suppresses the `uncovered` finding
+for ground nobody has planned, which is what that lane exists to catch.
 
 ## Signals: the three return channels
 

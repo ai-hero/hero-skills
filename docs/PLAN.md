@@ -92,25 +92,59 @@ mode**: `wayfare sync` reconciles the source against `DESIGN.md`, its own
 gaps and its own hardening audit, and no item carries a target anchor. The
 absence is not a defect and nothing reports it as one.
 
-## Three types
+## Four types
 
-| `type` | What it is | Terminal |
-| --- | --- | --- |
-| `task` | a change to this repo, shipped on a PR | `done` |
-| `signal` | a finding delivered somewhere this repo cannot write | `done` |
-| `goal` | an ordered set of tasks with a Definition of Done spanning them | `done` |
+| `type` | What it is | What an agent does with it | Terminal |
+| --- | --- | --- | --- |
+| `task` | a change to this repo, shipped on a PR | builds it | `done` |
+| `signal` | a finding delivered somewhere this repo cannot write | delivers it upstream | `done` |
+| `goal` | an ordered set of tasks with a Definition of Done spanning them | groups and authorizes | `done` |
+| `idea` | something worth doing eventually, not yet shaped into work | **nothing, until a person promotes it** | `done` |
 
-That is the whole taxonomy. A type is a table, not a mood: `task` and
-`signal` differ in *where the work lands*, which is the only difference that
-changes what an agent does with an item. Everything the old nine kinds
-distinguished beyond that is now a field.
+That is the whole taxonomy. **A type is what an agent does with the item**,
+and nothing else; that column is the test a fifth type would have to pass.
+`task` and `signal` differ in *where the work lands*. Everything the old
+nine kinds distinguished beyond that is now a field.
 
-**Tasks are built. Signals are delivered. Goals are neither** — a goal is
-never handed out as READY, because one-shot builds tasks.
+**Tasks are built. Signals are delivered. Goals and ideas are neither** — a
+goal is never handed out as READY because one-shot builds tasks, and an idea
+is not work at all yet.
+
+### `idea`: the parking lot
+
+An idea is a thought someone wants kept: a capability the product might want,
+a refactor that might pay off, a direction nobody has committed to. It is
+deliberately the thinnest item in the store.
+
+An idea carries **no `shape`, no `source`/`target`, no `anchors`, and no
+`depends_on`**, and its body is `## Context` and `## Log` and nothing else.
+**No Approach, no Subtasks, no Definition of Done**, and that absence is the
+point:
+
+> **An idea that can state a Definition of Done is a task that was mis-filed.**
+
+Two rules keep it from leaking into the roadmap:
+
+- **An idea is never READY.** Nothing builds one.
+- **Nothing may `depends_on` an idea**, and a dependency on one is a store
+  defect the listing reports. An idea is not committed work, so depending on
+  it would block a real task behind something nobody has decided to do —
+  silently and forever, because no route exists to mark an idea `done` by
+  building it.
+
+**`sync` never promotes an idea on its own.** It reports the parked set as a
+count and promotes only what a person picks. On promotion the idea goes
+`done` with `resolution: promoted`, and whatever it became carries
+`discovered_from: IDEA_ID` — the provenance field that already exists, doing
+the job it was built for.
+
+Sync must not read an idea as coverage. Counting one would suppress the
+`uncovered` finding for ground nobody has planned, which is the whole failure
+the `uncovered` lane exists to catch.
 
 ## Shape: what a task's Definition of Done must assert
 
-`shape` is required on a `task` and absent on the other two types. It decides
+`shape` is required on a `task` and absent on the other three types. It decides
 three things and nothing else: whether the slice rule applies, what the
 Definition of Done has to assert, and how that assertion is verified.
 
@@ -135,7 +169,7 @@ PR is the plan.
 
 ## Channel: where a signal goes
 
-`channel` is required on a `signal` and absent on the other two types.
+`channel` is required on a `signal` and absent on the other three types.
 
 | `channel` | Goes to |
 | --- | --- |
@@ -169,7 +203,9 @@ new → accepted → planning → ready → active → committed → review → 
 
 Not every item visits every state. A `signal` runs
 `new → accepted → ready → active → done` (no plan to write, no branch to
-commit to). A `goal` runs `new → accepted → active → done`. A task whose work
+commit to). A `goal` runs `new → accepted → active → done`. An `idea` runs
+`new → accepted → done`, where `new` is jotted down and `accepted` is "we
+mean to do this eventually" — parked with intent. A task whose work
 is small, single-approach and single-area goes `accepted → ready` with a
 one-line approach and no planning run — **say which way you went and why, in
 one line**, because a skipped planning run should be a visible decision and
@@ -182,6 +218,7 @@ not an omission.
 | `shipped` | task | merged, deploy verified |
 | `delivered` | signal | carried upstream and accepted |
 | `rejected` | signal | carried upstream and declined — the question is answered |
+| `promoted` | idea | became one or more real items, which carry `discovered_from` |
 | `obsolete` | any | the world moved; the item no longer describes anything |
 
 This is the field that deletes the two-enum problem. **A dependency is
@@ -218,7 +255,7 @@ fields are marked; a field that does not apply is **absent**, never empty.
 ```markdown
 ---
 id: 12
-type: task # task | signal | goal
+type: task # task | signal | goal | idea
 shape: story # TASK ONLY — story | structural | visual | defect | dependency
 title: I can sign in with my Google account
 status: ready
@@ -283,6 +320,36 @@ What must be observably true when this ships — every line verified before
   until the account is known
 ```
 
+### An idea's whole format
+
+Everything above is what a `task` carries. An idea carries this and no more:
+
+```markdown
+---
+id: 44
+type: idea
+title: Trips could sync to a calendar
+status: new # new | accepted | done | dropped
+resolution: # promoted | obsolete — set at done
+origin: rahul
+---
+
+## Context
+
+What the thought is and why it was worth keeping. One paragraph is the
+expected length. If this section is growing subtasks and acceptance
+criteria, the idea is ready to be promoted — promote it rather than
+writing a task in an idea's clothing.
+
+## Log
+
+- 2026-09-19 (rahul) note: came up while looking at the trip detail screen
+```
+
+There is no Approach, no Subtasks and no Definition of Done, and adding
+them is not an enrichment — it is the mis-filing the type exists to make
+visible.
+
 ### `## Log` replaces three sections
 
 The old schema had `## Comments`, `## Mistakes`, `## Turn log` and
@@ -301,7 +368,7 @@ rules, kept consistent by hand. They are one section with a tag.
 | `decision` | a choice made and the reason, where the file cannot show it | reviewers |
 | `signal` | a divergence captured mid-build, before `wayfare sync` promotes it to a `signal` item | `wayfare sync` |
 
-Three rules carry over unchanged and all three are load-bearing:
+Three rules carry over unchanged, and each one has a failure behind it:
 
 - **Append-only and exhaustive.** A summarized `mistake` list reads as a clean
   build. A recovered wrong turn belongs here too: the recovery is invisible in
@@ -398,7 +465,7 @@ the local format looks the way it does.
 | --- | --- |
 | `.plans/PLAN.md` frontmatter | one `plans` row per repo |
 | `.plans/items/NNN-slug.md` frontmatter | one `items` row; `id` is unique per plan, not global |
-| `type` | enum column — the discriminator, three values |
+| `type` | enum column — the discriminator, four values |
 | `shape`, `channel` | nullable enum columns, valid only for their type |
 | `status`, `resolution` | enum columns; `resolution` null until `done` |
 | `depends_on` | `item_dependencies` join table |
@@ -430,6 +497,7 @@ the folder (`docs/MESSAGES.md`), and the fleet register at `.fleet/`.
 | `kind: architecture-feedback` | `type: signal`, `channel: architecture` |
 | `kind: goal` | `type: goal` |
 | no `kind` (legacy) | `type: task`, `shape: story` |
+| (nothing) | `type: idea` — no old kind maps to it; ideas start with schema 1 |
 | `status: todo` | `status: accepted` |
 | `status: implementing` | `status: active` |
 | `status: reviewing` | `status: review` |

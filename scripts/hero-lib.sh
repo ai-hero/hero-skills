@@ -761,6 +761,27 @@ hero_items_dir() { # [ROOT]
   printf '%s' "$(hero_store_path "${1:-}")/items"
 }
 
+# How many ideas are parked, i.e. at `new` or `accepted`.
+#
+# The roadmap view prints this as one line ("7 ideas parked") instead of one
+# row per idea: a parking lot is meant to grow, and forty rows of it between
+# a reader and the READY set is how the actionable rows stop being read.
+# The listing itself still emits an `idea` row per item, because a caller
+# parsing rows must see every item; the collapsing is presentation.
+hero_idea_count() { # [STORE]
+  local items f n=0
+  items="${1:-$(hero_store_path)}/items"
+  [ -d "$items" ] || { printf 0; return 0; }
+  ( cd "$items" 2>/dev/null || exit 0
+    setopt localoptions nullglob 2>/dev/null || true
+    for f in *.md; do
+      [ -e "$f" ] || continue
+      [ "$(hero_item_type "$f")" = idea ] || continue
+      case "$(hero_item_status "$f")" in new|accepted) n=$((n + 1)) ;; esac
+    done
+    printf '%s' "$n" )
+}
+
 # Print the ids of a goal's members, in `depends_on` order with `rank`
 # breaking ties, one per line.
 #
@@ -1273,6 +1294,7 @@ hero_norm_id() {
 hero_ready_items() (
   local store items f d raw deps ready title id state itype row all_ids done_ids
   local open_goals parent committed_ids committed missing awaiting since enum
+  local idea_ids
   store="${1:-$(hero_work_store)}" || return 1
 
   # An unmigrated store lists NOTHING rather than listing wrong. Every item in
@@ -1303,6 +1325,7 @@ hero_ready_items() (
   done_ids=" "
   committed_ids=" "
   open_goals=" "
+  idea_ids=" "
   for f in *.md; do
     [ -e "$f" ] || continue
     id=$(hero_norm_id "$(hero_item_field "$f" id)")
@@ -1343,6 +1366,10 @@ hero_ready_items() (
     case "$itype:$state" in
       goal:accepted|goal:active) open_goals="$open_goals$id " ;;
     esac
+    # Ideas are collected whatever their status: a dependency on one is a
+    # defect even after it is promoted, because the dependent was written
+    # against a parking-lot entry rather than against the work it became.
+    case "$itype" in idea) idea_ids="$idea_ids$id " ;; esac
   done
 
   for f in *.md; do
@@ -1354,7 +1381,7 @@ hero_ready_items() (
     # by something that has not caught up. Never guessed: guessing `task` is
     # how a goal gets handed to one-shot to build.
     if [ -z "$itype" ]; then
-      echo "hero_ready_items: $f has no type; schema 1 requires task, signal or goal (docs/PLAN.md)" >&2
+      echo "hero_ready_items: $f has no type; schema 1 requires task, signal, goal or idea (docs/PLAN.md)" >&2
       echo "invalid $f — $title"
       continue
     fi
@@ -1414,6 +1441,13 @@ hero_ready_items() (
     # they now genuinely mean the same thing for every type.
     row=READY
     case "$itype:$state" in
+      # Above `*:new`, which would otherwise swallow `idea:new` and print a
+      # parked thought as an untriaged item. An idea is not work yet:
+      # nothing builds it, nothing delivers it, and `sync` must not read it
+      # as coverage. Its own row word at BOTH open statuses, so the roadmap
+      # view can collapse the parking lot to one count instead of printing
+      # forty rows between a reader and the READY set.
+      idea:new|idea:accepted) echo "idea    $f — $title"; continue ;;
       *:new)       echo "new     $f — $title"; continue ;;
       # Terminal and frozen. A rejected signal is kept on purpose: "we raised
       # this and they said no" is the history that stops it being raised again
@@ -1452,7 +1486,8 @@ hero_ready_items() (
           task)   enum="new/accepted/planning/ready/active/committed/review/done/dropped" ;;
           signal) enum="new/accepted/ready/active/done/dropped" ;;
           goal)   enum="new/accepted/active/done/dropped" ;;
-          *)      enum="a status of an unrecognized type '$itype'; expected task, signal or goal" ;;
+          idea)   enum="new/accepted/done/dropped" ;;
+          *)      enum="a status of an unrecognized type '$itype'; expected task, signal, goal or idea" ;;
         esac
         echo "hero_ready_items: $f has unrecognized status '$state', which is not one of $enum; not eligible for READY" >&2
         echo "invalid $f — $title"
@@ -1477,6 +1512,17 @@ hero_ready_items() (
           # say it with the RAW value as written in the file, so grepping the
           # store for the printed token actually finds it.
           echo "hero_ready_items: $f depends_on '$raw', which no item carries; blocked until the reference is fixed" >&2
+          missing="$missing $raw"
+          ready=0
+          continue ;;
+      esac
+      # An idea is not committed work. Depending on one blocks a real item
+      # behind something nobody has decided to do, and no route exists to
+      # mark an idea `done` by building it, so the block is permanent and
+      # looks like ordinary waiting. Name it like a dangling ref.
+      case "$idea_ids" in
+        *" $d "*)
+          echo "hero_ready_items: $f depends_on '$raw', which is an idea; an idea is not work and nothing can build it. Promote it, then depend on what it became" >&2
           missing="$missing $raw"
           ready=0
           continue ;;

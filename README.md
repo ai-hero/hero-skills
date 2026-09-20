@@ -79,11 +79,19 @@ own hardening instead — a self-review.
 item. Items come in three types, and a task's `shape` decides what its
 Definition of Done has to assert.
 
-| Type | What it is | Ends at |
+| Type | What it is | What happens to it |
 | --- | --- | --- |
-| `task` | a change to this repo, shipped on a PR | `done` |
-| `signal` | a finding delivered where this repo cannot write | `done` |
-| `goal` | an ordered set of tasks with one Definition of Done | `done` |
+| `task` | a change to this repo, shipped on a PR | built |
+| `signal` | a finding delivered where this repo cannot write | delivered upstream |
+| `goal` | an ordered set of tasks with one Definition of Done | grouped and authorized |
+| `idea` | something worth doing eventually, not yet shaped into work | nothing, until you promote it |
+
+An **idea** is the parking lot: a thought worth keeping that nobody has
+committed to. It carries no plan, no paths and no Definition of Done — an
+idea that can state one is a task that was mis-filed. Nothing builds an idea
+and nothing may depend on one; `wayfare sync` reports the parked set as a
+count and promotes only what you pick, at which point whatever it becomes
+carries `discovered_from` pointing back at it.
 
 Every item runs one lifecycle. `ready` is the only state a person sets, and
 it is the gate: nothing is built without it.
@@ -107,6 +115,53 @@ stateDiagram-v2
 `done` unblocks whatever depends on the item; `dropped` deliberately does
 not, because the prerequisite was abandoned. The full specification is
 [docs/PLAN.md](./docs/PLAN.md).
+
+### From tasks to goals
+
+Grouping is the **last stage of every `wayfare sync`**, not a separate step
+you run. It works bottom-up from the dependency graph: the first goal is the
+smallest outcome whose tasks depend on nothing outside the group, the next is
+the smallest outcome whose remaining dependencies are already inside a formed
+goal, and so on.
+
+```mermaid
+flowchart TB
+  subgraph G7["goal 7 · I can manage my trips"]
+    T12["task 12<br/>save a trip"]
+    T13["task 13<br/>rename it"]
+    T21["task 21<br/>empty state"]
+    T12 --> T13
+    T12 --> T21
+  end
+
+  subgraph G9["goal 9 · I can share a trip"]
+    T15["task 15<br/>share link"]
+    T18["task 18<br/>read-only view"]
+    T15 --> T18
+  end
+
+  T13 -. "task edge crosses the boundary" .-> T15
+  G7 == "so goal 9 depends_on 7 — derived, never authored" ==> G9
+```
+
+Goals are grouped by **outcome** — what a person can do once the whole group
+ships — never by area or layer. A group whose Definition of Done cannot be
+stated as one user-visible outcome is a filter over the roadmap, not a goal,
+and it will report `done` without anything shipping that a person notices.
+
+The stage holds one invariant: **every item at `ready` or further and not
+`done` is in exactly one open goal.** `next` walks goals and never items, so
+a `ready` task in no goal is an orphan nothing in the loop reaches. A task
+that adds up to nothing larger becomes a one-item goal — small, but
+reachable.
+
+Each round **re-cuts** the open goals rather than appending to them: tasks
+join and leave, two goals naming one outcome coalesce, a goal whose DoD
+became two outcomes splits. An `active` goal is frozen, because its members
+and permissions were authorized as a set at `next`'s gate.
+
+`sync` writes the goal. It never authorizes it — that is typed by a person at
+`wayfare next`, in-session, and is never stored in the file.
 
 ## Install
 
