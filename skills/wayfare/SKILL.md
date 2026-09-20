@@ -2,7 +2,7 @@
 name: wayfare
 # prettier-ignore
 description: The front door. sync converges architecture, design, hardening, compliance, deps and the roadmap into .plans and proposes goals; next authorizes and runs the next goal; do advances one item; improve audits the fleet. Use whenever asked what to work on next, to plan, or to build a feature.
-argument-hint: "[sync [CONTEXT|ideas] | next | do ID | improve | recalibrate]"
+argument-hint: "[init | sync [CONTEXT|ideas] | next | do ID | drop ID | improve | recalibrate]"
 ---
 
 # Wayfare: the route from source to target
@@ -38,10 +38,12 @@ there.
 
 | Verb | What it does | Procedure |
 | --- | --- | --- |
+| `init` | Investigates the repo, writes `HERO.md` and the plan object `.plans/PLAN.md`, and migrates an old store on sight. In an empty directory it scaffolds first | `references/init.md`, `references/scaffold.md` |
 | `sync [CONTEXT]` | Reads the world and converges everything into `.plans/`: the architecture record, the design snapshot, the hardening audit, the compliance register, the dependency bots' PRs, the roadmap, and the goals over it | `references/sync.md` |
 | `sync ideas` | Walks the parked ideas and promotes, parks or bins each one. Only when asked — ideas are not re-triaged every round | `references/sync.md` |
 | `next` | Authorizes the next goal at a gate a person types, then runs its first turn | `references/goals.md` |
 | `do ID` | Advances one item as far as the gates allow, or runs one turn of one goal | `references/advancing.md` |
+| `drop ID` | Abandons work on an unmerged branch and writes `status: dropped` on the item, so the roadmap stops claiming it | `references/drop.md` |
 | `improve` | Runs the compliance audit alone, for this repo or the whole fleet, and drafts the backports | `references/improve.md` |
 | `recalibrate` | Tunes the `## Wayfare` block in HERO.md | `references/configuration.md` |
 
@@ -66,9 +68,30 @@ say so.
 accepting one a person brings. It carries the four shape exemptions and the
 visual pass. `docs/PLAN.md` owns which shape asserts what.
 
+## `init`: configure the repo and create its plan
+
+**Read `references/init.md`.** Run it on a repo with no `HERO.md`, on one
+with no `.plans/PLAN.md`, or with `recalibrate` when the config has gone
+stale. In an empty directory, `references/scaffold.md` runs first and falls
+through into it.
+
+Progress:
+
+- [ ] 1. Fleet check (below) — at a fleet root this is `fleet sync`, not `init`
+- [ ] 2. Scaffold, only when there is no repo yet (`references/scaffold.md`)
+- [ ] 3. Investigate, then confirm the findings with evidence-based questions
+- [ ] 4. Write `HERO.md` and refresh `AGENTS.md`'s managed sections
+- [ ] 5. Write `.plans/PLAN.md`, or migrate an unmigrated store and say so
+- [ ] 6. Fill `## Scope` — a round that plans against "TODO" plans against nothing
+
+`init` is the only verb that creates the plan object. Every other verb reads
+it, and `hero_ready_items` refuses a store without one rather than printing
+an empty roadmap that reads as "nothing to do".
+
 ## Step 0: load, on every verb
 
-Every verb starts here. **Read `references/loading.md` and work its
+Every verb except `init` starts here — `init` is what makes Step 0 able to
+pass. **Read `references/loading.md` and work its
 checklist**; nothing below runs until it passes.
 
 The fleet check is first and is a hard stop:
@@ -144,6 +167,16 @@ runs *Advancing one item*; a `shape: dependency` task with `bot:` runs
 
 `do` never plans. An item that is not `ready` or further is refused with
 `Next step: wayfare sync`; an item with unmet deps is refused naming them.
+
+## `drop ID`: abandon work, and say so on the roadmap
+
+**Read `references/drop.md`.** It stashes (never silently — always named,
+always confirmed), switches away, and writes `status: dropped`.
+
+The item write is the part that did not exist before: an abandoned branch
+used to leave its item at `active` forever, claiming work that had stopped.
+`dropped` does not satisfy a dependency, so the listing reports the
+dependents as blocked instead of quietly unblocking them.
 
 ## `improve`
 

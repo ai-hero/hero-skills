@@ -1,64 +1,14 @@
----
-name: create-project
-# prettier-ignore
-description: Scaffold a new project. Supports standalone repos or monorepo subprojects. Creates Python (FastAPI/CLI/library), full-stack (FastAPI + Next.js/Vite), or Node.js projects with AGENTS.md. Use when starting a repo or subproject from nothing.
-argument-hint: "PROJECT_NAME [description] | recalibrate"
-disable-model-invocation: true
----
+# `init` on an empty directory: scaffold, then initialize
 
-# Create Project: scaffold a new project
+Run by `hero-skills:wayfare init` when there is no repo yet, or when adding a
+subproject to a monorepo. Scaffold the project, then fall through to
+`references/init.md`, which writes `HERO.md` and the plan object.
 
-Scaffold a new project, either standalone or as a subproject in an existing repo.
+This was `hero-skills:wayfare init`. Same procedure, same templates; it is
+the empty-directory case of one verb rather than a second entry point, so
+nobody has to decide which of the two to run.
 
-## Pipeline DAG
-
-This skill owns Pipeline 1 (init-project) from `PIPELINES.md`:
-
-```
-scaffold → setup-dev → init-hero → first-commit
-```
-
-Print the DAG line at the start of each step. Format:
-
-```
-[N/4] (✓) scaffold → (▶) setup-dev → ( ) init-hero → ( ) first-commit
-
-Now running: setup-dev
-```
-
-This skill drives the **scaffold** step and then invokes `hero-skills:setup-dev`, then `hero-skills:init-hero`, and finally a `git commit` of HERO.md + AGENTS.md. Each chained skill renders its own internal DAG when it has one.
-
-**Naming note for `first-commit`:** When scaffolding a *standalone* repo, Step 6 below already creates the literal first commit (the scaffold). The pipeline's `first-commit` node means the commit that lands `HERO.md` and `AGENTS.md`. On a standalone repo that is a follow-up commit; when adding to an existing repo it is simply the next commit. See `PIPELINES.md` for the canonical definition.
-
-## Arguments
-
-- `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before the project name.
-- `$ARGUMENTS` - Project name (required) and an optional description
-
-## `recalibrate`
-
-`hero-skills:create-project recalibrate` tunes the config that drives this skill, and
-stops. It does not go on to run the skill. You want to see which field was
-wrong, not spend a whole run finding out.
-
-Dispatch on it before parsing any other argument, in whichever step does
-that parsing. When the first token of
-`$ARGUMENTS` is exactly `recalibrate`, print `create-project: running recalibrate`,
-follow the four phases in
-[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) (report, ask, write, commit)
-using the table below as the report, and stop.
-
-```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" create-project
-```
-
-Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
-`(refused)`, `(absent)`, `(no-file)`. Also ask about any row the user says is
-wrong. A row that already holds the right value is not a question.
-
-## Instructions
-
-### Step 0: Load Configuration
+## Step 0: Load Configuration
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
@@ -68,15 +18,15 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 
 If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
 
-Read `HERO.md` for repo type (single vs monorepo), code quality tools, and coding conventions. If missing, suggest `hero-skills:init-hero` and proceed with defaults.
+Read `HERO.md` for repo type (single vs monorepo), code quality tools, and coding conventions. If missing, suggest `hero-skills:wayfare init` and proceed with defaults.
 
-### Step 1: Parse Arguments
+## Step 1: Parse Arguments
 
-- `recalibrate` as the first word is the verb, not a project name. Run the `recalibrate` section above and stop. A project genuinely named `recalibrate` has to be created by hand.
+- `recalibrate` as the first word is the verb, not a project name. Run wayfare's own `recalibrate` (`SKILL.md`, *`recalibrate`*) and stop. A project genuinely named `recalibrate` has to be created by hand.
 - **Project name** (required): First word. Ask if missing.
 - **Description** (optional): Remaining text.
 
-### Step 2: Determine Context
+## Step 2: Determine Context
 
 ```bash
 git rev-parse --is-inside-work-tree 2>/dev/null && echo "IN_REPO" || echo "STANDALONE"
@@ -91,7 +41,7 @@ Ask based on context:
 | In a repo with siblings | Add as a new subproject? |
 | Empty repo | Initialize this repo with the new project? |
 
-### Step 3: Choose Project Type
+## Step 3: Choose Project Type
 
 Ask the user:
 
@@ -102,9 +52,9 @@ Ask the user:
 5. **Frontend only**: Next.js or Vite with shadcn
 6. **Node.js service**: an Express or Fastify backend
 
-### Step 4: Scaffold
+## Step 4: Scaffold
 
-#### Python Backend (FastAPI)
+### Python Backend (FastAPI)
 
 Read uv FastAPI guide at <https://docs.astral.sh/uv/guides/integration/fastapi/>
 
@@ -128,13 +78,13 @@ PROJECT_NAME/
 └── uv.lock
 ```
 
-#### Python Library
+### Python Library
 
 ```bash
 uv init --lib PROJECT_NAME
 ```
 
-#### Python CLI
+### Python CLI
 
 ```bash
 uv init PROJECT_NAME
@@ -147,7 +97,7 @@ Add entry point in `pyproject.toml`:
 PROJECT_NAME = "project_name:main"
 ```
 
-#### Full-stack
+### Full-stack
 
 ```
 PROJECT_NAME/
@@ -184,11 +134,11 @@ Frontend (ask Next.js or Vite):
   }
   ```
 
-#### Frontend Only
+### Frontend Only
 
 Same as full-stack frontend, at project root instead of `frontend/`.
 
-#### Node.js Service
+### Node.js Service
 
 ```bash
 mkdir PROJECT_NAME && cd PROJECT_NAME
@@ -197,7 +147,7 @@ npm install express typescript @types/node @types/express tsx
 npx tsc --init
 ```
 
-### Step 5: Create AGENTS.md (+ CLAUDE.md symlink)
+## Step 5: Create AGENTS.md (+ CLAUDE.md symlink)
 
 House standard: `AGENTS.md` is the real file and `CLAUDE.md` symlinks to it, so one
 file serves Claude Code, Cursor, and Copilot without drift. Write `AGENTS.md`, then:
@@ -209,7 +159,7 @@ ln -s AGENTS.md CLAUDE.md
 If `ln -s` fails (Windows without Developer Mode), write a one-line `CLAUDE.md`
 containing `See [AGENTS.md](./AGENTS.md).` and tell the user why.
 
-`hero-skills:init-hero` (Step 1) fills in the Tech Stack / Best Practices /
+`hero-skills:wayfare init` (Step 1) fills in the Tech Stack / Best Practices /
 Coding Conventions sections after it investigates, so leave them out here.
 
 ```markdown
@@ -235,7 +185,7 @@ DESCRIPTION
 [Brief description of key directories]
 ```
 
-### Step 6: Initialize Git (if standalone)
+## Step 6: Initialize Git (if standalone)
 
 ```bash
 git init
@@ -250,12 +200,12 @@ EOF
 )"
 ```
 
-### Step 7: Chain to setup-dev → init-hero → first-commit
+## Step 7: Chain to setup-dev → config → first-commit
 
 The init-project pipeline does not stop at scaffolding. After Step 6, render the DAG:
 
 ```
-[2/4] (✓) scaffold → (▶) setup-dev → ( ) init-hero → ( ) first-commit
+[2/4] (✓) scaffold → (▶) setup-dev → ( ) config → ( ) first-commit
 
 Now running: setup-dev
 ```
@@ -263,27 +213,27 @@ Now running: setup-dev
 Then run `hero-skills:setup-dev` to install required CLIs and authenticate. After that completes, render:
 
 ```
-[3/4] (✓) scaffold → (✓) setup-dev → (▶) init-hero → ( ) first-commit
+[3/4] (✓) scaffold → (✓) setup-dev → (▶) config → ( ) first-commit
 
-Now running: init-hero
+Now running: the config pass (references/init.md)
 ```
 
-Run `hero-skills:init-hero` to investigate the freshly scaffolded project and write `HERO.md`. (Pipeline 3 runs as a nested DAG inside this step.)
+Run `hero-skills:wayfare init` to investigate the freshly scaffolded project and write `HERO.md`. (Pipeline 3 runs as a nested DAG inside this step.)
 
 Finally render:
 
 ```
-[4/4] (✓) scaffold → (✓) setup-dev → (✓) init-hero → (▶) first-commit
+[4/4] (✓) scaffold → (✓) setup-dev → (✓) config → (▶) first-commit
 
 Now running: first-commit
 ```
 
-If the repo was initialized standalone in Step 6 with an initial commit, the `first-commit` step folds HERO.md and AGENTS.md (written by init-hero) into a follow-up commit:
+If the repo was initialized standalone in Step 6 with an initial commit, the `first-commit` step folds HERO.md and AGENTS.md (written by the config pass) into a follow-up commit:
 
 ```bash
 git add HERO.md AGENTS.md CLAUDE.md
 git commit -m "$(cat <<'EOF'
-chore: add HERO.md and AGENTS.md from hero-skills:init-hero
+chore: add HERO.md and AGENTS.md from hero-skills:wayfare init
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 EOF
@@ -292,7 +242,7 @@ EOF
 
 If the project was added to an existing repo, defer the commit to `hero-skills:push-pr` (the user's normal flow).
 
-### Step 8: Summary
+## Step 8: Summary
 
 ```
 Create Project Summary
@@ -302,7 +252,7 @@ Type: [Python Backend | Full-stack | ...]
 Location: PATH
 
 Pipeline:
-  (✓) scaffold → (✓) setup-dev → (✓) init-hero → (✓) first-commit
+  (✓) scaffold → (✓) setup-dev → (✓) config → (✓) first-commit
 
 Created:
   - Project structure

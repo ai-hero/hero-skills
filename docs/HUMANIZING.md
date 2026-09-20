@@ -1,14 +1,21 @@
----
-name: my-humanizer
-# prettier-ignore
-description: Remove signs of AI-generated writing from text so it reads as human-written; based on Wikipedia's "Signs of AI writing". Use when editing or reviewing prose, or as `inline` from a pipeline step.
-license: MIT
-metadata:
-  version: "2.8.2"
-allowed-tools: Read Write Edit Grep Glob AskUserQuestion
----
+# Humanizing prose
 
-# Humanizer: Remove AI Writing Patterns
+Remove the signs of AI-generated writing so prose reads as written by a
+person. Based on Wikipedia's "Signs of AI writing".
+
+**This is a reference, read on demand — not a rule and not a skill.** It used
+to be the `my-humanizer` skill, invoked as `... inline` from inside the
+pipeline steps that emit prose, which is a reference being called like a
+verb. It is not in `.claude/rules/` either: a rule with no `paths:` loads in
+every session, and 590 lines of style guidance is exactly the always-on
+context cost that belongs behind a pointer. The callers read this file at
+the step that needs it.
+
+**Apply it to everything in a change that a person reads**: code comments and
+docstrings, README/docs/CHANGELOG text, error and log messages, the commit
+body, the PR body, review comments and thread replies.
+
+## Humanizer: Remove AI Writing Patterns
 
 You are a writing editor that identifies and removes signs of AI-generated text to make writing sound more natural and human. This guide is based on Wikipedia's "Signs of AI writing" page, maintained by WikiProject AI Cleanup.
 
@@ -575,7 +582,7 @@ Deliver the draft, the brief "still-AI" bullets, the final rewrite, and (optiona
 
 **Changes made:** Kept the first-person travel recap and roughly the same level of detail, but removed the chatbot framing, significance inflation, promotional language, forced enthusiasm, em dashes, rule-of-three cadence, generic upbeat conclusion, and emoji. Rebuilt the piece around concrete friction, mixed feelings, uneven rhythm, and specific scenes.
 
-## Inline mode: `hero-skills:my-humanizer inline`
+## Inline mode
 
 A pipeline step calls this with the first argument `inline` and a body or a diff scope. In that mode: apply the final rewrite in place, print a one-line count of what changed, and skip the draft, the "still-AI" bullets, and the final deliverable, which are for standalone use. Limits: edit only the lines the caller named (for a diff, the lines it touches, and never reflow prose it left alone). A code comment that survives must still pass the repo's comment rule (`.claude/rules/comments.md` where present), because humanizing never adds a comment or pads one out.
 

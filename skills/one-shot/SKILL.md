@@ -57,8 +57,8 @@ Each DAG node delegates to a single skill (or runs inline when the work is just 
 ## Prerequisites
 
 - **GitHub CLI (`gh`) installed and authenticated with the `repo` scope**. Steps 4 (push), 5 (self-review), 8 (respond), and 9 (ship) all fail without it. Install via `brew install gh` (macOS), `sudo apt install gh` (Debian/Ubuntu), or <https://cli.github.com/>. Authenticate with `gh auth login -s repo`.
-- `HERO.md` exists (run `hero-skills:init-hero` first if not)
-- `.github/workflows/auto-approve.yaml` (or `.yml`) is on the default branch (Step 9 needs it). If missing, run `hero-skills:init-hero recalibrate` to install it (Step 6a of init-hero handles this), then merge that workflow file to the default branch before running one-shot.
+- `HERO.md` exists (run `hero-skills:wayfare init` first if not)
+- `.github/workflows/auto-approve.yaml` (or `.yml`) is on the default branch (Step 9 needs it). If missing, run `hero-skills:wayfare init recalibrate` to install it (Step 6a of `wayfare init` handles this), then merge that workflow file to the default branch before running one-shot.
 - **`pr-review-toolkit` plugin installed** so Step 5 (`self-review`) gets all six review agents: five from the plugin plus the security pass, which needs no extra install. From inside Claude Code: `/plugin install pr-review-toolkit`. From a shell: `claude plugins add pr-review-toolkit@claude-plugins-official`. Without it, `hero-skills:review-pr` runs with a thinner review.
 - **Playwright MCP server registered** so Step 4 (`push`)'s test phase can drive the dev server for UI smoke. Requires Node.js 18+. Run `claude mcp add playwright npx @playwright/mcp@latest` (add `--scope user` to share across projects, `--scope project` to commit it). Backend-only PRs skip the UI-smoke portion of the test phase with `(–)` even without this.
 - The task is small; see the scope guard above
@@ -147,7 +147,7 @@ echo "deploy checks owed: $(hero_deploy_pending "$STORE" 2>/dev/null | wc -l | t
 
 If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
 
-If `HERO.md` is missing, STOP and tell the user to run `hero-skills:init-hero` first. one-shot relies on every downstream skill having a config to read; running blind through 9 steps is unsafe.
+If `HERO.md` is missing, STOP and tell the user to run `hero-skills:wayfare init` first. one-shot relies on every downstream skill having a config to read; running blind through 9 steps is unsafe.
 
 > Each bash block below runs in a fresh shell, so re-source `hero-lib.sh` at the top of any block that calls a `hero_*` function. The snippets show this.
 
@@ -272,7 +272,7 @@ Use the decision tree below to pick the **resume step** (1 to 9). Each row is th
 | Condition | Resume at | Reason |
 | --- | --- | --- |
 | `STATE_OK=false` | STOP with diagnostic | print `STATE_ERRORS` (the only health variable emitted; `FETCH_OK` and `GH_OK` are script-internal and unset in your shell); every row below depends on state that was not established. Two recoverable cases. `bot-username` alone: say the review bot cannot be identified and offer to continue at the user's chosen step; `item-claim-conflict`: two unbranched items are in flight and neither names this branch: ask which one is this branch's, write its `branch:`, and re-run. For anything else, fix it and re-run, or invoke the individual skills |
-| `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0`, `UNPUSHED == 0` | exit with hint | `MERGED` → done; suggest re-running `hero-skills:ship-pr` if the local checkout still has the branch (Step 7b retries the cleanup for an already-merged PR, and `abandon` refuses merged branches by design). `CLOSED` without merge → the work never landed; say so explicitly and suggest reopening the PR or starting a new branch |
+| `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0`, `UNPUSHED == 0` | exit with hint | `MERGED` → done; suggest re-running `hero-skills:ship-pr` if the local checkout still has the branch (Step 7b retries the cleanup for an already-merged PR, and `wayfare drop` refuses merged branches by design). `CLOSED` without merge → the work never landed; say so explicitly and suggest reopening the PR or starting a new branch |
 | `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED == 0`, `UNPUSHED > 0` | exit with hint | local commits exist that never reached the merged or closed PR. Do NOT suggest a reset; push them to a new branch (or reopen) so the work is saved remotely first |
 | `PR_EXISTS=true` AND `PR_STATE` is `MERGED` or `CLOSED`, `UNCOMMITTED > 0` | exit with hint | a merged or closed PR with local edits. Branch off `DEFAULT_BRANCH` for follow-up work |
 | `CURRENT_BRANCH == DEFAULT_BRANCH` and `UNCOMMITTED == 0` and `AHEAD == 0` | Step 1 (plan) | fresh start (Step 0.4 already auto-branched if there was any work to preserve) |
@@ -778,4 +778,4 @@ If the pipeline stopped early, render the DAG with `(✗)` on the failed step, t
 - Step 0.4's `git checkout -b` is unconfirmed by design, because one-shot never works on the default branch and assumes the auto-derived name is acceptable. To rename later, use `git branch -m`. The sibling skill `push-pr` prompts for the name because it's invoked deliberately on an existing branch; one-shot's auto-mode contract precludes that prompt.
 - For larger work, run the same skills individually so you can pause between them.
 - **Committing and pushing belong to push-pr (Step 4), never to this skill directly.** Doing it by hand skips the test phase, `/simplify`, the commit convention, and the draft PR, with no error to show for it. Branch creation at Step 0.4 and read-only git commands are the only exceptions.
-- Run `hero-skills:abandon` separately if you abandon mid-pipeline, because ship-pr's reset only fires after a successful merge.
+- Run `hero-skills:wayfare drop` separately if you abandon mid-pipeline, because ship-pr's reset only fires after a successful merge.

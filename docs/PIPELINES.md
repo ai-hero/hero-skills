@@ -46,15 +46,15 @@ followed by `Stopped: REASON`.
 ### Pipeline 1: init-project, scaffold a new project end-to-end
 
 ```
-scaffold → setup-dev → init-hero → first-commit
+scaffold → setup-dev → config → first-commit
 ```
 
-Owner: `hero-skills:create-project`. The skill scaffolds the project, then
-chains forward to `hero-skills:setup-dev`, `hero-skills:init-hero`, and a
+Owner: `hero-skills:wayfare init`. The skill scaffolds the project, then
+chains forward to `hero-skills:setup-dev`, `hero-skills:wayfare init`, and a
 final commit. Each stage announces itself with the DAG line.
 
 **Naming note for `first-commit`:** When scaffolding a *standalone* repo,
-create-project Step 6 already produces the literal first commit (the
+`wayfare init`'s scaffold step already produces the literal first commit (the
 scaffold). The DAG node `first-commit` refers specifically to **the commit
 that lands `HERO.md` and `AGENTS.md`**, for standalone repos this is the
 second commit; for "added to existing repo" it is just the next commit. The
@@ -154,14 +154,14 @@ merging. The skill does not skip those confirmations.
 investigate → confirm → write → commit
 ```
 
-Owner: `hero-skills:init-hero`. Four steps:
+Owner: `hero-skills:wayfare init`. Four steps:
 
 1. `investigate`, deeply scan the repo for evidence of stack, conventions, CI, deploy
 2. `confirm`, present findings as a numbered list and ask the user to confirm/correct
 3. `write`, write HERO.md, update AGENTS.md summary sections (CLAUDE.md is a symlink to it), and (if the user opted in during `confirm`) install `.github/workflows/auto-approve.yaml` via Step 6a and the design-system enforcement layer via Step 6b
 4. `commit`, stage and commit HERO.md + AGENTS.md + the CLAUDE.md symlink (and the auto-approve workflow / design-system rule + hook if installed this run)
 
-Run by itself (`hero-skills:init-hero` or `hero-skills:init-hero recalibrate`) or
+Run by itself (`hero-skills:wayfare init` or `hero-skills:wayfare init recalibrate`) or
 as the third step of Pipeline 1.
 
 Thirteen other skills carry a scoped slice of this pipeline as their own

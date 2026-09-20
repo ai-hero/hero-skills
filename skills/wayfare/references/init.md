@@ -1,69 +1,14 @@
----
-name: init-hero
-# prettier-ignore
-description: Initialize Hero for a project. Investigates the repo, auto-detects the stack, confirms findings with smart questions, and creates HERO.md that all skills use. Use on a repo with no HERO.md, or with recalibrate when the config has gone stale.
-argument-hint: "[recalibrate]"
-disable-model-invocation: true
----
+# `init`: investigate the repo and write its config
 
-# Init: investigate the repo and write its config
+Run by `hero-skills:wayfare init`. Deeply investigate the repository,
+auto-detect its settings, confirm the findings with evidence-based questions,
+then write `HERO.md` and the plan object `.plans/PLAN.md`.
 
-Deeply investigate the repository, auto-detect project settings, then confirm findings with the user through smart, evidence-based questions. Creates or updates `HERO.md` at the repo root.
+This was `hero-skills:wayfare init`. It is the same procedure; it is reached
+through wayfare now, because "configure the repo" and "plan the repo" were
+never two decisions a person should have to sequence themselves.
 
-## Pipeline DAG
-
-This skill owns Pipeline 3 from `PIPELINES.md`:
-
-```
-investigate → confirm → write → commit
-```
-
-Print the DAG line at the start of each step. Substep groups in this skill map to pipeline nodes as:
-
-- Step 3 (Deep Investigation) → `investigate`
-- Step 4 (Synthesize Findings into Smart Questions) → `confirm`
-- Steps 5, 6, 6a, and 6b (write HERO.md, validate with the user, optionally install the auto-approve workflow and the design-system enforcement layer) → `write`
-- Step 7 (Commit HERO.md + AGENTS.md) → `commit`
-
-Format:
-
-```
-[N/4] (✓) investigate → (▶) confirm → ( ) write → ( ) commit
-
-Now running: confirm
-```
-
-## Arguments
-
-- `$ARGUMENTS`:
-  - (none) - Investigate repo and create `HERO.md`
-  - `--update` - Deprecated spelling of `recalibrate`. Accept it, say once that the verb was renamed, and continue. The old name is vendored into consumer repos' instructions and stays in circulation until they re-vendor.
-  - `recalibrate` - Re-investigate and update the existing `HERO.md`. The whole-file pass of the verb every skill carries; see [docs/RECALIBRATE.md](../../docs/RECALIBRATE.md). A skill that is misbehaving over one field is cheaper to fix with that skill's own `recalibrate`.
-
-## Why This Matters
-
-Each skill needs specific information to work well. This skill figures out what's needed by examining the repo rather than asking generic questions.
-
-**What each skill needs from HERO.md:**
-
-| Skill | Needs |
-| --- | --- |
-| `hero-skills:push-pr` | Default branch, branch convention, hosting platform (`gh`/`glab`), issue prefix, commit convention, pre-commit run command, CI platform, workflow names, registry, required status checks |
-| `hero-skills:one-shot` | PM tool + MCP server name, branch template, issue prefix, project list |
-| `hero-skills:push-pr` (test phase) | Language, framework, lint/format/typecheck commands, test/dev/install commands, ports, dependency file |
-| `hero-skills:review-pr` | Code Quality (pre-commit), Code Review Agent (bot username, used to dedupe its comments) |
-| `hero-skills:wayfare` | Wayfare (source-repo, design-project, design-transport, feedback-repo, ux-flow); for its stages: repo type, project list, deployment platform and registry, linters, dependency files per project |
-| `hero-skills:create-project` | Repo type, coding conventions, code quality tools, project scaffold patterns |
-| `hero-skills:setup-dev` | Required tools, recommended tools, MCP servers |
-| `hero-skills:respond-to-comments` | Code Review Agent (agent, trigger, poll-method, bot-username) |
-| `hero-skills:ship-pr` | CI/CD (auto-approve workflow installed on default branch), Repository (default branch), deployment platform, namespaces, ArgoCD, health check endpoints |
-| `hero-skills:init-hero recalibrate` | All sections. Re-investigates and refreshes HERO.md on demand |
-| `hero-skills:recomponentize-ui` | Design System (role, namespace, registry-url, token-env-var, atomic-layers), frontend project paths |
-| `hero-skills:audit-plugin` | (internal) Plugin structure validation |
-
-## Instructions
-
-### Step 1: Establish AGENTS.md as the Agent Instructions File
+## Step 1: Establish AGENTS.md as the Agent Instructions File
 
 **House standard: `AGENTS.md` is the real file; `CLAUDE.md` is a symlink to it.**
 
@@ -110,15 +55,15 @@ Scaffold for a new `AGENTS.md` (content is filled in during Step 5):
 <!-- CLAUDE.md is a symlink to this file. Edit AGENTS.md, never CLAUDE.md. -->
 
 ## Tech Stack
-<!-- Auto-managed by hero-skills:init-hero. See HERO.md for full configuration. -->
-See [HERO.md](./HERO.md) for the full tech stack configuration detected by `hero-skills:init-hero`.
+<!-- Auto-managed by hero-skills:wayfare init. See HERO.md for full configuration. -->
+See [HERO.md](./HERO.md) for the full tech stack configuration detected by `hero-skills:wayfare init`.
 
 ## Best Practices
-<!-- Auto-managed by hero-skills:init-hero. See HERO.md for full configuration. -->
+<!-- Auto-managed by hero-skills:wayfare init. See HERO.md for full configuration. -->
 See [HERO.md](./HERO.md) for project conventions, code quality tools, and CI/CD configuration.
 
 ## Coding Conventions
-<!-- Auto-managed by hero-skills:init-hero. See HERO.md for full configuration. -->
+<!-- Auto-managed by hero-skills:wayfare init. See HERO.md for full configuration. -->
 See [HERO.md](./HERO.md) for coding conventions detected from the codebase.
 ```
 
@@ -127,14 +72,14 @@ See [HERO.md](./HERO.md) for coding conventions detected from the codebase.
 - Read it and check for `## Tech Stack`, `## Best Practices`, and `## Coding Conventions`.
 - If a section is **missing**, append it.
 - If a section exists but does **not** reference `HERO.md`, add:
-  `See [HERO.md](./HERO.md) for details managed by hero-skills:init-hero.`
+  `See [HERO.md](./HERO.md) for details managed by hero-skills:wayfare init.`
 - **Do not** remove or overwrite content the user wrote. Only add the pointer if it is absent.
 
 **Windows note:** symlinks need Developer Mode or elevated privileges. If `ln -s` fails, fall back to a regular `CLAUDE.md` containing the single line `See [AGENTS.md](./AGENTS.md).` and tell the user why.
 
 **Why this matters:** `AGENTS.md`/`CLAUDE.md` is loaded into context at conversation start. Without a HERO.md reference, Claude won't consult HERO.md for tech stack decisions (OpenTofu vs Terraform) or coding conventions (snake_case, structured logging, no DB mocks). The pointer ensures the agent reads HERO.md for authoritative configuration, and it survives a context compaction, which loaded skills may not.
 
-### Step 2: Check for Existing HERO.md Configuration
+## Step 2: Check for Existing HERO.md Configuration
 
 ```bash
 ls "$ROOT/HERO.md" 2>/dev/null && echo "EXISTS" || echo "NEW"
@@ -145,11 +90,11 @@ If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **A
 
 If `HERO.md` exists and `recalibrate` was not passed, show current config and ask if user wants to update it. If `recalibrate`, read the existing file to compare against new findings.
 
-### Step 3: Deep Investigation
+## Step 3: Deep Investigation
 
 Launch a thorough investigation of the repository. Use an Explore subagent or do it yourself. The goal is to gather **evidence** for every configuration decision.
 
-#### 3a: Coding Agent & AI Tooling
+### 3a: Coding Agent & AI Tooling
 
 Detect which AI coding agent(s) the team uses. This must come first, because it determines which hooks, configs, and integrations are possible.
 
@@ -190,7 +135,7 @@ grep -r "claude\|cursor\|copilot\|windsurf\|aider" .pre-commit-config.yaml 2>/de
 *"What AI coding agent does your team use? (Claude Code, Cursor, Windsurf, Copilot, other)"*
 This determines what hooks and integrations hero skills can set up (e.g., pre-commit self-review, agent-specific rules files).
 
-#### 3b: Code Review Agent
+### 3b: Code Review Agent
 
 Detect which external code review bot the team uses for automated PR reviews.
 
@@ -219,7 +164,7 @@ gh api "/repos/{owner}/{repo}/installation" --jq '{app_slug, app_name}' 2>/dev/n
 **If no review agent detected**, set `agent: none`. Optionally ask:
 *"Does your team use an automated code review bot (Greptile, CodeRabbit, Copilot review, etc.)?"*
 
-#### 3b-2: Design System & UI Registry
+### 3b-2: Design System & UI Registry
 
 Only relevant when the project has a frontend. Skip entirely if there is no UI.
 
@@ -257,7 +202,7 @@ grep -rlE '#[0-9a-fA-F]{3,6}\b' --include="*.tsx" src/ 2>/dev/null | wc -l
 - Existing MUI/Chakra/Mantine/Ant → note it. **Never propose migrating UI libraries during init.** That is a project, not a config decision.
 - Atomic dirs already present → record `atomic-layers: true`.
 
-#### 3c: Repository & Collaboration Model
+### 3c: Repository & Collaboration Model
 
 ```bash
 # Basic structure
@@ -293,7 +238,7 @@ gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed,del
 - Allowed merge methods → `merge-method` field. Prefer `squash` when allowed; otherwise `rebase`; otherwise `merge`. If multiple are allowed, ask the user once to pin the team's choice.
 - `deleteBranchOnMerge` → `auto-delete-branches` field. If true, GitHub already deletes merged branches and `hero-skills:ship-pr` will skip cleanup. If false, the skill will delete the remote and local branch after a successful merge unless `auto-delete-branches: false` overrides it in HERO.md.
 
-#### 3d: Project Management & Issue Tracking
+### 3d: Project Management & Issue Tracking
 
 ```bash
 # Issue templates often reveal the PM tool
@@ -316,7 +261,7 @@ grep -r "linear\|jira\|asana\|shortcut" .github/ 2>/dev/null | head -5
 - Linear/Jira mentions in templates → identifies PM tool
 - GitHub issue references (`#123`, `Fixes #123`) → GitHub Issues
 
-#### 3e: CI/CD Platform & Workflows
+### 3e: CI/CD Platform & Workflows
 
 ```bash
 # GitHub Actions
@@ -372,7 +317,7 @@ else
 fi
 ```
 
-#### 3f: Required CLI Tools & Developer Toolchain
+### 3f: Required CLI Tools & Developer Toolchain
 
 ```bash
 # Version control & hosting
@@ -416,7 +361,7 @@ which pre-commit 2>/dev/null && pre-commit --version
 - Note minimum versions if the project depends on specific features
 - These go into HERO.md `## Developer Setup` as team-shared requirements. Individual installation and auth are handled by `hero-skills:setup-dev`
 
-#### 3g: Deployment & Infrastructure
+### 3g: Deployment & Infrastructure
 
 ```bash
 # Container
@@ -448,7 +393,7 @@ grep -r "namespace\|environment\|staging\|production" k8s/ .github/workflows/ 2>
 - ArgoCD references → GitOps workflow
 - Environment names → staging, production, etc.
 
-#### 3h: Code Quality & Developer Tooling
+### 3h: Code Quality & Developer Tooling
 
 ```bash
 # Pre-commit
@@ -473,7 +418,7 @@ ls .editorconfig 2>/dev/null
 - mypy/pyright/tsc strict → type checker
 - What's enforced in CI vs. just local
 
-#### 3i: Project Structure & Tech Stack
+### 3i: Project Structure & Tech Stack
 
 ```bash
 # Root project files (dependency files)
@@ -536,7 +481,7 @@ grep -E "port\|PORT\|:3000\|:8000\|:8080\|:5173\|:4000" pyproject.toml package.j
 - Dev server commands and default ports
 - Entry points for CLIs
 
-#### 3j: Coding Conventions & Team Patterns
+### 3j: Coding Conventions & Team Patterns
 
 Investigate the codebase for established conventions the team follows. These are critical, because the agent must follow the same patterns the team uses.
 
@@ -633,7 +578,7 @@ For these, ask the user: *"I noticed you use X instead of Y. Is there a specific
 
 Keep rationale brief for mild preferences, elaborate for hard-won lessons (e.g., "mocks hid a migration bug").
 
-### Step 4: Synthesize Findings into Smart Questions
+## Step 4: Synthesize Findings into Smart Questions
 
 Based on your investigation, present findings grouped by **what the hero skills need**. Do NOT ask generic questionnaire questions. Instead, present evidence-based confirmations.
 
@@ -659,14 +604,14 @@ Based on your investigation, present findings grouped by **what the hero skills 
 
 **Group findings into these categories, presented in this order:**
 
-#### Group 0: "Your coding agent" (`hero-skills:init-hero recalibrate`, `hero-skills:setup-dev`)
+### Group 0: "Your coding agent" (`hero-skills:wayfare init recalibrate`, `hero-skills:setup-dev`)
 
 - Coding agent (Claude Code, Cursor, Windsurf, etc.)
 - Whether hooks/pre-commit integration is possible
 
-Do NOT offer to install a pre-commit hook for `hero-skills:init-hero recalibrate`. Skills surface a stale-HERO.md hint on demand instead; see `scripts/check-hero-staleness.sh`.
+Do NOT offer to install a pre-commit hook for `hero-skills:wayfare init recalibrate`. Skills surface a stale-HERO.md hint on demand instead; see `scripts/check-hero-staleness.sh`.
 
-#### Group 1: "For committing and pushing code" (`hero-skills:push-pr`, `hero-skills:ship-pr`)
+### Group 1: "For committing and pushing code" (`hero-skills:push-pr`, `hero-skills:ship-pr`)
 
 - Hosting platform (GitHub, GitLab, Bitbucket), read from the remote URL
 - Commit convention (evidence from git log patterns)
@@ -678,13 +623,13 @@ Do NOT offer to install a pre-commit hook for `hero-skills:init-hero recalibrate
 - Linters, formatters
 - Task runner (if Makefile/justfile provides commit/push/lint targets)
 
-#### Group 2: "For planning and tracking work" (`hero-skills:one-shot`)
+### Group 2: "For planning and tracking work" (`hero-skills:one-shot`)
 
 - PM tool (evidence from templates, commit messages, integrations)
 - Issue ID prefix (evidence from commit/branch patterns)
 - MCP server name if applicable
 
-#### Group 3: "For testing and verification" (`hero-skills:push-pr` test phase)
+### Group 3: "For testing and verification" (`hero-skills:push-pr` test phase)
 
 - Per-project: language, framework, dependency file, install command
 - Per-project: test, lint, format, typecheck commands (prefer task runner targets if available)
@@ -693,7 +638,7 @@ Do NOT offer to install a pre-commit hook for `hero-skills:init-hero recalibrate
 - Task runner (Makefile, justfile, etc.) and its available targets
 - Monorepo vs single repo structure
 
-#### Group 4: "For CI/CD and deployment" (`hero-skills:push-pr`, `hero-skills:ship-pr`, `hero-skills:harden`)
+### Group 4: "For CI/CD and deployment" (`hero-skills:push-pr`, `hero-skills:ship-pr`, `hero-skills:harden`)
 
 - CI platform and workflow names
 - Deployment platform
@@ -705,7 +650,7 @@ Do NOT offer to install a pre-commit hook for `hero-skills:init-hero recalibrate
   - If the user says yes, run the install in Step 6a below.
   - If the workflow exists locally but is not on the default branch yet, remind the user that `@auto-approve` will be a no-op until that file lands on the default branch.
 
-#### Group 6: "For UI work" (`hero-skills:recomponentize-ui`)
+### Group 6: "For UI work" (`hero-skills:recomponentize-ui`)
 
 Skip this group entirely for projects with no frontend.
 
@@ -717,7 +662,7 @@ Skip this group entirely for projects with no frontend.
 - If yes, also ask: *"Install the enforcement layer (`.claude/rules/design-system.md` + a PostToolUse token check)? It is what makes the constraints apply reliably rather than only when a skill happens to trigger."* If the user agrees, run the install in Step 6b.
 - **Never** propose migrating off an existing UI library here.
 
-#### Group 5: "Coding conventions for consistent code" (all skills that write code)
+### Group 5: "Coding conventions for consistent code" (all skills that write code)
 
 - Naming conventions (functions, files, folders)
 - Import style and organization
@@ -833,20 +778,20 @@ Please confirm or correct the [??] items, and fill in the [--] items.
 Everything marked [OK] will be used as-is unless you say otherwise.
 ```
 
-### Step 5: Incorporate Answers & Generate HERO.md
+## Step 5: Incorporate Answers & Generate HERO.md
 
 After the user responds, merge confirmed findings + user answers and write `HERO.md`:
 
 ```markdown
 # Hero Configuration
-<!-- Generated by hero-skills:init-hero. Re-run with hero-skills:init-hero recalibrate to refresh. -->
+<!-- Generated by hero-skills:wayfare init. Re-run with hero-skills:wayfare init recalibrate to refresh. -->
 
 ## Coding Agent
 - primary: claude-code # or cursor, windsurf, copilot, aider
 - agents: AGENT_LIST # list all if team uses multiple
 - hooks: true # or false — whether the agent supports pre-commit/hook integration
 - rules-file: AGENTS.md # CLAUDE.md is a symlink to it; or .cursorrules, .windsurfrules, copilot-instructions.md
-<!-- HERO.md is refreshed on demand by `hero-skills:init-hero recalibrate`.
+<!-- HERO.md is refreshed on demand by `hero-skills:wayfare init recalibrate`.
      Skills detect when HERO.md is stale (project config newer than HERO.md)
      and prompt the user to run the refresh themselves. There is no
      pre-commit hook for this — it was too slow.
@@ -1063,7 +1008,7 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 
 ```markdown
 ## Tech Stack
-<!-- Auto-managed by hero-skills:init-hero. See HERO.md for full configuration. -->
+<!-- Auto-managed by hero-skills:wayfare init. See HERO.md for full configuration. -->
 - **Language:** Python 3.12
 - **Framework:** FastAPI
 - **Infrastructure:** OpenTofu (NOT Terraform), Kubernetes
@@ -1072,7 +1017,7 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 See [HERO.md](./HERO.md) for the full tech stack configuration.
 
 ## Best Practices
-<!-- Auto-managed by hero-skills:init-hero. See HERO.md for full configuration. -->
+<!-- Auto-managed by hero-skills:wayfare init. See HERO.md for full configuration. -->
 - **Commits:** Conventional commits (`feat:`, `fix:`, `chore:`)
 - **Branches:** `feature/*`, `fix/*` off `main`
 - **Code Quality:** ruff (linter), black (formatter), mypy (type checker)
@@ -1080,7 +1025,7 @@ See [HERO.md](./HERO.md) for the full tech stack configuration.
 - **Tests:** `uv run pytest` — always run before pushing
 
 ## Coding Conventions
-<!-- Auto-managed by hero-skills:init-hero. See HERO.md for full configuration. -->
+<!-- Auto-managed by hero-skills:wayfare init. See HERO.md for full configuration. -->
 - **Naming:** snake_case functions, PascalCase classes, kebab-case files
 - **Imports:** Absolute (`from app.models import ...`), grouped stdlib → third-party → local
 - **Error handling:** Custom exceptions in `app/exceptions.py`, no bare `except`
@@ -1092,7 +1037,7 @@ See [HERO.md](./HERO.md) for full coding conventions.
 
 Tailor the bullet points to what was actually detected. Include anything that Claude might otherwise get wrong (e.g., "OpenTofu NOT Terraform", "pnpm NOT npm", "Bun NOT Node").
 
-### Step 6: Validate & Confirm
+## Step 6: Validate & Confirm
 
 Show the generated file and a one-line-per-skill summary:
 
@@ -1108,7 +1053,7 @@ How your hero skills will use this:
   hero-skills:ship-pr       → k8s namespaces: staging, production
   hero-skills:wayfare sync  → architecture (single repo, Python + FastAPI, k8s), harden (pyproject.toml deps, ghcr.io registry), roadmap, goals
   hero-skills:setup-dev     → require node, uv, gh, docker; recommend pre-commit, linear CLI
-  hero-skills:init-hero recalibrate → re-investigate and refresh HERO.md on demand (run when project config changes)
+  hero-skills:wayfare init recalibrate → re-investigate and refresh HERO.md on demand (run when project config changes)
 
 Does this look right? [Y/n]
 ```
@@ -1120,7 +1065,7 @@ Run hero-skills:setup-dev to configure your local dev environment
 (git config, CLI tools, authentication) based on this HERO.md.
 ```
 
-### Step 6a: Optionally Install Auto-Approve Workflow
+## Step 6a: Optionally Install Auto-Approve Workflow
 
 If the user agreed to install `.github/workflows/auto-approve.yml` (Group 4 confirmation), copy it into their repo using the bundled installer. The installer's exit code is the contract, so capture it and branch on it explicitly so an existing customized workflow is never silently overwritten or treated as "installed":
 
@@ -1209,7 +1154,7 @@ Next steps before hero-skills:ship-pr will work:
   3. Add ANTHROPIC_API_KEY in repo settings -> Secrets and variables -> Actions
 ```
 
-### Step 6b: Optionally Install Design-System Enforcement
+## Step 6b: Optionally Install Design-System Enforcement
 
 If the user opted in during Group 6, install the rule + hook. Same exit-code contract as Step 6a: branch on it explicitly rather than assuming success:
 
@@ -1251,11 +1196,11 @@ Next: add REGISTRY_TOKEN to .env (never commit it), then run
 hero-skills:recomponentize-ui to migrate the UI.
 ```
 
-### Step 7: Commit HERO.md
+## Step 7: Commit HERO.md
 
 Always commit `HERO.md` to the repo. Do NOT ask whether to commit or whether to add it to `.gitignore`. Stage and commit it immediately after user confirmation in Step 6 (and Step 6a if the workflow was installed).
 
-Only stage the workflow file when Step 6a reported the file is in sync with the plugin (`INSTALL_OK=true`, covering both the fresh-install and already-up-to-date paths). When the installer returned exit 2 (`EXISTS`, drift detected), the working file is still the user's original, and committing it now would falsely claim `hero-skills:init-hero` installed the new version.
+Only stage the workflow file when Step 6a reported the file is in sync with the plugin (`INSTALL_OK=true`, covering both the fresh-install and already-up-to-date paths). When the installer returned exit 2 (`EXISTS`, drift detected), the working file is still the user's original, and committing it now would falsely claim `hero-skills:wayfare init` installed the new version.
 
 **Stage `AGENTS.md`, not just `CLAUDE.md`.** `CLAUDE.md` is a symlink, so staging it alone commits the link and silently drops every content change, because those live in `AGENTS.md`. Stage both: the symlink itself needs committing the first time it is created.
 
@@ -1273,7 +1218,7 @@ if [ "${DS_OK:-false}" = "true" ]; then
   FILES_TO_ADD+=(".claude/rules/design-system.md" ".claude/hooks/check-design-tokens.sh" ".claude/settings.json")
 fi
 git add "${FILES_TO_ADD[@]}"
-git commit -m "chore: initialize HERO.md and update AGENTS.md via hero-skills:init-hero"
+git commit -m "chore: initialize HERO.md and update AGENTS.md via hero-skills:wayfare init"
 ```
 
 Never stage `.env`. If Group 6 added a `REGISTRY_TOKEN`, confirm `.gitignore` covers `.env` before committing anything.
@@ -1299,9 +1244,45 @@ When `recalibrate` is passed:
 - **Omit irrelevant sections.** If no deployment, don't include a Deployment section.
 - **One round of questions.** Present all findings at once with a single numbered list of questions (1. 2. 3. ...), get all answers at once. Use plan mode or a numbered format, never freeform prose questions.
 
+## The plan object
+
+`HERO.md` is only half of what `init` writes. The other half is
+`.plans/PLAN.md`, the plan object (`docs/PLAN.md`), and without it
+`hero_ready_items` refuses the store outright — it cannot tell an empty
+roadmap from an unreadable one, so it declines to guess.
+
+Three cases, decided by what is already on disk:
+
+1. **No `.plans/` at all** → create the store and write `PLAN.md`: `schema: 1`,
+   the repo slug, the default branch, today's date, `next_id: 1`, the
+   `source.root` and `source.head` this run resolved, and a `target:` block
+   only when `design-project` is a project id rather than `none`. Fill
+   `## Scope` from the investigation: one paragraph on what this repo is and
+   what the plan over it is for. Every planning round reads it as the frame
+   its proposals have to fit, so "TODO" there is a round planning against
+   nothing.
+2. **A `.plans/` holding items but no `PLAN.md` with `schema:`** → an
+   unmigrated store from the nine-kind schema. Run the migrator and say so:
+
+   ```bash
+   bash "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/migrate-plan.sh" "$(hero_store_path)"
+   ```
+
+   Report its warnings rather than swallowing them; an unrecognized `kind`
+   migrates as `task`/`story` and wants a human look. Then fill `## Scope`,
+   which the migrator cannot know.
+3. **A `PLAN.md` already at `schema: 1`** → converge it, do not rewrite it.
+   Refresh `source.head` and `target.head`; leave `next_id` alone unless it
+   is behind the highest id in `items/`; never touch `## Log`.
+
+**Never write `PLAN.md` into a directory that is not a git repo.**
+`hero_work_store` refuses to create a store it cannot add to
+`.git/info/exclude`, because a store that is not ignored is one that gets
+committed, and `.plans/` is private by design.
+
 ## Examples
 
 ```
-hero-skills:init-hero              # Investigate and create HERO.md
-hero-skills:init-hero recalibrate  # Re-investigate and update existing config
+hero-skills:wayfare init              # Investigate, write HERO.md and PLAN.md
+hero-skills:wayfare init recalibrate  # Re-investigate and update existing config
 ```

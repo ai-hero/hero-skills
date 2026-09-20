@@ -109,7 +109,7 @@ DRY VIOLATIONS
 `scripts/hero-fields.sh --all` is the declared map of which skill reads which
 field, and what it decides there (its CURRENT column is always `-`; the map
 reads no repo). It is a claim, not evidence: cross-reference
-it against the HERO.md template in init-hero and against what the skills
+it against the HERO.md template in `wayfare init`'s reference and against what the skills
 actually read, and report both directions of drift.
 
 ```bash
@@ -159,7 +159,7 @@ DESCRIPTION QUALITY
 
 #### 2f: Alphabetical & Organizational Checks
 
-- Are skills listed alphabetically when referenced in tables (e.g., init-hero's "What each skill needs" table)?
+- Are skills listed alphabetically when referenced in tables (e.g. the "What each skill needs" table)?
 - Are HERO.md sections in a logical order?
 - Are frontmatter fields in a consistent order across skills?
 
@@ -203,6 +203,6 @@ If `--fix` is passed, automatically fix:
 
 - **This skill is for the hero-skills repo only.** It audits the plugin, not user projects.
 - **DRY is not always better.** Skills run independently, so some repetition is by design.
-- **Field coverage matters.** Every HERO.md field should be produced by init-hero and consumed by at least one skill.
+- **Field coverage matters.** Every HERO.md field should be produced by `wayfare init` and consumed by at least one skill.
 - **Size awareness.** Skills consume context window. Large skills slow down every invocation.
 - **Be specific.** File, line, what's wrong, how to fix.

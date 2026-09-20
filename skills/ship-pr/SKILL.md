@@ -7,7 +7,7 @@ argument-hint: "[pr-number | recalibrate]"
 
 # Ship: trigger auto-approve, merge, reset the local branch
 
-This skill posts `@auto-approve` on the PR, waits for the workflow run to finish, reads the verdict, and, on an APPROVE, asks whether to merge. If REQUEST_CHANGES, it shows what to fix and offers to re-trigger after fixes land. After a successful merge, it switches to the default branch, pulls latest, deletes the merged head branch (remote + local), and offers cleanup of other stale merged branches (the merged-branch counterpart to `hero-skills:abandon`). It then waits for the merge commit's own workflow runs (ten-minute cap) and reports, advisory only, whether post-merge CI passed and whether the deployment is healthy (Kubernetes, VM, PaaS, or serverless, per HERO.md).
+This skill posts `@auto-approve` on the PR, waits for the workflow run to finish, reads the verdict, and, on an APPROVE, asks whether to merge. If REQUEST_CHANGES, it shows what to fix and offers to re-trigger after fixes land. After a successful merge, it switches to the default branch, pulls latest, deletes the merged head branch (remote + local), and offers cleanup of other stale merged branches (the merged-branch counterpart to `hero-skills:wayfare drop`). It then waits for the merge commit's own workflow runs (ten-minute cap) and reports, advisory only, whether post-merge CI passed and whether the deployment is healthy (Kubernetes, VM, PaaS, or serverless, per HERO.md).
 
 ## Pipeline DAG
 
@@ -38,7 +38,7 @@ The workflow lives at `.github/workflows/auto-approve.yaml` (or `.yml`, since bo
 ## Prerequisites
 
 - `gh` CLI installed and authenticated with `repo` scope
-- `.github/workflows/auto-approve.yaml` (or `.yml`) present on the default branch. Run `hero-skills:init-hero recalibrate` to install it
+- `.github/workflows/auto-approve.yaml` (or `.yml`) present on the default branch. Run `hero-skills:wayfare init recalibrate` to install it
 - The repo has an `ANTHROPIC_API_KEY` secret configured (used by the workflow)
 - `kubectl`/`argocd` (k8s deploys) or `curl`-reachable health endpoints for VM or PaaS. Only needed if HERO.md declares a deployment platform
 
@@ -81,7 +81,7 @@ Read `HERO.md` if it exists. This skill uses:
 - **CI/CD** -> workflow names (to identify the auto-approve run)
 - **Deployment** -> platform (kubernetes | vm | serverless | paas | none), namespaces/hosts, health endpoints
 
-If `HERO.md` is missing, suggest `hero-skills:init-hero` but proceed with defaults.
+If `HERO.md` is missing, suggest `hero-skills:wayfare init` but proceed with defaults.
 
 ### Step 1: Identify the PR
 
@@ -142,7 +142,7 @@ GitHub only honors issue_comment workflows that already exist on the default bra
 Posting @auto-approve here will silently do nothing.
 
 Fix:
-  1. Run hero-skills:init-hero recalibrate to install the workflow
+  1. Run hero-skills:wayfare init recalibrate to install the workflow
   2. Open a PR for that workflow file alone, get it reviewed and merged to DEFAULT_BRANCH
   3. Re-run hero-skills:ship-pr
 ```
@@ -753,9 +753,9 @@ fi
 
 Worth telling the user when they are staring at a failed merge, because "don't use `--admin`" reads like a policy they could choose to break: **under `enforce_admins: true` it does not work at all.** Branch protection with admin enforcement on applies to admins too, so `gh pr merge --admin` returns an error rather than overriding anything. It is not a lever being withheld; there is no lever. The real options are to satisfy the failing requirement, or to have someone with repo-settings access change the protection rule.
 
-#### Step 7b: Reset to the Default Branch (the merged-branch counterpart to `hero-skills:abandon`)
+#### Step 7b: Reset to the Default Branch (the merged-branch counterpart to `hero-skills:wayfare drop`)
 
-After a successful merge, leave the user on the default branch, pulled, with the merged PR branch cleaned up. We are usually still on the just-merged head. `abandon` mirrors this for the never-merged case; not shared logic.
+After a successful merge, leave the user on the default branch, pulled, with the merged PR branch cleaned up. We are usually still on the just-merged head. `wayfare drop` mirrors this for the never-merged case; not shared logic.
 
 If Step 1 skipped straight here, `$OWNER`/`$REPO` were never set (only Step 3 sets them):
 
@@ -1292,7 +1292,7 @@ Next step: (one only — omit for REQUEST_CHANGES/WORKFLOW_FAILED, already cover
 ```
 
 - Merged → `/clear`. A plain suggestion, not Skill-tool invocable, with no y/N offer.
-- Abandoning mid-flight → `hero-skills:abandon`. Restricted, so print only.
+- Abandoning mid-flight → `hero-skills:wayfare drop`. Restricted, so print only.
 
 Skip `hero-skills:one-shot`; it's not the deterministic next action.
 

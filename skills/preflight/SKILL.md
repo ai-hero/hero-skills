@@ -70,7 +70,7 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 
 If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
 
-If `HERO.md` is missing, mention it but still run `scripts/preflight.sh`. The script reports the missing-HERO blocker with a useful next step (`hero-skills:init-hero`).
+If `HERO.md` is missing, mention it but still run `scripts/preflight.sh`. The script reports the missing-HERO blocker with a useful next step (`hero-skills:wayfare init`).
 
 ### Step 1: Run the Script
 

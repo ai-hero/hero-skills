@@ -281,7 +281,7 @@ Three commands. Everything else is run by them.
 
 ```
 # 1. Configure your project (run once per repo)
-hero-skills:init-hero
+hero-skills:wayfare init
 
 # 2. Converge the world into a plan. One round, eleven stages:
 #    config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals
@@ -368,10 +368,10 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:init-hero` | Investigate your repo, auto-detect stack, create `HERO.md` config |
+| `hero-skills:wayfare init` | Investigate your repo, auto-detect stack, create `HERO.md` config |
 | `hero-skills:preflight` | Catch missing tooling, stale `HERO.md`, env mismatches, and busy ports before a pipeline step does destructive work |
 | `hero-skills:setup-dev` | Set up a developer's local environment (tools, auth, dependencies) |
-| `hero-skills:create-project` | Scaffold a new project (Python, full-stack, Node.js) |
+| `hero-skills:wayfare init` | Scaffold a new project (Python, full-stack, Node.js) |
 | `hero-skills:create-skill` | Create a new Claude Code skill, subagent, rule, or hook |
 
 ### Development Cycle
@@ -393,7 +393,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 | Command | What it does |
 | --- | --- |
 | `hero-skills:one-shot` | Drives a small task end-to-end: plan → implement → simplify → push (tests included) → self-review → mark-ready → await-review → respond → ship. Detects a resume point on re-invocation; with no arguments, drives the current goal to merged + reset branch. Explicit user gates at each destructive step. |
-| `hero-skills:create-project` | Scaffolds a new project, then chains into setup-dev → init-hero → first-commit. |
+| `hero-skills:wayfare init` | Scaffolds a new project, then chains into setup-dev → config → first-commit. |
 
 ### The front door
 
@@ -413,7 +413,6 @@ Two skills are stages of `sync` and hidden from the slash menu (`user-invocable:
 | Command | What it does |
 | --- | --- |
 | `hero-skills:think-it-through` | Brainstorm + grill an idea one question at a time into shared understanding and dependency-aware work-items |
-| `hero-skills:my-humanizer` | Strip AI-writing patterns from prose (Wikipedia's "Signs of AI writing"). Runs inline inside the pipeline on everything a person reads: code comments, docs, commit bodies, and the PR body in `push-pr`, review comments in `review-pr`, thread replies in `respond-to-comments`; standalone on any text |
 | `hero-skills:fleet` | Create + converge `FLEET.md`, the local, unversioned map of the repos checked out beside each other (group, port). `sync` scans the folder and proposes rows, `review` reports drift read-only. Every repo skill run from the fleet root fans out to the repos you pick (see `docs/FLEET-MD.md`) |
 | `hero-skills:handoff` | Distill the current conversation into one self-contained work-item for a downstream agent (optionally filed to the tracker, or to **another repo** with `--repo OWNER/NAME`) |
 
@@ -421,7 +420,7 @@ Two skills are stages of `sync` and hidden from the slash menu (`user-invocable:
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:abandon` | Abandon or pause an unmerged branch, stash uncommitted work, switch to default, clear context |
+| `hero-skills:wayfare drop` | Abandon or pause an unmerged branch, stash uncommitted work, switch to default, clear context |
 | `hero-skills:audit-plugin` | Audit the hero-skills plugin itself for quality and consistency |
 
 ## Updating vendored assets in a downstream repo
@@ -493,13 +492,13 @@ with what `auto-approve.yaml` declares.
 
 Every skill reads `HERO.md` from your repo root. It declares your stack so skills don't have to guess. **HERO.md is committed to the repo**. It's team-shared, so every developer and every skill works from the same config.
 
-When project config drifts (new deps, CI changes, switched task runner), skills detect the staleness and remind you to run `hero-skills:init-hero recalibrate` to refresh. There is no auto-pre-commit hook for this. It was too slow. Run the refresh on demand.
+When project config drifts (new deps, CI changes, switched task runner), skills detect the staleness and remind you to run `hero-skills:wayfare init recalibrate` to refresh. There is no auto-pre-commit hook for this. It was too slow. Run the refresh on demand.
 
 **`recalibrate` is on fourteen skills.** When a skill does the wrong thing
 because its config is wrong, you fix it where you noticed:
 `hero-skills:ship-pr recalibrate` asks about the eight fields `ship-pr` reads
 across Repository, CI/CD and Deployment, writes what you confirm, commits, and
-stops. It does not then ship. `hero-skills:init-hero recalibrate` is the
+stops. It does not then ship. `hero-skills:wayfare init recalibrate` is the
 whole-file pass. `scripts/hero-fields.sh SKILL` prints the fields of any skill
 that carries the verb, with their current values. See
 [docs/RECALIBRATE.md](docs/RECALIBRATE.md).
@@ -533,7 +532,7 @@ Here's what a minimal config looks like:
 - Dev command: uvicorn main:app --reload
 ```
 
-No `HERO.md`? Skills fall back to auto-detection. Run `hero-skills:init-hero` to generate one. It investigates your repo and asks smart questions to fill in what it can't detect.
+No `HERO.md`? Skills fall back to auto-detection. Run `hero-skills:wayfare init` to generate one. It investigates your repo and asks smart questions to fill in what it can't detect.
 
 <details>
 <summary><strong>Full config reference</strong></summary>

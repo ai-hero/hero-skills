@@ -176,7 +176,7 @@ own branch for that reason and closes the bots' PRs after its own merge.
      reachable here (harden's reachability questions);
    - CI on the head.
 
-   Humanize it (`hero-skills:my-humanizer inline`), then post **one** review:
+   Humanize it ([docs/HUMANIZING.md](../../../docs/HUMANIZING.md)), then post **one** review:
    `gh pr review N --approve --body …` when the class is patch/minor, or a
    major whose call sites are clean, CI is green, and step 2 was green;
    otherwise `--request-changes` naming what fails (the local test failure
