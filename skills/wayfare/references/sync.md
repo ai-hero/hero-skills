@@ -10,7 +10,7 @@ propose, write only what the user confirms**.
 `design-project`.** Step 0 printed every key. Walk them in this order, propose
 a value for each one that is unset or `none` where one can be found, and write
 only what the user confirms. A `none` the user confirms is a complete answer;
-plan stops re-proposing it.
+sync stops re-proposing it.
 
 1. **Which side of the design system is this repo?** Read `role` under
    `## Design System`:
@@ -767,7 +767,7 @@ So the pass runs across the roadmap:
    derived above, `budget` = the member count, `budget_max` = `2 * budget`. The rest of
    the format is not optional. `anchors.source` and `anchors.target` are anchored
    here, from the heads this run already resolved: a non-`done` item with no
-   `anchors.target` is a store defect the *next* plan reports **when
+   `anchors.target` is a store defect the *next* sync reports **when
    `$DESIGN_PROJECT` is a project id**, the same carve-out the store-defects
    finding uses, since self-review mode resolves no target head to anchor.
    So a pass that omits `anchors.target` while a design project is configured

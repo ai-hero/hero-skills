@@ -9,7 +9,7 @@ bad value does. Read in Step 0 of every verb.
 ## Wayfare
 
 - source-repo: . # the repo wayfare runs in; virtually always `.`
-- design-project: https://claude.ai/design/PROJECT_UUID # a claude.ai/design link or bare project UUID; `ask` = prompt for the link in-session, never stored; `none` disables the target and runs plan in self-review mode (source only) — plan asks each run whether to add one, unless the comment says `none # PERMANENT — reason` (a repo that structurally can't have one)
+- design-project: https://claude.ai/design/PROJECT_UUID # a claude.ai/design link or bare project UUID; `ask` = prompt for the link in-session, never stored; `none` disables the target and runs sync in self-review mode (source only) — sync asks each run whether to add one, unless the comment says `none # PERMANENT — reason` (a repo that structurally can't have one)
 - design-transport: auto # auto | designsync | manual — how the design snapshot is refreshed (see Reading the target)
 - feedback-repo: none # OWNER/NAME GitHub repo where design-feedback and architecture-feedback issues are filed; `none` keeps feedback in local packets
 - ux-flow: flows/ # optional path, relative to the DESIGN PROJECT ROOT, holding the UX prototype flow / guided tour; `none` = the design genuinely has none

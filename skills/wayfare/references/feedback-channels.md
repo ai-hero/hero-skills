@@ -4,11 +4,14 @@ Every other wayfare edge flows inward: design system → app design → code. Th
 three flow back out. What **building** teaches gets carried to whoever owns the
 thing it disagrees with:
 
-| Kind | Goes to | Owned by | Destination config |
-| --- | --- | --- | --- |
-| `design-feedback` | the **app design** project — a screen, a flow, a state | the design team | `feedback-repo` |
-| `architecture-feedback` | the **app design** project — a boundary, a dependency direction, an invariant the design assumes and the code disproves | the design team | `feedback-repo` |
-| `design-system-feedback` | the **design system** — a token, a component API, a specimen, a guidance card | the design-system repo | `design-system-repo` |
+Every signal is `type: signal` (docs/PLAN.md); `channel` says which lane it
+takes:
+
+| `channel` | Goes to | Owned by | Destination config | Delivered as |
+| --- | --- | --- | --- | --- |
+| `design` | the **app design** project — a screen, a flow, a state | the design team | `feedback-repo` | a GitHub issue |
+| `architecture` | the **app design** project — a boundary, a dependency direction, an invariant the design assumes and the code disproves | the design team | `feedback-repo` | a GitHub issue |
+| `design-system` | the **design system** — a token, a component API, a specimen, a guidance card | the design-system repo | `design-system-repo` | a **message** into its `.plans/inbox/` (`docs/MESSAGES.md`) |
 
 **Nothing in this flow may change the thing it is about.** Wayfare reads the
 target and the design system and never writes either; one-shot works inside the
@@ -17,9 +20,9 @@ and *delivered separately, on the user's word*.
 
 Why two design lanes rather than one: a surface divergence and a boundary
 divergence get read by different people and answered on different evidence. A
-`design-feedback` item is settled by looking at a screen; an
-`architecture-feedback` item is settled by tracing a call. Folding them into one
-channel is how the architectural ones get triaged as visual nitpicks.
+`channel: design` signal is settled by looking at a screen; a
+`channel: architecture` signal is settled by tracing a call. Folding them into
+one channel is how the architectural ones get triaged as visual nitpicks.
 
 ## Capture, then promote — two forms, one owner at a time
 
@@ -30,8 +33,9 @@ state at any moment.
    `## Design Feedback` section. Mid-build is the wrong time to allocate a store
    id and author a full item, and this section is what one-shot's close-out gate
    reads when a Definition-of-Done line legitimately fails.
-2. **Promote, at `sync`.** Each undelivered entry becomes a feedback item of the
-   right type (`origin: wayfare`, `discovered_from` = the task id). The
+2. **Promote, at `sync`.** Each undelivered entry becomes a `type: signal`
+   item on the right `channel` (`origin: wayfare`, `discovered_from` = the
+   task id). The
    entry's marker becomes `[item: ID]` and **the item owns the state from that
    point on.** The sync also authors feedback items directly from its own
    reconciliation findings — those never pass through a task at all, because
@@ -119,18 +123,21 @@ log, and it is dropped, not followed.
 ```markdown
 ---
 id: 61
-type: design-feedback # or architecture-feedback | design-system-feedback
+type: signal
+channel: design # design | architecture | design-system
 origin: wayfare
-discovered_from: 12 # the task this was found while building; absent when plan authored it directly
-entry: DF-12-2026-07-25-1 # the capture entry this was promoted from; absent when plan authored it directly. Makes the [item: ID] link checkable from both ends
+discovered_from: 12 # the task this was found while building; absent when sync authored it directly
+entry: DF-12-2026-07-25-1 # the capture entry this was promoted from; absent when sync authored it directly. Makes the [item: ID] link checkable from both ends
 title: Consent is ordered before account linking
-status: accepted # new | todo | queued | delivered | rejected
+status: accepted # new | accepted | ready | active | done
+resolution: # delivered | rejected — set at done
 depends_on: []
-subject: design/auth/sign-in.md # the path this is about — in the app design for design-feedback, in the design system for design-system-feedback; for architecture-feedback, a DESIGN.md section or absent (the source: line carries the evidence)
+subject: design/auth/sign-in.md # the path this is about — in the app design on channel design, in the design system on channel design-system; on channel architecture, a DESIGN.md section or absent (the source: line carries the evidence)
 source: services/auth/link.go # the source file that disproves it
-anchors.target: FULL_COMMIT_SHA # head of the snapshot `subject` lives in: $SNAP for design-/architecture-feedback, $DS_SNAP for design-system-feedback
-anchors.source: FULL_COMMIT_SHA # source head this was found against
-delivered_to: "" # issue URL, or the path written into the design-system store
+anchors:
+  target: FULL_COMMIT_SHA # head of the snapshot `subject` lives in: $SNAP on channels design and architecture, $DS_SNAP on channel design-system
+  source: FULL_COMMIT_SHA # source head this was found against
+delivered_to: "" # issue URL, or the message id deposited into the design-system repo's inbox
 ---
 
 ## What the design says
@@ -147,20 +154,33 @@ The thing the design could not know. If this section cannot be written, the
 item is a bug report against the source, not feedback — delete it and fix the
 code.
 
-## Comments
+## Log
 
-- 2026-07-26 (rahul): dated, append-only entries — never rewrite or delete one
+- 2026-07-26 (rahul) note: dated, append-only entries — never rewrite or delete one
 ```
 
-`status` is the delivery lifecycle, and `hero_ready_items` knows it: `new`
-lists as `new`; `accepted` and `queued` list as `feedback`; `delivered` and
-`rejected` list as `done` and count as terminal, so a task that
-`depends_on` an answered question unblocks. **A feedback item is never
-READY** — nothing builds it.
+`status` is the delivery lifecycle (docs/PLAN.md's one lifecycle, using the
+states a signal needs):
+
+| Status | Means |
+| --- | --- |
+| `new` | captured, not yet promoted |
+| `accepted` | promoted to a signal item, not yet in a delivery batch |
+| `ready` | rendered and awaiting the hand-off — the packet path's resting state |
+| `active` | a delivery run is filing it right now |
+| `done` + `resolution: delivered` | it reached the destination |
+| `done` + `resolution: rejected` | the other side declined it |
+
+`hero_ready_items` lists `accepted` and `ready` as `feedback`, and `done` as
+`done`, which counts as terminal, so a task that `depends_on` an answered
+question unblocks. **A signal is never handed out as READY** — nothing
+builds one; `ready` here means ready to *deliver*.
 
 `rejected` is reached only by the user reporting that the other side declined
 it, and it is kept deliberately: "we raised this and they said no" is the
-history that stops it being raised again next quarter.
+history that stops it being raised again next quarter. It is a `resolution`
+and not a status precisely so that one comparison — `status == done` —
+unblocks the dependents either way.
 
 ## Delivery
 
@@ -177,10 +197,10 @@ into a third party's tracker. The body is the items and nothing else.
 ### 1. Resolve the destination
 
 Which key applies is decided by the item's **type**, never by which key happens
-to be set. Delivering an `architecture-feedback` item to `design-system-repo`
+to be set. Delivering a `channel: architecture` item to `design-system-repo`
 because `feedback-repo` was `none` is a misroute, not a fallback.
 
-**`design-feedback` and `architecture-feedback` → `$FEEDBACK_REPO`.** From Step
+**`channel: design` and `channel: architecture` → `$FEEDBACK_REPO`.** From Step
 0 it is either `none` or a validated `OWNER/NAME` — the strict-shape check
 already ran, so never re-derive it from other config:
 
@@ -200,10 +220,28 @@ already ran, so never re-derive it from other config:
   packet path. When the items clearly deserve a tracker, say once that setting
   `feedback-repo` in HERO.md enables direct filing.
 
-**`design-system-feedback` → `$DS_REPO`** (Step 0's validated value), which
-is a **local checkout path**, not a GitHub slug: delivery writes the item into
-that repo's own `.plans/` store, where its wayfare picks it up as ordinary
-work. Resolve it read-only, and resolve it **before** anything else:
+**`channel: design-system` → `$DS_REPO`** (Step 0's validated value), which
+is a **local checkout path**, not a GitHub slug. Delivery deposits a
+`type: ask` **message** into that repo's `.plans/inbox/`, per
+`docs/MESSAGES.md`, and that repo's own wayfare promotes it to an item.
+
+**It is a message, not an item, and the distinction is the whole rule.**
+`docs/MESSAGES.md` allows exactly one kind of write outside this repo —
+a file in another checkout's `.plans/inbox/` — and requires the recipient to
+promote it before it becomes work. Writing a ready item into the sibling's
+`items/` instead, which this lane used to do, is a sibling writing that
+repo's roadmap: its one-shot builds it, and its `sync` reads it as existing
+coverage and suppresses the `uncovered` finding that would have caught it.
+So the deposit follows the standard's send half in full: the fleet gate, the
+`(from, about)` dedupe probe, the temp-name-then-`mv`. Ids for the message
+come from `hero_msg_id`, not from either store's item sequence.
+
+**No `FLEET.md` row for the design-system repo means no deposit.** The fleet
+gate is what makes a message's `from:` provenance worth anything, and a
+sibling that is not on the map cannot be addressed. Report it and use the
+packet path, saying once that adding the row enables direct delivery.
+
+Resolve the checkout read-only, and resolve it **before** anything else:
 
 ```bash
 # hero_root takes NO argument — it always returns the current repo — so it
@@ -221,14 +259,12 @@ it creates `.plans/` and edits `.git/info/exclude` in whatever root it is
 handed — and `$DS_REPO` comes from HERO.md, which is attacker-controlled in a
 cloned repo. Calling it here would mutate a repository the user has not yet
 named. It runs in step 4, **after** the user has typed the resolved absolute
-path.
-
-Ids come from **that** store's sequence, never this one's, re-checked
-immediately before writing. Zero-pad only the filename.
+path. A sibling with no `.plans/inbox/` cannot receive a deposit: report it
+and use the packet path rather than creating a store in someone else's repo.
 
 ### 2. Collect and key the items
 
-Collect every `accepted` and `queued` feedback item of the kinds this delivery
+Collect every `accepted` and `ready` feedback item of the kinds this delivery
 covers. **One delivery per destination** — never one issue carrying both design
 and design-system feedback, because they are answered by different people.
 
@@ -310,7 +346,7 @@ Then the gate. It is its **own** gate, not folded into sync's proposal confirm:
 ```
 Design feedback delivery
   Destination: acme/design      (from HERO.md feedback-repo — NOT named by you)
-  Lane:        design-feedback + architecture-feedback
+  Channels:    design + architecture
   Title:       Design feedback from acme/web (2 items)
   Filing:      2 items
   Skipping:    1 item already covered by acme/design#88
@@ -362,9 +398,9 @@ report it and offer the packet path. Do not mark.
 **Both lists get marked, and an empty `to_file` still performs marking.** This
 is what makes the channel recover instead of livelocking:
 
-- **`to_file`** → `status: delivered`, `delivered_to:` the URL (or store path)
-  just returned.
-- **`already_covered`** → `status: delivered`, `delivered_to:` the issue found
+- **`to_file`** → `status: done`, `resolution: delivered`, `delivered_to:` the URL, or the message id
+  just deposited.
+- **`already_covered`** → `status: done`, `resolution: delivered`, `delivered_to:` the issue found
   in step 3. These items were filed by an earlier run that died before marking;
   they need no filing, only the status they never got.
 
@@ -375,7 +411,7 @@ while the user is re-prompted forever.
 
 ### 6. Reconcile against a captured baseline
 
-Capture `BEFORE` — the `accepted`-plus-`queued` count — in step 2, **before**
+Capture `BEFORE` — the `accepted`-plus-`ready` count — in step 2, **before**
 anything changes. After marking, re-scan and assert:
 
 ```
@@ -400,14 +436,14 @@ holds someone else's feedback, undetectably.
 Guard `$STORE` first — `hero_work_store` can fail, and an empty `$STORE` turns
 the path into `/.feedback/…`. If it is empty or unlistable, STOP and name it.
 
-Set those items `status: queued`, **not** `delivered`. Nothing reached the
-destination; a file in a git-ignored store carried nothing anywhere. A queued
+Set those items `status: ready`, **not** `done`. Nothing reached the
+destination; a file in a git-ignored store carried nothing anywhere. A `ready`
 item stays in the backlog and re-surfaces every sync.
 
 **Queued → delivered** is the user's report that it landed: they name the issue
 URL, you validate it is `https://`-shaped and on the destination host, and the
-status flips with `delivered_to` set. Until then it stays queued. Re-running the
-packet path for an already-queued item **updates its existing `delivered_to` in
+status flips with `delivered_to` set. Until then it stays `ready`. Re-running the
+packet path for an already-`ready` item **updates its existing `delivered_to` in
 place** — it never appends a second packet.
 
 Never write a packet into a snapshot repo (`$STORE/.cache/design`,
@@ -416,14 +452,16 @@ disk — a snapshot mirrors its project and nothing else.
 
 ## Reading the history back
 
-The sync's **feedback** finding collects `accepted` and `queued` items across all three
+The sync's **feedback** finding collects `accepted` and `ready` items across all three
 lanes. Two further obligations:
 
 - **Recording a rejection.** When the user reports that the other side declined
-  a delivered item, flip `status: delivered` → `rejected` — same
-  `delivered_to`, same date — and append the reason to `## Comments`. This is
-  the only transition that writes `rejected`, and without it the state is
-  unreachable and every section above is dead.
+  a delivered item, flip `resolution: delivered` → `rejected` — the status
+  stays `done`, same `delivered_to`, same date — and append the reason to
+  `## Log`. This is the only transition that writes `rejected`, and without
+  it the resolution is unreachable and every section above is dead. The
+  status not moving is the point: the question is answered either way, so
+  the dependents stay unblocked.
 - **Consulting it.** When a *new* item names a `subject:` some `rejected` item
   already names, say so in the proposal: "this was raised on acme/design#71 and
   rejected on 2026-07-22". Otherwise the rejection history is written and never

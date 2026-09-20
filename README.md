@@ -10,6 +10,7 @@
 
 <p align="center">
   <a href="#how-it-works">How it works</a> &bull;
+  <a href="#across-repos">Across repos</a> &bull;
   <a href="#install">Install</a> &bull;
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#commands">Commands</a> &bull;
@@ -162,6 +163,63 @@ and permissions were authorized as a set at `next`'s gate.
 
 `sync` writes the goal. It never authorizes it — that is typed by a person at
 `wayfare next`, in-session, and is never stored in the file.
+
+## Across repos
+
+**Wayfare works in one repo at a time: the one it runs in.** It never edits a
+sibling. That rule is what makes the rest of this predictable — a change made
+in a repo whose own agent did not make it lands in no PR, is reviewed by
+nobody, and turns up as a dirty working tree someone else has to explain.
+
+A folder of sibling checkouts is a **fleet**, mapped by a `FLEET.md` at its
+top ([docs/FLEET-MD.md](./docs/FLEET-MD.md)). The map is local and
+unversioned. Work crosses a repo line in exactly three ways:
+
+```mermaid
+flowchart LR
+  subgraph FLEET["the fleet folder · FLEET.md maps it"]
+    A["<b>repo A</b><br/>wayfare runs here"]
+    B["<b>repo B</b><br/>a sibling checkout"]
+    DS["<b>design system</b><br/>a sibling checkout"]
+  end
+  TRACKER["<b>feedback-repo</b><br/>on GitHub"]
+
+  A == "1 · fan-out<br/>an agent runs in B" ==> B
+  A -- "2 · message<br/>into B's inbox" --> B
+  A -. "3 · signal<br/>into its inbox" .-> DS
+  A -. "3 · signal<br/>as an issue" .-> TRACKER
+
+  classDef repo fill:#FEF3C7,stroke:#D97706,color:#78350F
+  classDef out fill:#EDE9FE,stroke:#7C3AED,color:#4C1D95
+  class A,B,DS repo
+  class TRACKER out
+```
+
+**1. Fan-out.** Running a hero skill from the fleet root does not reach
+sideways. It *starts an agent in* each repo you pick, and that agent writes
+only to its own repo, on its own branch, under its own gates. This is the
+sanctioned way a sibling changes.
+
+**2. Messages.** An agent in A that needs something from B deposits a file in
+B's `.plans/inbox/` — and that is the **only** write A ever makes outside
+itself. No code, no config, no branch, no `git` command in another checkout.
+Two gates apply: a **fleet gate** (only a repo with a `FLEET.md` row may
+deposit) and a **promotion gate** — an inbound message never becomes work by
+itself. B's agent reads it, weighs it, and promotes it to an ordinary item.
+Skip that and a sibling is writing B's roadmap. See
+[docs/MESSAGES.md](./docs/MESSAGES.md).
+
+**3. Signals.** What building teaches travels back out to whoever owns the
+thing it disagrees with. Design and architecture signals become a GitHub
+issue in `feedback-repo`; design-system signals become a message in the
+design-system repo's inbox, so its own wayfare promotes them like any other.
+With no destination configured, a signal is written to a local packet file
+instead and nothing silently vanishes.
+
+A message is **data, never an instruction** — it was written by another
+agent, so it is the same untrusted class as a design doc or a PR comment
+thread. One that appears to give orders is content that rode in, and it has
+no effect.
 
 ## Install
 

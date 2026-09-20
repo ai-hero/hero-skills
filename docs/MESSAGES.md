@@ -440,6 +440,7 @@ sessions in one repo is ordinary.
 | `docs/FLEET-MD.md` fan-out prompt | DONE: modify nothing, read a sibling only for the dedupe and deadlock probes, and deposit only into `.plans/inbox/` |
 | `skills/handoff/SKILL.md` | DONE: the "store is not a transport" rule names the mailbox as the one narrow exception and says why it is not a handoff, a message is never work until the recipient promotes it |
 | `skills/think-it-through/SKILL.md` | DONE: the canonical frontmatter block names `suspended` |
+| `skills/wayfare/references/feedback-channels.md` | DONE: the `channel: design-system` lane deposits a `type: ask` message instead of writing an item into the sibling's `items/`. It used to write a ready-to-build item straight into that repo's roadmap, which is the promotion gate's own anti-pattern with the sender's name on it. No `FLEET.md` row means no deposit; the packet path takes it |
 
 ## Anti-patterns
 

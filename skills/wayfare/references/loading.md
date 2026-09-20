@@ -110,7 +110,7 @@ fi
 
 # ux-flow also reaches `git show`/`git diff` in pathspec position, so it gets
 # the same rc split. Three states must stay distinct: UNSET (never looked —
-# plan goes looking), NONE (declared absent — plan stops re-proposing), and a
+# sync goes looking), NONE (declared absent — sync stops re-proposing), and a
 # path. Collapsing UNSET into NONE is what would make a missing UX flow
 # silently stop being reported.
 UX_FLOW=$(hero_field ux-flow); rc=$?
