@@ -100,8 +100,9 @@ below runs its `review` and offers its `sync`. A file's presence is not configur
 so nothing about it is written to HERO.md.
 
 **Mode detection.** The roadmap exists iff `.plans/` holds at least one item
-whose **frontmatter** `type` is one of wayfare's six `sync`-written kinds,
-read it with `hero_item_field "$f" type` per `"$STORE"/*.md`, never a raw grep (a body
+whose **frontmatter** `type` is `task`, `signal` or `goal` (an `idea` alone
+is not a roadmap), read with `hero_item_field "$f" type` per
+`"$STORE"/items/*.md`, never a raw grep (a body
 mentioning `type: task` would trip it). First confirm the store lists
 (`ls "$STORE"` succeeds): a clean pass with no task item means bootstrap; a
 store that will not list is a failed check, so STOP and name the path.
@@ -136,9 +137,9 @@ and never skip either:
    applied**: match `reply_to` against the `awaiting:` of this store's
    `suspended` items, check the reply's `from:` equals the original
    message's `to:`, print the reply text beside the item it answers, and on
-   confirmation append it to that item's `## Comments` and, when the last
-   awaited id is answered or declined, restore `awaiting` (the
-   status the item left; an item that left `ready` returns to `ready` only
+   confirmation append it to that item's `## Log` as a `note` line and,
+   when the last awaited id is answered or declined, clear `awaiting` (the
+   item keeps the status it had; a `ready` one becomes READY again only
    on this confirmation, since the answer is content the locked plan has
    not absorbed). A reply whose `reply_to` matches nothing is an orphan:
    report it by path and id, leave it `new`, never `claimed`. A consumed
@@ -302,7 +303,7 @@ carry, without the plugin learning either.
 
 **The `deps` stage: the bots' open PRs.** A dependency bot opens PRs nobody
 planned; each is a bump already implemented on a branch that is not ours.
-This stage turns each into a `security` item with `bot:` so that `do ID`
+This stage turns each into a `shape: dependency` task with `bot:` so that `do ID`
 can carry it and a goal can cover it:
 
 ```bash
@@ -335,11 +336,11 @@ titles are stable, and one that does not parse is read from the diff).
 Classify the bump `patch` / `minor` / `major`, match it to an alert for
 severity, and find an existing item whose `pr:` is this PR. Print one table:
 `#N  package  from → to  class  severity  CI  mergeState  age  item`. Propose
-one item per PR that has none (the security-with-`bot:` format under *Item
+one item per PR that has none (the dependency-with-`bot:` format under *Item
 formats*, `status: accepted`, `severity` from the alert or `none` / `unknown`),
-reuse the existing one otherwise with its `## Comments` intact, and write on
+reuse the existing one otherwise with its `## Log` intact, and write on
 confirmation. A PR harden's batch (its A4) supersedes is noted on the item
-and left `accepted` with a comment naming the batch item. The batch's recipe
+and left `accepted` with a `note` line naming the batch item. The batch's recipe
 closes the bot's PR after its own merge, so the two never race. No open bot
 PRs → `(–)` and one line saying so.
 
@@ -508,22 +509,23 @@ follows):
   other rows structurally cannot produce: a screen resolves to its route,
   the route exists, and coverage reports `built` while the page looks wrong.
   Run it per *Polish: the fine-tuning pass*: measured rows only, split three
-  ways (`polish` / `design-feedback` / `design-system-feedback`), one item per
+  ways (a `visual` task / a `channel: design` signal / a `channel:
+  design-system` signal), one item per
   screen. An unmeasurable row is `unverified`, not a proposal. **Where the row
   lands depends on what owns the screen**, and all three cases occur:
   a task still open owns its own drift (the row goes in that task's
   Definition of Done. This is the same rendered check **covered** already
   requires before proposing `done`, so it is one read, not two); a task
-  already `done` gets a `polish` item for drift that appeared after it closed;
+  already `done` gets a `visual` task for drift that appeared after it closed;
   and a shipped screen with **no task item at all** (legacy surfaces, or work
-  that predates the roadmap) gets a `polish` item too. That last case is the
+  that predates the roadmap) gets a `visual` task too. That last case is the
   one a done-gated reading drops on the floor, and it is where most of a mature
   repo's drift lives.
 - **in-code-not-in-design**: shipped behaviour with no surface in the target,
   found by resolving source symbols the other way. Each row carries an opinion
   on what should happen to it, in a sentence or two; **a row without an opinion
   is a changelog entry**, and one with an opinion that the design should change
-  is a `design-feedback` item.
+  is a `channel: design` signal.
 
 **Source lane: the code:**
 
@@ -539,7 +541,7 @@ follows):
 - **architecture drift**: a structural claim in `DESIGN.md` that the code no
   longer satisfies, or a boundary the target design assumes and the source does
   not have. Propose a `type: task` + `shape: structural` item when the fix belongs in the
-  code, and a `type: architecture-feedback` item when the design's structural
+  code, and a `channel: architecture` signal when the design's structural
   assumption is the thing that is wrong. The two are not interchangeable: one
   is work, the other is a question for someone else.
 - **premise defects**: an item whose `## Approach` or `## Subtasks` rest on a
@@ -549,8 +551,8 @@ follows):
 
 **Feedback lane: the three return channels:**
 
-- **feedback**: `## Design Feedback` entries marked `[undelivered]`, plus
-  every `accepted`/`queued` feedback item. Propose promoting the entries to items
+- **feedback**: `signal` lines in `## Log` marked `[undelivered]`, plus
+  every `accepted`/`ready` signal item. Propose promoting the entries to items
   and delivering per `references/feedback-channels.md`, which owns the
   manifest, the in-session destination gate, and the success-gated statuses.
   **One delivery per destination**, never one issue carrying two lanes. This is
@@ -582,18 +584,17 @@ follows):
 - **store defects**: `hero_ready_items` stderr warnings (dangling deps,
   duplicate ids, unrecognized statuses; the script checks those and nothing
   below); plus, checked by this finding itself since the listing never reads
-  a goal's body: every `type: goal` item's `parent` four ways: each id
-  exists, is a build type, appears in no other goal's `parent` (two goals
-  pre-authorizing merges on the same task is a real hazard), and no
-  earlier entry `depends_on` a later one (the order the turn walks must not
+  a goal's body: every `type: goal` item's members (`hero_goal_members`)
+  two ways: each is a `task`, and no earlier member `depends_on` a later
+  one (the order the turn walks must not
   contradict the gate each task has); a goal's `depends_on` entry that is
   not a `type: goal`, or that disagrees with the derivation from its
   tasks' `depends_on`; a goal whose `## Permissions` is missing, lacks a
   key, or holds a value outside `yes`/`no` (`verify`/`none` for `deploy`),
   or whose `## Permissions` changed while `active`; a `budget_max` that is absent, not a positive
   integer, or below `budget`; a `concurrency` key left over from the
-  per-task-PR model, which nothing reads any more and which plan removes; an `active` goal holding a `parent`
-  id its `## Comments` do not account for; and a `committed` build item that
+  per-task-PR model, which nothing reads any more and which plan removes; an `active` goal holding a member
+  its `## Log` does not account for; and a `committed` task that
   no open goal has as a member (`hero_ready_items` warns on it). That is the
   residue of a goal whose branch was abandoned: the item claims work the
   repo does not have, and nothing else re-opens it, because only the goal's
@@ -605,27 +606,27 @@ follows):
   built on ancestry reports every task of every completed goal and offers
   to re-open finished work. A live `active` goal is likewise not a defect:
   its tasks are committed and unmerged by design until its step 7. Every admission opens a dated
-  entry with a fixed prefix (*Admitting discovered work*), so a `parent` that
+  entry with a fixed prefix (*Admitting discovered work*), so a member set that
   grew without one is a hand-edit under an authorization, reported and never
   silently adopted. `budget` is not checked this way: it is an expectation
   nothing raises, so a commit count above it is information, not a defect.
   **This is an integrity check against hand-edits, and nothing more**: a
-  turn that admits an item writes both the `parent` entry and its comment, so
+  turn that admits an item writes both the `parent` and its log line, so
   an admission the turn should never have made is perfectly accounted for and
   looks identical here. What guards that is the path scope and the never-admissible
   list (*Admitting discovered work*), the gate re-display (*Starting a goal*,
   step 2), and `budget_max`, not this listing. A goal the check does
   flag cannot be repaired by `sync`, because only an out-of-band `done` may leave an
-  `active` goal's `parent`, so report it with its one exit: the user
+  `active` goal, so report it with its one exit: the user
   re-authorizes, which drops the goal to `accepted`, lets the next `sync` re-cut
   it, and sends it back through `next`'s gate. Also a `accepted` item sitting in
-  an `active` goal's `parent` under `absorb: no`, which is waiting on a
-  person and shows here on every sync until someone plans it; a build item
+  an `active` goal under `absorb: no`, which is waiting on a
+  person and shows here on every sync until someone plans it; a task
   at `ready` or further, not `done`,
   that no `accepted` or `active` goal has as a member (the listing warns on stderr; the
   fix is the goals stage of this same run, never a hand-written `parent`);
-  every `[item: N]` marker in a `## Design Feedback` section checked per
-  `references/feedback-channels.md` (N exists, is a feedback type, its
+  every `[item: N]` marker on a `signal` line in `## Log` checked per
+  `references/feedback-channels.md` (N exists, is a `signal`, its
   `entry:` names this entry, its `discovered_from` is this task); a goal
   whose `budget` is absent, zero, or not a positive integer; plus any
   non-`done` item whose `anchors.target` is absent, not a 40-hex SHA (legacy or
@@ -644,7 +645,7 @@ follows):
 - **stale waits**: a `suspended` item whose `expires:` (carried on the
   item beside `awaiting:`, since the sender keeps no copy of the message)
   has passed with no reply: report it, and propose either re-sending (a new
-  message, new id) or restoring `awaiting` with a comment saying the
+  message, new id) or clearing `awaiting` with a `note` line saying the
   question is being answered here instead. This finding is where expiry is
   evaluated; nothing sweeps the fleet. A wait nobody re-reads is a hang
   with a status.
@@ -653,14 +654,14 @@ Apply only what the user confirms. **Applying stale rows** splits on whether
 the task's plan is already locked:
 
 - **`accepted` or `planning`**: the task absorbs the change: update
-  `anchors.target` to the new head, append a dated `## Comments` entry
+  `anchors.target` to the new head, append a `note` line to `## Log`
   summarizing what moved, and (for `planning`) fold the new design into the
   in-flight planning run.
 - **`ready` or later** (`active`, `committed`, `review`, `done`): the plan is
   locked; never mutate it to chase the design. Propose a **new `accepted`
   task** covering the design delta, `depends_on` the existing one, with
   `anchors.target` = the new head. The original keeps its `anchors.target` and ships
-  exactly as planned; append a comment on it pointing at the follow-up
+  exactly as planned; append a `note` line on it pointing at the follow-up
   (`superseded by task N for the vN design changes`). A task mid-flight
   is information, not interruption.
 
@@ -727,7 +728,7 @@ So the pass runs across the roadmap:
 
 4. **Goals: cover every planned item, bottom-up, and re-cut what is
    already there.** A goal is the unit `next` authorizes and runs, and
-   every item in its `parent` must already be `ready` (*Starting a goal*,
+   every member must already be `ready` (*Starting a goal*,
    step 1), so the end of this pass is the one moment in the workflow
    where a goal can be formed *from* the set instead of reassembled by
    hand afterwards. Roadmap mode has just settled the
@@ -736,11 +737,11 @@ So the pass runs across the roadmap:
    without the reasoning that produced it.
 
    **This stage always runs, and it ends with no planned item outside a
-   goal.** `next` walks goals and never items, so a `ready` build item no
+   goal.** `next` walks goals and never items, so a `ready` task no
    goal has as a member is never handed out: it sits READY until someone types `do N`
    by hand, and nothing in the loop ever reaches it. That is the orphan this
    stage exists to prevent. The invariant at the end of the pass: **every
-   build item at `ready` or further and not `done` is in exactly one open
+   task at `ready` or further and not `done` is in exactly one open
    goal.** A single item that adds up to nothing larger is a one-item goal
    with `budget: 1`: small, but reachable. The stage runs even when the
    plan pass stopped early or the user declined a ready-mark: it groups
@@ -754,7 +755,7 @@ So the pass runs across the roadmap:
    upward: the first goal is the smallest outcome whose tasks depend on
    nothing outside the group; the next is the smallest outcome whose
    remaining dependencies are all inside goals already formed; and so on
-   until every `ready` build item is in a goal. A goal's own `depends_on`
+   until every `ready` task is in a goal. A goal's own `depends_on`
    names the **goals** its tasks' dependencies fall in, derived and never
    authored: if any task in goal B `depends_on` a task in goal A, then
    B `depends_on: [A]`. That derived order is what `next` walks, so a goal
@@ -767,7 +768,7 @@ So the pass runs across the roadmap:
    never by area or layer. A group whose Definition of Done cannot be stated
    as one user-visible outcome is not a goal; it is a filter over the
    roadmap, and it will report `done` without anything having shipped that a
-   person would notice. Three kinds state their outcome differently, and
+   person would notice. Three shapes state their outcome differently, and
    the outcome test must not leave them orphaned:
    - **Security items**: `ready` bot items and harden items group into one
      goal per round whose DoD is "no open alert this round found, every
@@ -775,12 +776,12 @@ So the pass runs across the roadmap:
      their turns run a different pipeline (*Carrying a bot's PR*), and
      because a person authorizing a task goal should not be authorizing
      dependency merges in the same breath.
-   - **Bugs and polish** group per surface, the screen or flow they
+   - **Defects and visual work** group per surface, the screen or flow they
      correct, into a goal whose DoD is that surface working as designed:
      each item's `success` line, plus one line stating the surface's story
      end to end. A bug on a surface a task in this round also changes
      joins that task's goal instead.
-   - **Architecture items** join the goal of the first task that
+   - **Structural items** join the goal of the first task that
      `depends_on` them; one with no dependent task this round is its own
      goal, whose DoD is the invariant the item names, stated as something
      the code now enforces.
@@ -799,28 +800,28 @@ So the pass runs across the roadmap:
    ends here, at the re-cut, and at *Admitting discovered work* for the goal
    already running. A `new` goal is untriaged
    and has no members. The roadmap view already says to move it to `accepted`
-   or delete it, and the listing does not credit its `parent`. Two kinds
+   or delete it, and the listing does not credit its members. Two states
    of open goal, two rules:
    - **`accepted` goals are re-cut freely.** A task planned this round that
-     serves an existing goal's outcome joins its `parent` (`budget` grows
+     serves an existing goal's outcome joins it (`parent` set; `budget` grows
      with it); a task that went `done` out-of-band or `obsolete` leaves;
      **two goals whose DoDs name one outcome coalesce** into the lower id,
      the other going `done` with a comment pointing at the survivor; **a
      goal whose DoD has become two outcomes splits**, the second outcome
      taking a new id and a comment on the first naming what moved. A
-     coalesce or split re-derives `depends_on`, `parent` order, and `budget`
+     coalesce or split re-derives `depends_on`, member `rank`, and `budget`
      for every goal it touched. A re-cut goal keeps its id and its
-     `## Comments`; every change is a dated comment naming what moved and
+     `## Log`; every change is a dated `note` line naming what moved and
      why. Each proposed change is a row in the same confirm flow as a new
      goal, and a declined row leaves that goal exactly as it was.
    - **`active` goals are frozen, and `sync` never re-cuts one.** Their
-     `parent` and `## Permissions` were shown at `next`'s gate and
+     member set and `## Permissions` were shown at `next`'s gate and
      authorized as a set; changing either from outside changes what was
      authorized. Two edits an active goal takes, neither of them sync's: a
      dropped task that went `done` out-of-band (that shrinks what was
      authorized, never grows it), and an **admission** written by the goal's
      own turn (*Admitting discovered work*). The sync treats an admitted item as
-     covered, because it is in a `parent`, and never proposes a goal for it.
+     covered, because its `parent` is set, and never proposes a goal for it.
      Everything else that belongs to an active goal's outcome is a
      **follow-up goal** with `depends_on` the active one, and a comment on
      the active goal points at it. Before writing one, check it is not
@@ -830,7 +831,8 @@ So the pass runs across the roadmap:
    Each proposal goes through the same confirm flow as any other row, and is
    written in **the full goal item format** (*Item formats* below), not the
    subset this paragraph happens to discuss. The sync decides five of its
-   values: `status: accepted`, `parent` in dependency order, `depends_on` as
+   values: `status: accepted`, `parent` on each member with `rank` in
+   dependency order, `depends_on` as
    derived above, `budget` = the member count, `budget_max` = `2 * budget`. The rest of
    the format is not optional. `anchors.source` and `anchors.target` are anchored
    here, from the heads this run already resolved: a non-`done` item with no
@@ -845,9 +847,8 @@ So the pass runs across the roadmap:
    and the user authorizes, and a goal with none is a goal whose gate cannot
    say what it is asking for. The `## Definition of Done` spans the group.
    Concatenating the tasks' own DoDs is not that: it asserts only what
-   each task already asserts alone. Exclude any task already in
-   another goal's `parent`. Overlapping `parent` is a store defect: two
-   goals pre-authorizing merges on one task.
+   each task already asserts alone. Exclude any task whose `parent` is
+   another goal: one `parent`, so a task is in one goal or none.
 
    **The sync writes the item and stops there. It never authorizes.** The
    approval that grants a goal's `## Permissions` is typed by a person at

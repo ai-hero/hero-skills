@@ -90,7 +90,7 @@ Allocate with real entropy, portably:
 printf 'm-%s' "$(od -An -N3 -tx1 /dev/urandom | tr -d ' \n')"
 ```
 
-`hero_ready_items` globs `*.md` at the store root and does not recurse, so
+`hero_ready_items` globs `*.md` in `.plans/items/` and never in `inbox/`, so
 inbox files are invisible to the listing for free. That is deliberate: an
 inbound message can never be handed to one-shot as READY.
 
@@ -183,7 +183,7 @@ sender's branch.
 ```
 
 `awaited: false` is the deliberate default. A story the bug blocks is still
-blocked, the sender's item says so in its own `depends_on` or comments,
+blocked, the sender's item says so in its own `depends_on` or `## Log`,
 but a suspension waiting on a reply that may never come is the wrong
 mechanism for that. `awaited: true` is for a bug the sender cannot route
 around and wants an answer on by `expires:`.
@@ -191,9 +191,9 @@ around and wants an answer on by `expires:`.
 **Promotion.** The recipient's `wayfare sync` (its `inbox` stage) proposes
 a `shape: defect` task from it: `origin: message`, `msg_id` as provenance, the
 four sections carried in as `## Context`, and a Definition of Done of "the
-repro no longer reproduces, and a test pins it". `bug` rides the build
-lifecycle like `polish` and is exempt from the slice rule for the same
-reason: it is not a story, it is a surface that exists and is wrong.
+repro no longer reproduces, and a test pins it". A `shape: defect` task is
+exempt from the slice rule like `visual`, and for the same reason: it is not
+a story, it is a surface that exists and is wrong.
 Declining the report is `status: declined` on the message with a comment
 saying why; the sender reads that in its own inbox if it asked for a reply.
 
@@ -229,10 +229,9 @@ sender never re-derives them.
    and allocating inside it races that repo's own allocation into a
    duplicate id and a silent mis-resolution.
 4. **Decide whether you are waiting, and suspend first if you are.** An
-   awaited message means the sending item goes `status: suspended` with
-   `awaiting:`, `suspended_from:`, `suspended_at:` and `expires:`, and the
-   full sent text copied into a `## Sent` section, **written before the
-   deposit**. Reversed, a fast reply lands in an inbox with nothing that
+   awaited message means the sending item keeps its `status:` and gains
+   `awaiting:`, `suspended_at:` and `expires:`, and the full sent text
+   copied into a `## Sent` section, **written before the deposit**. Reversed, a fast reply lands in an inbox with nothing that
    claims it, and the sender keeps no copy to rebuild from. The worst case
    in this order is a suspension whose message was never sent: detectable
    (no file with that id in the target's inbox) and recoverable (send again).
@@ -290,7 +289,7 @@ is identical. The difference is entirely in whether the *sender* suspended:
 | | Sender does | Message carries |
 | --- | --- | --- |
 | **async** | deposits, carries on | `awaited: false` |
-| **await** | deposits, then its item goes `suspended` | `awaited: true`, `expires:` |
+| **await** | deposits, then its item gains `awaiting:` | `awaited: true`, `expires:` |
 
 The recipient's behaviour is the same either way: read, then answer or
 decline. `awaited: true` is a courtesy. It says someone is stalled on this,
@@ -307,13 +306,13 @@ polling at all.
 So the waiting work item carries the wait:
 
 ```yaml
-status: suspended
+status: active # unchanged; non-empty `awaiting` is what suspends
 awaiting: [m-7f3a9c] # every id that must come back
 ```
 
 and resumption happens **across sessions**: the next run in the sending repo
 sees the reply in its own inbox, matches `reply_to` against `awaiting`, and
-un-suspends. Suspension is state on disk, not a live call.
+clears it. Suspension is state on disk, not a live call.
 
 **Suspend before you send.** If the deposit happens first and the session
 ends before the suspension is written, a fast reply lands in an inbox with
@@ -325,17 +324,19 @@ with that id in the target's inbox) and recoverable (send it again).
 
 Because the sender keeps no copy, deleting the inbox file destroys the only
 statement of what was asked. So the suspended item records the **full sent
-text**, in a `## Sent` section or a dated Comments entry. It is what a resend
-is built from.
+text**, in a `## Sent` section or a `note` line in `## Log`. It is what a
+resend is built from.
 
-## `suspended` in the status enum
+## `awaiting` is the suspension
 
-`suspended` joins the **build** enum (`feature` / `architecture` / `polish` /
-`security` / `bug`):
+There is no `suspended` status. The enum is
 
 ```text
-new | todo | planning | ready | implementing | committed | reviewing | suspended | done
+new | accepted | planning | ready | active | committed | review | done | dropped
 ```
+
+and an item with a non-empty `awaiting:` is suspended whatever its `status`
+says. `hero_ready_items` prints it as a `suspended` row.
 
 It must be all three of these, and dropping any one reintroduces a defect:
 
@@ -343,10 +344,10 @@ It must be all three of these, and dropping any one reintroduces a defect:
   session off an item that is mid-flight.
 - **Never terminal.** It must not enter `done_ids`, or every item that
   `depends_on` it unblocks while the question is still open.
-- **Loud on the row**, with the outstanding ids and the age:
+- **Holding the ids it waits on**, printed on the row with the age:
 
   ```text
-  suspended 012-device-flow.md — I can sign in with the device flow [awaiting 2 of 3: m-c0fbd5, m-d3e881 — 3d]
+  suspended 012-device-flow.md — I can sign in with the device flow [awaiting 2: m-c0fbd5 m-d3e881 — since 2026-08-30]
   ```
 
   A suspension with no age is indistinguishable from a healthy one. The
@@ -381,12 +382,12 @@ timer and nothing sweeps the fleet; Step 0 only prints the count. Because
 the sender keeps no copy of the message, the item carries its own
 `expires:` beside `awaiting:`.
 
-An expired await returns its item to the **live** state it left,
-`suspended_from:`, recorded when it suspended, whatever that was (an item
-suspended from `implementing` has a branch; `ready` would re-hand it out as
-fresh), with a Comments entry naming which ids lapsed. A reply that
-arrives restores the same field, on confirmation, once the last awaited id
-is answered or declined.
+An expired await clears the lapsed id from `awaiting:`, with a `note` line
+in `## Log` naming which ids lapsed. Nothing restores a status, because
+none changed: the item is **live** again as whatever it was (an `active`
+item has a branch; `ready` would re-hand it out as fresh). A reply that
+arrives clears its id the same way, on confirmation, once the last awaited
+id is answered or declined.
 Never `done`: completing an item because nobody answered silently discards
 the work the question was blocking.
 
@@ -412,11 +413,11 @@ sessions in one repo is ordinary.
 - **Two recipients, one message.** Two sessions in one repo both see the same
   unread file and both act. The recipient flips `status: claimed` with a
   session token and timestamp **before** doing anything, the guard one-shot's
-  `implementing` mark exists to provide. A claim older than **30 minutes** may
+  `active` mark exists to provide. A claim older than **30 minutes** may
   be taken over, and the takeover is *appended*, not overwritten: a stale
   claim with no takeover record is indistinguishable from a live one.
-- **Two resumers.** The mirror on the sending side: the item leaves
-  `suspended` before work restarts.
+- **Two resumers.** The mirror on the sending side: the item's `awaiting:`
+  is cleared before work restarts.
 - **Mutual suspension.** A awaits B while B awaits A; only expiry unwedges
   it, slowly, on both sides. Cheap to detect at send time, glob the target's
   store for a suspended item awaiting this repo, and worth a warning even
@@ -431,15 +432,15 @@ sessions in one repo is ordinary.
 | Where | Change |
 | --- | --- |
 | `hero_msg_id` / `hero_is_msg_id` / `hero_msg_find` / `hero_msg_deposit` | DONE: the send half, and the format checks that had no enforcement point before it |
-| `hero_item_class` (`scripts/hero-lib.sh`) | DONE: `bug` is a build kind; a promoted message is an ordinary item, and the inbox itself is outside the item namespace |
-| `hero_ready_items` status table | DONE: a `build:suspended` arm prints `suspended` with the awaiting annotation, never READY, never in `done_ids` |
-| The `enum=` strings in `hero_ready_items` | DONE: the build enum names `suspended` |
+| `hero_item_type` (`scripts/hero-lib.sh`) | DONE: a promoted message is an ordinary item (`type: task`, `shape: defect`), and the inbox itself is outside the item namespace |
+| `hero_ready_items` status table | DONE: a non-empty `awaiting` prints a `suspended` row with the awaiting annotation, never READY, never in `done_ids` |
+| The `enum=` strings in `hero_ready_items` | DONE: no enum names `suspended`; the flag is `awaiting` |
 | Every per-repo skill's Step 0 | DONE for wayfare, one-shot and think-it-through: each prints `hero_inbox_count`. Nothing else will make an agent notice, and a miscount of zero is indistinguishable from an empty inbox. The remaining per-repo skills are reached through one of those three |
 | `skills/wayfare/SKILL.md` store defects | DONE: `inbox/` is the mailbox, never a legacy subdirectory; `sync`'s `inbox` stage reads it |
 | `skills/fleet/SKILL.md` `sync` | DONE: it deposits a `type: ask` per repo instead of appending to each `AGENTS.md`, and each repo's own agent lands the section in its own PR. A row with no `.plans/` cannot receive one and is reported, never given a store to make the deposit work |
 | `docs/FLEET-MD.md` fan-out prompt | DONE: modify nothing, read a sibling only for the dedupe and deadlock probes, and deposit only into `.plans/inbox/` |
 | `skills/handoff/SKILL.md` | DONE: the "store is not a transport" rule names the mailbox as the one narrow exception and says why it is not a handoff, a message is never work until the recipient promotes it |
-| `skills/think-it-through/SKILL.md` | DONE: the canonical frontmatter block names `suspended` |
+| `skills/think-it-through/SKILL.md` | DONE: the canonical frontmatter block carries `awaiting` |
 | `skills/wayfare/references/feedback-channels.md` | DONE: the `channel: design-system` lane deposits a `type: ask` message instead of writing an item into the sibling's `items/`. It used to write a ready-to-build item straight into that repo's roadmap, which is the promotion gate's own anti-pattern with the sender's name on it. No `FLEET.md` row means no deposit; the packet path takes it |
 
 ## Anti-patterns

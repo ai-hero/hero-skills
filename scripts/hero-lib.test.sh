@@ -264,7 +264,7 @@ check "repo-ref: an existing local dir passes through" \
 
 # ---------- hero_ready_items -----------------------------------------------
 #
-# Schema 1 (docs/PLAN.md): three types, one lifecycle, `resolution` carrying
+# Schema 1 (docs/PLAN.md): four types, one lifecycle, `resolution` carrying
 # the ending. The cases below are the ones that were, or could again be,
 # WRONG SILENTLY.
 

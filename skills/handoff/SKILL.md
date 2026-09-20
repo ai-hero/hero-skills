@@ -91,10 +91,10 @@ One file at `.plans/items/NNN-slug.md`, id continuing from the highest existing 
 ---
 id: 9
 type: task # every item is a wayfare item (docs/PLAN.md)
-shape: story # or structural, defect, visual, dependency
+shape: story # or structural, defect, visual, dependency, docs
 origin: handoff
 title: Finish the payment-retry migration
-status: planning # wayfare's build enum; flipped to ready by the user's ready-mark
+status: planning # docs/PLAN.md's lifecycle; flipped to ready by the user's ready-mark
 depends_on: []
 one_way_door: false
 success: "Retries drain the backlog in staging; alert AL-42 stays green for 24h"
@@ -132,9 +132,9 @@ Hard-won session knowledge: failed approaches, environment quirks, gate/hook beh
 
 How the downstream agent proves completion (commands, tests, observable behavior).
 
-## Comments
+## Log
 
-- YYYY-MM-DD (author): append-only
+- YYYY-MM-DD (author) note: append-only
 ```
 
 ### Step 4: Optionally File to the Tracker (`--issue`)

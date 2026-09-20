@@ -24,7 +24,7 @@ way as a **signal**. Wayfare reads the target; it never writes it.
 **Wayfare plans; it never builds.** `hero-skills:one-shot` builds `ready`
 tasks and `hero-skills:think-it-through` does the planning. The `.plans/`
 store is the system of record and `docs/PLAN.md` is its specification: the
-plan object, the three types, the one lifecycle, the item format. **Read
+plan object, the four types, the one lifecycle, the item format. **Read
 `docs/PLAN.md` before writing any item.** Nothing here restates it.
 
 **Wayfare works in one repo at a time: the one it runs in.** Work belonging to
@@ -65,7 +65,7 @@ every task depends on the one before it has usually been cut horizontally;
 say so.
 
 **Read `references/shaping.md` before proposing any item**, and before
-accepting one a person brings. It carries the four shape exemptions and the
+accepting one a person brings. It carries the five shape exemptions and the
 visual pass. `docs/PLAN.md` owns which shape asserts what.
 
 ## `init`: configure the repo and create its plan

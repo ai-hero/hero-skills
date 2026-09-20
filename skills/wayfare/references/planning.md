@@ -17,7 +17,7 @@ roadmap, and wayfare owns only the contract it fills:
   (when one exists; see sync's Investigate), the repo's `wayfare: recipe`
   skills (a recipe that fits is named in `## Approach`, and one-shot invokes
   it instead of hand-rolling the procedure), and the task's own
-  `## Comments` and `## Design Feedback`.
+  `## Log`.
 - **The slice is grilled first.** Before planning how, confirm the task
   still passes the SLC test: name what a person can do when it ships, and
   whether it works every time for that path. A task that turns out to be a
@@ -34,7 +34,7 @@ roadmap, and wayfare owns only the contract it fills:
 - **Bounded by effort, not ambition.** Right-sized is a handful of subtasks
   one build run lands as one changeset. When the correct fix is bigger than
   that, plan the smallest correct step this slice needs and route the rest to
-  `sync` as its own task or `architecture` item.
+  `sync` as its own task, `story` or `structural`.
 - **`source` names where the change begins, not its boundary.** A plan that
   stops at the file list and leaves a caller, a migration or a test
   un-updated is incomplete, and the build has to go further than the plan

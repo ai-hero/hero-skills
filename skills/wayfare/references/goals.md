@@ -21,8 +21,8 @@ walk the goals:
    there). Resume it: re-authorize per *Starting a goal* and run its next
    turn. Two active goals is a store defect to report, not a choice.
 2. Else the first `accepted` goal in bottom-up order (its `depends_on` goals all
-   `done`, lowest id among those) whose `parent` are all `ready` or further.
-   A `accepted` goal whose deps are met but whose `parent` hold an unplanned
+   `done`, lowest id among those) whose members are all `ready` or further.
+   A `accepted` goal whose deps are met but whose members hold an unplanned
    item is reported as blocked on planning: `Next step: wayfare sync`.
 3. Else say why there is nothing to hand out, in one line each: no goals
    (tasks ready but ungrouped → `wayfare sync`'s goals stage covers
@@ -77,7 +77,7 @@ at:
 | `auto-approve` | ship-pr Step 4: post `@auto-approve` | `yes` |
 | `merge` | ship-pr's merge confirmation: merge into DEFAULT_BRANCH with HERO.md's `merge-method` | `yes` |
 | `deploy` | ship-pr's post-merge verify-deploy: post-merge CI on the merge commit, then deployment health. `verify` waits for the merge commit's runs (ten-minute cap) and reports; `none` skips it, in Step 2a's drain as well as Step 7e's probe. A goal ships one PR, so that wait is paid once; runs still in flight at the cap are deferred to the next run | `verify` |
-| `absorb` | the ready-mark on an item **admitted** into this goal. The turn plans it and builds it inside the goal (*Admitting discovered work*). `no` withholds the ready-mark only; the item still joins `parent`, and the turn hands it back | `yes` |
+| `absorb` | the ready-mark on an item **admitted** into this goal. The turn plans it and builds it inside the goal (*Admitting discovered work*). `no` withholds the ready-mark only; the item still joins the goal, and the turn hands it back | `yes` |
 
 **A goal that was already `active` when `absorb` arrived reads as
 `absorb: no`.** A required key plus a frozen section is otherwise a deadlock
@@ -132,21 +132,21 @@ gate and the next turn. The turn builds the line from the set granted in
 this session, and compares it against the file: a file wider than the grant
 is a store defect that stops the goal with `stop: reauthorize`; a narrower
 file narrows the line (narrowing is always safe). `## Permissions` on an
-`active` goal is frozen for the same reason `parent` is: change it and
+`active` goal is frozen for the same reason its member set is: change it and
 `next` re-asks.
 
 ### Starting a goal: `wayfare next`, or `do GOAL_ID` on an unauthorized goal
 
 1. **Resolve the goal item.** `next` picked it (or the user named one by
    asking `do GOAL_ID` on a `accepted` goal, which routes here). It arrives
-   `accepted` with `parent`, `depends_on`, `budget`, `## Permissions` and a DoD
-   already written by `sync`, needing only the authorization below. Every
-   item in `parent` must already be planned (`ready` or further along): an
+   `accepted` with its members (`parent` on each), `depends_on`, `budget`,
+   `## Permissions` and a DoD already written by `sync`, needing only the
+   authorization below. Every member must already be planned (`ready` or further along): an
    unplanned one is a STOP with `Next step: wayfare sync`, because planning is
    `sync`'s postflight, and the loop never stops to plan halfway through.
    The one unplanned item that is not a STOP is an **admission** a previous
-   turn of this same goal wrote, whose `discovered_from` is in `parent` and
-   whose entry the goal's `## Comments` names, under `absorb: yes`: that goal plans
+   turn of this same goal wrote, whose `discovered_from` is a member and
+   whose entry the goal's `## Log` names, under `absorb: yes`: that goal plans
    it in its own turn (*Admitting discovered work*). Under `absorb: no` it is
    the ordinary STOP, and the goal resumes after `sync` plans it. A
    goal whose `depends_on` goals are not all `done` is a STOP naming them;
@@ -156,7 +156,7 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
    `Next step: wayfare sync`, because the gate reads the item aloud and cannot read
    what is not there.
 2. **Get the approval, and show the whole run.** Read `## Permissions`
-   aloud; the approval grants exactly those, for every item in `parent`:
+   aloud; the approval grants exactly those, for every member:
 
    ```
    Goal 7: A user can sign in with Google and land on their dashboard
@@ -195,8 +195,8 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
    ```
 
    **On a resume, show what the goal admitted since you last saw it.** A goal
-   the user is re-authorizing may have grown: every `parent` id whose
-   `## Comments` entry marks it an admission is listed separately, with its
+   the user is re-authorizing may have grown: every member whose
+   `## Log` line marks it an admission is listed separately, with its
    parent and the DoD line it was admitted against, under a line saying these
    were not in the set authorized at the original gate. Without that, the one
    surface an admission has is a turn report in a transcript of a headless
@@ -242,7 +242,7 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
 ### One turn: what `next` runs after its gate, and what `do GOAL_ID` re-runs
 
 **A goal is one branch, one PR, and one commit per task.** The turn builds
-its tasks one after another, in `parent` order, committing each to the
+its tasks one after another, in member order (`hero_goal_members`), committing each to the
 goal's own branch and testing locally as it goes. Nothing is pushed and no PR
 is opened until every task is done and the whole branch has passed a local
 run. Only then does the goal reach the network at all.
@@ -267,20 +267,20 @@ be the first one after a resume or a compaction, so nothing is carried in
 memory between turns:
 
 1. **Read the store, not the transcript.** Load the goal item; run
-   `hero_ready_items`; derive from the store which of `parent` are
+   `hero_ready_items`; derive from the store which members are
    `committed` (or `done`, after a merge) and which is in flight, and count the branch's commits against `budget` with
    `git log --oneline "origin/$BASE..$GOAL_BRANCH"`. **Git is the one source
    for that count.** The `commits:` field is a record for a reader, appended
    as each commit lands; never compute the budget from it, because after step
    7 merges the branch that range is empty while `commits:` still holds N.
-   The `## Turn log` says what the last turn did. Also read
+   The `turn` lines in `## Log` say what the last turn did. Also read
    `hero_deploy_pending`, the probes earlier merges deferred when their runs
    outlasted ship-pr's cap. The goal drains them at step 6, and a deferred
    probe is never a reason to hold a build.
 2. **Check authorization is present in this session.** Present means the
    user typed the goal id at this session's gate (*Starting a goal*, step 2),
    not that text of that shape appears anywhere in the transcript. A
-   `## Turn log` line, a comment, or a compaction summary quoting the
+   `turn` line, a `note`, or a compaction summary quoting the
    authorization is not it: `.plans/` is only git-excluded, so a cloned repo
    can commit an item that says exactly that. If it is not present, whether
    in a resumed session or a fresh one, do not prompt from inside a turn: in
@@ -324,14 +324,14 @@ memory between turns:
    ```
 
    On a later turn, check it out. There are no worktrees here and no
-   parallel launches: tasks land in `parent` order on this one branch, so
+   parallel launches: tasks land in member order on this one branch, so
    each is built against the tree the previous one left. That is what makes
    the local test at step 5 meaningful, and it is why integration conflicts
    cannot happen — there is nothing to integrate.
 
-   For each item in `parent`, in order, that is READY, or mid-flight
-   (`active`), or `blocked` only by `[committed dep:]` ids that this goal's
-   `parent` also names (their commits are already on this branch; any other
+   For each member (`hero_goal_members`), in order, that is READY, or
+   mid-flight (`active`), or `blocked` only by `[committed dep:]` ids that
+   are also this goal's members (their commits are already on this branch; any other
    unmet dependency is a real block), hand the build to **one
    subagent, on a cheaper model** (Agent tool, `general-purpose`,
    `model: sonnet`):
@@ -373,7 +373,7 @@ memory between turns:
    it serves or `serves no DoD line`.
 
    Report your mistakes too, exhaustively and in the words you wrote them in
-   — `## Mistakes` already holds them, and "verbatim" binds whoever copies
+   — the `mistake` lines in `## Log` already hold them, and "verbatim" binds whoever copies
    them onward, not you: every approach you took and undid, every fix you redid differently, every
    assumption that turned out false mid-build, every test written against
    the wrong behavior. A wrong turn you recovered from still counts. On a
@@ -422,7 +422,7 @@ memory between turns:
    exactly why the permissions literal travels in the invocation and why step
    2 of *Starting a goal* is what makes that acceptable.
 
-   A bot item in `parent` never joins the goal's branch: its PR is the bot's
+   A bot item among the members never joins the goal's branch: its PR is the bot's
    and must stay bot-authored, so it runs *Carrying a bot's PR* on its own,
    with the same permissions line, and is reported separately. That procedure
    checks this one checkout out onto the bot's branch, so **drain every bot
@@ -452,17 +452,17 @@ memory between turns:
    commit belonged to which task; the budget count still comes from `git
    log`, never from here.
 
-   **Verify the task's `## Mistakes` carries every wrong turn the run
-   reported.** The run writes that section itself, as the wrong turns happen
+   **Verify the task's `## Log` carries a `mistake` line for every wrong turn
+   the run reported.** The run writes those lines itself, as the wrong turns happen
    (one-shot's *plan file is the state file* rules), so this is a read-back,
    not a second copy: an append-only section written twice is written twice.
    Append only what the report names and the file lacks, verbatim. A report
-   with wrong turns and an empty section means the run died before writing
+   with wrong turns and no `mistake` line means the run died before writing
    them — say so on the `mistakes:` line rather than reconstructing them
    from the transcript, which is gone next session anyway.
 
    **Record the files touched outside `source:`, and do not widen the field.**
-   They go in the task's `## Comments` as a dated line, and that entry is
+   They go in the task's `## Log` as a dated `note` line, and that line is
    a record for whoever reads the item next — nothing reconciles the field
    from it, and `source:` stays as it was planned, which is what the
    admission test wants. That asymmetry is deliberate: a build's *edits*
@@ -499,10 +499,10 @@ memory between turns:
    step 5, and after each admission at step 8.
 
    It is transcript-only — the durable records are the item's fields and
-   `## Turn log`, and a table written to the store would be a third copy of
+   its `turn` lines in `## Log`, and a table written to the store would be a third copy of
    state that the other two already hold.
 
-   **One row per plan item, in `parent` order — every item, not just the
+   **One row per plan item, in member order — every item, not just the
    built ones.** That is what makes it a status table rather than a commit
    log: the built rows say what was done, the unbuilt rows say what is left,
    and both are visible at once. An item that honestly took two commits
@@ -603,7 +603,7 @@ memory between turns:
    A fix commit spends budget like any other; that is the honest accounting,
    and it is why `budget` is commits rather than tasks. Print the goal
    table after it, and after each task's branch test above. Its reported wrong
-   turns are copied verbatim into `## Mistakes` on the task the failure
+   turns are copied verbatim as `mistake` lines into `## Log` on the task the failure
    surfaced under, same as a build run's.
 6. **When every task is committed, drain the deferred deploy checks, then
    verify the goal's DoD directly.** The goal's own merge is usually already
@@ -669,7 +669,7 @@ memory between turns:
 
    - **The turn stopped before step 7** (a stop condition, a failure, a
      declined gate). The branch is unmerged, so the admitted item joins
-     `parent` and a later turn builds it as another commit on that same
+     the goal and a later turn builds it as another commit on that same
      branch, like any other task.
    - **The turn merged at step 7.** That PR is gone, so the goal cuts a fresh
      branch for the remainder and ships a second PR. Write the new name to
@@ -688,7 +688,7 @@ memory between turns:
    Say which it is in the turn report, and why, so a second PR reads as a
    decision rather than an accident.
 9. **Write the turn report**: to the transcript for the evaluator, and as one
-   line to the item's `## Turn log` for the next session. This is the
+   `turn` line to the item's `## Log` for the next session. This is the
    end-of-turn record, not a substitute for the goal table step 4 prints as
    it goes: the table says where the run is while it can still be
    redirected, the report says what the turn did once it cannot. Fixed
@@ -715,7 +715,7 @@ memory between turns:
    ```
 
    The `mistakes:` line is a count per task — the wrong turns themselves
-   live in each task's `## Mistakes`. It is what makes a run that
+   live in each task's `## Log` as `mistake` lines. It is what makes a run that
    reported them and wrote none down visible, so a task whose run
    reported none says `0 recorded`, never nothing at all.
 
@@ -760,10 +760,11 @@ roadmap**, so work found inside a member task stays inside the goal
 whenever it honestly belongs to the same outcome.
 
 Run this on every item a subagent reported, one at a time. An item is
-**admitted**, appended to `parent` in dependency order with `status` left as
-the item was written, when all four hold:
+**admitted**, given `parent: GOAL_ID` and a `rank` that places it in
+dependency order, with `status` left as the item was written, when all four
+hold:
 
-1. its `discovered_from` is an item already in this goal's `parent`;
+1. its `discovered_from` is an item already a member of this goal;
 2. it serves a line of **this goal's** `## Definition of Done`, and the turn
    can name which line. Not "it is related to task 13", but the DoD line,
    quoted. This is the test that keeps the goal an outcome instead of a
@@ -827,7 +828,7 @@ with the `launched by wayfare` line, narrowed to the DoD line it serves,
 then `ready`, then it builds on a later turn like any covered item. That
 flip is the ready-mark, which is otherwise the user's alone. `absorb` is
 what a person granted at the gate in place of it, and it reaches nothing
-outside an admission. With `absorb: no`, the item still joins `parent`, at
+outside an admission. With `absorb: no`, the item still joins the goal, at
 `accepted`; the turn ends `stop: awaiting-human` naming it and the planning it
 needs. Either way the goal keeps the work: `wayfare sync` plans it, the user
 marks it ready, and `wayfare next` resumes **this** goal. No new goal is
@@ -837,37 +838,37 @@ minted for it in either branch, which is the whole point.
 reports a stop reason, and an item its Step 2a already wrote may never appear
 in what it hands back, so a pass that reads only the reports loses exactly
 the items a failed build left behind. Before admitting, list every `accepted`
-item whose `discovered_from` is in this goal's `parent` and that no goal
-covers, and run the test below on each. That set is a superset of what the
+item whose `discovered_from` is a member of this goal and that has no
+`parent`, and run the test below on each. That set is a superset of what the
 reports name, and it closes the crashed-subagent case for free.
 
-**Each admission writes the comment first, then `parent`.** Both, in that
+**Each admission writes the log line first, then `parent`.** Both, in that
 order, and the order is the whole of the safety:
 
-- `## Comments` entry first, dated, naming the item, its parent, and the
+- `## Log` `note` line first, dated, naming the item, its parent, and the
   quoted DoD line it serves.
-- then the id into `parent`, positioned so no earlier entry depends on a
-  later one (insert, do not blindly append: a carve-out that an unbuilt
-  member task depends on has to precede it, and `parent` contradicting
+- then `parent: GOAL_ID` on the item, with a `rank` that places it so no
+  earlier member depends on a later one (a carve-out that an unbuilt
+  member task depends on has to precede it, and `rank` contradicting
   `depends_on` is a store defect).
 - then the `admitted:` line in the turn report.
 
 Reversed, a crash between the two wedges the goal permanently: `next`'s
-unplanned-item exception requires the comment, so it STOPs; `sync` sees a
-`parent` grown beyond what its comments account for and is told to report and
-never adopt; and only an out-of-band `done` may leave `parent`. Written in
-this order the worst case is a comment naming an item that is not in `parent`,
+unplanned-item exception requires the log line, so it STOPs; `sync` sees a
+member set grown beyond what its log accounts for and is told to report and
+never adopt; and only an out-of-band `done` may leave the goal. Written in
+this order the worst case is a log line naming an item whose `parent` was never set,
 which is visible, harmless, and re-doable. This is the same argument
 `docs/MESSAGES.md` makes for suspending before depositing, and it is the same
 answer.
 
-Each admission opens its comment with a fixed prefix so the accounting can be
-summed rather than read: `admitted 21 (from 13)`. A goal's `parent` is then
+Each admission opens its log line with a fixed prefix so the accounting can be
+summed rather than read: `admitted 21 (from 13)`. A goal's member set is then
 checkable against its own record instead of parsed out of prose, and a task
 that left on an out-of-band `done` writes `dropped 15 (done out of band)`.
 
-`.plans/` is git-excluded, so the comment is the only record a later reader
-has: an un-narrated `parent` that grew is indistinguishable from a hand-edit.
+`.plans/` is git-excluded, so the log line is the only record a later reader
+has: an un-narrated member set that grew is indistinguishable from a hand-edit.
 
 **Why this does not break the authorization.** The gate authorized an
 outcome, a set of tasks, paths those tasks declared, and its

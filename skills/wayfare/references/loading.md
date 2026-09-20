@@ -502,9 +502,9 @@ and **`recalibrate`**.
 - `next` picks the next goal, gets its permissions authorized in-session, and
   runs one turn of it right here. It never plans, except what a turn
   admits under `absorb: yes`. See `next` below.
-- `do ID` advances one thing and stops. A build-type id (task,
-  architecture, polish, security) runs *Advancing one item* on it; a
-  `security` id with `bot:` runs *Carrying a bot's PR*; a goal id runs *One
+- `do ID` advances one thing and stops. A task id runs *Advancing one
+  item* on it; a `shape: dependency` id with `bot:` runs *Carrying a bot's
+  PR*; a goal id runs *One
   turn* of that goal, the same turn `next` runs after its gate. `do`
   without an id prints the roadmap view and asks which.
 - `improve` runs the `compliance` stage on its own and adds the backport
@@ -515,7 +515,7 @@ and **`recalibrate`**.
 
 Retired verbs get a one-line note, then the roadmap view: `goal GOAL` is now
 `next` (to start or resume) and `do GOAL_ID` (one turn); `deps [N]` is now
-`sync` (which gathers the bots' PRs into `security` items) and `do ID` on the
+`sync` (which gathers the bots' PRs into `shape: dependency` tasks) and `do ID` on the
 item. `hero-skills:harden` and `hero-skills:architecture` run inside `sync`;
 a user who types either by hand still gets that skill, but nothing in the
 workflow needs them named. A former verb name (`status`, `task`, `sync`,
@@ -537,8 +537,9 @@ half of `harden`) renders `(–)` and says why in one line, never silently.
 
 **The roadmap view**, which is how every verb reports. Run `hero_ready_items "$STORE"`
 and print the items grouped by row state (new → backlog → plan →
-READY/blocked → active → review → committed → suspended → done, then goal, then
-feedback), each with:
+READY/blocked → active → review → committed → suspended → done → dropped,
+then goal, then feedback, then one line for the idea count
+(`hero_idea_count`)), each with:
 
 - its dependencies (and which are unmet, from the listing's blocked rows),
 - a `stale` flag when `anchors.target` is set and differs from the current target
@@ -557,15 +558,15 @@ feedback), each with:
   `anchors.target` is the normal state of every item, per the intro, and never
   an input to compute staleness from,
 - its subtask progress when planned (checked/total from `## Subtasks`, e.g. `2/4`),
-- its open-comment count (entries in `## Comments`),
-- its **open-feedback count**: `## Design Feedback` entries whose header
-  marker is `[undelivered]`, plus feedback items whose row state is `feedback`
+- its note count (`note` lines in `## Log`),
+- its **open-feedback count**: `signal` lines in `## Log` whose marker is
+  `[undelivered]`, plus signal items whose row state is `feedback`
   (see `references/feedback-channels.md`). Count the markers and the rows, not
   the prose: this is the return channel's only backlog surface, so a miscount
   of zero is indistinguishable from "no feedback exists",
 - the single next action: `wayfare next` when a goal is runnable (see
   `next`: an `active` goal, else the first `accepted` goal in bottom-up order
-  whose `parent` are all planned), `wayfare do N` for a mid-flight item,
+  whose members are all planned), `wayfare do N` for a mid-flight item,
   `wayfare sync` for unplanned tasks, READY items no goal has as a member, stale
   rows, defects, and undelivered design feedback.
 
@@ -600,7 +601,7 @@ backlog reports untriaged jottings as roadmap; one that drops them repeats the
 invisibility the `new` default was added to end.
 
 **`goal` rows are their own group**, in bottom-up order (see *Goals* under
-`sync`), listing each goal's `parent` progress (committed / done / total), its unmet goal
+`sync`), listing each goal's member progress (committed / done / total), its unmet goal
 dependencies, and its next command (`wayfare next` for the first runnable
 one, `wayfare do ID` for an `active` one mid-run).
 

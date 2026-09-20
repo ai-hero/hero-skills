@@ -77,7 +77,7 @@ own hardening instead — a self-review.
 ### The plan store
 
 `.plans/` is the system of record: one `PLAN.md` per repo and one file per
-item. Items come in three types, and a task's `shape` decides what its
+item. Items come in four types, and a task's `shape` decides what its
 Definition of Done has to assert.
 
 | Type | What it is | What happens to it |

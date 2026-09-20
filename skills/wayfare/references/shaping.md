@@ -9,8 +9,8 @@ The slice rule and the fine-tuning pass. Read before proposing any item in
 like a user story, never a layer of one.** This is the shaping rule the rest
 of the skill serves, and it is the one wayfare gets asked to break most often.
 
-The rule is scoped to one shape on purpose. `structural`, `visual`, `defect`
-and `dependency` tasks are exempt, and all four for the same reason: the
+The rule is scoped to one shape on purpose. `structural`, `visual`, `defect`,
+`dependency` and `docs` tasks are exempt, and all five for the same reason: the
 surface already ships, so there is no story left to cut (docs/PLAN.md, *Shape*).
 The exemption is narrow. **A task of any exempt shape that could have been
 written as a user story was given the wrong shape**, and that is the finding.

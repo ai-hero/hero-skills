@@ -253,7 +253,7 @@ if [ -n "$STORE" ] && [ -d "$ITEMS" ]; then
   # stderr stays visible: it carries hero_ready_items' reason for each invalid
   # row, and the caller's eval consumes stdout only.
   if ROWS=$(hero_ready_items "$STORE"); then
-    # An invalid row may be the item being built (`status: in_progress`);
+    # An invalid row may be the item being built (a mistyped `status: active`);
     # dropping it would read as "nothing in flight" and route past its
     # unchecked subtasks.
     case "$ROWS" in invalid*|*"
@@ -261,9 +261,9 @@ invalid"*) fail_source "store-invalid-item" ;; esac
     MATCHED=""; LEGACY=""; LEGACY_N=0
     while read -r state f _; do
       [ "$state" = active ] || continue
-      # hero_ready_items owns the status enum; `active` is its word for
-      # in-progress (plain) and implementing (build). A goal at active is a
-      # set of features, not the item on this branch; a `bot:` item is a
+      # hero_ready_items owns the status enum; `active` is one-shot's mark
+      # before its first edit. A goal at active is a set of tasks, not the
+      # item on this branch; a `bot:` item is a
       # dependency bot's PR that wayfare's bot-PR procedure carries, never one-shot's.
       [ "$(hero_item_type "$ITEMS/$f")" = goal ] && continue
       [ -n "$(hero_item_field "$ITEMS/$f" bot)" ] && continue

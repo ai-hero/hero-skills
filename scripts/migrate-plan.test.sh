@@ -287,9 +287,13 @@ check "comment line is tagged note" "1" \
   "$(grep -c '^- 2026-07-23 (rahul) note: a note$' "$F" | tr -d ' ')"
 check "mistake line is tagged mistake" "1" \
   "$(grep -c '^- 2026-07-24 (feature 1 build) mistake: wired it' "$F" | tr -d ' ')"
-check "undelivered DF becomes a signal line" "1" \
-  "$(grep -c '^- 2026-07-25 (migrate) signal: the design orders consent first$' "$F" | tr -d ' ')"
-check "promoted DF entry is NOT copied" "0" "$(grep -c 'already promoted' "$F" | tr -d ' ')"
+# The DF id and the marker are the entry'"'"'s identity and state: a promoted
+# signal item'"'"'s `entry:` points at the id, and the next sync counts
+# `[undelivered]` markers. Strip either and every entry is re-proposed.
+check "undelivered DF becomes a signal line, id and marker intact" "1" \
+  "$(grep -c '^- 2026-07-25 (migrate) signal: DF-1-2026-07-25-1 \[undelivered\] the design orders consent first$' "$F" | tr -d ' ')"
+check "promoted DF entry is kept with its [item: N] marker" "1" \
+  "$(grep -c '^- 2026-07-20 (migrate) signal: DF-1-2026-07-20-1 \[item: 61\] already promoted' "$F" | tr -d ' ')"
 
 # ---------- PLAN.md and the second-pass refusal ----------------------------
 
@@ -323,6 +327,36 @@ OUT=$(bash "$MIG" "$S" 2>&1)
 check "unrecognized kind warns" "1" \
   "$(printf '%s' "$OUT" | grep -c "unrecognized kind 'features'" | tr -d ' ')"
 check "unrecognized kind still migrates" "task" "$(hero_item_field "$S/items/001-a.md" type)"
+
+# ---------- legacy items: no kind, old status aliases ----------------------
+
+R=$(newrepo legacy); S="$R/.plans"
+item "$R" "001-a.md" "---
+id: 1
+title: no kind at all
+status: in-progress
+---
+
+## Context
+
+x"
+item "$R" "002-b.md" "---
+id: 2
+title: no status either
+---
+
+## Context
+
+x"
+bash "$MIG" "$S" >/dev/null 2>&1
+# Without a `kind:` line there is nothing to rewrite in place, and an item
+# with no `type:` lists as invalid: the whole store would come out unusable.
+check "no-kind item gets type: task" "task" "$(hero_item_field "$S/items/001-a.md" type)"
+check "no-kind item gets shape: story" "story" "$(hero_item_field "$S/items/001-a.md" shape)"
+check "in-progress maps to active" "active" "$(hero_item_field "$S/items/001-a.md" status)"
+check "no-status item gets type too" "task" "$(hero_item_field "$S/items/002-b.md" type)"
+check "no-kind store lists with no invalid rows" "0" \
+  "$(hero_ready_items "$S" 2>/dev/null | grep -c '^invalid' | tr -d ' ')"
 
 # ---------- dry run changes nothing ----------------------------------------
 

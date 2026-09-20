@@ -729,7 +729,7 @@ hero_item_status() {
   printf '%s' "${s:-new}"
 }
 
-# An item's TYPE: task, signal or goal (docs/PLAN.md). Lowercased, because
+# An item's TYPE: task, signal, goal or idea (docs/PLAN.md). Lowercased, because
 # `Task` silently matching no arm of the listing table printed the item as
 # invalid, which reads as a malformed file rather than a capital letter.
 # Empty means the item was never migrated; the caller reports it, because
@@ -738,7 +738,7 @@ hero_item_type() {
   hero_item_field "$1" type | tr '[:upper:]' '[:lower:]'
 }
 
-# A task's SHAPE: story, structural, visual, defect or dependency. Decides
+# A task's SHAPE: story, structural, visual, defect, dependency or docs. Decides
 # what the Definition of Done must assert, never whether the item is READY,
 # so nothing in the listing reads it.
 hero_item_shape() {
@@ -1216,57 +1216,39 @@ hero_norm_id() {
 # satisfied, which is different from ordinary waiting.
 #
 # STATE is one of:
-#   READY    not done, and every depends_on target is done
+#   READY    a task at `ready` whose every depends_on target is done
 #   blocked  not done, but a dependency is unmet or unresolvable
-#   plan     status is planning: still being shaped; a HUMAN marks it todo
-#            (`ready` for a build kind)
-#   active   status is in-progress: someone is already on it
-#   done     completed
+#   backlog  a task at `accepted`: on the roadmap, not yet planned; annotated
+#            `[deps unmet]` when a dependency isn't done. Never READY: handing
+#            an unplanned task to one-shot would skip planning entirely
+#   plan     status is planning: still being shaped; a HUMAN marks it ready
+#   active   status is active: someone is already on it
+#   review   a task at review: PR open, awaiting merge
+#   committed a task committed on a goal's branch that has not merged. Never
+#            READY and never a satisfied dependency, because the default
+#            branch lacks the code; a dependent's row names it as
+#            `[committed dep: ID…]` so a goal turn can tell "already on my
+#            branch" from a real block
+#   suspended `awaiting:` is non-empty: waiting on a sibling repo's reply
+#            (docs/MESSAGES.md). Never READY and never a satisfied dependency
+#   feedback a signal at accepted or ready: a divergence written but not yet
+#            landed upstream. Never READY, because a signal is DELIVERED and
+#            never built, so handing one to one-shot is wrong
+#   goal     a goal at accepted: approved, waiting to run. Never READY: a goal
+#            is a container for tasks, and one-shot builds tasks. `wayfare
+#            next` selects goals by type instead
+#   idea     an idea at new or accepted: parked, never work until promoted
 #   new      status is new (or absent): created, not yet triaged. Never READY,
 #            because nobody has decided this should be worked on
-#   backlog  build kinds (and unrecognized ones) with status todo: on the
-#            roadmap, not yet planned; annotated `[deps unmet]` when a
-#            dependency isn't done
-#   review   build kinds only, status reviewing: PR open, awaiting merge
-#   committed build kinds only, status committed: committed on a goal's branch
-#            that has not merged. Never READY and never a satisfied
-#            dependency, because the default branch lacks the code; a
-#            dependent's row names it as `[committed dep: ID…]` so a goal turn
-#            can tell "already on my branch" from a real block
-#   feedback feedback kinds only, status todo or queued: a divergence
-#            written but not yet landed upstream. Never READY, because a
-#            feedback item is DELIVERED and never built, so handing one to
-#            one-shot is wrong
-#   goal     kind `goal` only, status todo: approved, waiting to run. Never
-#            READY: a goal is a container for features, and one-shot builds
-#            features. `wayfare next` selects goals by kind instead
-#   invalid  no usable id, OR an unrecognized status. Either way the item
-#            cannot participate in dependency order and is never handed out READY
+#   done     finished; the only state that satisfies a dependency
+#   dropped  abandoned; terminal, and does NOT satisfy a dependency
+#   invalid  no usable id, no type, or an unrecognized status. Either way the
+#            item cannot participate in dependency order and is never READY
 #
-# Kind picks a CLASS, and the class picks the status enum:
-#
-#   plain     '' / work-order / hardening: new | planning | todo | in-progress | done.
-#             LEGACY: every producer now writes a build kind. The arm stays so
-#             existing stores keep listing; dropping it would demote every
-#             pre-rule item to backlog with a stderr line as the only trace
-#   build     feature / architecture / polish / security: new | todo | planning | ready |
-#             implementing | committed | reviewing | done, mapped here as
-#             new | backlog | plan | READY-eligible |
-#             active | committed | review | done. For a build kind, `ready` (not `todo`) is
-#             the state eligible to become READY: `todo` means "identified,
-#             unplanned", and handing an unplanned one to one-shot would skip
-#             planning entirely
-#   feedback  design-feedback / architecture-feedback / design-system-feedback:
-#             new | todo | queued | delivered | rejected, mapped as new | feedback
-#             | feedback | done | done
-#   goal      goal: new | todo | active | done, mapped as new | goal | active |
-#             done. Spans several features via `covers:`; its own DoD is what
-#             the goal loop checks against
-#
-# Plain items keep the original enum; `ready`/`implementing`/`reviewing` on a
-# plain item stay invalid (loud). An unrecognized kind rides the plain enum with
-# READY downgraded to backlog. See the class gate for why that is the only
-# reading safe under both failure modes.
+# One enum for every type (docs/PLAN.md): new | accepted | planning | ready |
+# active | committed | review | done | dropped. Which states a type visits is
+# the type's business; the listing only refuses combinations that make no
+# sense (a goal at ready, a signal at committed) as invalid.
 #
 # `done` rows are PRINTED, not hidden. Callers need to see them: one-shot's
 # Step 1c resolves an argument against this listing to answer "has this already
@@ -1274,16 +1256,13 @@ hero_norm_id() {
 # duplicating it. Filtering them out silently defeated both.
 #
 # `active` is separated from READY so two sessions cannot both pick up the same
-# in-flight item: one-shot marks an item in-progress (`implementing` for a
-# feature) before its first edit specifically to prevent that, and folding it
-# into READY undid it.
+# in-flight item: one-shot marks an item active before its first edit
+# specifically to prevent that, and folding it into READY undid it.
 #
 # `planning` is never READY regardless of dependencies: the item is still being
-# shaped and awaits a human ready-mark. Skills that emit plain items write them
-# as `planning`; only the user's explicit say-so flips one to `todo` (`ready`
-# for a build kind). Without this state, freshly emitted items were
-# handed straight to one-shot. Wayfare emits features as `todo`, which for a
-# feature means backlog, and still never READY.
+# shaped and awaits a human ready-mark. Without this state, freshly emitted
+# items were handed straight to one-shot. Wayfare writes tasks as `accepted`,
+# which is backlog, and still never READY.
 #
 # NOTE: readiness is a claim about DEPENDENCIES, not about the codebase. An item
 # stays READY after its work lands until someone marks it done, so consumers must

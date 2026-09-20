@@ -29,15 +29,15 @@ one channel is how the architectural ones get triaged as visual nitpicks.
 Feedback is written twice on purpose, and exactly one of the two forms owns its
 state at any moment.
 
-1. **Capture, during the build.** one-shot appends a bullet to the task's
-   `## Design Feedback` section. Mid-build is the wrong time to allocate a store
-   id and author a full item, and this section is what one-shot's close-out gate
+1. **Capture, during the build.** one-shot appends a `signal` line to the
+   task's `## Log`. Mid-build is the wrong time to allocate a store id and
+   author a full item, and those lines are what one-shot's close-out gate
    reads when a Definition-of-Done line legitimately fails.
 2. **Promote, at `sync`.** Each undelivered entry becomes a `type: signal`
    item on the right `channel` (`origin: wayfare`, `discovered_from` = the
    task id). The
    entry's marker becomes `[item: ID]` and **the item owns the state from that
-   point on.** The sync also authors feedback items directly from its own
+   point on.** The sync also authors signal items directly from its own
    reconciliation findings — those never pass through a task at all, because
    nothing built them.
 
@@ -46,23 +46,23 @@ the item both carry a state and they drift apart.
 
 ## The entry (capture form)
 
-Entries live in a task's `## Design Feedback` section. Each is one bullet
-whose **header line** carries an id and a state marker in fixed position,
-followed by indented continuation lines:
+Entries live in a task's `## Log` as `signal` lines. Each is one log line
+whose **header line** carries the tag, an id and a state marker in fixed
+position, followed by indented continuation lines:
 
 ```markdown
-## Design Feedback
+## Log
 
-- DF-12-2026-07-25-1 [undelivered] design/auth/sign-in.md orders consent
-  before account linking; the code links first, because consent cannot be
-  scoped until the account is known.
-- DF-12-2026-07-24-1 [item: 61] design/auth/flow.md has no post-logout state;
-  the code returns to the marketing page.
+- 2026-07-24 (one-shot) signal: DF-12-2026-07-24-1 [item: 61] design/auth/flow.md
+  has no post-logout state; the code returns to the marketing page.
+- 2026-07-25 (one-shot) signal: DF-12-2026-07-25-1 [undelivered] design/auth/sign-in.md
+  orders consent before account linking; the code links first, because
+  consent cannot be scoped until the account is known.
 ```
 
 ### The id
 
-`DF-FEATURE_ID-YYYY-MM-DD-ORDINAL`, where ORDINAL starts at 1 and increments
+`DF-TASK_ID-YYYY-MM-DD-ORDINAL`, where ORDINAL starts at 1 and increments
 for each entry written on the same task on the same day. It is assigned at
 write time and never changes.
 
@@ -82,8 +82,11 @@ after the id, and the token never appears elsewhere in the entry:
 | `[undelivered]` | Written, not yet promoted | **Yes** — edit or delete freely |
 | `[item: ID]` | Promoted; the item owns the state | The entry is frozen; edit the item |
 
+`[queued: …]` and `[obsolete DATE]` are legacy closed markers a migrated store
+may carry; they count as neither open nor promoted.
+
 **`[item: ID]` is a reference, and it is checked.** `ID` must name an existing
-item whose `type` is one of the three feedback kinds, whose `entry:` is this
+item whose `type` is `signal`, whose `entry:` is this
 entry's `DF-` id, and whose `discovered_from` is this task. `sync`'s
 **store defects** finding checks every marker against all four; a marker that
 fails any of them is reported, never counted. Without this, a dangling or
@@ -264,7 +267,7 @@ and use the packet path rather than creating a store in someone else's repo.
 
 ### 2. Collect and key the items
 
-Collect every `accepted` and `ready` feedback item of the kinds this delivery
+Collect every `accepted` and `ready` signal item of the channels this delivery
 covers. **One delivery per destination** — never one issue carrying both design
 and design-system feedback, because they are answered by different people.
 
@@ -440,7 +443,7 @@ Set those items `status: ready`, **not** `done`. Nothing reached the
 destination; a file in a git-ignored store carried nothing anywhere. A `ready`
 item stays in the backlog and re-surfaces every sync.
 
-**Queued → delivered** is the user's report that it landed: they name the issue
+**Ready → delivered** is the user's report that it landed: they name the issue
 URL, you validate it is `https://`-shaped and on the destination host, and the
 status flips with `delivered_to` set. Until then it stays `ready`. Re-running the
 packet path for an already-`ready` item **updates its existing `delivered_to` in

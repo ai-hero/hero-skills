@@ -67,7 +67,7 @@ derive_status() { # STATUS SUSPENDED_FROM FILE
     new)             echo "new -" ;;
     todo)            echo "accepted -" ;;
     planning|ready)  echo "$1 -" ;;
-    implementing)    echo "active -" ;;
+    implementing|in-progress) echo "active -" ;;
     committed)       echo "committed -" ;;
     reviewing)       echo "review -" ;;
     queued)          echo "ready -" ;;
@@ -197,12 +197,16 @@ while IFS= read -r f; do
       return body
     }
 
-    BEGIN { fence = 0; sect = ""; nlog = 0; unknown_kind = 0 }
+    BEGIN { fence = 0; sect = ""; nlog = 0; sawkind = 0 }
 
     /^---[[:space:]]*$/ {
       fence++
       if (fence == 1) { print; next }
       if (fence == 2) {
+        # A legacy item has no `kind:` line to rewrite in place, and an item
+        # with no `type:` lists as invalid under schema 1 — so the derivation
+        # is written here, not skipped.
+        if (!sawkind) { print "type: " ntype; emitopt("shape", nshape); emitopt("channel", nchannel) }
         emitopt("parent", parent)
         emitopt("rank", rank)
         if (srcref != "" || tgtref != "") {
@@ -219,7 +223,7 @@ while IFS= read -r f; do
     fence == 1 {
       # Known fields are rewritten; everything else passes through verbatim,
       # so bot/pr/severity/branch/success/msg_id/budget survive untouched.
-      if ($0 ~ /^kind:/)  { print "type: " ntype; emitopt("shape", nshape); emitopt("channel", nchannel); next }
+      if ($0 ~ /^kind:/)  { sawkind = 1; print "type: " ntype; emitopt("shape", nshape); emitopt("channel", nchannel); next }
       if ($0 ~ /^status:/) { print "status: " nstatus; emitopt("resolution", nresolution); next }
       if ($0 ~ /^source_ref:/) { srcref = $0; sub(/^source_ref:[[:space:]]*/, "", srcref); sub(/[[:space:]]*#.*/, "", srcref); next }
       if ($0 ~ /^target_ref:/) { tgtref = $0; sub(/^target_ref:[[:space:]]*/, "", tgtref); sub(/[[:space:]]*#.*/, "", tgtref); next }
@@ -242,15 +246,17 @@ while IFS= read -r f; do
     sect != "" {
       if ($0 ~ /^[[:space:]]*$/) next
       if (sect == "signal") {
-        # An entry already promoted to a feedback item is state the item owns;
-        # copying it here would be a second, diverging record of it.
-        if ($0 ~ /\[item:/) { next }
+        # The DF id and the state marker survive verbatim: a promoted signal
+        # item points back at the id through `entry:`, and the marker is the
+        # state of the entry itself (`[undelivered]` is what the open-feedback
+        # count reads; `[item: N]`, `[queued: ...]` and `[obsolete ...]` are
+        # closed). Stripping either re-proposes every entry as undelivered on
+        # the next sync.
         d = $0
-        if (match(d, /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/)) {
-          dt = substr(d, RSTART, RLENGTH)
-          sub(/^-[[:space:]]*DF-[0-9]+-[0-9-]+[[:space:]]*/, "", d)
-          sub(/^\[[a-z]+\][[:space:]]*/, "", d)
-          nlog++; lg[nlog] = "- " dt " (migrate) signal: " d
+        if (d ~ /^-[[:space:]]*DF-[0-9]+-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9]+/) {
+          sub(/^-[[:space:]]*DF-[0-9]+-/, "", d)
+          dt = substr(d, 1, 10)
+          nlog++; lg[nlog] = "- " dt " (migrate) signal: " substr($0, index($0, "DF-"))
         } else { nlog++; lg[nlog] = logline("signal", $0) }
         next
       }

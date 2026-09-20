@@ -7,14 +7,13 @@ dependency bot's PR to merged and deployed.
 
 `do` takes exactly one id and dispatches on the item's type:
 
-- **A build type** (`task`, `architecture`, `polish`, or a `security`
-  item without `bot:`) runs *Advancing one item* below on it, with the item
+- **A task** (any `shape`, unless it is a `dependency` with `bot:`) runs *Advancing one item* below on it, with the item
   given rather than selected: one item, as far as the gates allow, then
   stop. It never plans. An item that is not `ready` (or further along) is
   refused with `Next step: wayfare sync`, whose postflight plans the set; an
   item with unmet deps is refused naming them. `do` on a task is
   unaffected by an active `/goal`.
-- **A `security` item with `bot:`** runs *Carrying a bot's PR* below,
+- **A `shape: dependency` task with `bot:`** runs *Carrying a bot's PR* below,
   there is nothing to build, only a bot's PR to carry to merged and
   deployed.
 - **A goal** runs *One turn* of it. This is what `next` runs once its gate
@@ -30,7 +29,7 @@ task as far as the gates allow in a single run (one-shot). It never plans,
 because planning is `sync`'s postflight, and the ready-mark was given there.
 
 **A goal turn does not route through here.** *One turn* step 4 owns its own
-selection: it drains bot items before the task loop rather than in `parent`
+selection: it drains bot items before the task loop rather than in member
 order, and launches a subagent per task. Both callers shared this procedure
 once and no longer do. An agent that reaches a goal's bot item through this
 section takes it mid-loop, which leaves the checkout on the bot's branch under
@@ -40,25 +39,25 @@ the next task.
    store), STOP and name the path; a failed listing is not an empty roadmap.
    The task is the given id: find its row and act on its tier. A goal
    turn does not reach this step at all (*One turn* step 4 owns its
-   selection), so there is no `parent` walk here:
+   selection), so there is no member walk here:
    **A `committed` dependency is not a satisfied one.** Its code is on a
    goal branch, not on the default branch, so anything that `depends_on` it
    would be built against a tree that lacks it. `hero_ready_items` lists
    the dependent as `blocked` with a `[committed dep: ID]` annotation;
-   report the goal whose `parent` names that id instead of building.
+   report the goal that id's `parent` names instead of building.
    `wayfare next` is already safe (the goal stays `active` until its PR
    merges, and a goal's derived `depends_on` holds the order), so this is
    the gap `do ID` has to cover.
 
    1. `active` task, mid-build: check out its branch if one exists (its
       `branch:` field names it, which is what `resume-state.sh` matches on;
-      `## Comments` records the PR from previous runs), then invoke
+      `## Log` records the PR from previous runs), then invoke
       `hero-skills:one-shot` (via the Skill tool); resume detection takes
       over.
-   2. `review` task: its PR is recorded in `## Comments` (one-shot
+   2. `review` task: its PR is recorded in `## Log` (one-shot
       appends the URL at PR-open). **Check the PR's state first**: open →
       `gh pr checkout` its branch, then invoke one-shot to resume; merged →
-      check `## Comments` for a `[close-out: …]` marker **before** assuming an
+      check `## Log` for a `[close-out: …]` marker **before** assuming an
       oversight. A close-out the user *declined* leaves exactly the same
       `review` + merged state as one that was simply missed, and re-running
       Step 9a against a decision already made is how that gate self-grants.
@@ -95,9 +94,9 @@ the next task.
    No second permission prompt belongs here: the ready-mark *is* the
    go-ahead, and one-shot still stops on its own at every gate (mark-ready,
    respond, auto-approve, merge) before anything merges. one-shot
-   writes `## Mistakes` itself on this path as it builds; before the run
-   rests, confirm the section is non-empty or that the run reported no
-   wrong turns. Do not write it on the run's behalf. Under a goal, the
+   writes its `mistake` lines to `## Log` itself on this path as it builds;
+   before the run rests, confirm they are there or that the run reported no
+   wrong turns. Do not write them on the run's behalf. Under a goal, the
    goal's granted `## Permissions` are what waive those stops, and only
    those.
 3. **One task per run, not one half of one.** A run takes its task as
@@ -110,7 +109,7 @@ the next task.
    merge that returned it to `active`. That last one is a resting state
    too: the next PR is the next run, not a continuation of this one.
 
-## Carrying a bot's PR: a `security` item with `bot:`
+## Carrying a bot's PR: a `shape: dependency` task with `bot:`
 
 A dependency bot opens PRs nobody planned. Each is a bump already implemented,
 on a branch that is not ours, waiting for a review, a merge, and a deploy.
@@ -184,8 +183,8 @@ own branch for that reason and closes the bots' PRs after its own merge.
    procedure's. Either state satisfies the "prior review" gate that ship-pr
    and `auto-approve.yaml` both check (a non-author review that is not
    `PENDING`); a `--comment` review would too, but says nothing.
-4. **Ship.** Flip the item to `review`, append the PR URL to
-   `## Comments`, and invoke `hero-skills:ship-pr N`: gates, `@auto-approve`,
+4. **Ship.** Flip the item to `review`, append the PR URL as a
+   `note` line to `## Log`, and invoke `hero-skills:ship-pr N`: gates, `@auto-approve`,
    verdict, the merge confirmation, merge, reset, verify-deploy. Under a
    goal the permissions line travels in the invocation and waives
    `auto-approve`, `merge` and `deploy` exactly as it does for one-shot;
@@ -195,7 +194,7 @@ own branch for that reason and closes the bots' PRs after its own merge.
    SHA, and the `Deployment:` line.
 5. **Close out.** Verify each `## Definition of Done` line of the item (the
    format below is the single spelling of what they are) and tick it with a
-   `## Comments` entry naming the evidence (one-shot Step 2's rule). Two
+   `note` line in `## Log` naming the evidence (one-shot Step 2's rule). Two
    lines can only be ticked on evidence that exists: the alert line's
    re-query returning `UNAVAILABLE` is `not checked`, and a deployment line
    that reads `DEGRADED`, `UNKNOWN`, or `skipped by goal` (the goal set

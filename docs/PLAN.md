@@ -30,9 +30,10 @@ replaces:
   verified — so each new combination needed a tenth.
 - **Two lifecycle enums, so "terminal" was not `done`.** Feedback ended at
   `delivered` or `rejected`, build kinds at `done`, and the dependency check
-  had to know the difference. `hero_ready_items` still carries the special
-  case, and the comment above it records what the omission cost: every
-  dependent of an answered upstream question blocked forever.
+  had to know the difference. `hero_ready_items` carried the special case
+  as a type-aware switch, and the comment above it recorded what the
+  omission had cost: every dependent of an answered upstream question
+  blocked forever.
 
 ## Layout
 
@@ -284,10 +285,10 @@ fields are marked; a field that does not apply is **absent**, never empty.
 ---
 id: 12
 type: task # task | signal | goal | idea
-shape: story # TASK ONLY — story | structural | visual | defect | dependency
+shape: story # TASK ONLY — story | structural | visual | defect | dependency | docs
 title: I can sign in with my Google account
 status: ready
-resolution: # set only at done — shipped | delivered | rejected | obsolete
+resolution: # set only at done — shipped | delivered | rejected | promoted | obsolete
 origin: wayfare # the producer that authored this item; never claimed for another
 severity: # optional — high | medium | low
 depends_on: [9] # ids that must reach `done` first; blockers only
@@ -302,6 +303,8 @@ anchors:
 awaiting: [] # message ids this item waits on; non-empty means suspended
 suspended_at: # date the wait started
 expires: # date the wait lapses
+ready_marked: 2026-07-24 # the date a person flipped it to ready; the record of the one act nothing else may perform
+one_way_door: false # optional — true when the change is expensive to reverse, so planning gave it extra scrutiny
 branch: feat/12-google-sign-in # written when work starts
 pr: https://github.com/OWNER/REPO/pull/41
 success: "a signed-out user completes Google sign-in and lands on their dashboard"
@@ -396,10 +399,25 @@ rules, kept consistent by hand. They are one section with a tag.
 | `decision` | a choice made and the reason, where the file cannot show it | reviewers |
 | `signal` | a divergence captured mid-build, before `wayfare sync` promotes it to a `signal` item | `wayfare sync` |
 
+A `signal` line carries the capture id and a state marker after the tag, and
+the marker is the one part of a log line that changes after it is written:
+
+```text
+- 2026-07-25 (one-shot) signal: DF-12-2026-07-25-1 [undelivered] design/auth/sign-in.md orders consent before account linking; the code links first, because consent cannot be scoped until the account is known
+```
+
+`[undelivered]` becomes `[item: 61]` when `wayfare sync` promotes the entry,
+and the signal item's `entry:` names the `DF-` id back. That is what lets the
+open-feedback count be a scan for one token, and what makes the promotion
+link checkable from both ends. `references/feedback-channels.md` owns the
+form; `[queued: …]` and `[obsolete DATE]` are legacy closed markers a
+migrated store may still carry, counted as neither open nor promoted.
+
 Three rules carry over unchanged, and each one has a failure behind it:
 
-- **Append-only and exhaustive.** A summarized `mistake` list reads as a clean
-  build. A recovered wrong turn belongs here too: the recovery is invisible in
+- **Append-only and exhaustive.** The marker flip on a `signal` line is the
+  one exception, and it is a state change, not an edit. A summarized
+  `mistake` list reads as a clean build. A recovered wrong turn belongs here too: the recovery is invisible in
   the diff, so this is the only place the plan's bad steer is recorded.
 - **Prose, never raw output.** No command output, env values or connection
   strings in a file that outlives the item.
@@ -541,7 +559,9 @@ the folder (`docs/MESSAGES.md`), and the fleet register at `.fleet/`.
 | `## Comments` | `## Log`, each line tagged `note` |
 | `## Mistakes` | `## Log`, each line tagged `mistake` |
 | `## Turn log` | `## Log`, each line tagged `turn` |
-| `## Design Feedback` | `## Log`, each line tagged `signal`; entries already promoted to an item are dropped |
+| `## Design Feedback` | `## Log`, each line tagged `signal`, keeping its `DF-` id and state marker |
+| `status: in-progress` (legacy plain) | `status: active` |
+| no `kind` and no `status` | `type: task`, `shape: story`, `status: new` |
 | items at `.plans/*.md` | moved to `.plans/items/` |
 
 The migrator is **not idempotent by accident** — it keys on the absence of
