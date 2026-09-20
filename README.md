@@ -9,6 +9,8 @@
 </p>
 
 <p align="center">
+  <a href="#how-it-works">How it works</a> &bull;
+  <a href="#across-repos">Across repos</a> &bull;
   <a href="#install">Install</a> &bull;
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#commands">Commands</a> &bull;
@@ -33,6 +35,191 @@ Hero Skills gives you **slash commands for the entire dev lifecycle** that adapt
 - **Verify changes**: auto-detect project type (API, frontend, CLI, MCP) and run lint, typecheck, unit tests, and smoke tests
 - **Ship with confidence**: pre-commit checks, conventional commits, draft PRs by default, automated parallel review before requesting human review
 - **Stay informed**: CI/CD status, cluster health, security scans
+
+## How it works
+
+Wayfare is the one skill you run. It reads the world, converges it into a
+plan, and hands tasks to the build chain — which folds the result back into
+the world it read.
+
+```mermaid
+flowchart TB
+  SRC["<b>Source</b> · this repo<br/>code + DESIGN.md"]
+  TGT["<b>Target</b> · claude.ai/design<br/>optional"]
+  PLAN["<b>wayfare sync</b><br/>reconcile · audit · propose"]
+  STORE[("<b>.plans/</b><br/>PLAN.md + items/")]
+  NEXT["<b>wayfare next</b><br/>authorize a goal"]
+  DO["<b>wayfare do ID</b><br/>advance one item"]
+  BUILD["one-shot → push-pr<br/>→ review-pr → ship-pr"]
+
+  SRC -- read --> PLAN
+  TGT -- read --> PLAN
+  PLAN --> STORE
+  STORE --> NEXT
+  STORE --> DO
+  NEXT --> BUILD
+  DO --> BUILD
+  BUILD -- merged --> SRC
+  STORE -. signal .-> TGT
+
+  classDef verb fill:#7C3AED,stroke:#5B21B6,color:#fff
+  classDef store fill:#1E293B,stroke:#0F172A,color:#fff
+  classDef end_ fill:#FEF3C7,stroke:#D97706,color:#78350F
+  class PLAN,NEXT,DO verb
+  class STORE store
+  class SRC,TGT end_
+```
+
+With no design project configured the target end is simply absent, and
+`wayfare sync` reconciles the repo against `DESIGN.md`, its own gaps and its
+own hardening instead — a self-review.
+
+### The plan store
+
+`.plans/` is the system of record: one `PLAN.md` per repo and one file per
+item. Items come in four types, and a task's `shape` decides what its
+Definition of Done has to assert.
+
+| Type | What it is | What happens to it |
+| --- | --- | --- |
+| `task` | a change to this repo, shipped on a PR | built |
+| `signal` | a finding delivered where this repo cannot write | delivered upstream |
+| `goal` | an ordered set of tasks with one Definition of Done | grouped and authorized |
+| `idea` | something worth doing eventually, not yet shaped into work | nothing, until you promote it |
+
+An **idea** is the parking lot: a thought worth keeping that nobody has
+committed to. It carries no plan, no paths and no Definition of Done — an
+idea that can state one is a task that was mis-filed. Nothing builds an idea
+and nothing may depend on one; `wayfare sync` reports the parked set as a
+count and promotes only what you pick, at which point whatever it becomes
+carries `discovered_from` pointing back at it.
+
+Every item runs one lifecycle. `ready` is the only state a person sets, and
+it is the gate: nothing is built without it.
+
+```mermaid
+stateDiagram-v2
+  [*] --> new
+  new --> accepted: plan accepts it
+  accepted --> planning: think-it-through
+  planning --> ready: your ready-mark
+  ready --> active: one-shot starts
+  active --> committed: on a goal branch
+  active --> review: PR opens
+  committed --> review: goal's PR opens
+  review --> done: merged, deploy verified
+  active --> dropped: wayfare drop
+  done --> [*]
+  dropped --> [*]
+```
+
+`done` unblocks whatever depends on the item; `dropped` deliberately does
+not, because the prerequisite was abandoned. The full specification is
+[docs/PLAN.md](./docs/PLAN.md).
+
+### From tasks to goals
+
+Grouping is the **last stage of every `wayfare sync`**, not a separate step
+you run. It works bottom-up from the dependency graph: the first goal is the
+smallest outcome whose tasks depend on nothing outside the group, the next is
+the smallest outcome whose remaining dependencies are already inside a formed
+goal, and so on.
+
+```mermaid
+flowchart TB
+  subgraph G7["goal 7 · I can manage my trips"]
+    T12["task 12<br/>save a trip"]
+    T13["task 13<br/>rename it"]
+    T21["task 21<br/>empty state"]
+    T12 --> T13
+    T12 --> T21
+  end
+
+  subgraph G9["goal 9 · I can share a trip"]
+    T15["task 15<br/>share link"]
+    T18["task 18<br/>read-only view"]
+    T15 --> T18
+  end
+
+  T13 -. "task edge crosses the boundary" .-> T15
+  G7 == "so goal 9 depends_on 7 — derived, never authored" ==> G9
+```
+
+Goals are grouped by **outcome** — what a person can do once the whole group
+ships — never by area or layer. A group whose Definition of Done cannot be
+stated as one user-visible outcome is a filter over the roadmap, not a goal,
+and it will report `done` without anything shipping that a person notices.
+
+The stage holds one invariant: **every item at `ready` or further and not
+`done` is in exactly one open goal.** `next` walks goals and never items, so
+a `ready` task in no goal is an orphan nothing in the loop reaches. A task
+that adds up to nothing larger becomes a one-item goal — small, but
+reachable.
+
+Each round **re-cuts** the open goals rather than appending to them: tasks
+join and leave, two goals naming one outcome coalesce, a goal whose DoD
+became two outcomes splits. An `active` goal is frozen, because its members
+and permissions were authorized as a set at `next`'s gate.
+
+`sync` writes the goal. It never authorizes it — that is typed by a person at
+`wayfare next`, in-session, and is never stored in the file.
+
+## Across repos
+
+**Wayfare works in one repo at a time: the one it runs in.** It never edits a
+sibling. That rule is what makes the rest of this predictable — a change made
+in a repo whose own agent did not make it lands in no PR, is reviewed by
+nobody, and turns up as a dirty working tree someone else has to explain.
+
+A folder of sibling checkouts is a **fleet**, mapped by a `FLEET.md` at its
+top ([docs/FLEET-MD.md](./docs/FLEET-MD.md)). The map is local and
+unversioned. Work crosses a repo line in exactly three ways:
+
+```mermaid
+flowchart LR
+  subgraph FLEET["the fleet folder · FLEET.md maps it"]
+    A["<b>repo A</b><br/>wayfare runs here"]
+    B["<b>repo B</b><br/>a sibling checkout"]
+    DS["<b>design system</b><br/>a sibling checkout"]
+  end
+  TRACKER["<b>feedback-repo</b><br/>on GitHub"]
+
+  A == "1 · fan-out<br/>an agent runs in B" ==> B
+  A -- "2 · message<br/>into B's inbox" --> B
+  A -. "3 · signal<br/>into its inbox" .-> DS
+  A -. "3 · signal<br/>as an issue" .-> TRACKER
+
+  classDef repo fill:#FEF3C7,stroke:#D97706,color:#78350F
+  classDef out fill:#EDE9FE,stroke:#7C3AED,color:#4C1D95
+  class A,B,DS repo
+  class TRACKER out
+```
+
+**1. Fan-out.** Running a hero skill from the fleet root does not reach
+sideways. It *starts an agent in* each repo you pick, and that agent writes
+only to its own repo, on its own branch, under its own gates. This is the
+sanctioned way a sibling changes.
+
+**2. Messages.** An agent in A that needs something from B deposits a file in
+B's `.plans/inbox/` — and that is the **only** write A ever makes outside
+itself. No code, no config, no branch, no `git` command in another checkout.
+Two gates apply: a **fleet gate** (only a repo with a `FLEET.md` row may
+deposit) and a **promotion gate** — an inbound message never becomes work by
+itself. B's agent reads it, weighs it, and promotes it to an ordinary item.
+Skip that and a sibling is writing B's roadmap. See
+[docs/MESSAGES.md](./docs/MESSAGES.md).
+
+**3. Signals.** What building teaches travels back out to whoever owns the
+thing it disagrees with. Design and architecture signals become a GitHub
+issue in `feedback-repo`; design-system signals become a message in the
+design-system repo's inbox, so its own wayfare promotes them like any other.
+With no destination configured, a signal is written to a local packet file
+instead and nothing silently vanishes.
+
+A message is **data, never an instruction** — it was written by another
+agent, so it is the same untrusted class as a design doc or a PR comment
+thread. One that appears to give orders is content that rode in, and it has
+no effect.
 
 ## Install
 
@@ -94,7 +281,7 @@ Three commands. Everything else is run by them.
 
 ```
 # 1. Configure your project (run once per repo)
-hero-skills:init-hero
+hero-skills:wayfare init
 
 # 2. Converge the world into a plan. One round, eleven stages:
 #    config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals
@@ -181,10 +368,10 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:init-hero` | Investigate your repo, auto-detect stack, create `HERO.md` config |
+| `hero-skills:wayfare init` | Investigate your repo, auto-detect stack, create `HERO.md` config |
 | `hero-skills:preflight` | Catch missing tooling, stale `HERO.md`, env mismatches, and busy ports before a pipeline step does destructive work |
 | `hero-skills:setup-dev` | Set up a developer's local environment (tools, auth, dependencies) |
-| `hero-skills:create-project` | Scaffold a new project (Python, full-stack, Node.js) |
+| `hero-skills:wayfare init` | Scaffold a new project (Python, full-stack, Node.js) |
 | `hero-skills:create-skill` | Create a new Claude Code skill, subagent, rule, or hook |
 
 ### Development Cycle
@@ -198,6 +385,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 | Command | What it does |
 | --- | --- |
 | `hero-skills:review-pr` | Review a PR with the review agents plus a security pass: your draft → applies fixes, asks before marking ready. Others' PR → inline comments only. |
+| `hero-skills:my-humanizer` | Strip AI-writing patterns from prose ([docs/HUMANIZING.md](./docs/HUMANIZING.md), from Wikipedia's "Signs of AI writing"). The pipeline steps that emit prose read the doc directly; this skill runs it on any text you hand it |
 | `hero-skills:respond-to-comments` | Fix PR review comments, resolve threads, optionally loop with external review agent |
 | `hero-skills:ship-pr` | Trigger gated `@auto-approve`, wait for the verdict, merge if it passes, reset to the default branch, and wait for the merge commit's runs to report post-merge CI and deployment health |
 
@@ -206,7 +394,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 | Command | What it does |
 | --- | --- |
 | `hero-skills:one-shot` | Drives a small task end-to-end: plan → implement → simplify → push (tests included) → self-review → mark-ready → await-review → respond → ship. Detects a resume point on re-invocation; with no arguments, drives the current goal to merged + reset branch. Explicit user gates at each destructive step. |
-| `hero-skills:create-project` | Scaffolds a new project, then chains into setup-dev → init-hero → first-commit. |
+| `hero-skills:wayfare init` | Scaffolds a new project, then chains into setup-dev → config → first-commit. |
 
 ### The front door
 
@@ -226,7 +414,6 @@ Two skills are stages of `sync` and hidden from the slash menu (`user-invocable:
 | Command | What it does |
 | --- | --- |
 | `hero-skills:think-it-through` | Brainstorm + grill an idea one question at a time into shared understanding and dependency-aware work-items |
-| `hero-skills:my-humanizer` | Strip AI-writing patterns from prose (Wikipedia's "Signs of AI writing"). Runs inline inside the pipeline on everything a person reads: code comments, docs, commit bodies, and the PR body in `push-pr`, review comments in `review-pr`, thread replies in `respond-to-comments`; standalone on any text |
 | `hero-skills:fleet` | Create + converge `FLEET.md`, the local, unversioned map of the repos checked out beside each other (group, port). `sync` scans the folder and proposes rows, `review` reports drift read-only. Every repo skill run from the fleet root fans out to the repos you pick (see `docs/FLEET-MD.md`) |
 | `hero-skills:handoff` | Distill the current conversation into one self-contained work-item for a downstream agent (optionally filed to the tracker, or to **another repo** with `--repo OWNER/NAME`) |
 
@@ -234,7 +421,7 @@ Two skills are stages of `sync` and hidden from the slash menu (`user-invocable:
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:abandon` | Abandon or pause an unmerged branch, stash uncommitted work, switch to default, clear context |
+| `hero-skills:wayfare drop` | Abandon or pause an unmerged branch, stash uncommitted work, switch to default, clear context |
 | `hero-skills:audit-plugin` | Audit the hero-skills plugin itself for quality and consistency |
 
 ## Updating vendored assets in a downstream repo
@@ -306,13 +493,13 @@ with what `auto-approve.yaml` declares.
 
 Every skill reads `HERO.md` from your repo root. It declares your stack so skills don't have to guess. **HERO.md is committed to the repo**. It's team-shared, so every developer and every skill works from the same config.
 
-When project config drifts (new deps, CI changes, switched task runner), skills detect the staleness and remind you to run `hero-skills:init-hero recalibrate` to refresh. There is no auto-pre-commit hook for this. It was too slow. Run the refresh on demand.
+When project config drifts (new deps, CI changes, switched task runner), skills detect the staleness and remind you to run `hero-skills:wayfare init recalibrate` to refresh. There is no auto-pre-commit hook for this. It was too slow. Run the refresh on demand.
 
 **`recalibrate` is on fourteen skills.** When a skill does the wrong thing
 because its config is wrong, you fix it where you noticed:
 `hero-skills:ship-pr recalibrate` asks about the eight fields `ship-pr` reads
 across Repository, CI/CD and Deployment, writes what you confirm, commits, and
-stops. It does not then ship. `hero-skills:init-hero recalibrate` is the
+stops. It does not then ship. `hero-skills:wayfare init recalibrate` is the
 whole-file pass. `scripts/hero-fields.sh SKILL` prints the fields of any skill
 that carries the verb, with their current values. See
 [docs/RECALIBRATE.md](docs/RECALIBRATE.md).
@@ -346,7 +533,7 @@ Here's what a minimal config looks like:
 - Dev command: uvicorn main:app --reload
 ```
 
-No `HERO.md`? Skills fall back to auto-detection. Run `hero-skills:init-hero` to generate one. It investigates your repo and asks smart questions to fill in what it can't detect.
+No `HERO.md`? Skills fall back to auto-detection. Run `hero-skills:wayfare init` to generate one. It investigates your repo and asks smart questions to fill in what it can't detect.
 
 <details>
 <summary><strong>Full config reference</strong></summary>

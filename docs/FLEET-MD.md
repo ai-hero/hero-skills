@@ -160,7 +160,7 @@ running a repo skill against it either fails late or, worse, half-works.
 5. **Relay every report, per repo.** The user sees one summary block per
    repo, what happened, what stopped, what needs them.
 
-Two exceptions. `create-project` at the fleet root scaffolds *into* the
+Two exceptions. `wayfare init` at the fleet root scaffolds *into* the
 folder (`FLEET_ROOT/NAME`) and then runs `fleet sync` to add the row. That
 is the natural place to create a project. `fleet` itself is the only skill
 whose subject is the folder.

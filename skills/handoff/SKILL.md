@@ -85,15 +85,16 @@ Show the user a three to six line synthesis (goal, key decisions, remaining work
 
 ### Step 3: Write the Work-Item
 
-One file at `.plans/NNN-slug.md`, id continuing from the highest existing id (think-it-through's numbering rules: integer `id`, zero-padded filename only). Use the shared format plus the handoff sections:
+One file at `.plans/items/NNN-slug.md`, id continuing from the highest existing id (think-it-through's numbering rules: integer `id`, zero-padded filename only). Use the shared format plus the handoff sections:
 
 ```markdown
 ---
 id: 9
-kind: feature # every item is a wayfare item — feature, or architecture for a structural change
+type: task # every item is a wayfare item (docs/PLAN.md)
+shape: story # or structural, defect, visual, dependency, docs
 origin: handoff
 title: Finish the payment-retry migration
-status: planning # wayfare's build enum; flipped to ready by the user's ready-mark
+status: planning # docs/PLAN.md's lifecycle; flipped to ready by the user's ready-mark
 depends_on: []
 one_way_door: false
 success: "Retries drain the backlog in staging; alert AL-42 stays green for 24h"
@@ -131,9 +132,9 @@ Hard-won session knowledge: failed approaches, environment quirks, gate/hook beh
 
 How the downstream agent proves completion (commands, tests, observable behavior).
 
-## Comments
+## Log
 
-- YYYY-MM-DD (author): append-only
+- YYYY-MM-DD (author) note: append-only
 ```
 
 ### Step 4: Optionally File to the Tracker (`--issue`)
@@ -184,7 +185,7 @@ If the target repo uses Linear rather than GitHub Issues, create the issue in th
 ### Step 6: Report
 
 ```
-Handoff written: .plans/009-finish-payment-retry-migration.md
+Handoff written: .plans/items/009-finish-payment-retry-migration.md
 Status: plan — awaiting your ready-mark
 Tracker: #123 filed (or: not filed)
 
@@ -203,7 +204,7 @@ For a `--repo` handoff, report both sides so it's clear what left the building:
 Handed off to: acme/api-service#88 — Add per-tenant rate limiting
                 https://github.com/acme/api-service/issues/88
 
-Local stub:    .plans/010-await-rate-limit-support.md
+Local stub:    .plans/items/010-await-rate-limit-support.md
 Status:        plan (waiting on acme/api-service#88 — mark ready when it lands)
 
 Nothing in this repo picks that issue up — the receiving team runs

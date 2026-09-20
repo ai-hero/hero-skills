@@ -23,9 +23,9 @@
 #     what is fatal. No function exits the calling shell.
 #   - Callers' shell state (cwd, variables) is never modified. Functions that
 #     need to cd do it inside a subshell.
-#   - MUTATING FUNCTIONS: hero_exclude_add (appends to .git/info/exclude) and
-#     hero_work_store (mkdir, and migrates a legacy store directory via mv).
-#     Everything else is read-only.
+#   - A function that writes says so in its own comment (hero_exclude_add,
+#     hero_work_store, hero_msg_deposit, the deploy-pending and pending-lock
+#     helpers). Everything else is read-only.
 
 # ---------- repo + config --------------------------------------------------
 
@@ -260,7 +260,7 @@ hero_check_staleness() {
     .github/workflows .pre-commit-config.yaml \
     CLAUDE.md Makefile justfile Taskfile.yml 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
   if [ "${config_time:-0}" -gt "${hero_time:-0}" ]; then
-    echo "note: HERO.md may be out of date; run hero-skills:init-hero recalibrate to refresh." >&2
+    echo "note: HERO.md may be out of date; run hero-skills:wayfare init recalibrate to refresh." >&2
   fi
   return 0
 }
@@ -677,8 +677,6 @@ hero_item_field() {
 # Print an item's depends_on ids, one per line.
 hero_item_deps() { hero_item_list_field "$1" depends_on; }
 
-# Print a goal's `covers` ids, one per line.
-hero_item_covers() { hero_item_list_field "$1" covers; }
 
 # Print a frontmatter list field's entries, one per line.
 #
@@ -723,36 +721,119 @@ hero_item_list_field() {
 
 # Normalize a work-item status: lowercase, empty defaults to `new`.
 # `Done` silently not matching `done` left every dependent blocked forever.
-# The default is `new`, not `todo`: `todo` on a plain item means READY-eligible,
-# so a status-less item went straight to one-shot untriaged.
+# The default is `new`, never a READY-eligible state: a status-less item must
+# land as untriaged, not on the READY tier.
 hero_item_status() {
   local s
   s=$(hero_item_field "$1" status | tr '[:upper:]' '[:lower:]')
   printf '%s' "${s:-new}"
 }
 
-# Map a kind to its CLASS. The class picks the status enum (see the table on
-# hero_ready_items). Prints the class; prints `unknown` and warns for a kind
-# not in the table. Both of hero_ready_items' loops call this so the kind list
-# exists once: a second copy in the terminal-status pass is how a fourth
-# feedback kind would get added to one and forgotten in the other, leaving its
-# dependents blocked forever.
-#
-# An unrecognized kind rides the plain enum with READY downgraded to backlog.
-# Not `invalid`: that hid every such item behind a stderr line. Not plain
-# either: `todo` means opposite things in the plain and build enums, so a typo
-# like `kind: features` would hand an unplanned feature straight to one-shot.
-# Listed-but-never-READY is the one reading safe under both.
-hero_item_class() {
+# An item's TYPE: task, signal, goal or idea (docs/PLAN.md). Lowercased, because
+# `Task` silently matching no arm of the listing table printed the item as
+# invalid, which reads as a malformed file rather than a capital letter.
+# Empty means the item was never migrated; the caller reports it, because
+# guessing a type here is how a `goal` gets handed to one-shot as a task.
+hero_item_type() {
+  hero_item_field "$1" type | tr '[:upper:]' '[:lower:]'
+}
+
+# A task's SHAPE: story, structural, visual, defect, dependency or docs. Decides
+# what the Definition of Done must assert, never whether the item is READY,
+# so nothing in the listing reads it.
+hero_item_shape() {
+  hero_item_field "$1" shape | tr '[:upper:]' '[:lower:]'
+}
+
+# A signal's CHANNEL: design, design-system or architecture. Decides where
+# the delivery procedure sends it, never whether it lists.
+hero_item_channel() {
+  hero_item_field "$1" channel | tr '[:upper:]' '[:lower:]'
+}
+
+# Read a field from the plan object's frontmatter (`.plans/PLAN.md`). A dotted
+# KEY (`source.head`, `target.project`) reads one level into a block; a bare
+# KEY that names a block prints nothing, so `hero_plan_field source` is NOT a
+# way to read the head — it was, silently, the reason a drift scan saw no
+# previous head on every run.
+hero_plan_field() { # KEY [STORE]
+  local store
+  store="${2:-$(hero_store_path)}"
+  [ -f "$store/PLAN.md" ] || return 1
   case "$1" in
-    ''|work-order|hardening)                                      printf plain ;;
-    feature|architecture|polish|security|bug)                     printf build ;;
-    goal)                                                         printf goal ;;
-    design-feedback|architecture-feedback|design-system-feedback) printf feedback ;;
-    *)
-      echo "hero_ready_items: $2 has unrecognized kind '$1'; listed on the plain enum but never handed out READY; add it to hero_item_class or fix the frontmatter" >&2
-      printf unknown ;;
+    *.*)
+      awk -v blk="${1%%.*}" -v key="${1#*.}" '
+        /^---[[:space:]]*$/ { if (++fence == 2) exit; next }
+        fence == 1 && index($0, blk ":") == 1 { inblk = 1; next }
+        fence == 1 && inblk && $0 ~ /^[^[:space:]]/ { inblk = 0 }
+        fence == 1 && inblk && index($0, "  " key ":") == 1 {
+          v = $0; sub(/^[[:space:]]*[^:]+:[[:space:]]*/, "", v); sub(/[[:space:]]*#.*/, "", v)
+          printf "%s", v; exit
+        }' "$store/PLAN.md" ;;
+    *) hero_item_field "$store/PLAN.md" "$1" ;;
   esac
+}
+
+# Absolute path to the item directory. Items live in `.plans/items/`, not
+# beside PLAN.md: the listing globs `*.md`, so a plan file in that directory
+# lists as a malformed item.
+# shellcheck disable=SC2120  # optional arg; callers usually rely on the default
+hero_items_dir() { # [ROOT]
+  printf '%s' "$(hero_store_path "${1:-}")/items"
+}
+
+# How many ideas are parked, i.e. at `new` or `accepted`.
+#
+# The roadmap view prints this as one line ("7 ideas parked") instead of one
+# row per idea: a parking lot is meant to grow, and forty rows of it between
+# a reader and the READY set is how the actionable rows stop being read.
+# The listing itself still emits an `idea` row per item, because a caller
+# parsing rows must see every item; the collapsing is presentation.
+hero_idea_count() { # [STORE]
+  local items f n=0
+  items="${1:-$(hero_store_path)}/items"
+  [ -d "$items" ] || { printf 0; return 0; }
+  ( cd "$items" 2>/dev/null || { printf 0; exit 0; }
+    setopt localoptions nullglob 2>/dev/null || true
+    for f in *.md; do
+      [ -e "$f" ] || continue
+      [ "$(hero_item_type "$f")" = idea ] || continue
+      case "$(hero_item_status "$f")" in new|accepted) n=$((n + 1)) ;; esac
+    done
+    printf '%s' "$n" )
+}
+
+# Print the ids of a goal's members, ordered by `rank` then id, one per line.
+# `depends_on` is not consulted: it gates each member's readiness in the
+# listing, and a rank that contradicts it is a store defect `wayfare sync`
+# reports. The second argument is the STORE, like every sibling here.
+#
+# Derived from each item's `parent`, never stored on the goal. The old schema
+# kept the same edge twice (`covers` on the goal AND the members' own order),
+# so the two could disagree and a sync had to reconcile them every round;
+# worse, two goals could name one item and each pre-authorize merges on it.
+# With one edge in one direction that is not representable.
+#
+# An empty GOAL_ID is refused: it would match every item with no `parent`,
+# and a goal turn reading that as "my members" would start building orphans.
+hero_goal_members() { # GOAL_ID [STORE]
+  local items f id parent rank
+  [ -n "$1" ] || { echo "hero_goal_members: empty GOAL_ID" >&2; return 2; }
+  items="${2:-$(hero_store_path)}/items"
+  [ -d "$items" ] || return 1
+  ( cd "$items" 2>/dev/null || return 1
+    setopt localoptions nullglob 2>/dev/null || true
+    for f in *.md; do
+      [ -e "$f" ] || continue
+      parent=$(hero_norm_id "$(hero_item_field "$f" parent)")
+      [ "$parent" = "$(hero_norm_id "$1")" ] || continue
+      id=$(hero_norm_id "$(hero_item_field "$f" id)")
+      [ -n "$id" ] || continue
+      rank=$(hero_item_field "$f" rank)
+      case "$rank" in ''|*[!0-9]*) rank=9999 ;; esac
+      printf '%s %s\n' "$rank" "$id"
+    done | sort -n -k1,1 -k2,2 | awk '{ print $2 }'
+  )
 }
 
 # Messages in a store's mailbox (docs/MESSAGES.md) by state. With no second
@@ -1162,57 +1243,39 @@ hero_norm_id() {
 # satisfied, which is different from ordinary waiting.
 #
 # STATE is one of:
-#   READY    not done, and every depends_on target is done
+#   READY    a task at `ready` whose every depends_on target is done
 #   blocked  not done, but a dependency is unmet or unresolvable
-#   plan     status is planning: still being shaped; a HUMAN marks it todo
-#            (`ready` for a build kind)
-#   active   status is in-progress: someone is already on it
-#   done     completed
+#   backlog  a task at `accepted`: on the roadmap, not yet planned; annotated
+#            `[deps unmet]` when a dependency isn't done. Never READY: handing
+#            an unplanned task to one-shot would skip planning entirely
+#   plan     status is planning: still being shaped; a HUMAN marks it ready
+#   active   status is active: someone is already on it
+#   review   a task at review: PR open, awaiting merge
+#   committed a task committed on a goal's branch that has not merged. Never
+#            READY and never a satisfied dependency, because the default
+#            branch lacks the code; a dependent's row names it as
+#            `[committed dep: ID…]` so a goal turn can tell "already on my
+#            branch" from a real block
+#   suspended `awaiting:` is non-empty: waiting on a sibling repo's reply
+#            (docs/MESSAGES.md). Never READY and never a satisfied dependency
+#   feedback a signal at accepted or ready: a divergence written but not yet
+#            landed upstream. Never READY, because a signal is DELIVERED and
+#            never built, so handing one to one-shot is wrong
+#   goal     a goal at accepted: approved, waiting to run. Never READY: a goal
+#            is a container for tasks, and one-shot builds tasks. `wayfare
+#            next` selects goals by type instead
+#   idea     an idea at new or accepted: parked, never work until promoted
 #   new      status is new (or absent): created, not yet triaged. Never READY,
 #            because nobody has decided this should be worked on
-#   backlog  build kinds (and unrecognized ones) with status todo: on the
-#            roadmap, not yet planned; annotated `[deps unmet]` when a
-#            dependency isn't done
-#   review   build kinds only, status reviewing: PR open, awaiting merge
-#   committed build kinds only, status committed: committed on a goal's branch
-#            that has not merged. Never READY and never a satisfied
-#            dependency, because the default branch lacks the code; a
-#            dependent's row names it as `[committed dep: ID…]` so a goal turn
-#            can tell "already on my branch" from a real block
-#   feedback feedback kinds only, status todo or queued: a divergence
-#            written but not yet landed upstream. Never READY, because a
-#            feedback item is DELIVERED and never built, so handing one to
-#            one-shot is wrong
-#   goal     kind `goal` only, status todo: approved, waiting to run. Never
-#            READY: a goal is a container for features, and one-shot builds
-#            features. `wayfare next` selects goals by kind instead
-#   invalid  no usable id, OR an unrecognized status. Either way the item
-#            cannot participate in dependency order and is never handed out READY
+#   done     finished; the only state that satisfies a dependency
+#   dropped  abandoned; terminal, and does NOT satisfy a dependency
+#   invalid  no usable id, no type, or an unrecognized status. Either way the
+#            item cannot participate in dependency order and is never READY
 #
-# Kind picks a CLASS, and the class picks the status enum:
-#
-#   plain     '' / work-order / hardening: new | planning | todo | in-progress | done.
-#             LEGACY: every producer now writes a build kind. The arm stays so
-#             existing stores keep listing; dropping it would demote every
-#             pre-rule item to backlog with a stderr line as the only trace
-#   build     feature / architecture / polish / security: new | todo | planning | ready |
-#             implementing | committed | reviewing | done, mapped here as
-#             new | backlog | plan | READY-eligible |
-#             active | committed | review | done. For a build kind, `ready` (not `todo`) is
-#             the state eligible to become READY: `todo` means "identified,
-#             unplanned", and handing an unplanned one to one-shot would skip
-#             planning entirely
-#   feedback  design-feedback / architecture-feedback / design-system-feedback:
-#             new | todo | queued | delivered | rejected, mapped as new | feedback
-#             | feedback | done | done
-#   goal      goal: new | todo | active | done, mapped as new | goal | active |
-#             done. Spans several features via `covers:`; its own DoD is what
-#             the goal loop checks against
-#
-# Plain items keep the original enum; `ready`/`implementing`/`reviewing` on a
-# plain item stay invalid (loud). An unrecognized kind rides the plain enum with
-# READY downgraded to backlog. See the class gate for why that is the only
-# reading safe under both failure modes.
+# One enum for every type (docs/PLAN.md): new | accepted | planning | ready |
+# active | committed | review | done | dropped. Which states a type visits is
+# the type's business; the listing only refuses combinations that make no
+# sense (a goal at ready, a signal at committed) as invalid.
 #
 # `done` rows are PRINTED, not hidden. Callers need to see them: one-shot's
 # Step 1c resolves an argument against this listing to answer "has this already
@@ -1220,16 +1283,13 @@ hero_norm_id() {
 # duplicating it. Filtering them out silently defeated both.
 #
 # `active` is separated from READY so two sessions cannot both pick up the same
-# in-flight item: one-shot marks an item in-progress (`implementing` for a
-# feature) before its first edit specifically to prevent that, and folding it
-# into READY undid it.
+# in-flight item: one-shot marks an item active before its first edit
+# specifically to prevent that, and folding it into READY undid it.
 #
 # `planning` is never READY regardless of dependencies: the item is still being
-# shaped and awaits a human ready-mark. Skills that emit plain items write them
-# as `planning`; only the user's explicit say-so flips one to `todo` (`ready`
-# for a build kind). Without this state, freshly emitted items were
-# handed straight to one-shot. Wayfare emits features as `todo`, which for a
-# feature means backlog, and still never READY.
+# shaped and awaits a human ready-mark. Without this state, freshly emitted
+# items were handed straight to one-shot. Wayfare writes tasks as `accepted`,
+# which is backlog, and still never READY.
 #
 # NOTE: readiness is a claim about DEPENDENCIES, not about the codebase. An item
 # stays READY after its work lands until someone marks it done, so consumers must
@@ -1238,25 +1298,40 @@ hero_norm_id() {
 # Runs in a subshell: it cds, and leaking that into a sourced caller's shell
 # silently reroutes every later relative path.
 hero_ready_items() (
-  local store f d raw deps ready title id state kind class enum row all_ids done_ids covered_ids committed_ids committed missing awaiting since
+  local store items f d raw deps ready title id state itype row all_ids done_ids
+  local open_goals parent committed_ids committed missing awaiting since enum
+  local idea_ids shape channel resolution
   store="${1:-$(hero_work_store)}" || return 1
-  cd "$store" 2>/dev/null || { echo "hero_ready_items: no store at ${store}" >&2; return 1; }
+
+  # An unmigrated store lists NOTHING rather than listing wrong. Every item in
+  # it still carries `kind`, which schema 1 does not read, so a permissive pass
+  # would print an empty roadmap for a repo that has a full one — and an empty
+  # roadmap reads as "nothing to do", not as "this did not work".
+  if [ ! -f "$store/PLAN.md" ] || [ -z "$(hero_item_field "$store/PLAN.md" schema)" ]; then
+    echo "hero_ready_items: '$store' has no PLAN.md at schema 1; run 'bash scripts/migrate-plan.sh $store', or hero-skills:wayfare init on a repo with no plan yet" >&2
+    return 1
+  fi
+
+  items="$store/items"
+  cd "$items" 2>/dev/null || { echo "hero_ready_items: no item directory at ${items}" >&2; return 1; }
   # zsh errors out on an unmatched glob (bash leaves it literal for the
   # `[ -e ]` guard to skip), so an EMPTY store aborted with a raw "no matches
   # found" and rc=1, indistinguishable from a missing store. nullglob makes
   # it an empty listing in both shells.
   setopt localoptions nullglob 2>/dev/null || true
 
-  # Collect every id and the done subset. Ids are integers by convention, but
-  # comparison is string-tolerant (hero_norm_id), so the ids rejected here are
-  # EMPTY ones and ids containing whitespace, because whitespace would inject extra
-  # tokens into the space-delimited sets below, letting a dep on a NONEXISTENT
-  # id resolve (and even count as done) with no warning at all. A malformed
-  # hand-written item must not erase or corrupt the whole listing.
+  # Collect every id, the done subset, and the open goals. Ids are integers by
+  # convention, but comparison is string-tolerant (hero_norm_id), so the ids
+  # rejected here are EMPTY ones and ids containing whitespace, because
+  # whitespace would inject extra tokens into the space-delimited sets below,
+  # letting a dep on a NONEXISTENT id resolve (and even count as done) with no
+  # warning at all. A malformed hand-written item must not erase or corrupt
+  # the whole listing.
   all_ids=" "
   done_ids=" "
   committed_ids=" "
-  covered_ids=" "
+  open_goals=" "
+  idea_ids=" "
   for f in *.md; do
     [ -e "$f" ] || continue
     id=$(hero_norm_id "$(hero_item_field "$f" id)")
@@ -1275,62 +1350,63 @@ hero_ready_items() (
     all_ids="$all_ids$id "
     # The same alphabet gate the listing loop applies, applied BEFORE anything
     # is admitted to done_ids. Without it an item the listing prints as
-    # `invalid` (`kind: foo bar`, `status: done`) still unblocked its
+    # `invalid` (`type: foo bar`, `status: done`) still unblocked its
     # dependents, invisible on the listing but live in the dependency order.
     state=$(hero_item_status "$f")
-    kind=$(hero_item_field "$f" kind | tr '[:upper:]' '[:lower:]')
-    case "$state$kind" in *[!a-z-]*) continue ;; esac
-    class=$(hero_item_class "$kind" "$f" 2>/dev/null)
-    # TERMINAL, not literally `done`. A feedback item ends at `delivered` or
-    # `rejected`; keying on the word `done` alone left every dependent of an
-    # answered upstream question blocked forever.
-    case "$class:$state" in
-      feedback:delivered|feedback:rejected) done_ids="$done_ids$id " ;;
-      feedback:*) ;;
+    itype=$(hero_item_type "$f")
+    # A missing type is checked on its own: `done` with no type concatenates
+    # to a clean word, passed the alphabet gate, and unblocked its dependents
+    # while the listing printed the item `invalid`.
+    [ -n "$itype" ] || continue
+    case "$state$itype" in *[!a-z-]*) continue ;; esac
+    # ONE rule, for every type. That is what `resolution` bought: a signal
+    # ends `done` with `resolution: rejected`, so "we asked and they said no"
+    # unblocks its dependents without the listing knowing what a signal is.
+    # `dropped` is terminal and deliberately does NOT satisfy: the
+    # prerequisite was abandoned, so anything waiting on it really is blocked.
+    case "$state" in
+      done)      done_ids="$done_ids$id " ;;
       # NOT done: the commit sits on a goal branch the default branch lacks,
       # so a dependent built against it merges onto a tree missing it.
-      build:committed) committed_ids="$committed_ids$id " ;;
-      *:done) done_ids="$done_ids$id " ;;
+      committed) committed_ids="$committed_ids$id " ;;
     esac
     # Only an OPEN goal counts as cover. `new` is untriaged and an
     # unrecognized status lists as invalid; crediting either would let a
-    # defective goal silence the orphan warning for every item it names.
-    case "$class:$state" in
-      goal:todo|goal:active)
-        while IFS= read -r raw; do
-          [ -z "$raw" ] && continue
-          d=$(hero_norm_id "$raw")
-          # Same guard as all_ids: a whitespace-containing entry would inject
-          # extra tokens and mark ids covered that no goal names.
-          case "$d" in
-            *[[:space:]]*) echo "hero_ready_items: $f covers '$raw', which is not one id, ignored" >&2; continue ;;
-          esac
-          covered_ids="$covered_ids$d "
-        done <<EOF
-$(hero_item_covers "$f")
-EOF
-        ;;
+    # defective goal silence the orphan warning for every item under it.
+    case "$itype:$state" in
+      goal:accepted|goal:active) open_goals="$open_goals$id " ;;
     esac
+    # Ideas are collected whatever their status: a dependency on one is a
+    # defect even after it is promoted, because the dependent was written
+    # against a parking-lot entry rather than against the work it became.
+    case "$itype" in idea) idea_ids="$idea_ids$id " ;; esac
   done
 
   for f in *.md; do
     [ -e "$f" ] || continue
     state=$(hero_item_status "$f")
     title=$(hero_item_field "$f" title)
-    kind=$(hero_item_field "$f" kind | tr '[:upper:]' '[:lower:]')
+    itype=$(hero_item_type "$f")
+    # An item with no `type` in a store that IS migrated was written by hand or
+    # by something that has not caught up. Never guessed: guessing `task` is
+    # how a goal gets handed to one-shot to build.
+    if [ -z "$itype" ]; then
+      echo "hero_ready_items: $f has no type; schema 1 requires task, signal, goal or idea (docs/PLAN.md)" >&2
+      echo "invalid $f — $title"
+      continue
+    fi
     # Gate the ALPHABET before the table: both values come from hand-editable
-    # frontmatter, and the kind-keyed patterns below anchor on a `:` join, and a
-    # smuggled colon (`status: x:todo`) would otherwise match the `*:todo` arm
-    # and walk an unrecognized status straight into READY, the exact silent
+    # frontmatter, and the type-keyed patterns below anchor on a `:` join, so a
+    # smuggled colon (`status: x:ready`) would otherwise match the `*:ready`
+    # arm and walk an unrecognized status straight into READY, the exact silent
     # fall-through the invalid arm exists to stop. Every legal keyword is
     # lowercase letters and hyphens only.
-    case "$state$kind" in
+    case "$state$itype" in
       *[!a-z-]*)
-        echo "hero_ready_items: $f has a malformed status/kind ('$state' / '$kind'); keywords are lowercase letters and hyphens only, not eligible for READY" >&2
+        echo "hero_ready_items: $f has a malformed status/type ('$state' / '$itype'); keywords are lowercase letters and hyphens only, not eligible for READY" >&2
         echo "invalid $f — $title"
         continue ;;
     esac
-    class=$(hero_item_class "$kind" "$f")
     # An item with no usable id is broken whatever its status: nothing can
     # depend on it and nothing can mark it done. Checked before the status
     # table so there is one rule instead of one per status.
@@ -1338,95 +1414,131 @@ EOF
     case "$id" in
       ''|*[[:space:]]*) echo "invalid $f — $title"; continue ;;
     esac
-    # A planned build item outside every open goal is invisible to `wayfare
-    # next`, which walks goals and never items, so it sits READY forever unless
-    # someone runs `do N` by hand. Sync groups every planned item; an
-    # uncovered one means that pass was skipped or cut short, and nothing
-    # else reports it. Warn on stderr only: the row itself is still correct.
-    # Sits ABOVE the status table because the mid-flight arms `continue`.
-    case "$class:$state" in
-      build:ready|build:implementing|build:in-progress|build:reviewing)
-        case "$covered_ids" in
-          *" $id "*) ;;
-          *) echo "hero_ready_items: $f is $state and no open goal covers it; wayfare sync groups it into a goal" >&2 ;;
+
+    # `shape` decides what a task's Definition of Done must assert and nothing
+    # about readiness, so a typo cannot misroute the item — it can only make
+    # the DoD be written against the wrong test, silently, which is the whole
+    # value of the field gone. Warned, never invalidated: the row is correct.
+    case "$itype" in
+      task)
+        shape=$(hero_item_shape "$f")
+        case "$shape" in
+          story|structural|visual|defect|dependency|docs) ;;
+          '') echo "hero_ready_items: $f is a task with no shape; a DoD written without one is written against no test (docs/PLAN.md)" >&2 ;;
+          *)  echo "hero_ready_items: $f has unrecognized shape '$shape'; expected story, structural, visual, defect, dependency or docs" >&2 ;;
         esac ;;
-      # A committed item outside every open goal is the residue of an
-      # abandoned goal branch: it claims work the repo does not have, and
-      # only sync's store-defect report re-opens it.
-      build:committed)
-        case "$covered_ids" in
-          *" $id "*) ;;
-          *) echo "hero_ready_items: $f is committed and no open goal covers it; its goal branch was abandoned, and wayfare sync reports it" >&2 ;;
+      *)
+        shape=$(hero_item_shape "$f")
+        [ -z "$shape" ] || echo "hero_ready_items: $f is a $itype and carries shape '$shape'; shape belongs to tasks only" >&2 ;;
+    esac
+    # `channel` is the same kind of field for a signal: never readiness, only
+    # where delivery goes, so a typo routes the signal nowhere without a word.
+    channel=$(hero_item_channel "$f")
+    case "$itype:$channel" in
+      signal:design|signal:design-system|signal:architecture) ;;
+      signal:)  echo "hero_ready_items: $f is a signal with no channel; expected design, design-system or architecture" >&2 ;;
+      signal:*) echo "hero_ready_items: $f has unrecognized channel '$channel'; expected design, design-system or architecture" >&2 ;;
+      *:)       ;;
+      *)        echo "hero_ready_items: $f is a $itype and carries channel '$channel'; channel belongs to signals only" >&2 ;;
+    esac
+    # `resolution` is the ending, so one on an item that has not ended is a
+    # status that was rolled back by hand without clearing it, or a `done`
+    # someone meant and did not write. Either way the two fields disagree.
+    resolution=$(hero_item_field "$f" resolution | tr '[:upper:]' '[:lower:]')
+    [ -z "$resolution" ] || [ "$state" = "done" ] || echo "hero_ready_items: $f carries resolution '$resolution' at status '$state'; resolution is set only at done" >&2
+
+    # Suspension is a FLAG, not a status (docs/PLAN.md): the item keeps the
+    # status it held and `awaiting` is what makes it suspended. Read before the
+    # status table, because it overrides every non-terminal row. A terminal
+    # item is not waiting on anything, whatever stale ids it still carries.
+    awaiting=""
+    case "$state" in
+      done|dropped) ;;
+      *) awaiting=$(hero_item_awaiting "$f" | tr '\n' ' ' | sed 's/ $//') ;;
+    esac
+    if [ -n "$awaiting" ]; then
+      # A wait with no age is indistinguishable from a healthy one.
+      since=$(hero_item_field "$f" suspended_at)
+      echo "suspended $f — $title [awaiting $(printf '%s\n' "$awaiting" | wc -w | tr -d ' '): $awaiting${since:+ — since $since}]"
+      continue
+    fi
+
+    # A planned task outside every open goal is invisible to `wayfare next`,
+    # which walks goals and never items, so it sits READY forever unless
+    # someone runs `do N` by hand. A committed one is worse: it is the residue
+    # of an abandoned goal branch, claiming work the repo does not have. Warn
+    # on stderr only; the row itself is still correct. Sits ABOVE the status
+    # table because the mid-flight arms `continue`.
+    case "$itype:$state" in
+      task:ready|task:active|task:review|task:committed)
+        parent=$(hero_norm_id "$(hero_item_field "$f" parent)")
+        case "$open_goals" in
+          *" ${parent:-__none__} "*) ;;
+          *) echo "hero_ready_items: $f is $state and no open goal has it as a member; wayfare sync groups it into a goal" >&2 ;;
         esac ;;
     esac
-    # One CLASS-keyed table, not a case block per kind: shared states appear
-    # once, and only the genuinely divergent arms name a class (see the state
-    # list above for the mapping and the ready-vs-todo rationale).
-    # `build:in-progress` aliases to active so features written before the
-    # lifecycle rename still list, not invalidate.
+
+    # One table over `type:status`. Nine kinds across two enums collapsed to
+    # this: the shared states are written once, with a `*:` wildcard, because
+    # they now genuinely mean the same thing for every type.
     row=READY
-    # Every arm names its classes. A `*:` wildcard here would let a feedback
-    # item at `in-progress` print `active`, byte-identical to a feature
-    # mid-build, and the row carries no kind, so a goal turn's tier 1 would
-    # hand it to one-shot. `*:new` is the one exception: new is in every enum.
-    case "$class:$state" in
-      *:new)                            echo "new     $f — $title"; continue ;;
-      plain:done|build:done|goal:done|unknown:done)
-                                        echo "done    $f — $title"; continue ;;
-      # Delivered and rejected are both TERMINAL and both frozen. A rejection
-      # is kept on purpose, because "we raised this and they said no" is the
-      # history that stops it being raised again next quarter.
-      feedback:delivered|feedback:rejected) echo "done    $f — $title"; continue ;;
-      # Open feedback: written, not yet landed upstream. Its own row word, so
-      # the backlog count is a scan rather than a judgment about prose. This
-      # is the return channel's only backlog surface, and a miscount of zero is
-      # indistinguishable from "no feedback exists".
-      feedback:todo|feedback:queued)    echo "feedback $f — $title"; continue ;;
-      # A goal is a container for features, not a unit of work. It is never
-      # READY, because READY means "hand this to one-shot" and one-shot builds
-      # features. `wayfare next` selects goals by kind and `do GOAL_ID` takes one by id, never off the READY tier.
-      goal:todo)                        echo "goal    $f — $title"; continue ;;
-      goal:active|build:implementing|build:in-progress|plain:in-progress|unknown:in-progress)
-                                        echo "active  $f — $title"; continue ;;
-      build:reviewing)                  echo "review  $f — $title"; continue ;;
-      # Its own row word rather than `done`, so no caller has to read comment
-      # markers to learn whether the default branch has the code (it does not).
-      build:committed)                  echo "committed $f — $title"; continue ;;
-      # Suspended: waiting on a sibling repo's reply (docs/MESSAGES.md). Never
-      # READY and never in done_ids, so a dependent stays blocked while the
-      # question is open. The row carries the ids and the date it suspended
-      # (`suspended_at:`), because a wait with no age is indistinguishable
-      # from a healthy one; a suspended item with NO awaiting ids can never be
-      # resumed by any reply, so it is invalid, not parked.
-      build:suspended)
-        awaiting=$(hero_item_awaiting "$store/$f" | tr '\n' ' ' | sed 's/ $//')
-        if [ -z "$awaiting" ]; then
-          echo "hero_ready_items: $f is suspended with no awaiting ids; nothing can resume it; restore its status by hand" >&2
-          echo "invalid $f — $title"; continue
-        fi
-        since=$(hero_item_field "$store/$f" suspended_at)
-        echo "suspended $f — $title [awaiting $(printf '%s\n' "$awaiting" | wc -w | tr -d ' '): $awaiting${since:+ — since $since}]"; continue ;;
-      plain:planning|build:planning|unknown:planning)
-                                        echo "plan    $f — $title"; continue ;;
-      build:todo|unknown:todo)          row=backlog ;; # never READY, but falls through to the dep check: dangling refs must still warn, and unmet deps must annotate the row (a goal turn reads them)
-      build:ready|plain:todo) ;;  # the only READY-eligible arms — dep check below
+    case "$itype:$state" in
+      # Above `*:new`, which would otherwise swallow `idea:new` and print a
+      # parked thought as an untriaged item. An idea is not work yet:
+      # nothing builds it, nothing delivers it, and `sync` must not read it
+      # as coverage. Its own row word at BOTH open statuses, so the roadmap
+      # view can collapse the parking lot to one count instead of printing
+      # forty rows between a reader and the READY set.
+      idea:new|idea:accepted) echo "idea    $f — $title"; continue ;;
+      *:new)       echo "new     $f — $title"; continue ;;
+      # Terminal and frozen. A rejected signal is kept on purpose: "we raised
+      # this and they said no" is the history that stops it being raised again
+      # next quarter, and `resolution` is where the answer lives.
+      *:done)      echo "done    $f — $title"; continue ;;
+      # Abandoned. Its own row word, never `done`, so nothing reads it as
+      # satisfied work and re-plans around code that was never written.
+      *:dropped)   echo "dropped $f — $title"; continue ;;
+      # Type-keyed, not `*:`: an idea at `active` or a goal at `planning` is
+      # not a shared state, it is a mis-filed item, and the wildcard walked it
+      # into a row resume-state then picked up as the item in flight.
+      task:planning) echo "plan    $f — $title"; continue ;;
+      task:active|signal:active|goal:active) echo "active  $f — $title"; continue ;;
+      # Its own row word rather than `done`, so no caller has to read the log
+      # to learn whether the default branch has the code (it does not).
+      task:committed) echo "committed $f — $title"; continue ;;
+      task:review) echo "review  $f — $title"; continue ;;
+      # A goal is a container, never a unit of work: READY means "hand this to
+      # one-shot", and one-shot builds tasks. `wayfare next` selects goals by
+      # type and `do GOAL_ID` takes one by id, never off the READY tier.
+      goal:accepted) echo "goal    $f — $title"; continue ;;
+      # A signal is delivered, not built, so it never reaches READY either.
+      # Its own row word so the open-feedback count is a scan rather than a
+      # judgment about prose: a miscount of zero is indistinguishable from
+      # "no feedback exists".
+      signal:accepted|signal:ready) echo "feedback $f — $title"; continue ;;
+      # Never READY, but falls through to the dep check: dangling refs must
+      # still warn, and unmet deps must annotate the row (a goal turn reads them).
+      task:accepted) row=backlog ;;
+      task:ready) ;; # the one READY-eligible arm — dep check below
       *)
         # An UNRECOGNIZED status must never fall through to the READY path. The
         # display label is `plan` while the keyword is `planning`, so `status:
-        # plan`, or any typo like `plannig`, is an easy hand or model error that
+        # plan`, or any misspelling of a keyword, is an easy hand or model error that
         # would otherwise be handed straight to one-shot with no human
-        # ready-mark, silently defeating the gate the planning state exists to
+        # ready-mark, silently defeating the gate the ready state exists to
         # enforce. Treat it like a rejected id: name it loudly, never READY.
-        case "$class" in
-          build)    enum="new/todo/planning/ready/implementing/committed/reviewing/suspended/done (kind: $kind; suspended needs awaiting:)" ;;
-          feedback) enum="new/todo/queued/delivered/rejected (kind: $kind)" ;;
-          goal)     enum="new/todo/active/done (kind: goal)" ;;
-          *)        enum="new/planning/todo/in-progress/done" ;;
+        case "$itype" in
+          task)   enum="new/accepted/planning/ready/active/committed/review/done/dropped" ;;
+          signal) enum="new/accepted/ready/active/done/dropped" ;;
+          goal)   enum="new/accepted/active/done/dropped" ;;
+          idea)   enum="new/accepted/done/dropped" ;;
+          *)      enum="a status of an unrecognized type '$itype'; expected task, signal, goal or idea" ;;
         esac
         echo "hero_ready_items: $f has unrecognized status '$state', which is not one of $enum; not eligible for READY" >&2
         echo "invalid $f — $title"
         continue ;;
     esac
+
     deps=$(hero_item_deps "$f")
     ready=1
     missing=""
@@ -1436,6 +1548,14 @@ EOF
     while IFS= read -r raw; do
       [ -z "$raw" ] && continue
       d=$(hero_norm_id "$raw")
+      # An item that depends on itself is blocked forever and looks like
+      # ordinary waiting: the id exists and is not done.
+      if [ "$d" = "$id" ]; then
+        echo "hero_ready_items: $f depends_on itself ('$raw'); blocked until the reference is removed" >&2
+        missing="$missing $raw"
+        ready=0
+        continue
+      fi
       case "$all_ids" in
         *" $d "*) ;;
         *)
@@ -1449,6 +1569,17 @@ EOF
           ready=0
           continue ;;
       esac
+      # An idea is not committed work. Depending on one blocks a real item
+      # behind something nobody has decided to do, and no route exists to
+      # mark an idea `done` by building it, so the block is permanent and
+      # looks like ordinary waiting. Name it like a dangling ref.
+      case "$idea_ids" in
+        *" $d "*)
+          echo "hero_ready_items: $f depends_on '$raw', which is an idea; an idea is not work and nothing can build it. Promote it, then depend on what it became" >&2
+          missing="$missing $raw"
+          ready=0
+          continue ;;
+      esac
       case "$done_ids" in *" $d "*) continue ;; esac
       ready=0
       case "$committed_ids" in *" $d "*) committed="$committed $d" ;; esac
@@ -1458,7 +1589,7 @@ EOF
     # backlog rows report dep state without ever becoming READY: the
     # annotation is what wayfare's "none of the above" report prints (blocked
     # rows and their unmet deps), and the missing-dep warning keeps a
-    # bootstrap-time typo'd id loud instead of a feature that silently never
+    # bootstrap-time typo'd id loud instead of a task that silently never
     # becomes selectable.
     if [ "$row" = backlog ]; then
       if [ "$ready" = 1 ]; then

@@ -46,15 +46,15 @@ followed by `Stopped: REASON`.
 ### Pipeline 1: init-project, scaffold a new project end-to-end
 
 ```
-scaffold → setup-dev → init-hero → first-commit
+scaffold → setup-dev → config → first-commit
 ```
 
-Owner: `hero-skills:create-project`. The skill scaffolds the project, then
-chains forward to `hero-skills:setup-dev`, `hero-skills:init-hero`, and a
+Owner: `hero-skills:wayfare init`. The skill scaffolds the project, then
+chains forward to `hero-skills:setup-dev`, its own config stage, and a
 final commit. Each stage announces itself with the DAG line.
 
 **Naming note for `first-commit`:** When scaffolding a *standalone* repo,
-create-project Step 6 already produces the literal first commit (the
+`wayfare init`'s scaffold step already produces the literal first commit (the
 scaffold). The DAG node `first-commit` refers specifically to **the commit
 that lands `HERO.md` and `AGENTS.md`**, for standalone repos this is the
 second commit; for "added to existing repo" it is just the next commit. The
@@ -107,7 +107,7 @@ one-shot alone does is *execute* an item and close it out: Step 1 resolves
 against the store before grilling anything new, and Step 9a marks the merged
 item `done`, no other skill does that automatically.
 Because nothing else observes the codebase on the store's behalf, Step 1 also
-re-checks a resolved item's `success` criteria against reality, because `status: todo`
+re-checks a resolved item's `success` criteria against reality, because `status: ready`
 only means nobody edited the file, not that the work is still outstanding.
 
 **Architecture and harden chain.** `wayfare sync`'s architecture stage runs
@@ -119,8 +119,8 @@ validate.sh's `CHAINED_SKILLS`); both children are `user-invocable: false`,
 so wayfare is the only way a person reaches them.
 
 **The design return channel.** Every other edge flows target → source. One
-flows back: one-shot logs a divergence it found while building into the
-feature's `## Design Feedback`, and `wayfare sync` delivers it. Two
+flows back: one-shot logs a divergence it found while building as a
+`signal` line in the task's `## Log`, and `wayfare sync` delivers it. Two
 destinations, no third: a configured `feedback-repo` gets an issue wayfare
 files itself (entries verbatim plus a manifest, destination confirmed
 in-session), and everything else (`feedback-repo: none`, a rejected value,
@@ -134,8 +134,8 @@ numbers into a third party's tracker. See
 
 **one-shot authors only Step 2a items.** Step 2a pushes discovered or
 mis-scoped work out of the running item into its own `.plans/` item, a
-`kind: feature` carve when it satisfies target-design paths
-(`origin: one-shot`), an ordinary `status: planning` work-item otherwise,
+`shape: story` task when it satisfies target-design paths, a `structural`
+or `defect` one otherwise (`origin: one-shot`, `status: accepted` either way),
 which is how the one-item-one-PR scope guard survives contact with
 implementation. Everything else in the store is authored by the producers
 above.
@@ -154,17 +154,17 @@ merging. The skill does not skip those confirmations.
 investigate → confirm → write → commit
 ```
 
-Owner: `hero-skills:init-hero`. Four steps:
+Owner: `hero-skills:wayfare init`. Four steps:
 
 1. `investigate`, deeply scan the repo for evidence of stack, conventions, CI, deploy
 2. `confirm`, present findings as a numbered list and ask the user to confirm/correct
 3. `write`, write HERO.md, update AGENTS.md summary sections (CLAUDE.md is a symlink to it), and (if the user opted in during `confirm`) install `.github/workflows/auto-approve.yaml` via Step 6a and the design-system enforcement layer via Step 6b
 4. `commit`, stage and commit HERO.md + AGENTS.md + the CLAUDE.md symlink (and the auto-approve workflow / design-system rule + hook if installed this run)
 
-Run by itself (`hero-skills:init-hero` or `hero-skills:init-hero recalibrate`) or
+Run by itself (`hero-skills:wayfare init` or `hero-skills:wayfare init recalibrate`) or
 as the third step of Pipeline 1.
 
-Thirteen other skills carry a scoped slice of this pipeline as their own
+Eleven other skills carry a scoped slice of this pipeline as their own
 `recalibrate` verb. RECALIBRATE.md names its phases `report → ask → write →
 commit`, where `report` is this pipeline's `investigate` narrowed to the fields
 that skill reads, and the verb ends at `commit` without going on to do the
@@ -180,17 +180,17 @@ config → inbox → architecture → harden → compliance → local → deps �
 
 Owner: `hero-skills:wayfare sync`. Eleven stages: the config gate; the
 mailbox (`docs/MESSAGES.md`, every unread message through the fleet gate
-and the promotion gate, a `type: bug` becoming a proposed `kind: bug`);
+and the promotion gate, a `type: bug` message becoming a proposed `shape: defect` task);
 `hero-skills:architecture review` (offering its `sync`);
 `hero-skills:harden all`; the compliance audit
 (`scripts/audit.py --repo THIS`, baseline plus the fleet's register overlay)
 with each failing check proposed as an item; the repo's own `wayfare: sync`
 skills (discovered in `.claude/skills/`, run with the harden contract); the
-dependency bots' open PRs written as `security` items; the design snapshot
+dependency bots' open PRs written as `shape: dependency` tasks; the design snapshot
 refresh; the reconciliation lanes; the planning postflight
 (`hero-skills:think-it-through` in Roadmap mode); and goals proposed
 bottom-up until every planned build item is in exactly one open goal, with
-existing `todo` goals re-cut, coalesced when two name one outcome, split
+existing `accepted` goals re-cut, coalesced when two name one outcome, split
 when one names two. Stages that do not apply render `(–)` with the reason;
 the goals stage never does. It ends with the roadmap
 view and, when a goal is runnable, `Next step: hero-skills:wayfare next`.
@@ -208,12 +208,12 @@ a fleet), and offers the per-repo fan-out.
 current → test → review → ship → close-out
 ```
 
-Owner: `hero-skills:wayfare do ITEM_ID` on a `security` item with `bot:`
+Owner: `hero-skills:wayfare do ITEM_ID` on a `shape: dependency` task with `bot:`
 (written and ready-marked by Pipeline 4), see *Carrying a bot's PR* in the
 skill. The bot already implemented the bump, so there is no `implement` and
 no PR of ours; `test` and `ship` delegate to `hero-skills:push-pr test` and
 `hero-skills:ship-pr`, and the item is `done` only once the deployment
-verifies. A goal turn runs the same steps for each bot item it covers, on the bot's
+verifies. A goal turn runs the same steps for each bot item among its members, on the bot's
 branch. A bot item never joins the goal's own branch: its PR is the bot's and
 has to stay bot-authored.
 
@@ -227,22 +227,22 @@ that same turn on its own. A turn that ends on a stop line prints the
 `/goal` line that would re-run it unattended, for the person to paste;
 wayfare cannot set `/goal` itself.
 
-**A goal is one branch, one PR, and one commit per feature.** The turn builds
-its covered features one after another on the goal's branch, in `covers`
+**A goal is one branch, one PR, and one commit per task.** The turn builds
+its member tasks one after another on the goal's branch, in member
 order, running the test phase after each commit. Each build is handed to one
-subagent on a cheaper model, scoped to that feature's `source` paths, one at a
+subagent on a cheaper model, scoped to that task's `source` paths, one at a
 time because they share the checkout; a failing branch test gets its own
 scoped fix agent and its own commit rather than being repaired in the parent. Nothing is pushed until every
-feature is in and the whole branch has passed locally; only then does one-shot
+task is in and the whole branch has passed locally; only then does one-shot
 run once over the branch to push, review, and ship it. That is one review pass,
 one auto-approve and one merge for the goal, instead of one of each per
-feature, and the commits still separate the work for whoever reads the PR.
+task, and the commits still separate the work for whoever reads the PR.
 
 Every one-shot invocation carries the granted permissions as one literal line.
 A gate the goal was not granted rests the goal at its PR and ends the loop with
-`stop: awaiting-human`. Work a turn finds inside a covered feature does not
+`stop: awaiting-human`. Work a turn finds inside a member task does not
 become a new goal: if it serves a line of this goal's Definition of Done it is
-**admitted** into the goal's `covers`, planned and built in the same run under
+**admitted** into the goal (its `parent` is set), planned and built in the same run under
 `absorb`. `budget` is what the goal is expected to take in commits, not a gate:
 going over is ordinary and the report says so, and `budget_max` is the hard
 line a person authorized. A goal ships a second PR only when what is left is a

@@ -63,7 +63,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # sit under wayfare even though wayfare never reads registry or linters itself.
 rows() {
   cat <<'ROWS'
-init-hero|*|*|every section — the only whole-file pass
+wayfare|*|*|every section — `init` writes the whole file, the only whole-file pass
 push-pr|Repository|default-branch|the branch to cut from and the PR base
 push-pr|Repository|branch-convention|the shape of the branch name it creates
 push-pr|Repository|commit-convention|the shape of the commit message it writes
@@ -108,26 +108,23 @@ wayfare|Wayfare|ux-flow|the authoritative journey the codebase is reconciled aga
 wayfare|Wayfare|design-system-repo|the registry the UI work sources primitives from
 wayfare|Wayfare|reconciliation|how far a sync is allowed to go on its own
 wayfare|Repository|default-branch|the base for every PR the goal turns open
-wayfare|Repository|type|single or monorepo, which decides whether one DESIGN.md covers the repo (the architecture stage)
+wayfare|Repository|type|single or monorepo, which decides whether one DESIGN.md covers the repo (the architecture stage) and where `init` scaffolds a new project
 wayfare|Deployment|platform|the deploy shape DESIGN.md's invariants hold under, and whether the harden stage has images to scan
 wayfare|Deployment|registry|where the image the harden stage scans is pulled from
 wayfare|Code Quality|linters|the security checks already in the gate, which the harden stage must not re-propose
-wayfare|Projects|*|per project: language and dependency file (the CVE scanners), and in a monorepo which project DESIGN.md describes
+wayfare|Projects|*|per project: language and dependency file (the CVE scanners), in a monorepo which project DESIGN.md describes, and the names a new project must not collide with
 recomponentize-ui|Design System|role|producer refuses the run; consumer is what the pass is for
 recomponentize-ui|Design System|namespace|the registry prefix components are sourced under
 recomponentize-ui|Design System|registry-url|where the registry is fetched from
 recomponentize-ui|Design System|token-env-var|the env var holding the registry token
 recomponentize-ui|Projects|*|per project: the framework, which decides whether there is a UI at all
-abandon|Repository|default-branch|what the tree resets to once the work is discarded
-abandon|Repository|branch-convention|which branches are this pipeline's to discard
+wayfare|Repository|branch-convention|which branches `drop` may discard, and the shape goal branches take
 preflight|Repository|default-branch|the branch every readiness check is made against
 preflight|CI/CD|auto-approve-installed|whether the ship step will be a no-op
 preflight|Code Quality|pre-commit|whether the gate is installed and current
 setup-dev|Developer Setup|*|required tools, recommended tools, and MCP servers — the checklist this skill walks
 setup-dev|Projects|*|per project: install and dev commands the setup verifies
-create-project|Repository|type|single or monorepo, which decides where the new project is scaffolded
-create-project|Design System|namespace|the registry a scaffolded UI is wired to
-create-project|Projects|*|the existing projects a new one must not collide with
+wayfare|Design System|namespace|the registry a scaffolded UI is wired to
 create-skill|Projects|*|per project: language and framework, which the new skill's examples follow
 handoff|Project Management|tool|where the distilled work-item is filed
 handoff|Project Management|issue-tracker|the tracker the item is created in

@@ -22,7 +22,7 @@ Guide an individual developer through setting up their local environment based o
 `HERO.md` must exist. If it doesn't, tell the user:
 
 ```
-No HERO.md found. Run hero-skills:init-hero first to configure the project.
+No HERO.md found. Run hero-skills:wayfare init first to configure the project.
 ```
 
 ## `recalibrate`
@@ -50,7 +50,7 @@ wrong. A row that already holds the right value is not a question.
 
 ### Step 1: Read HERO.md
 
-**If the first token of `$ARGUMENTS` is exactly `recalibrate`, run the `recalibrate` section above and stop.** Do this before the missing-HERO.md check below, which would otherwise send the user to `init-hero` for the very file the verb exists to fill in.
+**If the first token of `$ARGUMENTS` is exactly `recalibrate`, run the `recalibrate` section above and stop.** Do this before the missing-HERO.md check below, which would otherwise send the user to `wayfare init` for the very file the verb exists to fill in.
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
@@ -220,7 +220,7 @@ Remaining action items:
   2. Verify Linear MCP server is configured in Claude settings
 
 Your environment is ready for development! 🎉
-Run hero-skills:init-hero recalibrate if the project setup has changed.
+Run hero-skills:wayfare init recalibrate if the project setup has changed.
 
 Next step: hero-skills:preflight — sanity-check tooling, .env, ports before starting (print only — model-invocation-restricted, cannot auto-run)
 ```

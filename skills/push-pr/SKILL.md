@@ -70,7 +70,7 @@ Read `HERO.md` if it exists. This skill uses:
 - **CI/CD** → platform name for PR description context and CI status reporting
 - **Project Management** → issue prefix for branch names, `Fixes:`/`Relates to:` trailers, and linking PRs to issues
 
-If `HERO.md` is missing, suggest `hero-skills:init-hero` but proceed with defaults (the test phase falls back to auto-detection). If the stale-HERO hint fired, mention it once to the user but do not block.
+If `HERO.md` is missing, suggest `hero-skills:wayfare init` but proceed with defaults (the test phase falls back to auto-detection). If the stale-HERO hint fired, mention it once to the user but do not block.
 
 ### Step 1: Branch if on Default Branch
 
@@ -244,7 +244,7 @@ If Step 2a detected no frontend indicator at all (no `next.config.*`, `vite.conf
 This is expected on backend-only PRs.
 ```
 
-Otherwise, confirm which project to drive using HERO.md's `## Projects` section (already loaded in Step 0). UI detection there is **heuristic, not a closed enum**. `init-hero` does not constrain the `framework` value, so treat the list below as a hint and fall back to asking the user when nothing matches.
+Otherwise, confirm which project to drive using HERO.md's `## Projects` section (already loaded in Step 0). UI detection there is **heuristic, not a closed enum**. `wayfare init` does not constrain the `framework` value, so treat the list below as a hint and fall back to asking the user when nothing matches.
 
 **Known-UI frameworks (auto-detected as UI):**
 
@@ -284,7 +284,7 @@ Record `UI_PORT`, `UI_DEV_COMMAND`, `UI_PATH` from the matched project. Validate
 if [ ! -d "$ROOT/$UI_PATH" ]; then
   echo "ERROR: UI project path '$ROOT/$UI_PATH' does not exist."
   echo "       Check the 'path:' field for this project in HERO.md, or run"
-  echo "       hero-skills:init-hero recalibrate to re-detect."
+  echo "       hero-skills:wayfare init recalibrate to re-detect."
   exit 1
 fi
 ```
@@ -605,7 +605,7 @@ If the `simplify` skill is unavailable in this environment, report `NO_SIMPLIFY_
 - [ ] No over-engineering
 - [ ] Could this be simpler?
 
-Then the **humanizer pass**: `hero-skills:my-humanizer inline` over the prose this diff adds or rewrites: code comments, docstrings, README/docs/CHANGELOG text, error and log messages a person reads. The same pass covers every prose this skill emits: the commit body (3f) and the PR body (A3), drafted first, humanized once.
+Then the **humanizer pass**: [docs/HUMANIZING.md](../../docs/HUMANIZING.md) over the prose this diff adds or rewrites: code comments, docstrings, README/docs/CHANGELOG text, error and log messages a person reads. The same pass covers every prose this skill emits: the commit body (3f) and the PR body (A3), drafted first, humanized once.
 
 #### 3d: Ruthless Code Review
 

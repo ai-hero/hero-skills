@@ -87,7 +87,7 @@ gh pr list --author "app/dependabot" --state open --json number,title,headRefNam
 
 For each PR, view the diff and extract: package name, version change, file affected. An open Dependabot PR is *evidence for the plan*. Note whether the plan item should say "merge Dependabot PR #N" or "apply the update manually", for example when the PR is stale or conflicts.
 
-A bot PR that can merge as it stands is not harden's to re-implement: wayfare's `deps` stage writes it as a `security` item with `bot:`, and `wayfare do ID` takes that one PR through review, tests, `@auto-approve`, merge and the deployment check, without a copy of its diff. Harden's batch (A4) exists for the alerts no PR covers, and for bumps that must be tested together; a batch that supersedes a bot's PR names it, so wayfare leaves that PR's item `todo` rather than carrying both.
+A bot PR that can merge as it stands is not harden's to re-implement: wayfare's `deps` stage writes it as a `shape: dependency` task with `bot:`, and `wayfare do ID` takes that one PR through review, tests, `@auto-approve`, merge and the deployment check, without a copy of its diff. Harden's batch (A4) exists for the alerts no PR covers, and for bumps that must be tested together; a batch that supersedes a bot's PR names it, so wayfare leaves that PR's item `accepted` rather than carrying both.
 
 ### A3: Judge Each Alert
 
@@ -218,7 +218,8 @@ Write each unit as a work-item in `.plans/` using think-it-through's format (id 
 ```markdown
 ---
 id: 12
-kind: security # every item is a wayfare item; `security` for a CVE fix, a bump batch, an image bump; `architecture` when the fix is structural (a boundary, a trust decision) rather than a patch
+type: task # every item is a wayfare item (docs/PLAN.md)
+shape: defect # a CVE fix, a bump batch, an image bump; `structural` when the fix is a boundary or a trust decision rather than a patch
 origin: harden
 title: Update lodash + minimist for critical CVEs
 status: planning # the user marks audit plans ready — audit output never goes straight to build
@@ -291,7 +292,7 @@ Automated scanning: NONE (no dependabot config, no CI scan)
   -> this audit is a snapshot; pinned tags rot unwatched. Note in the plan
      whether to add a scheduled CI gate.
 
-Plans emitted: .plans/012-*.md … 016-*.md (5 items, 0 cut)
+Plans emitted: .plans/items/012-*.md … 016-*.md (5 items, 0 cut)
 Source files modified: NONE (read-only by contract)
 
 ```

@@ -1,6 +1,6 @@
 # The recalibrate verb
 
-Fourteen skills accept `recalibrate`: ask me the questions that decide how this
+Eleven skills accept `recalibrate`: ask me the questions that decide how this
 skill works, and write the answers. `scripts/hero-fields.sh` holds the map of
 which skill reads which fields, and `scripts/hero-fields.test.sh` ties the map
 and the skills to each other in both directions, a skill declaring the verb
@@ -20,7 +20,7 @@ run `hero-skills:ship-pr recalibrate`, which asks about the eight fields
 Three properties make it safe to reach for:
 
 1. **It is scoped.** A skill asks about the fields *it* reads and nothing
-   else. Whole-file convergence is `hero-skills:init-hero recalibrate`, one
+   else. Whole-file convergence is `hero-skills:wayfare init recalibrate`, one
    skill's job, not every skill's.
 2. **It never does the work.** `recalibrate` ends when the config is written.
    It does not then push, merge, refactor, or plan. The user decides whether
@@ -53,9 +53,9 @@ own config. `think-it-through` is a dialogue with the user, and stopping it to
 ask about config fields is the interruption the verb exists to avoid,
 recalibrate the skill that acts on its output instead.
 
-`hero-skills:init-hero recalibrate` is the whole-file pass, and the only one.
-It replaced `init-hero --update`; every other skill's `recalibrate` is a
-scoped slice of the same motion. `init-hero` is also the one mapped skill that
+`hero-skills:wayfare init recalibrate` is the whole-file pass, and the only one.
+It replaced the old `--update` flag; every other skill's `recalibrate` is a
+scoped slice of the same motion. `wayfare init` is also the one mapped skill that
 does not call `hero-fields.sh`: it re-investigates the repo rather than
 reading a field table.
 
@@ -70,7 +70,7 @@ Four phases, in this order, in every skill.
    missing section. Then look at the repo for those rows, a field the tree
    can answer should reach the user as a proposal with its evidence, not as an
    open question. `(no-file)` on every row is not a recalibrate at all: send
-   the user to `hero-skills:init-hero`.
+   the user to `hero-skills:wayfare init`.
 2. **Ask.** One numbered list, every question at once. Each question carries
    the evidence behind the proposal and the value it would replace. Never
    ask in freeform prose, and never ask about a field that already holds the
@@ -90,7 +90,7 @@ now that the config is right, not the output of having run it.
   retry. Chaining into the real work hides which change fixed the behavior
   and spends a merge or a push on a config guess.
 - **Asking about fields the skill does not read.** The scope is the whole
-  point. Send the rest to `hero-skills:init-hero recalibrate`.
+  point. Send the rest to `hero-skills:wayfare init recalibrate`.
 - **Rewriting the file to normalize it.** Reformatting unrelated sections
   turns a four-line config change into a diff nobody reviews.
 - **Reaching for it when the answer is `sync`.** A stale `DESIGN.md`, a

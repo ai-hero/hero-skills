@@ -199,7 +199,7 @@ elif [ "$PR_EXISTS" = "true" ]; then
     # BOT_REPLIED is only meaningful if we know who the bot is. Without
     # bot-username configured, a `false` here is indistinguishable from "no
     # reply yet" and await-review waits forever for a reply already posted.
-    # `agent: none` is a first-class supported setting (init-hero writes it when
+    # `agent: none` is a first-class supported setting (`wayfare init` writes it when
     # no review bot is detected), and such a repo has no bot-username. Treating
     # that as a failed source made STATE_OK=false on every resume, so one-shot
     # stopped with a diagnostic on a perfectly valid configuration.
@@ -246,11 +246,18 @@ ITEM_FILE=""
 SUBTASKS_OPEN=""; SUBTASKS_TOTAL=""; DOD_OPEN=""; DOD_TOTAL=""
 
 STORE=$(hero_store_path 2>/dev/null)
+# Items live in `.plans/items/` under schema 1 (docs/PLAN.md); the listing
+# prints bare filenames, so every read below joins them to ITEMS, not STORE.
+ITEMS="$STORE/items"
+# The guard is on the store, never on `items/`: an unmigrated store has no
+# such directory, and skipping the block for it read as "nothing in flight"
+# on every consumer the day schema 1 shipped. hero_ready_items refuses such a
+# store with rc=1, which is the `work-store` failure below.
 if [ -n "$STORE" ] && [ -d "$STORE" ]; then
   # stderr stays visible: it carries hero_ready_items' reason for each invalid
   # row, and the caller's eval consumes stdout only.
   if ROWS=$(hero_ready_items "$STORE"); then
-    # An invalid row may be the item being built (`status: in_progress`);
+    # An invalid row may be the item being built (a mistyped `status: active`);
     # dropping it would read as "nothing in flight" and route past its
     # unchecked subtasks.
     case "$ROWS" in invalid*|*"
@@ -258,15 +265,15 @@ invalid"*) fail_source "store-invalid-item" ;; esac
     MATCHED=""; LEGACY=""; LEGACY_N=0
     while read -r state f _; do
       [ "$state" = active ] || continue
-      # hero_ready_items owns the status enum; `active` is its word for
-      # in-progress (plain) and implementing (build). A goal at active is a
-      # set of features, not the item on this branch; a `bot:` item is a
-      # dependency bot's PR that wayfare's bot-PR procedure carries, never one-shot's.
-      kind=$(hero_item_field "$STORE/$f" kind | tr '[:upper:]' '[:lower:]')
-      [ "$(hero_item_class "$kind" "$f" 2>/dev/null)" = goal ] && continue
-      [ -n "$(hero_item_field "$STORE/$f" bot)" ] && continue
+      # hero_ready_items owns the status enum; `active` is one-shot's mark
+      # before its first edit. Only a task can be the item on this branch: a
+      # goal at active is a set of tasks, and a signal at active is being
+      # delivered, not built. A `bot:` task is a dependency bot's PR that
+      # wayfare's bot-PR procedure carries, never one-shot's.
+      [ "$(hero_item_type "$ITEMS/$f")" = task ] || continue
+      [ -n "$(hero_item_field "$ITEMS/$f" bot)" ] && continue
       ITEM_INFLIGHT=$((ITEM_INFLIGHT + 1))
-      branch=$(hero_item_field "$STORE/$f" branch)
+      branch=$(hero_item_field "$ITEMS/$f" branch)
       if [ -n "$branch" ]; then
         [ "$branch" = "$CURRENT_BRANCH" ] && MATCHED="$MATCHED$f "
       else
@@ -277,11 +284,11 @@ $ROWS
 EOF
     set -- $MATCHED
     if [ $# -eq 1 ]; then
-      ITEM_FILE="$STORE/$1"
+      ITEM_FILE="$ITEMS/$1"
     elif [ $# -gt 1 ]; then
       fail_source "item-claim-conflict"
     elif [ "$LEGACY_N" -eq 1 ]; then
-      ITEM_FILE="$STORE/$LEGACY"
+      ITEM_FILE="$ITEMS/$LEGACY"
     elif [ "$LEGACY_N" -gt 1 ]; then
       # Two unbranched claims on the store is not a choice this script makes.
       fail_source "item-claim-conflict"

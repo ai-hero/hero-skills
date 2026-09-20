@@ -1,41 +1,41 @@
----
-name: abandon
-# prettier-ignore
-description: Abandon or pause work on a branch that hasn't merged. Stashes uncommitted changes, switches to the default branch, and clears conversation context. Use when dropping or parking a branch, or when asked to reset to main.
-argument-hint: "[recalibrate]"
-disable-model-invocation: true
----
+# `drop ID`: abandon work and record that it was abandoned
 
-# Abandon Branch: stash it and walk away
+Stop work on a branch that never merged: stash anything uncommitted, switch
+back to the default branch, pull, and mark the item so the roadmap tells the
+truth about it.
 
-Abandon or pause work on a branch that never merged: stash any uncommitted changes, switch back to the default branch, pull latest, and clear conversation context.
+This was `hero-skills:wayfare drop`. Two things changed in the move. It takes an
+**item id**, and it writes `status: dropped` on that item — the state
+`docs/PLAN.md` defines and that nothing previously set, so an abandoned
+branch used to leave its item sitting at `active` forever, claiming work
+that had stopped. And `dropped` deliberately does **not** satisfy a
+dependency: the prerequisite was abandoned, so anything waiting on it really
+is blocked, and the listing says so instead of quietly unblocking.
 
-> **Note:** Merged branches are already cleaned up by `hero-skills:ship-pr`'s final step (switch to default, pull, delete the merged head, offer cleanup). This skill is for the opposite case: stepping away from a branch that did **not** go through `ship-pr`.
+`hero-skills:ship-pr` already cleans up a **merged** branch. This verb is
+for the opposite case, and it checks: a branch whose PR turns out to have
+merged is not a drop, and the run says so rather than deleting it.
 
-## `recalibrate`
+## Marking the item
 
-`hero-skills:abandon recalibrate` tunes the config that drives this skill, and
-stops. It does not go on to run the skill. You want to see which field was
-wrong, not spend a whole run finding out.
+Before touching the working tree, resolve the id and confirm what it names.
+After the branch work below succeeds:
 
-Dispatch on it before parsing any other argument, in whichever step does
-that parsing. When the first token of
-`$ARGUMENTS` is exactly `recalibrate`, print `abandon: running recalibrate`,
-follow the four phases in
-[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) (report, ask, write, commit)
-using the table below as the report, and stop.
+- Set `status: dropped` on the item. Leave `resolution` unset — `dropped` is
+  its own terminal, not a flavour of `done`.
+- Append one `## Log` line saying what was abandoned and why, dated. This is
+  the only record: `.plans/` is git-ignored, so there is no diff and no blame
+  to recover the reason from later.
+- **Keep the file.** A dropped item is the history that stops the same work
+  being re-proposed next round, the same reason a `rejected` signal is kept.
+- Say which dependents this blocks. `hero_ready_items` will report them as
+  blocked from here on, and the user should hear it now rather than discover
+  it at the next sync.
 
-```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" abandon
-```
+An id that names a `done` item is refused: finished work is not abandoned.
+An id with no item is refused rather than guessed at.
 
-Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
-`(refused)`, `(absent)`, `(no-file)`. Also ask about any row the user says is
-wrong. A row that already holds the right value is not a question.
-
-## Instructions
-
-### Step 0: Load Hero Configuration
+## Step 0: Load Hero Configuration
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
@@ -51,7 +51,7 @@ Read `HERO.md` if it exists. This skill uses:
 
 If `HERO.md` is missing, default to `main`.
 
-### Step 1: Check for Uncommitted Work
+## Step 1: Check for Uncommitted Work
 
 ```bash
 git status --porcelain
@@ -67,7 +67,7 @@ You have uncommitted changes on '$CURRENT':
   (list changed files from git status)
 
 Options:
-1. Stash changes (saved as "abandon: WIP on $CURRENT") — you can restore later with `git stash pop`
+1. Stash changes (saved as "wayfare drop: WIP on $CURRENT") — you can restore later with `git stash pop`
 2. Cancel — go back and commit or handle changes first
 ```
 
@@ -76,19 +76,19 @@ Options:
 **If user chooses option 1 (stash):**
 
 ```bash
-git stash push -m "abandon: WIP on $CURRENT"
+git stash push -m "wayfare drop: WIP on $CURRENT"
 ```
 
 Report the stash ref:
 
 ```
-Stashed as: stash@{0} — "abandon: WIP on $CURRENT"
+Stashed as: stash@{0} — "wayfare drop: WIP on $CURRENT"
 You can restore later with: git stash pop
 ```
 
 Note: this does NOT auto-pop the stash since the purpose is to switch away from the current branch. The user must manually restore if needed.
 
-### Step 2: Confirm the Branch Is Actually Unmerged, Then Switch Away
+## Step 2: Confirm the Branch Is Actually Unmerged, Then Switch Away
 
 ```bash
 # shellcheck source=/dev/null
@@ -105,7 +105,7 @@ fi
 
 If already on the default branch, skip to Step 3.
 
-Otherwise, check whether the current branch has secretly already been merged (this catches squash-and-merge). If it has, this is not an abandon at all: point the user at `ship-pr`'s cleanup rather than duplicating it here. Check remotely first, but fall back to a local check when the API call fails. A network hiccup must not read as "unmerged" when a real merge-status query would have said otherwise, and that matters more now that it gates the destructive Delete option below:
+Otherwise, check whether the current branch has secretly already been merged (this catches squash-and-merge). If it has, this is not a drop at all: point the user at `ship-pr`'s cleanup rather than duplicating it here. Check remotely first, but fall back to a local check when the API call fails. A network hiccup must not read as "unmerged" when a real merge-status query would have said otherwise, and that matters more now that it gates the destructive Delete option below:
 
 ```bash
 MERGED_COUNT=$(gh pr list --head "$CURRENT" --base "$DEFAULT_BRANCH" --state merged --json number --jq 'length' 2>/dev/null)
@@ -119,7 +119,7 @@ if [ -z "$MERGED_COUNT" ]; then
 fi
 ```
 
-**If `$MERGED_COUNT >= 1` (already merged):** stop and say `'$CURRENT' already has a merged PR, so this is not an abandon. Run hero-skills:ship-pr's cleanup flow (or delete '$CURRENT' manually) instead.` If Step 1 stashed anything, say so explicitly here too, because the user is being redirected away and would otherwise get no reminder: `Note: your uncommitted changes are stashed (stash@{0}). Restore them with 'git stash pop' after switching branches.` Do not proceed with this skill.
+**If `$MERGED_COUNT >= 1` (already merged):** stop and say `'$CURRENT' already has a merged PR, so this is not a drop. Run hero-skills:ship-pr's cleanup flow (or delete '$CURRENT' manually) instead.` If Step 1 stashed anything, say so explicitly here too, because the user is being redirected away and would otherwise get no reminder: `Note: your uncommitted changes are stashed (stash@{0}). Restore them with 'git stash pop' after switching branches.` Do not proceed with this verb.
 
 **Otherwise (genuinely unmerged):**
 
@@ -158,7 +158,7 @@ If `$PR_INFO` is non-empty, ask: `Open PR #{number} ({url}) still points at '$CU
 
 If there's no open PR but `$REMOTE_EXISTS` is non-empty, ask: `Remote branch 'origin/$CURRENT' still exists. Delete it too? [y/N]` On yes, run `git push origin --delete "$CURRENT"`.
 
-### Step 3: Pull Latest
+## Step 3: Pull Latest
 
 ```bash
 git pull origin $DEFAULT_BRANCH
@@ -166,11 +166,11 @@ git pull origin $DEFAULT_BRANCH
 
 **If pull fails due to conflicts:** Report and let user resolve.
 
-### Step 4: Clear Context
+## Step 4: Clear Context
 
 Run `/clear` to reset the conversation context.
 
-### Step 5: Report
+## Step 5: Report
 
 ```
 Abandon Summary
@@ -180,7 +180,7 @@ Status: Up to date with origin
 
 Previous branch: {previous-branch} [paused, kept locally / deleted (local + remote/PR, if confirmed) / was already on default]
 Pulled: N new commits
-Stashed: [yes — "abandon: WIP on {branch}" (restore with `git stash pop`) / no]
+Stashed: [yes — "wayfare drop: WIP on {branch}" (restore with `git stash pop`) / no]
 Context: Cleared
 
 Next step: hero-skills:one-shot — start the next task (print only — launch it on the user's word, never spontaneously)

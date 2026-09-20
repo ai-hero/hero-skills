@@ -143,7 +143,7 @@ check "contract: caller grants every scope the callee declares" "none" "$missing
 
 # Code lines only. The caller carries a comment WARNING against
 # `secrets: inherit`, and a plain grep matches that and reports the file as
-# using it, the same prose-matching trap as init-hero's install probe.
+# using it, the same prose-matching trap as init's install probe.
 check "contract: caller never uses secrets: inherit" "yes" \
   "$(grep -vE '^\s*#' "$SOURCE" | grep -q 'secrets: *inherit' && echo no || echo yes)"
 

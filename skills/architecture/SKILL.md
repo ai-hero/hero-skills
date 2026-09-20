@@ -131,7 +131,7 @@ New Decisions entries append at the end, in date order; a superseding entry
 names the date/title of the entry it supersedes.
 
 `Source ref` is the staleness anchor: the source commit the file was last
-converged against, the same role wayfare's `target_ref` plays for features. An
+converged against, the same role wayfare's `anchors.target` plays for tasks. An
 absent or non-40-hex ref is a defect to report and re-anchor on the next
 `sync`, never something to compute drift from. The anchor line's grammar is
 fixed at line 3 of the file, exactly `> Last updated: DATE · Source ref: SHA`,
@@ -202,7 +202,7 @@ is a permissions problem to surface, not an absent file.
 which project the file should describe, or whether one file covers the whole,
 and record the answer in `## Overview`'s first line. `NO_HERO_SECTIONS`
 covers both a missing HERO.md and one without these sections: suggest
-`hero-skills:init-hero` but proceed from a direct read.
+`hero-skills:wayfare init` but proceed from a direct read.
 
 Then dispatch, and **announce the dispatched verb first** (`architecture:
 running sync` / `running review`), so a typo'd `review` never lands in the

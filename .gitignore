@@ -219,3 +219,6 @@ __marimo__/
 !.claude/rules/
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Playwright MCP session artifacts (snapshots, console logs, screenshots)
+.playwright-mcp/

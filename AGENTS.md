@@ -64,7 +64,7 @@ repo's own gate while `auto-approve.yaml` is the fleet's.
   that will not merge. Rebase *before* `@auto-approve`, never between the
   verdict and the merge: branch protection dismisses approvals on push.
 - **`recalibrate` writes HERO.md; `sync` writes the skill's own file.**
-  Fourteen skills carry the verb ([docs/RECALIBRATE.md](./docs/RECALIBRATE.md));
+  Eleven skills carry the verb ([docs/RECALIBRATE.md](./docs/RECALIBRATE.md));
   their field map is `scripts/hero-fields.sh`, and a field missing there is a
   field no recalibrate can ask about. `fleet sync` and `wayfare sync` are
   unrelated: they converge FLEET.md and the plan, not config.

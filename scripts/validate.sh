@@ -238,11 +238,11 @@ else
     # the procedure IS the content, and every guard sits inline with the step
     # it constrains. Splitting one across files is how a step comes to be
     # executed without its STOP. The list is wayfare plus one-shot and the
-    # skills its DAG nodes delegate to, and init-hero, which writes the config
+    # skills its DAG nodes delegate to. `wayfare init` writes the config
     # they all read. Everything else keeps the 500/5000 guideline, where a
     # breach really does mean reference material has leaked into the
-    # instructions: my-humanizer warns today and should.
-    PIPELINE_SKILLS=" wayfare one-shot ship-pr push-pr review-pr respond-to-comments init-hero "
+    # instructions: an oversized reference warns today and should.
+    PIPELINE_SKILLS=" wayfare one-shot ship-pr push-pr review-pr respond-to-comments "
     LIMIT_LINES=500; LIMIT_WORDS=5000
     case "$PIPELINE_SKILLS" in
       *" $SKILL_NAME "*) LIMIT_LINES=3500; LIMIT_WORDS=35000 ;;
@@ -458,13 +458,13 @@ echo "────────────────────────�
 #
 # Format: "marker-regex|hero-lib replacement|human description"
 # Match the PARSING IDIOM, not the field name. Matching field names both
-# over-fired (prose mentioning "default-branch", init-hero GENERATING the
+# over-fired (prose mentioning "default-branch", init GENERATING the
 # HERO.md template, a test writing fixtures) and under-fired (it never named
 # merge-method / platform / health-endpoint, so four hand-rolled parsers in
 # ship-pr went unseen). Reading HERO.md through a text tool is the actual
 # duplication; writing it is not.
 # Match the PARSING IDIOM, not the field name. Field names both over-fired
-# (prose, init-hero GENERATING the HERO.md template, tests writing fixtures)
+# (prose, init GENERATING the HERO.md template, tests writing fixtures)
 # and under-fired (never naming merge-method / platform, so four hand-rolled
 # parsers in ship-pr went unseen). Reading HERO.md through a text tool is the
 # duplication; writing it is not.

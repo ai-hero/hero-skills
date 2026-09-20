@@ -60,7 +60,7 @@ Read `HERO.md` if it exists. This skill uses:
 - **Code Quality** → linters, formatters, pre-commit
 - **Code Review Agent** → agent name, trigger method, poll method, bot username (for review loop)
 
-If `HERO.md` is missing, suggest `hero-skills:init-hero` but proceed with defaults.
+If `HERO.md` is missing, suggest `hero-skills:wayfare init` but proceed with defaults.
 
 ### Step 1: Identify the PR
 
@@ -298,7 +298,7 @@ git push origin $(git branch --show-current)
 
 ### Step 9: Reply to and Resolve Comments
 
-Draft every reply first, humanize them in one `hero-skills:my-humanizer inline` call, then for each addressed comment post its reply and resolve the thread:
+Draft every reply first, humanize them in one pass against [docs/HUMANIZING.md](../../docs/HUMANIZING.md), then for each addressed comment post its reply and resolve the thread:
 
 ```bash
 # Reply to the comment explaining the fix

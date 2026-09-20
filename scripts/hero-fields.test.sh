@@ -123,7 +123,7 @@ check "a heading inside a code fence is not present" \
   "(absent)" "$("$FIELDS" setup-dev "$TMP/fenced" | awk -F'\t' '$1 == "Developer Setup" { print $3 }')"
 
 # No HERO.md at all: every row says so, and the command still succeeds, so
-# recalibrate reads the rows and sends the user to init-hero.
+# recalibrate reads the rows and sends the user to `wayfare init`.
 mkdir -p "$TMP/bare"
 BARE=$("$FIELDS" push-pr "$TMP/bare"); check "missing HERO.md exits 0" "0" "$?"
 check "every row is no-file when there is no HERO.md" \
@@ -186,11 +186,10 @@ for name in $("$FIELDS" --list); do
 done
 check "every mapped name is a skill directory" "" "$BAD_NAME"
 
-# init-hero is the whole-file pass: its recalibrate re-investigates the repo
-# rather than reading a field table, so it is the one mapped skill that does
-# not invoke this script. Naming the exemption here is what stops it being
-# "fixed" into the loop below.
-NO_INVOCATION="init-hero"
+# Every mapped skill invokes this script. There is no exemption now that the
+# whole-file pass belongs to `wayfare init`, and wayfare's own recalibrate
+# does invoke it. An empty list is the claim; the loop below is the check.
+NO_INVOCATION=""
 
 # The map is the claim and the skills are the truth. Match the frontmatter
 # anchored to the first block: create-skill/SKILL.md carries a second

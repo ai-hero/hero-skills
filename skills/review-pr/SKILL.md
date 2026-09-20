@@ -76,7 +76,7 @@ Read `HERO.md` for:
 - **Code Quality** → pre-commit (re-run after fixes in self-review mode)
 - **Code Review Agent** → bot username (to avoid duplicating its comments)
 
-If `HERO.md` is missing, suggest `hero-skills:init-hero` but proceed with defaults.
+If `HERO.md` is missing, suggest `hero-skills:wayfare init` but proceed with defaults.
 
 Detect the PR and mode:
 
@@ -232,7 +232,7 @@ Wait for all agents to complete, then aggregate findings into: **Critical** (bug
 
 ### Step 3: Post Review Comment
 
-Render the template with real findings, humanize it (`hero-skills:my-humanizer inline`; keep headings and counts), then post:
+Render the template with real findings, humanize it against [docs/HUMANIZING.md](../../docs/HUMANIZING.md), keeping headings and counts, then post:
 
 ```bash
 gh pr comment $PR_NUMBER --body "$(cat <<'EOF'

@@ -263,25 +263,36 @@ check "repo-ref: an existing local dir passes through" \
   "$TMP/cfg" "$(hero_normalize_repo_ref "$TMP/cfg")"
 
 # ---------- hero_ready_items -----------------------------------------------
+#
+# Schema 1 (docs/PLAN.md): four types, one lifecycle, `resolution` carrying
+# the ending. The cases below are the ones that were, or could again be,
+# WRONG SILENTLY.
 
 W="$TMP/w/.plans"
-mkdir -p "$W"
+mkdir -p "$W/items"
 
-item() { # file id title status deps [kind]
+# Every store needs a plan object; without one the listing refuses outright,
+# which is its own case further down.
+plan() { # STORE
+  printf -- '---\nschema: 1\ndefault_branch: main\nnext_id: 999\n---\n' > "$1/PLAN.md"
+}
+plan "$W"
+
+item() { # file id title status deps [type]
   {
     printf -- '---\nid: %s\n' "$2"
-    if [ -n "${6:-}" ]; then printf 'kind: %s\n' "$6"; fi
+    printf 'type: %s\n' "${6:-task}"
     printf 'title: %s\nstatus: %s\ndepends_on: %s\n---\n' "$3" "$4" "$5"
-  } > "$W/$1"
+  } > "$W/items/$1"
 }
 
 item 001-done.md 1 "Finished" "done" "[]"
-item 002-todo.md 2 "Unblocked" "todo" "[1]"
-item 003-blocked.md 3 "Waiting" "todo" "[2]"
-item 004-active.md 4 "In flight" "in-progress" "[1]"
+item 002-todo.md 2 "Unblocked" "ready" "[1]"
+item 003-blocked.md 3 "Waiting" "ready" "[2]"
+item 004-active.md 4 "In flight" "active" "[1]"
 item 005-pad.md 007 "Zero padded" "done" "[]"
-item 006-padref.md 6 "Refs padded id" "todo" "[7]"
-item 007-dangling.md 8 "Dangling ref" "todo" "[99]"
+item 006-padref.md 6 "Refs padded id" "ready" "[7]"
+item 007-dangling.md 8 "Dangling ref" "ready" "[99]"
 item 008-caps.md 9 "Capitalized status" "DONE" "[]"
 
 OUT="$(hero_ready_items "$W" 2>/dev/null)"
@@ -291,7 +302,7 @@ state_of() { printf '%s' "${2:-$OUT}" | awk -v f="$1" '$2 == f { print $1; exit 
 
 check "ready: satisfied dep is READY"        "READY"   "$(state_of 002-todo.md)"
 check "ready: unmet dep is blocked"          "blocked" "$(state_of 003-blocked.md)"
-check "ready: in-progress is active, not READY" "active" "$(state_of 004-active.md)"
+check "ready: active is active, not READY"   "active"  "$(state_of 004-active.md)"
 check "ready: done items are listed"         "done"    "$(state_of 001-done.md)"
 # 007 and 7 must compare equal, or a zero-padded legacy id blocks its dependents.
 check "ready: zero-padded id resolves"       "READY"   "$(state_of 006-padref.md)"
@@ -309,11 +320,23 @@ check "ready: dangling dep warns on stderr" "0" "$?"
 # `DONE` must count as done, or every dependent stays blocked forever.
 check "ready: status match is case-insensitive" "done"  "$(state_of 008-caps.md)"
 
+# An UNMIGRATED store must list nothing and say why. A permissive pass would
+# print an empty roadmap for a repo that has a full one, and an empty roadmap
+# reads as "nothing to do" rather than as "this did not work".
+mkdir -p "$TMP/unmig/.plans/items"
+printf -- '---\nid: 1\nkind: feature\ntitle: Old\nstatus: todo\n---\n' > "$TMP/unmig/.plans/items/001-a.md"
+UNMIG="$(hero_ready_items "$TMP/unmig/.plans" 2>/dev/null)"; RCU=$?
+check "schema: unmigrated store returns non-zero" "1" "$RCU"
+check "schema: unmigrated store prints nothing"   ""  "$UNMIG"
+ERRU="$(hero_ready_items "$TMP/unmig/.plans" 2>&1 >/dev/null)"
+printf '%s' "$ERRU" | grep -q "migrate-plan.sh"
+check "schema: unmigrated store names the migrator" "0" "$?"
+
 # Ids are integers by convention, but a hand-written oddball must degrade
 # gracefully: a non-numeric id used to be a FATAL arithmetic error that
 # emitted NOTHING: a caller reads that as an empty plate, not as a failure.
 item 009-strid.md "AH-12" "String id" "done" "[]"
-item 00a-strdep.md "b3f2" "Depends on string id" "todo" "[ah-12]"
+item 00a-strdep.md "b3f2" "Depends on string id" "ready" "[ah-12]"
 OUT2="$(hero_ready_items "$W" 2>/dev/null)"
 COUNT2="$(printf '%s' "$OUT2" | grep -c . )"
 check "ready: string id does not blank the listing" "10" "$COUNT2"
@@ -331,22 +354,23 @@ check "ready: does not change caller's cwd" "$BEFORE" "$PWD"
 
 # ---------- hero_item_field ------------------------------------------------
 
-cat > "$W/010-colon.md" <<'EOF'
+cat > "$W/items/010-colon.md" <<'EOF'
 ---
 id: 10
+type: task
 title: Fix auth: token refresh
-status: todo
+status: accepted
 depends_on: []
 success: e2e green: login under 30s
 ---
 EOF
 
 # Splitting on every ': ' truncated any value containing a colon, and
-# `success` is the field Step 1c reads to decide whether to build.
+# `success` is the field a build reads to decide whether to build.
 check "item_field: title keeps its colon" \
-  "Fix auth: token refresh" "$(hero_item_field "$W/010-colon.md" title)"
+  "Fix auth: token refresh" "$(hero_item_field "$W/items/010-colon.md" title)"
 check "item_field: success keeps its colon" \
-  "e2e green: login under 30s" "$(hero_item_field "$W/010-colon.md" success)"
+  "e2e green: login under 30s" "$(hero_item_field "$W/items/010-colon.md" success)"
 
 # ---------- silent-READY regressions ---------------------------------------
 #
@@ -354,11 +378,12 @@ check "item_field: success keeps its colon" \
 # blocked) with nothing on stderr, so an agent would have picked up work whose
 # dependencies do not exist, or skipped work that was actually unblocked.
 
-cat > "$W/011-mldeps.md" <<'EOF'
+cat > "$W/items/011-mldeps.md" <<'EOF'
 ---
 id: 11
+type: task
 title: Block sequence deps
-status: todo
+status: ready
 depends_on:
   - 99
   - 100
@@ -369,23 +394,25 @@ EOF
 OUT3="$(hero_ready_items "$W" 2>/dev/null)"
 check "deps: block sequence blocks" "blocked" "$(state_of 011-mldeps.md "$OUT3")"
 
-cat > "$W/012-quoted.md" <<'EOF'
+cat > "$W/items/012-quoted.md" <<'EOF'
 ---
 id: 12
+type: task
 title: Quoted status
 status: "done"
 depends_on: []
 ---
 EOF
-cat > "$W/013-dep.md" <<'EOF'
+cat > "$W/items/013-dep.md" <<'EOF'
 ---
 id: 13
+type: task
 title: Depends on the quoted-done item
-status: todo
+status: ready
 depends_on: [12]
 ---
 EOF
-item 015-qdep.md 15 "Quoted inline dep" "todo" '["12"]'
+item 015-qdep.md 15 "Quoted inline dep" "ready" '["12"]'
 OUT4="$(hero_ready_items "$W" 2>/dev/null)"
 # A quoted status did not equal `done`, so every dependent blocked forever.
 check "status: quoted done counts as done" "done"  "$(state_of 012-quoted.md "$OUT4")"
@@ -394,9 +421,10 @@ check "status: its dependent unblocks"     "READY" "$(state_of 013-dep.md "$OUT4
 # or `depends_on: ["12"]` emits `"12"` and never matches id 12.
 check "deps: quoted inline entry resolves" "READY" "$(state_of 015-qdep.md "$OUT4")"
 
-cat > "$W/014-body.md" <<'EOF'
+cat > "$W/items/014-body.md" <<'EOF'
 ---
 id: 14
+type: task
 title: Body mentions a status
 depends_on: []
 ---
@@ -414,7 +442,7 @@ check "ready: missing store returns non-zero" "1" "$?"
 
 # An empty store is a healthy empty plate, not a failure (zsh aborted here
 # with a raw unmatched-glob error and rc=1 before nullglob was set).
-mkdir -p "$TMP/empty-store"
+mkdir -p "$TMP/empty-store/items"; plan "$TMP/empty-store"
 EMPTY="$(hero_ready_items "$TMP/empty-store" 2>/dev/null)"
 check "ready: empty store returns success" "0" "$?"
 check "ready: empty store prints nothing" "" "$EMPTY"
@@ -427,7 +455,7 @@ check "ready: empty store prints nothing" "" "$EMPTY"
 # the exact silent-READY failure the dangling-dep report exists to prevent.
 
 item 016-wsid.md "WS tok9" "Whitespace id" "done" "[]"
-item 017-wsdep.md 17 "Deps on token of whitespace id" "todo" "[tok9]"
+item 017-wsdep.md 17 "Deps on token of whitespace id" "ready" "[tok9]"
 OUT6="$(hero_ready_items "$W" 2>/dev/null)"
 ERR6="$(hero_ready_items "$W" 2>&1 >/dev/null)"
 check "ready: dep on a whitespace-id token stays blocked" "blocked" "$(state_of 017-wsdep.md "$OUT6")"
@@ -436,24 +464,25 @@ check "ready: whitespace id warns on stderr" "0" "$?"
 
 # Duplicate ids (after normalization, 007 is already item 005's id) must be
 # named: dependents may resolve against the wrong twin.
-item 018-dup7.md 7 "Duplicate of padded id 007" "todo" "[]"
+item 018-dup7.md 7 "Duplicate of padded id 007" "accepted" "[]"
 ERR7="$(hero_ready_items "$W" 2>&1 >/dev/null)"
 printf '%s' "$ERR7" | grep -q "duplicate id 7"
 check "ready: normalized duplicate id warns on stderr" "0" "$?"
 
-# An item with no usable id cannot participate in dependency order, handing
+# An item with no usable id cannot participate in dependency order; handing
 # it out as READY would have a consumer work an item nothing can depend on.
-printf 'just prose, no frontmatter\n' > "$W/019-prose.md"
+printf 'just prose, no frontmatter\n' > "$W/items/019-prose.md"
 OUT7="$(hero_ready_items "$W" 2>/dev/null)"
 check "ready: id-less item is invalid, not READY" "invalid" "$(state_of 019-prose.md "$OUT7")"
 
-# discovered_from is provenance, never a blocker: a DANGLING discovered_from
-# must not block (or even warn), the readiness engine only parses depends_on.
-cat > "$W/020-disc.md" <<'EOF'
+# discovered_from is provenance, never a blocker, and schema 1 keeps it as a
+# SEPARATE edge from `parent`: a dangling one must not block (or even warn).
+cat > "$W/items/020-disc.md" <<'EOF'
 ---
 id: 20
+type: task
 title: Discovered while working another item
-status: todo
+status: ready
 depends_on: []
 discovered_from: 999
 ---
@@ -461,18 +490,35 @@ EOF
 OUT8="$(hero_ready_items "$W" 2>/dev/null)"
 check "ready: dangling discovered_from never blocks" "READY" "$(state_of 020-disc.md "$OUT8")"
 
+# ---------- the type gate ----------------------------------------------------
+#
+# `type` is the discriminator schema 1 dispatches on, so an item without one,
+# in a store that IS migrated, must be loud rather than guessed. Guessing
+# `task` is how a goal gets handed to one-shot to build.
+
+printf -- '---\nid: 26\ntitle: No type line\nstatus: ready\ndepends_on: []\n---\n' > "$W/items/026-notype.md"
+printf -- '---\nid: 27\ntype: widget\ntitle: Unknown type\nstatus: ready\ndepends_on: []\n---\n' > "$W/items/027-badtype.md"
+OUTT="$(hero_ready_items "$W" 2>/dev/null)"
+check "type: missing type is invalid, not READY" "invalid" "$(state_of 026-notype.md "$OUTT")"
+check "type: unrecognized type is invalid"       "invalid" "$(state_of 027-badtype.md "$OUTT")"
+ERRT="$(hero_ready_items "$W" 2>&1 >/dev/null)"
+printf '%s' "$ERRT" | grep -q "026-notype.md has no type"
+check "type: missing type warns on stderr" "0" "$?"
+printf '%s' "$ERRT" | grep -q "unrecognized type 'widget'"
+check "type: unrecognized type names the type on stderr" "0" "$?"
+
 # ---------- planning gate ----------------------------------------------------
 #
-# The planning state is the human ready-mark gate: emitted items sit in
-# `planning` until a person flips them to `todo`. Each case here pins a way the
-# gate could be silently defeated, an emitted item handed to one-shot with no
-# ready-mark, the precise silent-READY shape this table exists to catch.
+# `planning` is the human ready-mark gate: planned items sit there until a
+# person flips them to `ready`. Each case pins a way the gate could be
+# silently defeated, the precise silent-READY shape this table exists to catch.
 
 item 021-planning.md 21 "Awaiting ready-mark" "planning" "[1]"
-item 022-plandep.md 22 "Depends on a planning item" "todo" "[21]"
-cat > "$W/023-qplan.md" <<'EOF'
+item 022-plandep.md 22 "Depends on a planning item" "ready" "[21]"
+cat > "$W/items/023-qplan.md" <<'EOF'
 ---
 id: 23
+type: task
 title: Quoted planning
 status: "planning"
 depends_on: []
@@ -483,7 +529,6 @@ item 024-capplan.md 24 "Capitalized planning" "Planning" "[]"
 # shortening that previously fell through to READY, defeating the whole gate.
 item 025-typo.md 25 "Status typo" "plan" "[1]"
 OUT9="$(hero_ready_items "$W" 2>/dev/null)"
-# Planning items list as `plan`, never READY, even with every dependency done.
 check "planning: item lists as plan, not READY" "plan"    "$(state_of 021-planning.md "$OUT9")"
 check "planning: quoted planning counts"        "plan"    "$(state_of 023-qplan.md "$OUT9")"
 check "planning: capitalized planning counts"   "plan"    "$(state_of 024-capplan.md "$OUT9")"
@@ -498,426 +543,347 @@ ERR9="$(hero_ready_items "$W" 2>&1 >/dev/null)"
 printf '%s' "$ERR9" | grep -q "unrecognized status 'plan'"
 check "planning: unknown status warns on stderr" "0" "$?"
 
-# ---------- feature lifecycle (kind: feature) --------------------------------
+# ---------- the task lifecycle -----------------------------------------------
 #
-# Wayfare features carry the extended enum todo|planning|ready|implementing|
-# reviewing|done. Each case pins a way the mapping could silently regress: a
-# `todo` feature handed to one-shot unplanned (backlog must never be READY),
-# or the extended statuses leaking into plain items (they must stay invalid).
+# new|accepted|planning|ready|active|committed|review|done|dropped. Each case
+# pins a way the mapping could silently regress: an `accepted` task handed to
+# one-shot unplanned (backlog must never be READY), or a terminal state
+# wrongly satisfying a dependency.
 
-# Feature-item fixture: `item` with kind defaulted to `feature`.
-fitem() { item "$1" "$2" "$3" "$4" "$5" "${6:-feature}"; }
-
-fitem 030-backlog.md 30 "Unplanned feature" "todo" "[]"
-fitem 031-fplan.md 31 "Feature being planned" "planning" "[]"
-fitem 032-fready.md 32 "Planned and marked ready" "ready" "[1]"
-fitem 033-fblocked.md 33 "Ready but blocked" "ready" "[30]"
-fitem 034-fimpl.md 34 "Being built" "implementing" "[]"
-fitem 035-flegacy.md 35 "Legacy in-progress feature" "in-progress" "[]"
-fitem 036-frev.md 36 "PR in review" "reviewing" "[]"
-fitem 037-fdone.md 37 "Shipped feature" "done" "[]"
-fitem 038-fcaps.md 38 "Capitalized kind" "todo" "[]" "Feature"
-fitem 039-ftypo.md 39 "Feature status typo" "in-review" "[]"
-# The extended enum is features-only: a PLAIN item claiming `ready` must stay
-# invalid, otherwise any item could skip the human ready-mark by declaring it.
-item 040-plainready.md 40 "Plain item claiming ready" "ready" "[]"
-# Interaction fixtures: dependency resolution, legacy kinds, and the malformed
-# values that must land in the loud invalid arm, never a READY-eligible one.
-fitem 041-fchain.md 41 "Depends on shipped feature" "ready" "[37]"
-item 042-wo.md 42 "Legacy work order" "todo" "[]" "work-order"
-printf -- '---\nid: 43\nkind: feature\ntitle: No status line\ndepends_on: []\n---\n' > "$W/043-fnostatus.md"
-fitem 044-fcaps.md 44 "Capitalized ready" "Ready" "[]"
-# A colon smuggled into status must NOT suffix-match a kind-keyed arm: x:todo
-# reaching READY skips the ready-mark; not:done reaching `done` is a split-brain
-# (listed done, but done_ids uses exact compare so dependents block forever).
-item 045-colon.md 45 "Colon status" "x:todo" "[]"
-fitem 046-fcolon.md 46 "Colon feature status" "plan:todo" "[]"
+item 030-backlog.md 30 "Unplanned task" "accepted" "[]"
+item 032-fready.md 32 "Planned and marked ready" "ready" "[1]"
+item 033-fblocked.md 33 "Ready but blocked" "ready" "[30]"
+item 034-fimpl.md 34 "Being built" "active" "[]"
+item 036-frev.md 36 "PR in review" "review" "[]"
+item 037-fdone.md 37 "Shipped task" "done" "[]"
+item 038-fcaps.md 38 "Capitalized type" "accepted" "[]" "Task"
+item 039-ftypo.md 39 "Task status typo" "in-review" "[]"
+item 041-fchain.md 41 "Depends on shipped task" "ready" "[37]"
+printf -- '---\nid: 43\ntype: task\ntitle: No status line\ndepends_on: []\n---\n' > "$W/items/043-fnostatus.md"
+item 044-fcaps.md 44 "Capitalized ready" "Ready" "[]"
+# A colon smuggled into status must NOT suffix-match a type-keyed arm:
+# `x:ready` reaching READY skips the ready-mark; `not:done` reaching `done` is
+# a split-brain (listed done, but done_ids uses exact compare, so dependents
+# block forever).
+item 045-colon.md 45 "Colon status" "x:ready" "[]"
 item 047-notdone.md 47 "Colon done status" "not:done" "[]"
-# An unknown kind must stay VISIBLE (invalidating it hid nine items, five of
-# them security, behind a stderr line nobody reads) yet must never be handed
-# out READY: build-todo and plain-todo mean OPPOSITE things, so `kind:
-# features` + todo reaching READY would skip the ready-mark. `backlog` is the
-# one reading safe under both.
-item 048-badkind.md 48 "Typo kind" "todo" "[]" "features"
 # Backlog rows still run the dep check: unmet deps annotate the row
-# (wayfare's report prints it) and a dangling ref warns, a bootstrap typo must
+# (wayfare's report prints it) and a dangling ref warns; a bootstrap typo must
 # not be invisible.
-fitem 049-fwait.md 49 "Backlog waiting on dep" "todo" "[30]"
-fitem 050-fdangle.md 50 "Backlog dangling dep" "todo" "[999]"
-# `committed` is a goal feature's commit on the goal branch, unmerged: its own
+item 049-fwait.md 49 "Backlog waiting on dep" "accepted" "[30]"
+item 050-fdangle.md 50 "Backlog dangling dep" "accepted" "[999]"
+# `committed` is a goal task's commit on the goal branch, unmerged: its own
 # row, never READY, never a satisfied dependency (the default branch lacks the
 # code), and the dependent's row must NAME it so a goal turn can tell a
 # dependency already on its own branch from a real block.
-fitem 195-fcommit.md 195 "Committed on goal branch" "committed" "[]"
-fitem 196-fafter.md 196 "Ready, waiting on committed" "ready" "[195]"
-fitem 197-fafterlog.md 197 "Backlog, waiting on committed" "todo" "[195]"
-item 198-plaincommit.md 198 "Plain item claiming committed" "committed" "[]"
+item 195-fcommit.md 195 "Committed on goal branch" "committed" "[]"
+item 196-fafter.md 196 "Ready, waiting on committed" "ready" "[195]"
+item 197-fafterlog.md 197 "Backlog, waiting on committed" "accepted" "[195]"
+# `dropped` is terminal and must NOT satisfy a dependency: the prerequisite
+# was abandoned, so anything waiting on it really is blocked. Listing it as
+# `done` would re-plan around code nobody ever wrote.
+item 199-dropped.md 199 "Abandoned task" "dropped" "[]"
+item 200-waitdrop.md 200 "Waiting on abandoned work" "ready" "[199]"
 OUTF="$(hero_ready_items "$W" 2>/dev/null)"
-# A todo feature is on the roadmap but UNPLANNED, never READY.
-check "feature: todo lists as backlog, not READY" "backlog" "$(state_of 030-backlog.md "$OUTF")"
-check "feature: planning lists as plan"           "plan"    "$(state_of 031-fplan.md "$OUTF")"
-# `ready` is the feature state eligible for READY, dep-gated like plain todo.
-check "feature: ready with deps done is READY"    "READY"   "$(state_of 032-fready.md "$OUTF")"
-check "feature: ready with unmet dep is blocked"  "blocked" "$(state_of 033-fblocked.md "$OUTF")"
-check "feature: implementing is active"           "active"  "$(state_of 034-fimpl.md "$OUTF")"
-check "feature: legacy in-progress still active"  "active"  "$(state_of 035-flegacy.md "$OUTF")"
-check "feature: reviewing lists as review"        "review"  "$(state_of 036-frev.md "$OUTF")"
-check "feature: done is done"                     "done"    "$(state_of 037-fdone.md "$OUTF")"
-check "feature: kind match is case-insensitive"   "backlog" "$(state_of 038-fcaps.md "$OUTF")"
-check "feature: unknown status is invalid"        "invalid" "$(state_of 039-ftypo.md "$OUTF")"
-check "feature: plain item with ready is invalid" "invalid" "$(state_of 040-plainready.md "$OUTF")"
-# A done FEATURE must count in done_ids, or every roadmap chain stalls forever.
-check "feature: dep on a done feature is READY"   "READY"   "$(state_of 041-fchain.md "$OUTF")"
-# Any known non-feature kind rides the plain arms, legacy work orders still list.
-check "feature: kind work-order behaves as plain" "READY"   "$(state_of 042-wo.md "$OUTF")"
-# No status line means the item was just created and nobody has triaged it,
-# `new`, never READY. It used to default to `todo`, which for a plain item meant
-# READY-eligible: untriaged items went straight to one-shot.
-check "feature: empty status defaults to new" "new" "$(state_of 043-fnostatus.md "$OUTF")"
-check "feature: capitalized ready is READY"       "READY"   "$(state_of 044-fcaps.md "$OUTF")"
-check "feature: colon status is invalid (plain)"  "invalid" "$(state_of 045-colon.md "$OUTF")"
-check "feature: colon status is invalid (feature)" "invalid" "$(state_of 046-fcolon.md "$OUTF")"
-check "feature: colon-done is invalid, not done"  "invalid" "$(state_of 047-notdone.md "$OUTF")"
-check "feature: unknown kind is backlog, not invalid" "backlog" "$(state_of 048-badkind.md "$OUTF")"
-# Backlog rows carry dep state without ever being READY.
-check "feature: backlog with unmet dep stays backlog" "backlog" "$(state_of 049-fwait.md "$OUTF")"
+check "task: accepted lists as backlog, not READY" "backlog" "$(state_of 030-backlog.md "$OUTF")"
+check "task: ready with deps done is READY"    "READY"   "$(state_of 032-fready.md "$OUTF")"
+check "task: ready with unmet dep is blocked"  "blocked" "$(state_of 033-fblocked.md "$OUTF")"
+check "task: active is active"                 "active"  "$(state_of 034-fimpl.md "$OUTF")"
+check "task: review lists as review"           "review"  "$(state_of 036-frev.md "$OUTF")"
+check "task: done is done"                     "done"    "$(state_of 037-fdone.md "$OUTF")"
+check "task: type match is case-insensitive"   "backlog" "$(state_of 038-fcaps.md "$OUTF")"
+check "task: unknown status is invalid"        "invalid" "$(state_of 039-ftypo.md "$OUTF")"
+# A done task must count in done_ids, or every roadmap chain stalls forever.
+check "task: dep on a done task is READY"      "READY"   "$(state_of 041-fchain.md "$OUTF")"
+# No status line means the item was just created and nobody has triaged it:
+# `new`, never READY.
+check "task: empty status defaults to new"     "new"     "$(state_of 043-fnostatus.md "$OUTF")"
+check "task: capitalized ready is READY"       "READY"   "$(state_of 044-fcaps.md "$OUTF")"
+check "task: colon status is invalid"          "invalid" "$(state_of 045-colon.md "$OUTF")"
+check "task: colon-done is invalid, not done"  "invalid" "$(state_of 047-notdone.md "$OUTF")"
+check "task: backlog with unmet dep stays backlog" "backlog" "$(state_of 049-fwait.md "$OUTF")"
 printf '%s' "$OUTF" | grep -q '049-fwait.md.*\[deps unmet'
-check "feature: backlog unmet deps are annotated" "0" "$?"
+check "task: backlog unmet deps are annotated" "0" "$?"
 printf '%s' "$OUTF" | grep -q '050-fdangle.md.*missing dep: 999'
-check "feature: backlog dangling dep is annotated" "0" "$?"
-check "feature: committed lists as committed"     "committed" "$(state_of 195-fcommit.md "$OUTF")"
-check "feature: dep on committed is blocked, not READY" "blocked" "$(state_of 196-fafter.md "$OUTF")"
+check "task: backlog dangling dep is annotated" "0" "$?"
+check "task: committed lists as committed"     "committed" "$(state_of 195-fcommit.md "$OUTF")"
+check "task: dep on committed is blocked, not READY" "blocked" "$(state_of 196-fafter.md "$OUTF")"
 printf '%s' "$OUTF" | grep -q '196-fafter.md.*\[committed dep: 195\]'
-check "feature: blocked row names its committed dep" "0" "$?"
+check "task: blocked row names its committed dep" "0" "$?"
 printf '%s' "$OUTF" | grep -q '197-fafterlog.md.*\[deps unmet; committed dep: 195\]'
-check "feature: backlog row names its committed dep" "0" "$?"
-check "feature: plain item with committed is invalid" "invalid" "$(state_of 198-plaincommit.md "$OUTF")"
+check "task: backlog row names its committed dep" "0" "$?"
+check "task: dropped lists as dropped, not done" "dropped" "$(state_of 199-dropped.md "$OUTF")"
+check "task: dep on a dropped item stays blocked" "blocked" "$(state_of 200-waitdrop.md "$OUTF")"
 ERRF="$(hero_ready_items "$W" 2>&1 >/dev/null)"
-printf '%s' "$ERRF" | grep -q "unrecognized status 'in-review'.*kind: feature"
-check "feature: unknown status names the feature enum on stderr" "0" "$?"
-printf '%s' "$ERRF" | grep -q "045-colon.md has a malformed status/kind"
-check "feature: colon status warns on stderr"     "0" "$?"
-printf '%s' "$ERRF" | grep -q "048-badkind.md has unrecognized kind 'features'"
-check "feature: unknown kind warns on stderr"     "0" "$?"
+printf '%s' "$ERRF" | grep -q "unrecognized status 'in-review'.*new/accepted/planning/ready"
+check "task: unknown status names the task enum on stderr" "0" "$?"
+printf '%s' "$ERRF" | grep -q "045-colon.md has a malformed status/type"
+check "task: colon status warns on stderr"     "0" "$?"
 printf '%s' "$ERRF" | grep -q "050-fdangle.md depends_on '999'"
-check "feature: backlog dangling dep warns on stderr" "0" "$?"
+check "task: backlog dangling dep warns on stderr" "0" "$?"
 
-# ---------- kind classes: architecture, polish, feedback, goal, new ---------
+# ---------- signals and goals ------------------------------------------------
 #
-# `architecture` and `polish` share the build enum with `feature`; the feedback
-# kinds carry their own delivery enum and must NEVER be READY, nothing builds
-# a feedback item, it gets delivered, so handing one to one-shot is always
-# wrong.
-item 051-arch.md 51 "Planned architecture change" "ready" "[]" "architecture"
-item 052-archtodo.md 52 "Unplanned architecture change" "todo" "[]" "architecture"
-item 053-archrev.md 53 "Architecture PR in review" "reviewing" "[]" "architecture"
-item 075-pol.md 75 "Dashboard header spacing" "ready" "[]" "polish"
-item 076-poltodo.md 76 "Card grid gutters" "todo" "[]" "polish"
-item 077-polrev.md 77 "Polish PR in review" "reviewing" "[]" "polish"
-# `security` (a bot's bump PR taken to deployment by `wayfare do`, or a
-# harden fix) rides the build enum. Left off the class table it rides the
-# unknown enum instead: ready lists as invalid, todo as backlog, never READY.
-item 078-dep.md 78 "Bump lodash to 4.17.21" "ready" "[]" "security"
-item 079-deptodo.md 79 "Bump minimist" "todo" "[]" "security"
-item 080-deprev.md 80 "Bump in review" "reviewing" "[]" "security"
-item 054-df.md 54 "Surface divergence" "todo" "[]" "design-feedback"
-item 055-dfq.md 55 "Queued in a packet" "queued" "[]" "design-feedback"
-item 056-dfd.md 56 "Filed upstream" "delivered" "[]" "design-feedback"
-item 057-dfr.md 57 "Design said no" "rejected" "[]" "design-feedback"
-item 058-af.md 58 "Boundary divergence" "todo" "[]" "architecture-feedback"
-item 059-dsf.md 59 "Token divergence" "todo" "[]" "design-system-feedback"
-# A feedback item claiming a BUILD status must be loud, not quietly READY.
-item 060-dfbad.md 60 "Feedback claiming ready" "ready" "[]" "design-feedback"
-# `new` is valid in every enum and READY in none of them.
-item 065-newplain.md 65 "Fresh plain task" "new" "[]"
-item 066-newfeat.md 66 "Fresh feature" "new" "[]" "feature"
-item 067-newdf.md 67 "Fresh feedback" "new" "[]" "design-feedback"
+# A signal is DELIVERED, never built, so it must never reach READY: handing
+# one to one-shot is always wrong. A goal is a container, so the same holds
+# for the opposite reason. `resolution` is what lets both end at `done`
+# without the listing knowing either type's vocabulary.
+
+item 054-df.md 54 "Surface divergence" "accepted" "[]" "signal"
+item 055-dfq.md 55 "Ready to deliver" "ready" "[]" "signal"
+item 056-dfd.md 56 "Filed upstream" "done" "[]" "signal"
+item 058-af.md 58 "Boundary divergence" "accepted" "[]" "signal"
+# A signal claiming a task-only status must be loud, not quietly active.
+item 060-dfbad.md 60 "Signal claiming committed" "committed" "[]" "signal"
+# THE case `resolution` exists for: a delivered or rejected signal ends at
+# `done` like everything else, so its dependents unblock under the one rule.
+# Keying terminality on the word `done` alone used to leave every dependent of
+# an answered upstream question blocked forever.
+cat > "$W/items/061-rejected.md" <<'EOF'
+---
+id: 61
+type: signal
+channel: design
+title: Design said no
+status: done
+resolution: rejected
+depends_on: []
+---
+EOF
+item 062-waitrej.md 62 "Waiting on the answer" "ready" "[61]"
+# `new` is valid for every type and READY for none.
+item 065-newplain.md 65 "Fresh task" "new" "[]"
+item 067-newdf.md 67 "Fresh signal" "new" "[]" "signal"
 # A dependency that is merely `new` is not done, so dependents stay blocked.
-item 068-waitnew.md 68 "Waits on a new item" "todo" "[65]"
-# A goal spans features. It is never READY, one-shot builds features, and a
-# goal handed to it has nothing to build.
+item 068-waitnew.md 68 "Waits on a new item" "ready" "[65]"
 item 070-goalnew.md 70 "Fresh goal" "new" "[]" "goal"
-item 071-goaltodo.md 71 "Approved goal" "todo" "[]" "goal"
+item 071-goaltodo.md 71 "Approved goal" "accepted" "[]" "goal"
+# The shared-state arms are type-keyed: `planning` is a task's state, and a
+# goal or signal claiming it used to ride the `*:` wildcard into a `plan` row.
+item 075-goalplan.md 75 "Goal planning" "planning" "[]" "goal"
+item 063-sigplan.md 63 "Signal planning" "planning" "[]" "signal"
+# A self-dependency blocks forever and looks like ordinary waiting.
+item 051-self.md 51 "Depends on itself" "ready" "[51]"
+# `done` with no type used to pass the alphabet gate into done_ids while the
+# listing printed the item invalid.
+printf -- '---\nid: 52\ntitle: Typeless done\nstatus: done\n---\n' > "$W/items/052-notype.md"
+item 053-waitnotype.md 53 "Waits on the typeless" "ready" "[52]"
+# A signal with a bad channel routes nowhere; both warn, neither invalidates.
+printf -- '---\nid: 64\ntype: signal\nchannel: desgn\ntitle: Typo channel\nstatus: accepted\ndepends_on: []\n---\n' > "$W/items/064-badchan.md"
+# A resolution on an unfinished item is two fields disagreeing.
+printf -- '---\nid: 66\ntype: task\nshape: story\ntitle: Resolved but active\nstatus: active\nresolution: shipped\ndepends_on: []\n---\n' > "$W/items/066-earlyres.md"
 item 072-goalrun.md 72 "Goal being run" "active" "[]" "goal"
 item 073-goaldone.md 73 "Achieved goal" "done" "[]" "goal"
 item 074-goalbad.md 74 "Goal claiming ready" "ready" "[]" "goal"
 OUTK="$(hero_ready_items "$W" 2>/dev/null)"
-check "kind: goal new is new"                    "new"      "$(state_of 070-goalnew.md "$OUTK")"
-check "kind: goal todo is goal, never READY"     "goal"     "$(state_of 071-goaltodo.md "$OUTK")"
-check "kind: goal active is active"              "active"   "$(state_of 072-goalrun.md "$OUTK")"
-check "kind: goal done is done"                  "done"     "$(state_of 073-goaldone.md "$OUTK")"
-check "kind: goal claiming ready is invalid"     "invalid"  "$(state_of 074-goalbad.md "$OUTK")"
-check "status: new on a plain item"              "new"      "$(state_of 065-newplain.md "$OUTK")"
-check "status: new on a feature"                 "new"      "$(state_of 066-newfeat.md "$OUTK")"
-check "status: new on a feedback item"           "new"      "$(state_of 067-newdf.md "$OUTK")"
-check "status: dep on a new item stays blocked"  "blocked"  "$(state_of 068-waitnew.md "$OUTK")"
-check "kind: architecture ready is READY"        "READY"    "$(state_of 051-arch.md "$OUTK")"
-check "kind: architecture todo is backlog"       "backlog"  "$(state_of 052-archtodo.md "$OUTK")"
-check "kind: architecture reviewing is review"   "review"   "$(state_of 053-archrev.md "$OUTK")"
-check "kind: polish ready is READY"              "READY"    "$(state_of 075-pol.md "$OUTK")"
-check "kind: polish todo is backlog"             "backlog"  "$(state_of 076-poltodo.md "$OUTK")"
-check "kind: polish reviewing is review"         "review"   "$(state_of 077-polrev.md "$OUTK")"
-check "kind: security ready is READY"            "READY"    "$(state_of 078-dep.md "$OUTK")"
-check "kind: security todo is backlog"           "backlog"  "$(state_of 079-deptodo.md "$OUTK")"
-check "kind: security reviewing is review"       "review"   "$(state_of 080-deprev.md "$OUTK")"
-check "kind: design-feedback todo is feedback"   "feedback" "$(state_of 054-df.md "$OUTK")"
-check "kind: design-feedback queued is feedback" "feedback" "$(state_of 055-dfq.md "$OUTK")"
-check "kind: design-feedback delivered is done"  "done"     "$(state_of 056-dfd.md "$OUTK")"
-check "kind: design-feedback rejected is done"   "done"     "$(state_of 057-dfr.md "$OUTK")"
-check "kind: architecture-feedback is feedback"  "feedback" "$(state_of 058-af.md "$OUTK")"
-check "kind: design-system-feedback is feedback" "feedback" "$(state_of 059-dsf.md "$OUTK")"
-check "kind: feedback claiming ready is invalid" "invalid"  "$(state_of 060-dfbad.md "$OUTK")"
+check "goal: new is new"                        "new"      "$(state_of 070-goalnew.md "$OUTK")"
+check "goal: accepted is goal, never READY"     "goal"     "$(state_of 071-goaltodo.md "$OUTK")"
+check "goal: active is active"                  "active"   "$(state_of 072-goalrun.md "$OUTK")"
+check "goal: done is done"                      "done"     "$(state_of 073-goaldone.md "$OUTK")"
+check "goal: claiming ready is invalid"         "invalid"  "$(state_of 074-goalbad.md "$OUTK")"
+check "status: new on a task"                   "new"      "$(state_of 065-newplain.md "$OUTK")"
+check "status: new on a signal"                 "new"      "$(state_of 067-newdf.md "$OUTK")"
+check "status: dep on a new item stays blocked" "blocked"  "$(state_of 068-waitnew.md "$OUTK")"
+check "signal: accepted is feedback, never READY" "feedback" "$(state_of 054-df.md "$OUTK")"
+check "signal: ready is feedback, never READY"  "feedback" "$(state_of 055-dfq.md "$OUTK")"
+check "signal: done is done"                    "done"     "$(state_of 056-dfd.md "$OUTK")"
+check "signal: a second channel behaves the same" "feedback" "$(state_of 058-af.md "$OUTK")"
+check "signal: claiming a task-only status is invalid" "invalid" "$(state_of 060-dfbad.md "$OUTK")"
+check "signal: rejected is done (resolution carries the ending)" "done" "$(state_of 061-rejected.md "$OUTK")"
+check "signal: dep on a rejected signal is READY" "READY"  "$(state_of 062-waitrej.md "$OUTK")"
 ERRK="$(hero_ready_items "$W" 2>&1 >/dev/null)"
-printf '%s' "$ERRK" | grep -q "unrecognized status 'ready'.*kind: goal"
-check "kind: goal bad status names the goal enum" "0" "$?"
-printf '%s' "$ERRK" | grep -q "unrecognized status 'ready'.*kind: design-feedback"
-check "kind: feedback bad status names its own enum" "0" "$?"
+printf '%s' "$ERRK" | grep -q "unrecognized status 'ready'.*new/accepted/active/done/dropped"
+check "goal: bad status names the goal enum"    "0" "$?"
+printf '%s' "$ERRK" | grep -q "060-dfbad.md has unrecognized status 'committed'"
+check "signal: bad status names its own enum"   "0" "$?"
 
-# ---------- goal coverage ----------------------------------------------------
+# ---------- shape ------------------------------------------------------------
 #
-# `wayfare next` walks goals, never items, so a planned build item outside every
-# open goal is never handed out. It sits READY until someone runs `do N` by
-# hand. Sync's goals stage groups every planned item; the warning is the only
-# thing that reports the stage having been skipped or cut short.
-mkdir -p "$TMP/cov/.plans"; C="$TMP/cov/.plans"
-cat > "$C/001-in.md" <<'ITEM'
----
-id: 1
-kind: feature
-title: Covered by open goal
-status: ready
-depends_on: []
----
-ITEM
-cat > "$C/002-out.md" <<'ITEM'
----
-id: 2
-kind: feature
-title: Nobody covers me
-status: ready
-depends_on: []
----
-ITEM
-cat > "$C/003-block.md" <<'ITEM'
----
-id: 3
-kind: polish
-title: Covered via block-form covers
-status: ready
-depends_on: []
----
-ITEM
-cat > "$C/004-donegoal.md" <<'ITEM'
----
-id: 4
-kind: bug
-title: Only a done goal covers me
-status: ready
-depends_on: []
----
-ITEM
-cat > "$C/005-todo.md" <<'ITEM'
----
-id: 5
-kind: feature
-title: Unplanned, so not expected in a goal yet
-status: todo
-depends_on: []
----
-ITEM
-cat > "$C/006-impl.md" <<'ITEM'
----
-id: 6
-kind: feature
-title: Mid-flight and uncovered
-status: implementing
-depends_on: []
----
-ITEM
-cat > "$C/007-rev.md" <<'ITEM'
----
-id: 7
-kind: feature
-title: In review, covered only by a new goal
-status: reviewing
-depends_on: []
----
-ITEM
-cat > "$C/008-ws.md" <<'ITEM'
----
-id: 8
-kind: feature
-title: Named only inside a two-token covers entry
-status: ready
-depends_on: []
----
-ITEM
-cat > "$C/009-commit.md" <<'ITEM'
----
-id: 9
-kind: feature
-title: Committed on a branch no goal owns
-status: committed
-depends_on: []
----
-ITEM
-cat > "$C/013-newgoal.md" <<'ITEM'
----
-id: 13
-kind: goal
-title: Untriaged goal
-status: new
-depends_on: []
-covers: [7]
----
-ITEM
-cat > "$C/014-wsgoal.md" <<'ITEM'
----
-id: 14
-kind: goal
-title: Goal with a malformed covers entry
-status: todo
-depends_on: []
-covers:
-  - 8 99
----
-ITEM
-cat > "$C/010-goal.md" <<'ITEM'
----
-id: 10
-kind: goal
-title: Open goal
-status: todo
-depends_on: []
-covers: [1]
----
-ITEM
-cat > "$C/011-goal.md" <<'ITEM'
----
-id: 11
-kind: goal
-title: Active goal, block-form covers
-status: active
-depends_on: []
-covers:
-  - "3"
----
-ITEM
-cat > "$C/012-goal.md" <<'ITEM'
----
-id: 12
-kind: goal
-title: Done goal
-status: done
-depends_on: []
-covers: [4]
----
-ITEM
-check "covers: inline form parses" "1" "$(hero_item_covers "$C/010-goal.md")"
-check "covers: block form parses, quotes stripped" "3" "$(hero_item_covers "$C/011-goal.md")"
-ERRC="$(hero_ready_items "$C" 2>&1 >/dev/null)"
-printf '%s' "$ERRC" | grep -q "002-out.md is ready and no open goal covers it"
-check "covers: uncovered ready item warns" "0" "$?"
-printf '%s' "$ERRC" | grep -q "004-donegoal.md is ready and no open goal covers it"
-check "covers: a done goal's covers do not count" "0" "$?"
-printf '%s' "$ERRC" | grep -q "001-in.md"
-check "covers: covered item is silent" "1" "$?"
-printf '%s' "$ERRC" | grep -q "003-block.md"
-check "covers: block-form cover is silent" "1" "$?"
-printf '%s' "$ERRC" | grep -q "005-todo.md"
-check "covers: unplanned todo item is not expected covered" "1" "$?"
-# The mid-flight arms `continue` out of the listing loop; the check has to sit
-# above them or "ready or further" silently means "ready".
-printf '%s' "$ERRC" | grep -q "006-impl.md is implementing and no open goal covers it"
-check "covers: uncovered implementing item warns" "0" "$?"
-printf '%s' "$ERRC" | grep -q "007-rev.md is reviewing and no open goal covers it"
-check "covers: a new goal's covers do not count" "0" "$?"
-printf '%s' "$ERRC" | grep -q "008-ws.md is ready and no open goal covers it"
-check "covers: a two-token covers entry covers nothing" "0" "$?"
-printf '%s' "$ERRC" | grep -q "009-commit.md is committed and no open goal covers it"
-check "covers: uncovered committed item warns as an abandoned branch" "0" "$?"
-printf '%s' "$ERRC" | grep -q "014-wsgoal.md covers '8 99', which is not one id"
-check "covers: a two-token covers entry warns" "0" "$?"
-OUTC="$(hero_ready_items "$C" 2>/dev/null)"
-check "covers: uncovered item still lists READY" "READY" "$(state_of 002-out.md "$OUTC")"
-check "covers: uncovered implementing item still lists active" "active" "$(state_of 006-impl.md "$OUTC")"
-# A delivered feedback item is TERMINAL, so dependents on it must unblock,
-# otherwise a feature waiting on an upstream answer blocks forever.
-item 061-waitdf.md 61 "Waits on delivered feedback" "todo" "[56]"
-item 062-waitrej.md 62 "Waits on rejected feedback" "todo" "[57]"
-# The terminal-state widening is scoped to the three real feedback kinds. An
-# UNKNOWN kind claiming `delivered` lists as invalid (plain enum has no such
-# status), so counting it terminal would be a split-brain: invisible on the
-# listing, yet silently unblocking its dependents.
-item 063-fakedeliv.md 63 "Unknown kind claiming delivered" "delivered" "[]" "vibes-feedback"
-item 064-waitfake.md 64 "Waits on the fake" "todo" "[63]"
-# The hole the old kind-invalidation existed to close: an unknown kind must
-# not reach READY through ANY status. `todo` → backlog is tested above; `ready`
-# is the arm a "simplification" of the class gate would most likely open.
-item 069-badkindready.md 69 "Typo kind claiming ready" "ready" "[]" "features"
-# `hardening`, the kind behind the nine-invisible-items incident, rides the
-# plain enum: todo is READY, ready is invalid (no skipping the ready-mark).
-item 075-hard.md 75 "Hardening task" "todo" "[]" "hardening"
-item 076-hardready.md 76 "Hardening claiming ready" "ready" "[]" "hardening"
-# Unknown kinds ride the FULL plain enum, and can complete: a done one must
-# unblock its dependents, or the fallback re-hides finished work.
-item 077-unkdone.md 77 "Unknown kind, done" "done" "[]" "features"
-item 078-waitunk.md 78 "Waits on unknown done" "todo" "[77]"
-item 079-unkprog.md 79 "Unknown kind, in flight" "in-progress" "[]" "features"
-# `queued` belongs to the feedback enum only; hoisting it to a wildcard arm
-# would let a feature marked queued fall off the roadmap count as `feedback`.
-item 080-plainq.md 80 "Plain claiming queued" "queued" "[]"
-item 081-featq.md 81 "Feature claiming queued" "queued" "[]" "feature"
-item 082-goalq.md 82 "Goal claiming queued" "queued" "[]" "goal"
-# Build-enum words on feedback and goal items must be INVALID, not aliased. A
-# feedback item at in-progress printing `active` is byte-identical to a
-# feature mid-build, the row has no kind, and tier 1 would build it.
-item 083-fbprog.md 83 "Feedback claiming in-progress" "in-progress" "[]" "design-feedback"
-item 084-fbplan.md 84 "Feedback claiming planning" "planning" "[]" "design-feedback"
-item 085-fbdone.md 85 "Feedback claiming done" "done" "[]" "design-feedback"
-item 086-waitfbdone.md 86 "Waits on feedback claiming done" "todo" "[85]"
-item 087-goalplan.md 87 "Goal claiming planning" "planning" "[]" "goal"
-# done_ids must apply the same alphabet gate as the listing: an item printed
-# `invalid` for a malformed kind must not unblock its dependents from the
-# shadows.
-item 088-donewskind.md 88 "Done with whitespace kind" "done" "[]" "foo bar"
-item 089-waitws.md 89 "Waits on the malformed one" "todo" "[88]"
-# id-less item claiming done: invalid, never `done`, a done row that is not
-# in done_ids is a split-brain (listed finished, dependents blocked forever).
-printf -- '---\ntitle: No id, claims done\nstatus: done\ndepends_on: []\n---\n' > "$W/090-noiddone.md"
-# A dependency that is merely queued is not done.
-item 091-waitq.md 91 "Waits on queued feedback" "todo" "[55]"
-OUTK2="$(hero_ready_items "$W" 2>/dev/null)"
-check "kind: unknown kind claiming ready is invalid" "invalid" "$(state_of 069-badkindready.md "$OUTK2")"
-check "kind: hardening todo is READY"             "READY"   "$(state_of 075-hard.md "$OUTK2")"
-check "kind: hardening claiming ready is invalid" "invalid" "$(state_of 076-hardready.md "$OUTK2")"
-check "kind: unknown kind done is done"           "done"    "$(state_of 077-unkdone.md "$OUTK2")"
-check "kind: dep on unknown done is READY"        "READY"   "$(state_of 078-waitunk.md "$OUTK2")"
-check "kind: unknown kind in-progress is active"  "active"  "$(state_of 079-unkprog.md "$OUTK2")"
-check "kind: plain claiming queued is invalid"    "invalid" "$(state_of 080-plainq.md "$OUTK2")"
-check "kind: feature claiming queued is invalid"  "invalid" "$(state_of 081-featq.md "$OUTK2")"
-check "kind: goal claiming queued is invalid"     "invalid" "$(state_of 082-goalq.md "$OUTK2")"
-check "kind: feedback in-progress is invalid"     "invalid" "$(state_of 083-fbprog.md "$OUTK2")"
-check "kind: feedback planning is invalid"        "invalid" "$(state_of 084-fbplan.md "$OUTK2")"
-check "kind: feedback done is invalid"            "invalid" "$(state_of 085-fbdone.md "$OUTK2")"
-check "kind: dep on feedback-done stays blocked"  "blocked" "$(state_of 086-waitfbdone.md "$OUTK2")"
-check "kind: goal planning is invalid"            "invalid" "$(state_of 087-goalplan.md "$OUTK2")"
-check "kind: done with malformed kind is invalid" "invalid" "$(state_of 088-donewskind.md "$OUTK2")"
-check "kind: dep on it stays blocked (done_ids gated)" "blocked" "$(state_of 089-waitws.md "$OUTK2")"
-check "kind: id-less done is invalid, not done"   "invalid" "$(state_of 090-noiddone.md "$OUTK2")"
-check "kind: dep on queued feedback stays blocked" "blocked" "$(state_of 091-waitq.md "$OUTK2")"
-ERRK2="$(hero_ready_items "$W" 2>&1 >/dev/null)"
-printf '%s' "$ERRK2" | grep -q "069-badkindready.md has unrecognized status 'ready'.*new/planning/todo/in-progress/done"
-check "kind: unknown+ready names the plain enum on stderr" "0" "$?"
-printf '%s' "$ERRK2" | grep -q "048-badkind.md has unrecognized kind 'features'.*never handed out READY"
-check "kind: fallback warning says never READY"   "0" "$?"
-check "kind: dep on delivered feedback is READY" "READY" "$(state_of 061-waitdf.md "$OUTK2")"
-check "kind: dep on rejected feedback is READY"  "READY" "$(state_of 062-waitrej.md "$OUTK2")"
-check "kind: unknown kind claiming delivered is invalid" "invalid" "$(state_of 063-fakedeliv.md "$OUTK2")"
-check "kind: dep on it stays blocked"            "blocked" "$(state_of 064-waitfake.md "$OUTK2")"
+# `shape` decides what a DoD asserts and nothing about readiness, so a wrong
+# value cannot misroute an item. It can only have the DoD written against the
+# wrong test, silently — which is the whole value of the field gone. Warned,
+# never invalidated: the row itself is still correct.
 
-# Clean up so later sections' listings aren't polluted by these fixtures.
-rm -f "$W"/03[0-9]-*.md "$W"/04[0-9]-*.md "$W"/05[0-9]-*.md "$W"/06[0-9]-*.md "$W"/07[0-9]-*.md "$W"/08[0-9]-*.md "$W"/09[0-9]-*.md
+mkdir -p "$TMP/shape/.plans/items"; SH="$TMP/shape/.plans"; plan "$SH"
+shitem() { # file id type status [shape]
+  {
+    printf -- '---\nid: %s\ntype: %s\ntitle: item %s\nstatus: %s\ndepends_on: []\n' "$2" "$3" "$2" "$4"
+    [ -n "${5:-}" ] && printf 'shape: %s\n' "$5"
+    printf -- '---\n'
+  } > "$SH/items/$1"
+}
+shitem 001-ok.md    1 task ready story
+shitem 002-docs.md  2 task ready docs
+shitem 003-typo.md  3 task ready storey
+shitem 004-none.md  4 task ready
+shitem 005-goal.md  5 goal accepted
+shitem 006-goalsh.md 6 goal accepted story
+OUTSH="$(hero_ready_items "$SH" 2>/dev/null)"
+ERRSH="$(hero_ready_items "$SH" 2>&1 >/dev/null)"
+
+# `docs` is the sixth shape: prose about code that the code has outgrown.
+check "shape: docs is recognized"       "READY" "$(state_of 002-docs.md "$OUTSH")"
+# Match on `shape`, not the bare filename: these items also trip the
+# goal-membership warning, which is a different finding and expected here.
+printf '%s' "$ERRSH" | grep -q "002-docs.md.*shape"
+check "shape: docs warns about nothing"  "1" "$?"
+# A wrong shape still lists, and still lists as READY: it is a DoD problem,
+# not a routing one, and hiding the row would lose the item.
+check "shape: a typo still lists READY"  "READY" "$(state_of 003-typo.md "$OUTSH")"
+printf '%s' "$ERRSH" | grep -q "unrecognized shape 'storey'"
+check "shape: a typo warns on stderr"    "0" "$?"
+check "shape: a task with none still lists" "READY" "$(state_of 004-none.md "$OUTSH")"
+printf '%s' "$ERRSH" | grep -q "004-none.md is a task with no shape"
+check "shape: a missing shape warns"     "0" "$?"
+printf '%s' "$ERRSH" | grep -q "001-ok.md.*shape"
+check "shape: a valid shape is silent"   "1" "$?"
+# shape belongs to tasks; a goal carrying one is a store defect worth saying.
+printf '%s' "$ERRSH" | grep -q "005-goal.md.*shape"
+check "shape: a goal without one is silent" "1" "$?"
+printf '%s' "$ERRSH" | grep -q "006-goalsh.md is a goal and carries shape"
+check "shape: a goal carrying one warns" "0" "$?"
+
+# ---------- ideas: the parking lot -------------------------------------------
+#
+# An idea is not work. The two rules that keep it out of the roadmap are the
+# ones with a silent failure behind them: listed as anything but `idea` it
+# mixes into the actionable rows, and depended on it blocks a real item
+# forever behind something nobody decided to do.
+
+mkdir -p "$TMP/ideas/.plans/items"; I="$TMP/ideas/.plans"; plan "$I"
+iitem() { # file id status [type]
+  printf -- '---\nid: %s\ntype: %s\ntitle: idea %s\nstatus: %s\n---\n' \
+    "$2" "${4:-idea}" "$2" "$3" > "$I/items/$1"
+}
+iitem 001-jotted.md   1 new
+iitem 002-parked.md   2 accepted
+iitem 003-promoted.md 3 "done"
+iitem 004-binned.md   4 dropped
+iitem 005-bad.md      5 ready
+printf -- '---\nid: 6\ntype: task\nshape: story\ntitle: Depends on an idea\nstatus: ready\ndepends_on: [2]\n---\n' > "$I/items/006-dep.md"
+printf -- '---\nid: 7\ntype: task\nshape: story\ntitle: Depends on a promoted idea\nstatus: ready\ndepends_on: [3]\n---\n' > "$I/items/007-depdone.md"
+OUTI="$(hero_ready_items "$I" 2>/dev/null)"
+ERRI="$(hero_ready_items "$I" 2>&1 >/dev/null)"
+
+# `*:new` would otherwise swallow `idea:new` and print a parked thought as an
+# untriaged item, which is exactly what the collapse exists to avoid.
+check "idea: new lists as idea, not new"      "idea"    "$(state_of 001-jotted.md "$OUTI")"
+check "idea: accepted lists as idea"          "idea"    "$(state_of 002-parked.md "$OUTI")"
+check "idea: promoted lists as done"          "done"    "$(state_of 003-promoted.md "$OUTI")"
+check "idea: dropped lists as dropped"        "dropped" "$(state_of 004-binned.md "$OUTI")"
+# An idea has no `ready` state; claiming one must be loud, never READY.
+check "idea: claiming ready is invalid"       "invalid" "$(state_of 005-bad.md "$OUTI")"
+printf '%s' "$ERRI" | grep -q "unrecognized status 'ready'.*new/accepted/done/dropped"
+check "idea: bad status names the idea enum"  "0" "$?"
+
+# The dependency rule. An idea cannot be built, so nothing will ever mark it
+# done that way: the block is permanent and reads as ordinary waiting.
+check "idea: a dependent of an open idea is blocked" "blocked" "$(state_of 006-dep.md "$OUTI")"
+printf '%s' "$ERRI" | grep -q "006-dep.md depends_on '2', which is an idea"
+check "idea: the dependency is named on stderr" "0" "$?"
+# Still a defect after promotion: the dependent was written against the
+# parking-lot entry, not against the work it became.
+check "idea: a dependent of a promoted idea is also blocked" "blocked" "$(state_of 007-depdone.md "$OUTI")"
+printf '%s' "$ERRI" | grep -q "007-depdone.md depends_on '3', which is an idea"
+check "idea: a promoted idea's dependency still warns" "0" "$?"
+
+# ---------- typed arms, self-deps, typeless done, channel, resolution --------
+
+OUTW="$(hero_ready_items "$W" 2>/dev/null)"
+ERRW="$(hero_ready_items "$W" 2>&1 >/dev/null)"
+check "goal at planning is invalid, not plan"     "invalid" "$(state_of 075-goalplan.md "$OUTW")"
+check "signal at planning is invalid, not plan"   "invalid" "$(state_of 063-sigplan.md "$OUTW")"
+check "self-dependency lists blocked"             "blocked" "$(state_of 051-self.md "$OUTW")"
+printf '%s' "$ERRW" | grep -q "051-self.md depends_on itself"
+check "self-dependency is named on stderr"        "0" "$?"
+check "typeless done lists invalid"               "invalid" "$(state_of 052-notype.md "$OUTW")"
+check "typeless done does not satisfy a dependency" "blocked" "$(state_of 053-waitnotype.md "$OUTW")"
+printf '%s' "$ERRW" | grep -q "064-badchan.md has unrecognized channel 'desgn'"
+check "bad channel warns"                         "0" "$?"
+check "bad channel still lists as feedback"       "feedback" "$(state_of 064-badchan.md "$OUTW")"
+printf '%s' "$ERRW" | grep -q "066-earlyres.md carries resolution 'shipped' at status 'active'"
+check "resolution before done warns"              "0" "$?"
+check "resolution before done still lists active" "active" "$(state_of 066-earlyres.md "$OUTW")"
+iitem 008-actidea.md 8 active
+OUTI="$(hero_ready_items "$I" 2>/dev/null)"
+check "idea at active is invalid, not active"     "invalid" "$(state_of 008-actidea.md "$OUTI")"
+
+# hero_plan_field reads one level into a block with a dotted key; a bare
+# block key prints nothing, which is what made every drift scan see no head.
+mkdir -p "$TMP/pf/items"
+printf -- '---\nschema: 1\nnext_id: 4\nsource:\n  root: .\n  head: abc123\ntarget:\n  project: p1\n---\n' > "$TMP/pf/PLAN.md"
+check "plan field: scalar"         "4"      "$(hero_plan_field next_id "$TMP/pf")"
+check "plan field: nested head"    "abc123" "$(hero_plan_field source.head "$TMP/pf")"
+check "plan field: nested project" "p1"     "$(hero_plan_field target.project "$TMP/pf")"
+check "plan field: block key is empty" ""   "$(hero_plan_field source "$TMP/pf")"
+
+# The count the roadmap view collapses to: open ideas only.
+check "idea count: open ideas only"  "2" "$(hero_idea_count "$I")"
+check "idea count: no store is 0"    "0" "$(hero_idea_count "$TMP/definitely-not-a-store")"
+
+# An idea must never be credited as goal coverage, or a parked thought
+# suppresses the uncovered finding for ground nobody has planned.
+printf '%s' "$ERRI" | grep -q "001-jotted.md is .* and no open goal"
+check "idea: never warned about as an uncovered task" "1" "$?"
+
+# ---------- goal membership (parent, not covers) ------------------------------
+#
+# `wayfare next` walks goals, never items, so a planned task outside every
+# open goal is never handed out: it sits READY until someone runs `do N` by
+# hand. Membership is ONE edge in ONE direction now, so two goals claiming one
+# task is not representable and needs no defect check.
+
+mkdir -p "$TMP/cov/.plans/items"; C="$TMP/cov/.plans"; plan "$C"
+mkitem() { # file id type status [parent] [rank]
+  {
+    printf -- '---\nid: %s\ntype: %s\ntitle: item %s\nstatus: %s\ndepends_on: []\n' "$2" "$3" "$2" "$4"
+    [ "$3" = task ] && printf 'shape: story\n'                  # else the no-shape warning fires
+    [ -n "${5:-}" ] && printf 'parent: %s\n' "$5"
+    [ -n "${6:-}" ] && printf 'rank: %s\n' "$6"
+    printf -- '---\n'
+  } > "$C/items/$1"
+}
+mkitem 001-in.md     1 task ready     10 2
+mkitem 002-out.md    2 task ready
+mkitem 003-second.md 3 task ready     10 1
+mkitem 004-donegoal.md 4 task ready   12
+mkitem 005-todo.md   5 task accepted
+mkitem 006-impl.md   6 task active
+mkitem 007-rev.md    7 task review    13
+mkitem 009-commit.md 9 task committed
+mkitem 010-goal.md  10 goal accepted
+mkitem 012-goal.md  12 goal "done"
+mkitem 013-newgoal.md 13 goal "new"
+
+# Members come from `parent`, ordered by `rank`: item 3 ranks 1, item 1 ranks 2.
+check "members: derived from parent, ordered by rank" "3
+1" "$(hero_goal_members 10 "$C")"
+check "members: a goal with none prints nothing" "" "$(hero_goal_members 99 "$C")"
+check "members: an empty GOAL_ID is refused, not every orphan" "2" "$(hero_goal_members "" "$C" 2>/dev/null; echo $?)"
+
+ERRC="$(hero_ready_items "$C" 2>&1 >/dev/null)"
+printf '%s' "$ERRC" | grep -q "002-out.md is ready and no open goal has it as a member"
+check "members: uncovered ready task warns" "0" "$?"
+printf '%s' "$ERRC" | grep -q "006-impl.md is active and no open goal"
+check "members: uncovered active task warns" "0" "$?"
+# Only an OPEN goal counts: a `new` goal is untriaged and a `done` one is
+# finished, so neither may silence the warning for its members.
+printf '%s' "$ERRC" | grep -q "007-rev.md is review and no open goal"
+check "members: a new goal does not count as cover" "0" "$?"
+printf '%s' "$ERRC" | grep -q "004-donegoal.md is ready and no open goal"
+check "members: a done goal does not count as cover" "0" "$?"
+printf '%s' "$ERRC" | grep -q "009-commit.md is committed and no open goal"
+check "members: uncovered committed task warns" "0" "$?"
+# An `accepted` task is not planned yet, so it is not expected in a goal.
+printf '%s' "$ERRC" | grep -q "005-todo.md"
+check "members: an accepted task is not warned about" "1" "$?"
+# A member of an open goal is silent.
+printf '%s' "$ERRC" | grep -q "001-in.md"
+check "members: a covered task is not warned about" "1" "$?"
+OUTC="$(hero_ready_items "$C" 2>/dev/null)"
+check "members: uncovered task still lists READY" "READY" "$(state_of 002-out.md "$OUTC")"
+check "members: uncovered active task still lists active" "active" "$(state_of 006-impl.md "$OUTC")"
+
 
 # ---------- hero_work_store migration ---------------------------------------
 #
@@ -1081,31 +1047,50 @@ check "self-review count: gh failure returns non-zero" "no" "$([ $? -eq 0 ] && e
 # The workflow carries its own copy of the marker; the two must agree.
 check "self-review marker matches the workflow's" "yes" "$(grep -q "$HERO_SELF_REVIEW_MARKER" "$(dirname "$0")/../.github/workflows/auto-approve.yaml" && echo yes || echo no)"
 
-# ---------- bug kind, suspended, the inbox, local skills -------------------
-# `bug` rides the build enum like polish; `suspended` (docs/MESSAGES.md) is
-# never READY and never done, so a dependent stays blocked while the sibling's
-# answer is open.
+# ---------- shape, suspension, the inbox, local skills ---------------------
+# `shape` decides what a task's Definition of Done asserts and NOTHING about
+# readiness, so a defect and a story list identically. Suspension is a FLAG
+# (docs/PLAN.md): the item keeps its status and `awaiting` is what suspends
+# it, so a suspended item is never READY and never satisfies a dependency
+# while the sibling's answer is open.
 W3="$TMP/w3/.plans"
-mkdir -p "$W3/inbox"
+mkdir -p "$W3/items" "$W3/inbox"
 W="$W3"
-item 090-bug.md 90 "Badge clips at 320px" "ready" "[]" "bug"
-item 091-bugtodo.md 91 "Untriaged bug" "todo" "[]" "bug"
-# Written by hand: item() has no slot for the awaiting field, and the field
-# must sit INSIDE the frontmatter for the reader to see it.
-printf -- '---\nid: 92\nkind: feature\ntitle: Waiting on design-system\nstatus: suspended\nsuspended_at: 2026-09-01\nawaiting:\n  - m-7f3a9c\n  - m-c0fbd5\ndepends_on: []\n---\n' > "$W3/092-susp.md"
-printf -- '---\nid: 94\nkind: feature\ntitle: Suspended with nothing to wait for\nstatus: suspended\ndepends_on: []\n---\n' > "$W3/094-noawait.md"
-item 093-dep.md 93 "Blocked on the wait" "ready" "[92]" "feature"
+plan "$W3"
+sitem() { # file id title status shape
+  printf -- '---\nid: %s\ntype: task\nshape: %s\ntitle: %s\nstatus: %s\ndepends_on: []\n---\n' \
+    "$2" "$5" "$3" "$4" > "$W3/items/$1"
+}
+sitem 090-bug.md 90 "Badge clips at 320px" "ready" "defect"
+sitem 091-bugtodo.md 91 "Untriaged defect" "accepted" "defect"
+sitem 095-visual.md 95 "Header spacing" "ready" "visual"
+sitem 096-dep.md 96 "Bump lodash" "ready" "dependency"
+# Written by hand: sitem has no slot for awaiting, and the field must sit
+# INSIDE the frontmatter for the reader to see it.
+printf -- '---\nid: 92\ntype: task\ntitle: Waiting on design-system\nstatus: review\nsuspended_at: 2026-09-01\nawaiting:\n  - m-7f3a9c\n  - m-c0fbd5\ndepends_on: []\n---\n' > "$W3/items/092-susp.md"
+# No `awaiting` at all: nothing suspends it, so it simply lists at its status.
+# The old schema needed a `suspended` status here and an `invalid` row when
+# the two disagreed; with the flag there is no pair that can disagree.
+printf -- '---\nid: 94\ntype: task\ntitle: Nothing to wait for\nstatus: ready\nawaiting: []\ndepends_on: []\n---\n' > "$W3/items/094-noawait.md"
+# A TERMINAL item is not waiting on anything, whatever stale ids it carries.
+printf -- '---\nid: 97\ntype: task\ntitle: Shipped, stale awaiting\nstatus: done\nawaiting:\n  - m-old\ndepends_on: []\n---\n' > "$W3/items/097-doneawait.md"
+printf -- '---\nid: 93\ntype: task\ntitle: Blocked on the wait\nstatus: ready\ndepends_on: [92]\n---\n' > "$W3/items/093-dep.md"
+printf -- '---\nid: 98\ntype: task\ntitle: Waiting on shipped work\nstatus: ready\ndepends_on: [97]\n---\n' > "$W3/items/098-afterdone.md"
 OUT3="$(hero_ready_items "$W3" 2>/dev/null)"
-check "kind: bug ready is READY"                 "READY"     "$(state_of 090-bug.md "$OUT3")"
-check "kind: bug todo is backlog"                "backlog"   "$(state_of 091-bugtodo.md "$OUT3")"
-check "suspended lists as suspended"             "suspended" "$(state_of 092-susp.md "$OUT3")"
+check "shape: a defect at ready is READY"        "READY"     "$(state_of 090-bug.md "$OUT3")"
+check "shape: a defect at accepted is backlog"   "backlog"   "$(state_of 091-bugtodo.md "$OUT3")"
+check "shape: visual lists like any other task"  "READY"     "$(state_of 095-visual.md "$OUT3")"
+check "shape: dependency lists like any other task" "READY"  "$(state_of 096-dep.md "$OUT3")"
+check "suspended: awaiting overrides the status row" "suspended" "$(state_of 092-susp.md "$OUT3")"
 # Block-form awaiting, two ids, and the age: the single-line reader printed
 # the block form as empty, which rendered a real wait as one with nothing to
 # wait for.
-check "suspended row names count, ids and age"    "yes"       "$(printf '%s' "$OUT3" | grep -q 'awaiting 2: m-7f3a9c m-c0fbd5 — since 2026-09-01' && echo yes || echo no)"
-check "suspended with no awaiting is invalid"     "invalid"   "$(state_of 094-noawait.md "$OUT3")"
-check "awaiting parser: block form"               "m-7f3a9c m-c0fbd5" "$(hero_item_awaiting "$W3/092-susp.md" | tr '\n' ' ' | sed 's/ $//')"
-check "a dependent of a suspended item is blocked" "blocked" "$(state_of 093-dep.md "$OUT3")"
+check "suspended: row names count, ids and age"  "yes"       "$(printf '%s' "$OUT3" | grep -q 'awaiting 2: m-7f3a9c m-c0fbd5 — since 2026-09-01' && echo yes || echo no)"
+check "suspended: empty awaiting leaves the status alone" "READY" "$(state_of 094-noawait.md "$OUT3")"
+check "suspended: a terminal item is never suspended" "done" "$(state_of 097-doneawait.md "$OUT3")"
+check "suspended: a done item with stale awaiting still unblocks" "READY" "$(state_of 098-afterdone.md "$OUT3")"
+check "awaiting parser: block form"               "m-7f3a9c m-c0fbd5" "$(hero_item_awaiting "$W3/items/092-susp.md" | tr '\n' ' ' | sed 's/ $//')"
+check "suspended: a dependent stays blocked"      "blocked"   "$(state_of 093-dep.md "$OUT3")"
 
 printf -- '---\nmsg_id: m-1\ntype: bug\nstatus: new\n---\n' > "$W3/inbox/m-1.md"
 printf -- '---\nmsg_id: m-2\ntype: ask\nstatus: answered\n---\n' > "$W3/inbox/m-2.md"

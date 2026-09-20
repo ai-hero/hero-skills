@@ -1,5 +1,5 @@
 # Hero Configuration
-<!-- This file configures hero-skills. See hero-skills:init-hero to update. -->
+<!-- This file configures hero-skills. See hero-skills:wayfare init to update. -->
 
 ## Project Management
 
