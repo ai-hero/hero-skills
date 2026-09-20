@@ -155,17 +155,45 @@ Definition of Done has to assert, and how that assertion is verified.
 | `visual` | exempt | measured values at named viewports | rendering at those viewports and measuring |
 | `defect` | exempt | the repro no longer reproduces, pinned by a test | running the test |
 | `dependency` | exempt | the bump merged, the alert closed, the deploy healthy | the PR and the platform |
+| `docs` | exempt | prose that describes code now describes what the code does, or is gone | reading the prose against the code it describes |
 
 **The slice rule** (`hero-skills:wayfare`, *Slices, not layers*) is that a
 `story` task is Simple, Lovable and Complete: a vertical cut through every
 layer it needs, shaped `AS_A user I_CAN do X SO_THAT Y`, never a layer of one.
-The four exemptions are narrow and all for the same reason: the surface
+The five exemptions are narrow and all for the same reason: the surface
 already ships, so there is no story left to cut. **A task of any exempt shape
 that could have been written as a user story was given the wrong shape**, and
 that is the finding, not the exemption.
 
 `shape: dependency` is the only one that skips planning outright: the bot's
 PR is the plan.
+
+### Why `docs` is its own shape
+
+Prose about code is the one thing none of the other four verifications
+reach. A stale comment cannot be pinned by a test, which is what makes it a
+poor `defect`; it asserts nothing structural, which is what makes it a poor
+`structural`; and there is nothing to render. It is checked by reading the
+prose next to the code it claims to describe, and by nothing else.
+
+It matters more than its size suggests, because **prose about code is read
+as memory.** An agent picking up a file takes its comments and its docs as
+statements of fact about the code, the same way a person does. A comment
+that was true when written and is false now does not degrade gracefully:
+
+> An outdated comment is worse than none, because it gets believed.
+
+That rule is this plugin's own (`.claude/rules/comments.md`); a repo that
+states its own comment standard wins over it. Either way it is the reason
+the shape exists. A wrong comment sends the next reader — human
+or agent — to the wrong conclusion with confidence, and the diff that
+introduced the drift looks clean, because nothing in it touched the comment.
+
+A `docs` task covers comments, docstrings, README and `docs/` prose, and the
+managed sections of `AGENTS.md`. Its Definition of Done has one line per
+claim corrected or deleted. **Deleting is a valid fix and often the right
+one**: a comment that no longer names a trap is noise, and noise outlives
+its accuracy.
 
 ## Channel: where a signal goes
 
@@ -497,7 +525,7 @@ the folder (`docs/MESSAGES.md`), and the fleet register at `.fleet/`.
 | `kind: architecture-feedback` | `type: signal`, `channel: architecture` |
 | `kind: goal` | `type: goal` |
 | no `kind` (legacy) | `type: task`, `shape: story` |
-| (nothing) | `type: idea` — no old kind maps to it; ideas start with schema 1 |
+| (nothing) | `type: idea` and `shape: docs` — no old kind maps to either; both start with schema 1 |
 | `status: todo` | `status: accepted` |
 | `status: implementing` | `status: active` |
 | `status: reviewing` | `status: review` |

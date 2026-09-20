@@ -179,6 +179,73 @@ line, a `Trivy: skipped (unavailable)` or `Docker/Scout: skipped
 `unverified` row in this run's report (a part that ran on one scanner is
 partial, not clean), never "clean".
 
+**The `comments` stage: prose that has gone false about the code.** Runs
+after `harden`, before `compliance`, in both modes.
+
+`review-pr` already runs `pr-review-toolkit:comment-analyzer` over a PR's
+diff, which catches a comment that was wrong *when written*. It cannot catch
+the case this stage exists for: a comment that was **correct when written**,
+and is false now because the code moved underneath it. Nothing touched the
+comment, so no diff ever showed it, and no review ever looked at it again.
+
+That matters because prose about code is read as memory. An agent opening a
+file takes its comments and its docs as statements of fact, and the
+consequence is the one this plugin's own comment rule states: *an outdated
+comment is worse than none, because it gets believed.* A wrong comment sends
+the next reader to the wrong conclusion with confidence.
+
+**Scope the scan to what moved.** Auditing every comment in the repo every
+round is unbounded and produces a backlog nobody drains. Comments in files
+untouched since the last round were already audited then, so the set is:
+
+```bash
+# The plan object's anchor is where the last round stopped looking. A first
+# run with no previous head audits nothing and says so — a one-time backfill
+# is a decision to take deliberately, not to have a sync spring on you.
+PREV=$(hero_plan_field 'source' | sed -n 's/.*head: //p')  # or read source.head directly
+[ -n "$PREV" ] && git diff --name-only "$PREV..HEAD" -- . || echo "NO_PREVIOUS_HEAD"
+```
+
+Two classes of drift, and the second is the one worth the stage:
+
+1. **Prose inside a changed file.** The comment sits next to code that moved.
+   Cheap to find: hand the changed files to
+   `pr-review-toolkit:comment-analyzer` with the range, and ask it for
+   comments the current code contradicts.
+2. **Prose elsewhere that describes changed code.** A README step, an
+   `AGENTS.md` section, a `docs/` page, or a comment in another file that
+   names a symbol, path, flag or exit code the change altered. This is the
+   half that rots invisibly, because the file holding the lie was never in
+   the diff. Find it by taking the symbols and paths the change touched and
+   searching the repo's prose for them, not by re-reading every doc.
+
+**Both classes produce `shape: docs` tasks** (`docs/PLAN.md`). Two findings
+route elsewhere and must not be filed here: prose that is wrong because the
+*code* is wrong is a `defect` task against the code, and prose about a
+sibling repo's surface is a message, not a task.
+
+**A comment that names no trap is a finding too.** The test is *would
+someone later undo this for a reason this comment prevents?*, and prose
+failing it is noise that will outlive its own accuracy. When the repo states
+its own comment rule — `.claude/rules/comments.md`, or whatever
+`AGENTS.md` points at — that rule wins over this one, and a round that
+applies a stricter standard than the repo asked for is filing taste as
+drift. Say which rule you applied.
+
+**Deleting is a valid fix and often the right one.** A round that only ever
+rewrites, never deletes, is growing the thing it was asked to prune.
+
+**One task per module or document, never per comment.** Fifty one-line items
+is a bug tracker, and nobody picks up the forty-ninth. Group a file cluster
+or a document into one task whose Definition of Done is the list of claims
+to correct or delete, each naming the code that disproves it.
+
+**It never gates coverage.** Like visual work, a `docs` task gets a
+`depends_on` naming what it must not jump, and is proposed after the coverage
+rows. A roadmap that spends its next three PRs on comment wording is one that
+has stopped shipping. And a file whose own task is still open needs no `docs`
+task: its drift belongs in that task's Definition of Done.
+
 **The `compliance` stage: this repo against the register.** The register
 has two halves: the generic baseline shipped with the plugin
 (`assets/compliance/`) and the fleet's overlay in the checkout FLEET.md

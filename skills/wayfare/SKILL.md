@@ -39,7 +39,7 @@ there.
 | Verb | What it does | Procedure |
 | --- | --- | --- |
 | `init` | Investigates the repo, writes `HERO.md` and the plan object `.plans/PLAN.md`, and migrates an old store on sight. In an empty directory it scaffolds first | `references/init.md`, `references/scaffold.md` |
-| `sync [CONTEXT]` | Reads the world and converges everything into `.plans/`: the architecture record, the design snapshot, the hardening audit, the compliance register, the dependency bots' PRs, the roadmap, and the goals over it | `references/sync.md` |
+| `sync [CONTEXT]` | Reads the world and converges everything into `.plans/`: the architecture record, the design snapshot, the hardening audit, prose that has gone false about the code, the compliance register, the dependency bots' PRs, the roadmap, and the goals over it | `references/sync.md` |
 | `sync ideas` | Walks the parked ideas and promotes, parks or bins each one. Only when asked — ideas are not re-triaged every round | `references/sync.md` |
 | `next` | Authorizes the next goal at a gate a person types, then runs its first turn | `references/goals.md` |
 | `do ID` | Advances one item as far as the gates allow, or runs one turn of one goal | `references/advancing.md` |
@@ -129,7 +129,7 @@ Progress:
 
 - [ ] 1. Step 0 above
 - [ ] 2. Inbox — triage `.plans/inbox/`, resume what the replies unblock
-- [ ] 3. Reconciliation lanes — design, architecture, design system, hardening, compliance, deps
+- [ ] 3. Reconciliation lanes — design, architecture, design system, hardening, comments, compliance, deps
 - [ ] 4. Visual pass — the shipped screens, per `references/shaping.md`
 - [ ] 5. Store defects — dangling deps, orphaned members, missing anchors
 - [ ] 6. Confirm the proposal table with the user, row by row

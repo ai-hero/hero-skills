@@ -683,6 +683,52 @@ check "goal: bad status names the goal enum"    "0" "$?"
 printf '%s' "$ERRK" | grep -q "060-dfbad.md has unrecognized status 'committed'"
 check "signal: bad status names its own enum"   "0" "$?"
 
+# ---------- shape ------------------------------------------------------------
+#
+# `shape` decides what a DoD asserts and nothing about readiness, so a wrong
+# value cannot misroute an item. It can only have the DoD written against the
+# wrong test, silently — which is the whole value of the field gone. Warned,
+# never invalidated: the row itself is still correct.
+
+mkdir -p "$TMP/shape/.plans/items"; SH="$TMP/shape/.plans"; plan "$SH"
+shitem() { # file id type status [shape]
+  {
+    printf -- '---\nid: %s\ntype: %s\ntitle: item %s\nstatus: %s\ndepends_on: []\n' "$2" "$3" "$2" "$4"
+    [ -n "${5:-}" ] && printf 'shape: %s\n' "$5"
+    printf -- '---\n'
+  } > "$SH/items/$1"
+}
+shitem 001-ok.md    1 task ready story
+shitem 002-docs.md  2 task ready docs
+shitem 003-typo.md  3 task ready storey
+shitem 004-none.md  4 task ready
+shitem 005-goal.md  5 goal accepted
+shitem 006-goalsh.md 6 goal accepted story
+OUTSH="$(hero_ready_items "$SH" 2>/dev/null)"
+ERRSH="$(hero_ready_items "$SH" 2>&1 >/dev/null)"
+
+# `docs` is the sixth shape: prose about code that the code has outgrown.
+check "shape: docs is recognized"       "READY" "$(state_of 002-docs.md "$OUTSH")"
+# Match on `shape`, not the bare filename: these items also trip the
+# goal-membership warning, which is a different finding and expected here.
+printf '%s' "$ERRSH" | grep -q "002-docs.md.*shape"
+check "shape: docs warns about nothing"  "1" "$?"
+# A wrong shape still lists, and still lists as READY: it is a DoD problem,
+# not a routing one, and hiding the row would lose the item.
+check "shape: a typo still lists READY"  "READY" "$(state_of 003-typo.md "$OUTSH")"
+printf '%s' "$ERRSH" | grep -q "unrecognized shape 'storey'"
+check "shape: a typo warns on stderr"    "0" "$?"
+check "shape: a task with none still lists" "READY" "$(state_of 004-none.md "$OUTSH")"
+printf '%s' "$ERRSH" | grep -q "004-none.md is a task with no shape"
+check "shape: a missing shape warns"     "0" "$?"
+printf '%s' "$ERRSH" | grep -q "001-ok.md.*shape"
+check "shape: a valid shape is silent"   "1" "$?"
+# shape belongs to tasks; a goal carrying one is a store defect worth saying.
+printf '%s' "$ERRSH" | grep -q "005-goal.md.*shape"
+check "shape: a goal without one is silent" "1" "$?"
+printf '%s' "$ERRSH" | grep -q "006-goalsh.md is a goal and carries shape"
+check "shape: a goal carrying one warns" "0" "$?"
+
 # ---------- ideas: the parking lot -------------------------------------------
 #
 # An idea is not work. The two rules that keep it out of the roadmap are the
@@ -747,6 +793,7 @@ mkdir -p "$TMP/cov/.plans/items"; C="$TMP/cov/.plans"; plan "$C"
 mkitem() { # file id type status [parent] [rank]
   {
     printf -- '---\nid: %s\ntype: %s\ntitle: item %s\nstatus: %s\ndepends_on: []\n' "$2" "$3" "$2" "$4"
+    [ "$3" = task ] && printf 'shape: story\n'                  # else the no-shape warning fires
     [ -n "${5:-}" ] && printf 'parent: %s\n' "$5"
     [ -n "${6:-}" ] && printf 'rank: %s\n' "$6"
     printf -- '---\n'

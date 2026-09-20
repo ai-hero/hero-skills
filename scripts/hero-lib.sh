@@ -1294,7 +1294,7 @@ hero_norm_id() {
 hero_ready_items() (
   local store items f d raw deps ready title id state itype row all_ids done_ids
   local open_goals parent committed_ids committed missing awaiting since enum
-  local idea_ids
+  local idea_ids shape
   store="${1:-$(hero_work_store)}" || return 1
 
   # An unmigrated store lists NOTHING rather than listing wrong. Every item in
@@ -1403,6 +1403,23 @@ hero_ready_items() (
     id=$(hero_norm_id "$(hero_item_field "$f" id)")
     case "$id" in
       ''|*[[:space:]]*) echo "invalid $f — $title"; continue ;;
+    esac
+
+    # `shape` decides what a task's Definition of Done must assert and nothing
+    # about readiness, so a typo cannot misroute the item — it can only make
+    # the DoD be written against the wrong test, silently, which is the whole
+    # value of the field gone. Warned, never invalidated: the row is correct.
+    case "$itype" in
+      task)
+        shape=$(hero_item_shape "$f")
+        case "$shape" in
+          story|structural|visual|defect|dependency|docs) ;;
+          '') echo "hero_ready_items: $f is a task with no shape; a DoD written without one is written against no test (docs/PLAN.md)" >&2 ;;
+          *)  echo "hero_ready_items: $f has unrecognized shape '$shape'; expected story, structural, visual, defect, dependency or docs" >&2 ;;
+        esac ;;
+      *)
+        shape=$(hero_item_shape "$f")
+        [ -z "$shape" ] || echo "hero_ready_items: $f is a $itype and carries shape '$shape'; shape belongs to tasks only" >&2 ;;
     esac
 
     # Suspension is a FLAG, not a status (docs/PLAN.md): the item keeps the
