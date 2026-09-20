@@ -3,13 +3,17 @@
 Remove the signs of AI-generated writing so prose reads as written by a
 person. Based on Wikipedia's "Signs of AI writing".
 
-**This is a reference, read on demand — not a rule and not a skill.** It used
-to be the `my-humanizer` skill, invoked as `... inline` from inside the
-pipeline steps that emit prose, which is a reference being called like a
-verb. It is not in `.claude/rules/` either: a rule with no `paths:` loads in
+**This file is the substance; it is read on demand and nothing else holds a
+copy.** The four pipeline steps that emit prose — `push-pr`, `review-pr`,
+`respond-to-comments`, and wayfare's review step — read it directly at the
+step that needs it. `hero-skills:my-humanizer` is a thin skill over it, for
+running the same filter over text by hand; it carries no rules of its own.
+
+It lives in `docs/` for two reasons. Those callers sit in three different
+skill directories, so it is shared material, not one skill's private
+reference. And it is not a `.claude/rule`: a rule with no `paths:` loads in
 every session, and 590 lines of style guidance is exactly the always-on
-context cost that belongs behind a pointer. The callers read this file at
-the step that needs it.
+context cost that belongs behind a pointer.
 
 **Apply it to everything in a change that a person reads**: code comments and
 docstrings, README/docs/CHANGELOG text, error and log messages, the commit
