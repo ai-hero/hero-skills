@@ -276,7 +276,7 @@ shape: story # story | structural | visual | defect | dependency | docs — see 
 origin: think-it-through # the producer that wrote this item
 title: I can sign in with the device flow # a user story for a `story` task; the structural change for a `structural` one
 status: planning # new | accepted | planning | ready | active | committed | review | done | dropped  (planning = awaiting the user's ready-mark; readiness is DERIVED, not stored; committed = on a goal's branch, unmerged; a non-empty awaiting: suspends the item at whatever status it holds, docs/MESSAGES.md)
-resolution: # set only at done — shipped | delivered | rejected | obsolete
+resolution: # set only at done — shipped on a task; the full set is in docs/PLAN.md
 depends_on: [3, 5] # ids that must be `done` before this can start — blockers only
 discovered_from: 4 # optional; the item this was found while working — provenance, never blocks
 one_way_door: false # true = expensive to reverse; got extra scrutiny

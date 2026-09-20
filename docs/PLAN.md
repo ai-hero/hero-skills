@@ -5,8 +5,9 @@ What a plan is, what is in it, and what shape every item takes.
 Wayfare offers one thing: **a way to plan work and have agents execute it, in
 a repo.** The plan is the durable object that makes that possible. This
 document specifies it. `scripts/hero-lib.sh` reads and writes it,
-`hero-skills:wayfare` is the only skill that creates items in it, and every
-other skill that touches work touches it through here.
+`hero-skills:wayfare` is the skill that creates items from a sync; handoff,
+think-it-through, one-shot and harden author items too and each stamps its
+name in `origin`. Every skill that touches work touches it through here.
 
 The store is local and private (`.git/info/exclude`, via `hero_exclude_add`).
 It is **also the reference model for the server-side store**, so every field
@@ -279,7 +280,9 @@ non-empty.
 ## The item format: `.plans/items/NNN-slug.md`
 
 Every item, of every type, has this frontmatter and these sections. Type-only
-fields are marked; a field that does not apply is **absent**, never empty.
+fields are marked and are **absent** on the other types, never empty. An
+optional field may be written empty until it is set; the readers treat empty
+and absent alike.
 
 ```markdown
 ---
@@ -466,8 +469,10 @@ made) and `branch`.
 ### Membership is one edge, in one direction
 
 `parent` is the only membership field. A goal's members are every item whose
-`parent` is that goal's id, in `depends_on` order, with `rank` breaking ties
-where the order is genuinely free.
+`parent` is that goal's id, ordered by `rank` and then id
+(`hero_goal_members`). `depends_on` is not part of the order: it gates each
+member's readiness in the listing, and a `rank` that puts a member before
+one it depends on is a store defect `wayfare sync` reports.
 
 The old schema stored the same edge twice — `covers` on the goal, ordered,
 plus `depends_on` re-encoding much of that order — and `wayfare sync` had to
@@ -542,7 +547,7 @@ the folder (`docs/MESSAGES.md`), and the fleet register at `.fleet/`.
 | `kind: design-system-feedback` | `type: signal`, `channel: design-system` |
 | `kind: architecture-feedback` | `type: signal`, `channel: architecture` |
 | `kind: goal` | `type: goal` |
-| no `kind` (legacy) | `type: task`, `shape: story` |
+| no `kind`, `kind: work-order`, `kind: hardening` (legacy) | `type: task`, `shape: story` |
 | (nothing) | `type: idea` and `shape: docs` — no old kind maps to either; both start with schema 1 |
 | `status: todo` | `status: accepted` |
 | `status: implementing` | `status: active` |
@@ -550,7 +555,10 @@ the folder (`docs/MESSAGES.md`), and the fleet register at `.fleet/`.
 | `status: queued` (feedback) | `status: ready` |
 | `status: delivered` | `status: done`, `resolution: delivered` |
 | `status: rejected` | `status: done`, `resolution: rejected` |
-| `status: done` | `status: done`, `resolution: shipped` |
+| `status: done` on a task | `status: done`, `resolution: shipped` |
+| `status: done` on a signal | `status: done`, no resolution, and a warning to set one |
+| `goal` at `ready`, `planning` or `reviewing`; `signal` at `planning` | `accepted`, with a warning; neither type visits those states |
+| `signal` at `reviewing` or `committed` | `active`, with a warning |
 | `status: suspended` | `status:` ← `suspended_from`; `awaiting` kept |
 | `suspended_from` | dropped |
 | `covers: [12, 13]` on goal 7 | `parent: 7` on items 12 and 13, `rank` from the list order |
@@ -565,9 +573,12 @@ the folder (`docs/MESSAGES.md`), and the fleet register at `.fleet/`.
 | items at `.plans/*.md` | moved to `.plans/items/` |
 
 The migrator is **not idempotent by accident** — it keys on the absence of
-`schema:` in `PLAN.md` and refuses a store that already has one. Run it once
-per repo; there is no second pass to be safe against, because the second pass
-would read `type: task` as an unmigrated legacy item and re-derive a shape
-for it.
+`schema:` in `PLAN.md` and refuses a store that already has one. A second
+pass would find no legacy files (they already sit in `items/`) and would
+then rewrite `PLAN.md` from a scan of nothing: `next_id` back to 1, `## Scope`
+back to the placeholder, the migration log line gone. It also refuses a
+hand-written `PLAN.md` with no `schema:`, and an `items/` that already holds
+items with no `PLAN.md` beside it, which is a run that stopped midway. A file
+at the store root with no frontmatter is not an item and is left in place.
 
 `wayfare init` on a repo with an old store runs the migrator and says so.

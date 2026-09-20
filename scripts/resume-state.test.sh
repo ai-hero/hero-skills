@@ -300,6 +300,30 @@ case "$(val STATE_ERRORS)" in
 esac
 rm -rf "$REPO/.plans"
 
+# An unmigrated store has no items/ at all. Guarding on that directory skipped
+# the whole block and read as "nothing in flight" on every consumer the day
+# schema 1 shipped; the store must fail as a source instead.
+mkdir -p "$REPO/.plans"
+printf -- '---\nid: 3\nkind: feature\nstatus: implementing\n---\n## Subtasks\n- [ ] a\n' > "$REPO/.plans/003-foo.md"
+OUT="$(run)"
+check "unmigrated store: STATE_OK false" "false" "$(val STATE_OK)"
+case "$(val STATE_ERRORS)" in
+  *work-store*) PASS=$((PASS + 1)) ;;
+  *) FAIL=$((FAIL + 1)); echo "FAIL  unmigrated store is named in STATE_ERRORS (got: $(val STATE_ERRORS))" ;;
+esac
+rm -rf "$REPO/.plans"
+
+# Only a task can be the item on this branch: a signal at active is being
+# delivered, not built, and must not count as in flight or claim the branch.
+mkdir -p "$REPO/.plans/items"
+printf -- '---\nschema: 1\ndefault_branch: main\nnext_id: 99\n---\n' > "$REPO/.plans/PLAN.md"
+printf -- '---\nid: 3\ntype: task\nstatus: active\nbranch: %s\n---\n## Subtasks\n- [ ] a\n' "$(git -C "$REPO" branch --show-current)" > "$REPO/.plans/items/003-foo.md"
+printf -- '---\nid: 5\ntype: signal\nchannel: design\nstatus: active\n---\n' > "$REPO/.plans/items/005-sig.md"
+OUT="$(run)"
+check "signal at active is not in flight" "1" "$(val ITEM_INFLIGHT)"
+check "signal at active never claims the branch" ".plans/items/003-foo.md" "$(val ITEM_FILE | sed 's|.*/\(\.plans/items/\)|\1|')"
+rm -rf "$REPO/.plans"
+
 # ---------- the eval contract ----------------------------------------------
 
 # Output is consumed via `eval`, so a hostile branch name or config value must

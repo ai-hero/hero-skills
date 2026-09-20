@@ -132,8 +132,8 @@ origin: wayfare
 discovered_from: 12 # the task this was found while building; absent when sync authored it directly
 entry: DF-12-2026-07-25-1 # the capture entry this was promoted from; absent when sync authored it directly. Makes the [item: ID] link checkable from both ends
 title: Consent is ordered before account linking
-status: accepted # new | accepted | ready | active | done
-resolution: # delivered | rejected — set at done
+status: accepted # new | accepted | ready | active | done | dropped
+resolution: # delivered | rejected | obsolete — set at done
 depends_on: []
 subject: design/auth/sign-in.md # the path this is about — in the app design on channel design, in the design system on channel design-system; on channel architecture, a DESIGN.md section or absent (the source: line carries the evidence)
 source: services/auth/link.go # the source file that disproves it

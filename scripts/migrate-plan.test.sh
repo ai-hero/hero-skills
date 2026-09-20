@@ -189,8 +189,8 @@ item "$R" "007-g.md" "---
 id: 7
 kind: goal
 title: g
-status: active
-covers: [12, 13]
+status: done
+covers: [12, 13, 77]
 budget: 2
 budget_max: 4
 ---
@@ -198,6 +198,19 @@ budget_max: 4
 ## Definition of Done
 
 - [ ] x"
+# Two goals name 13; the open one wins, whatever the glob order.
+item "$R" "008-g2.md" "---
+id: 8
+kind: goal
+title: g2
+status: active
+covers:
+  - 13
+---
+
+## Definition of Done
+
+- [ ] y"
 item "$R" "012-a.md" "---
 id: 12
 kind: feature
@@ -216,13 +229,18 @@ status: todo
 ## Context
 
 x"
-bash "$MIG" "$S" >/dev/null 2>&1
+OUT=$(bash "$MIG" "$S" 2>&1)
 check "covers -> parent on member 1" "7" "$(hero_item_field "$S/items/012-a.md" parent)"
-check "covers -> parent on member 2" "7" "$(hero_item_field "$S/items/013-b.md" parent)"
-check "covers order -> rank" "1 2" \
+check "covers: the open goal wins over the closed one" "8" "$(hero_item_field "$S/items/013-b.md" parent)"
+check "covers: rank comes from the winning goal" "1 1" \
   "$(hero_item_field "$S/items/012-a.md" rank) $(hero_item_field "$S/items/013-b.md" rank)"
+check "covers: the collision is warned" "1" \
+  "$(printf '%s' "$OUT" | grep -c 'item 13 is covered by goals 7 (closed) and 8 (open); keeping 8' | tr -d ' ')"
+check "covers: a dangling id is warned" "1" \
+  "$(printf '%s' "$OUT" | grep -c 'covers item 77, which no item carries' | tr -d ' ')"
 check "covers is gone from the goal" "" "$(hero_item_field "$S/items/007-g.md" covers)"
 check "goal keeps its type" "goal" "$(hero_item_field "$S/items/007-g.md" type)"
+check "goal at done stays done" "done" "$(hero_item_field "$S/items/007-g.md" status)"
 check "goal at done carries no shipped resolution" "" \
   "$(hero_item_field "$S/items/007-g.md" resolution)"
 check "budget survives" "2" "$(hero_item_field "$S/items/007-g.md" budget)"
@@ -327,6 +345,109 @@ OUT=$(bash "$MIG" "$S" 2>&1)
 check "unrecognized kind warns" "1" \
   "$(printf '%s' "$OUT" | grep -c "unrecognized kind 'features'" | tr -d ' ')"
 check "unrecognized kind still migrates" "task" "$(hero_item_field "$S/items/001-a.md" type)"
+# The summary is the one line a long run's reader sees; a warn raised inside a
+# subshell used to leave it saying nothing.
+check "unrecognized kind is counted in the summary" "1" \
+  "$(printf '%s' "$OUT" | grep -c '1 warning(s) above need a look' | tr -d ' ')"
+check "unrecognized kind leaves a Log line in the item" "1" \
+  "$(grep -c "note: kind 'features' was not recognized" "$S/items/001-a.md" | tr -d ' ')"
+
+# ---------- type-aware status clamps, case, existing Log -------------------
+
+R=$(newrepo clamp); S="$R/.plans"
+item "$R" "001-g.md" "---
+id: 1
+kind: goal
+status: ready
+---
+
+## Context
+
+x"
+item "$R" "002-s.md" "---
+id: 2
+kind: design-feedback
+status: reviewing
+---
+
+## Context
+
+x"
+item "$R" "003-w.md" "---
+id: 3
+kind: feature
+status: suspended
+suspended_from: Done
+awaiting: [m-1]
+---
+
+## Context
+
+x
+
+## Log
+
+- 2026-08-01 (rahul) note: already tagged
+
+## Comments
+
+- 2026-08-02 (rahul): a later comment
+- 2026-08-03: no actor"
+item "$R" "004-sd.md" "---
+id: 4
+kind: design-feedback
+status: done
+---
+
+## Context
+
+x"
+OUT=$(bash "$MIG" "$S" 2>&1)
+check "goal at ready clamps to accepted" "accepted" "$(hero_item_field "$S/items/001-g.md" status)"
+check "signal at reviewing clamps to active" "active" "$(hero_item_field "$S/items/002-s.md" status)"
+check "clamps are warned" "2" \
+  "$(printf '%s' "$OUT" | grep -c 'has no schema-1 equivalent' | tr -d ' ')"
+check "suspended_from is case-insensitive" "done" "$(hero_item_field "$S/items/003-w.md" status)"
+check "restored done gets shipped" "shipped" "$(hero_item_field "$S/items/003-w.md" resolution)"
+check "an existing ## Log is not duplicated" "1" "$(grep -c '^## Log' "$S/items/003-w.md" | tr -d ' ')"
+check "existing Log lines survive untouched" "1" \
+  "$(grep -c '^- 2026-08-01 (rahul) note: already tagged$' "$S/items/003-w.md" | tr -d ' ')"
+check "a dated line with no actor gets one colon" "1" \
+  "$(grep -c '^- 2026-08-03 note: no actor$' "$S/items/003-w.md" | tr -d ' ')"
+check "signal at done gets no task resolution" "" "$(hero_item_field "$S/items/004-sd.md" resolution)"
+check "signal at done without an answer is warned" "1" \
+  "$(printf '%s' "$OUT" | grep -c 'signal at .done. with no delivered/rejected' | tr -d ' ')"
+check "warning count matches" "1" \
+  "$(printf '%s' "$OUT" | grep -c '3 warning(s) above need a look' | tr -d ' ')"
+
+# ---------- refusals and non-items -----------------------------------------
+
+R=$(newrepo hand); S="$R/.plans"
+printf '## Scope\n\nhand-written\n' > "$S/PLAN.md"
+item "$R" "001-a.md" "---
+id: 1
+kind: feature
+status: todo
+---
+
+## Context
+
+x"
+bash "$MIG" "$S" >/dev/null 2>&1; RC=$?
+check "hand-written PLAN.md is refused" "1" "$RC"
+check "hand-written PLAN.md is untouched" "1" "$(grep -c hand-written "$S/PLAN.md" | tr -d ' ')"
+rm "$S/PLAN.md"
+printf '# notes\n\nnot an item\n' > "$S/README.md"
+OUT=$(bash "$MIG" "$S" 2>&1)
+check "a file with no frontmatter is left in place" "1" "$([ -f "$S/README.md" ] && echo 1 || echo 0)"
+check "a file with no frontmatter is not moved" "0" "$([ -f "$S/items/README.md" ] && echo 1 || echo 0)"
+check "a non-item is warned" "1" \
+  "$(printf '%s' "$OUT" | grep -c 'README.md: no frontmatter; not an item' | tr -d ' ')"
+# A run that stopped midway leaves items/ populated and no PLAN.md; a rerun
+# would rebuild parent links and next_id from an empty root.
+rm "$S/PLAN.md"
+bash "$MIG" "$S" >/dev/null 2>&1; RC=$?
+check "items/ without PLAN.md is refused" "1" "$RC"
 
 # ---------- legacy items: no kind, old status aliases ----------------------
 

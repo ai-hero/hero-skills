@@ -203,7 +203,7 @@ untouched since the last round were already audited then, so the set is:
 # The plan object's anchor is where the last round stopped looking. A first
 # run with no previous head audits nothing and says so — a one-time backfill
 # is a decision to take deliberately, not to have a sync spring on you.
-PREV=$(hero_plan_field 'source' | sed -n 's/.*head: //p')  # or read source.head directly
+PREV=$(hero_plan_field source.head)
 [ -n "$PREV" ] && git diff --name-only "$PREV..HEAD" -- . || echo "NO_PREVIOUS_HEAD"
 ```
 
@@ -637,7 +637,7 @@ follows):
   backfilling it from the current target head. A task without a usable
   anchor is silently exempt from staleness detection, and an unresolvable one
   must never become a diff base.
-- **legacy items**: `type: work-order` items or a `.plans/pins/` directory
+- **legacy items**: a `.plans/pins/` directory
   from pre-simplification wayfare: propose folding each order's content into
   its task (or marking it `done`, or deleting it) and removing `pins/`,
   never silently. `inbox/` is **not** legacy: it is the mailbox the `inbox`

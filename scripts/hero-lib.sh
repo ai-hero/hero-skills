@@ -23,9 +23,9 @@
 #     what is fatal. No function exits the calling shell.
 #   - Callers' shell state (cwd, variables) is never modified. Functions that
 #     need to cd do it inside a subshell.
-#   - MUTATING FUNCTIONS: hero_exclude_add (appends to .git/info/exclude) and
-#     hero_work_store (mkdir, and migrates a legacy store directory via mv).
-#     Everything else is read-only.
+#   - A function that writes says so in its own comment (hero_exclude_add,
+#     hero_work_store, hero_msg_deposit, the deploy-pending and pending-lock
+#     helpers). Everything else is read-only.
 
 # ---------- repo + config --------------------------------------------------
 
@@ -721,8 +721,8 @@ hero_item_list_field() {
 
 # Normalize a work-item status: lowercase, empty defaults to `new`.
 # `Done` silently not matching `done` left every dependent blocked forever.
-# The default is `new`, not `todo`: `todo` on a plain item means READY-eligible,
-# so a status-less item went straight to one-shot untriaged.
+# The default is `new`, never a READY-eligible state: a status-less item must
+# land as untriaged, not on the READY tier.
 hero_item_status() {
   local s
   s=$(hero_item_field "$1" status | tr '[:upper:]' '[:lower:]')
@@ -745,12 +745,33 @@ hero_item_shape() {
   hero_item_field "$1" shape | tr '[:upper:]' '[:lower:]'
 }
 
-# Read a scalar from the plan object's frontmatter (`.plans/PLAN.md`).
+# A signal's CHANNEL: design, design-system or architecture. Decides where
+# the delivery procedure sends it, never whether it lists.
+hero_item_channel() {
+  hero_item_field "$1" channel | tr '[:upper:]' '[:lower:]'
+}
+
+# Read a field from the plan object's frontmatter (`.plans/PLAN.md`). A dotted
+# KEY (`source.head`, `target.project`) reads one level into a block; a bare
+# KEY that names a block prints nothing, so `hero_plan_field source` is NOT a
+# way to read the head — it was, silently, the reason a drift scan saw no
+# previous head on every run.
 hero_plan_field() { # KEY [STORE]
   local store
   store="${2:-$(hero_store_path)}"
   [ -f "$store/PLAN.md" ] || return 1
-  hero_item_field "$store/PLAN.md" "$1"
+  case "$1" in
+    *.*)
+      awk -v blk="${1%%.*}" -v key="${1#*.}" '
+        /^---[[:space:]]*$/ { if (++fence == 2) exit; next }
+        fence == 1 && index($0, blk ":") == 1 { inblk = 1; next }
+        fence == 1 && inblk && $0 ~ /^[^[:space:]]/ { inblk = 0 }
+        fence == 1 && inblk && index($0, "  " key ":") == 1 {
+          v = $0; sub(/^[[:space:]]*[^:]+:[[:space:]]*/, "", v); sub(/[[:space:]]*#.*/, "", v)
+          printf "%s", v; exit
+        }' "$store/PLAN.md" ;;
+    *) hero_item_field "$store/PLAN.md" "$1" ;;
+  esac
 }
 
 # Absolute path to the item directory. Items live in `.plans/items/`, not
@@ -772,7 +793,7 @@ hero_idea_count() { # [STORE]
   local items f n=0
   items="${1:-$(hero_store_path)}/items"
   [ -d "$items" ] || { printf 0; return 0; }
-  ( cd "$items" 2>/dev/null || exit 0
+  ( cd "$items" 2>/dev/null || { printf 0; exit 0; }
     setopt localoptions nullglob 2>/dev/null || true
     for f in *.md; do
       [ -e "$f" ] || continue
@@ -782,17 +803,23 @@ hero_idea_count() { # [STORE]
     printf '%s' "$n" )
 }
 
-# Print the ids of a goal's members, in `depends_on` order with `rank`
-# breaking ties, one per line.
+# Print the ids of a goal's members, ordered by `rank` then id, one per line.
+# `depends_on` is not consulted: it gates each member's readiness in the
+# listing, and a rank that contradicts it is a store defect `wayfare sync`
+# reports. The second argument is the STORE, like every sibling here.
 #
 # Derived from each item's `parent`, never stored on the goal. The old schema
 # kept the same edge twice (`covers` on the goal AND the members' own order),
 # so the two could disagree and a sync had to reconcile them every round;
 # worse, two goals could name one item and each pre-authorize merges on it.
 # With one edge in one direction that is not representable.
+#
+# An empty GOAL_ID is refused: it would match every item with no `parent`,
+# and a goal turn reading that as "my members" would start building orphans.
 hero_goal_members() { # GOAL_ID [STORE]
   local items f id parent rank
-  items="${2:-$(hero_items_dir)}/"
+  [ -n "$1" ] || { echo "hero_goal_members: empty GOAL_ID" >&2; return 2; }
+  items="${2:-$(hero_store_path)}/items"
   [ -d "$items" ] || return 1
   ( cd "$items" 2>/dev/null || return 1
     setopt localoptions nullglob 2>/dev/null || true
@@ -1273,7 +1300,7 @@ hero_norm_id() {
 hero_ready_items() (
   local store items f d raw deps ready title id state itype row all_ids done_ids
   local open_goals parent committed_ids committed missing awaiting since enum
-  local idea_ids shape
+  local idea_ids shape channel resolution
   store="${1:-$(hero_work_store)}" || return 1
 
   # An unmigrated store lists NOTHING rather than listing wrong. Every item in
@@ -1327,7 +1354,11 @@ hero_ready_items() (
     # dependents, invisible on the listing but live in the dependency order.
     state=$(hero_item_status "$f")
     itype=$(hero_item_type "$f")
-    case "$state$itype" in ''|*[!a-z-]*) continue ;; esac
+    # A missing type is checked on its own: `done` with no type concatenates
+    # to a clean word, passed the alphabet gate, and unblocked its dependents
+    # while the listing printed the item `invalid`.
+    [ -n "$itype" ] || continue
+    case "$state$itype" in *[!a-z-]*) continue ;; esac
     # ONE rule, for every type. That is what `resolution` bought: a signal
     # ends `done` with `resolution: rejected`, so "we asked and they said no"
     # unblocks its dependents without the listing knowing what a signal is.
@@ -1400,6 +1431,21 @@ hero_ready_items() (
         shape=$(hero_item_shape "$f")
         [ -z "$shape" ] || echo "hero_ready_items: $f is a $itype and carries shape '$shape'; shape belongs to tasks only" >&2 ;;
     esac
+    # `channel` is the same kind of field for a signal: never readiness, only
+    # where delivery goes, so a typo routes the signal nowhere without a word.
+    channel=$(hero_item_channel "$f")
+    case "$itype:$channel" in
+      signal:design|signal:design-system|signal:architecture) ;;
+      signal:)  echo "hero_ready_items: $f is a signal with no channel; expected design, design-system or architecture" >&2 ;;
+      signal:*) echo "hero_ready_items: $f has unrecognized channel '$channel'; expected design, design-system or architecture" >&2 ;;
+      *:)       ;;
+      *)        echo "hero_ready_items: $f is a $itype and carries channel '$channel'; channel belongs to signals only" >&2 ;;
+    esac
+    # `resolution` is the ending, so one on an item that has not ended is a
+    # status that was rolled back by hand without clearing it, or a `done`
+    # someone meant and did not write. Either way the two fields disagree.
+    resolution=$(hero_item_field "$f" resolution | tr '[:upper:]' '[:lower:]')
+    [ -z "$resolution" ] || [ "$state" = "done" ] || echo "hero_ready_items: $f carries resolution '$resolution' at status '$state'; resolution is set only at done" >&2
 
     # Suspension is a FLAG, not a status (docs/PLAN.md): the item keeps the
     # status it held and `awaiting` is what makes it suspended. Read before the
@@ -1452,8 +1498,11 @@ hero_ready_items() (
       # Abandoned. Its own row word, never `done`, so nothing reads it as
       # satisfied work and re-plans around code that was never written.
       *:dropped)   echo "dropped $f — $title"; continue ;;
-      *:planning)  echo "plan    $f — $title"; continue ;;
-      *:active)    echo "active  $f — $title"; continue ;;
+      # Type-keyed, not `*:`: an idea at `active` or a goal at `planning` is
+      # not a shared state, it is a mis-filed item, and the wildcard walked it
+      # into a row resume-state then picked up as the item in flight.
+      task:planning) echo "plan    $f — $title"; continue ;;
+      task:active|signal:active|goal:active) echo "active  $f — $title"; continue ;;
       # Its own row word rather than `done`, so no caller has to read the log
       # to learn whether the default branch has the code (it does not).
       task:committed) echo "committed $f — $title"; continue ;;
@@ -1499,6 +1548,14 @@ hero_ready_items() (
     while IFS= read -r raw; do
       [ -z "$raw" ] && continue
       d=$(hero_norm_id "$raw")
+      # An item that depends on itself is blocked forever and looks like
+      # ordinary waiting: the id exists and is not done.
+      if [ "$d" = "$id" ]; then
+        echo "hero_ready_items: $f depends_on itself ('$raw'); blocked until the reference is removed" >&2
+        missing="$missing $raw"
+        ready=0
+        continue
+      fi
       case "$all_ids" in
         *" $d "*) ;;
         *)

@@ -50,7 +50,7 @@ scaffold → setup-dev → config → first-commit
 ```
 
 Owner: `hero-skills:wayfare init`. The skill scaffolds the project, then
-chains forward to `hero-skills:setup-dev`, `hero-skills:wayfare init`, and a
+chains forward to `hero-skills:setup-dev`, its own config stage, and a
 final commit. Each stage announces itself with the DAG line.
 
 **Naming note for `first-commit`:** When scaffolding a *standalone* repo,
@@ -164,7 +164,7 @@ Owner: `hero-skills:wayfare init`. Four steps:
 Run by itself (`hero-skills:wayfare init` or `hero-skills:wayfare init recalibrate`) or
 as the third step of Pipeline 1.
 
-Thirteen other skills carry a scoped slice of this pipeline as their own
+Eleven other skills carry a scoped slice of this pipeline as their own
 `recalibrate` verb. RECALIBRATE.md names its phases `report → ask → write →
 commit`, where `report` is this pipeline's `investigate` narrowed to the fields
 that skill reads, and the verb ends at `commit` without going on to do the

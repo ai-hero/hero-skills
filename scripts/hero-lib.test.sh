@@ -658,6 +658,20 @@ item 067-newdf.md 67 "Fresh signal" "new" "[]" "signal"
 item 068-waitnew.md 68 "Waits on a new item" "ready" "[65]"
 item 070-goalnew.md 70 "Fresh goal" "new" "[]" "goal"
 item 071-goaltodo.md 71 "Approved goal" "accepted" "[]" "goal"
+# The shared-state arms are type-keyed: `planning` is a task's state, and a
+# goal or signal claiming it used to ride the `*:` wildcard into a `plan` row.
+item 075-goalplan.md 75 "Goal planning" "planning" "[]" "goal"
+item 063-sigplan.md 63 "Signal planning" "planning" "[]" "signal"
+# A self-dependency blocks forever and looks like ordinary waiting.
+item 051-self.md 51 "Depends on itself" "ready" "[51]"
+# `done` with no type used to pass the alphabet gate into done_ids while the
+# listing printed the item invalid.
+printf -- '---\nid: 52\ntitle: Typeless done\nstatus: done\n---\n' > "$W/items/052-notype.md"
+item 053-waitnotype.md 53 "Waits on the typeless" "ready" "[52]"
+# A signal with a bad channel routes nowhere; both warn, neither invalidates.
+printf -- '---\nid: 64\ntype: signal\nchannel: desgn\ntitle: Typo channel\nstatus: accepted\ndepends_on: []\n---\n' > "$W/items/064-badchan.md"
+# A resolution on an unfinished item is two fields disagreeing.
+printf -- '---\nid: 66\ntype: task\nshape: story\ntitle: Resolved but active\nstatus: active\nresolution: shipped\ndepends_on: []\n---\n' > "$W/items/066-earlyres.md"
 item 072-goalrun.md 72 "Goal being run" "active" "[]" "goal"
 item 073-goaldone.md 73 "Achieved goal" "done" "[]" "goal"
 item 074-goalbad.md 74 "Goal claiming ready" "ready" "[]" "goal"
@@ -773,6 +787,36 @@ check "idea: a dependent of a promoted idea is also blocked" "blocked" "$(state_
 printf '%s' "$ERRI" | grep -q "007-depdone.md depends_on '3', which is an idea"
 check "idea: a promoted idea's dependency still warns" "0" "$?"
 
+# ---------- typed arms, self-deps, typeless done, channel, resolution --------
+
+OUTW="$(hero_ready_items "$W" 2>/dev/null)"
+ERRW="$(hero_ready_items "$W" 2>&1 >/dev/null)"
+check "goal at planning is invalid, not plan"     "invalid" "$(state_of 075-goalplan.md "$OUTW")"
+check "signal at planning is invalid, not plan"   "invalid" "$(state_of 063-sigplan.md "$OUTW")"
+check "self-dependency lists blocked"             "blocked" "$(state_of 051-self.md "$OUTW")"
+printf '%s' "$ERRW" | grep -q "051-self.md depends_on itself"
+check "self-dependency is named on stderr"        "0" "$?"
+check "typeless done lists invalid"               "invalid" "$(state_of 052-notype.md "$OUTW")"
+check "typeless done does not satisfy a dependency" "blocked" "$(state_of 053-waitnotype.md "$OUTW")"
+printf '%s' "$ERRW" | grep -q "064-badchan.md has unrecognized channel 'desgn'"
+check "bad channel warns"                         "0" "$?"
+check "bad channel still lists as feedback"       "feedback" "$(state_of 064-badchan.md "$OUTW")"
+printf '%s' "$ERRW" | grep -q "066-earlyres.md carries resolution 'shipped' at status 'active'"
+check "resolution before done warns"              "0" "$?"
+check "resolution before done still lists active" "active" "$(state_of 066-earlyres.md "$OUTW")"
+iitem 008-actidea.md 8 active
+OUTI="$(hero_ready_items "$I" 2>/dev/null)"
+check "idea at active is invalid, not active"     "invalid" "$(state_of 008-actidea.md "$OUTI")"
+
+# hero_plan_field reads one level into a block with a dotted key; a bare
+# block key prints nothing, which is what made every drift scan see no head.
+mkdir -p "$TMP/pf/items"
+printf -- '---\nschema: 1\nnext_id: 4\nsource:\n  root: .\n  head: abc123\ntarget:\n  project: p1\n---\n' > "$TMP/pf/PLAN.md"
+check "plan field: scalar"         "4"      "$(hero_plan_field next_id "$TMP/pf")"
+check "plan field: nested head"    "abc123" "$(hero_plan_field source.head "$TMP/pf")"
+check "plan field: nested project" "p1"     "$(hero_plan_field target.project "$TMP/pf")"
+check "plan field: block key is empty" ""   "$(hero_plan_field source "$TMP/pf")"
+
 # The count the roadmap view collapses to: open ideas only.
 check "idea count: open ideas only"  "2" "$(hero_idea_count "$I")"
 check "idea count: no store is 0"    "0" "$(hero_idea_count "$TMP/definitely-not-a-store")"
@@ -813,8 +857,9 @@ mkitem 013-newgoal.md 13 goal "new"
 
 # Members come from `parent`, ordered by `rank`: item 3 ranks 1, item 1 ranks 2.
 check "members: derived from parent, ordered by rank" "3
-1" "$(hero_goal_members 10 "$C/items")"
-check "members: a goal with none prints nothing" "" "$(hero_goal_members 12 "$C/items" | grep -v '^4$')"
+1" "$(hero_goal_members 10 "$C")"
+check "members: a goal with none prints nothing" "" "$(hero_goal_members 99 "$C")"
+check "members: an empty GOAL_ID is refused, not every orphan" "2" "$(hero_goal_members "" "$C" 2>/dev/null; echo $?)"
 
 ERRC="$(hero_ready_items "$C" 2>&1 >/dev/null)"
 printf '%s' "$ERRC" | grep -q "002-out.md is ready and no open goal has it as a member"

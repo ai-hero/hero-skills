@@ -249,7 +249,11 @@ STORE=$(hero_store_path 2>/dev/null)
 # Items live in `.plans/items/` under schema 1 (docs/PLAN.md); the listing
 # prints bare filenames, so every read below joins them to ITEMS, not STORE.
 ITEMS="$STORE/items"
-if [ -n "$STORE" ] && [ -d "$ITEMS" ]; then
+# The guard is on the store, never on `items/`: an unmigrated store has no
+# such directory, and skipping the block for it read as "nothing in flight"
+# on every consumer the day schema 1 shipped. hero_ready_items refuses such a
+# store with rc=1, which is the `work-store` failure below.
+if [ -n "$STORE" ] && [ -d "$STORE" ]; then
   # stderr stays visible: it carries hero_ready_items' reason for each invalid
   # row, and the caller's eval consumes stdout only.
   if ROWS=$(hero_ready_items "$STORE"); then
@@ -262,10 +266,11 @@ invalid"*) fail_source "store-invalid-item" ;; esac
     while read -r state f _; do
       [ "$state" = active ] || continue
       # hero_ready_items owns the status enum; `active` is one-shot's mark
-      # before its first edit. A goal at active is a set of tasks, not the
-      # item on this branch; a `bot:` item is a
-      # dependency bot's PR that wayfare's bot-PR procedure carries, never one-shot's.
-      [ "$(hero_item_type "$ITEMS/$f")" = goal ] && continue
+      # before its first edit. Only a task can be the item on this branch: a
+      # goal at active is a set of tasks, and a signal at active is being
+      # delivered, not built. A `bot:` task is a dependency bot's PR that
+      # wayfare's bot-PR procedure carries, never one-shot's.
+      [ "$(hero_item_type "$ITEMS/$f")" = task ] || continue
       [ -n "$(hero_item_field "$ITEMS/$f" bot)" ] && continue
       ITEM_INFLIGHT=$((ITEM_INFLIGHT + 1))
       branch=$(hero_item_field "$ITEMS/$f" branch)
