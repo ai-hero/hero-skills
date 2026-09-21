@@ -560,12 +560,23 @@ check_pipeline() {
   fi
 
   # 2. Issue tracker auth (only if HERO.md declares one)
-  local tracker
-  # Deleting the legacy fallback inside hero_connection_compat would make an
-  # unmigrated repo report OK by reading nothing at all, which is the one
-  # outcome this check exists to prevent.
-  tracker=$(hero_connection_compat issues type tool "$ROOT" 2>/dev/null)
-  [ -n "$tracker" ] || tracker=$(hero_connection_compat issues type issue-tracker "$ROOT" 2>/dev/null)
+  local tracker rc nudge
+  # Two things must not be swallowed here. The stderr is hero_connection_compat's
+  # migration nudge, which is the whole point of the fallback existing, and rc 2
+  # is a value someone WROTE and the reader refused — reported as an empty
+  # tracker it lands in the `none` arm and this check says "no issue tracker
+  # configured" for a repo that has one it cannot trust.
+  nudge=$(mktemp)
+  tracker=$(hero_connection_compat issues type tool "$ROOT" 2>"$nudge"); rc=$?
+  if [ "$rc" = 1 ]; then
+    tracker=$(hero_connection_compat issues type issue-tracker "$ROOT" 2>"$nudge"); rc=$?
+  fi
+  [ -s "$nudge" ] && emit WARN "pipeline: $(head -1 "$nudge")"
+  rm -f "$nudge"
+  if [ "$rc" = 2 ]; then
+    emit BLOCKER "pipeline: the issues connection's type was REJECTED as unsafe — fix HERO.md"
+    return 0
+  fi
   case "${tracker:-none}" in
     linear)
       # Linear MCP is the usual integration. We can't probe Anthropic's

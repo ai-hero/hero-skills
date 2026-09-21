@@ -130,9 +130,31 @@ hero_field() {
 # `hero_field` would answer from any section, and `namespace` or `type` exists
 # in more than one, so a connection field is never read without its block.
 hero_connection() { # KIND KEY [ROOT]
-  local root
+  local root value
   root="${3:-$(hero_root)}" || return 1
-  hero_md_field "$root/HERO.md" "$2" "### $1" "## Connections"
+  value=$(hero_md_field "$root/HERO.md" "$2" "### $1" "## Connections") || return $?
+  # `reach` NAMES A BINARY OR TOOL, and docs/CONNECTIONS.md tells the agent to
+  # go check that it is there — `command -v $REACH`, `$REACH --version`. A
+  # value carrying `;`, `|`, `$(` or a space is a command the repo's HERO.md
+  # gets to run through that probe, and refusing only a leading `-` (which is
+  # all hero_md_field does) does not stop it. Tool names have no use for any
+  # of those characters.
+  if [ "$2" = reach ] && ! printf '%s' "$value" | grep -qE '^[A-Za-z0-9._-]+$'; then
+    echo "hero_connection: refusing $1.reach '$value'; a reach names one tool, [A-Za-z0-9._-] only" >&2
+    return 2
+  fi
+  # `issues.at` reaches `gh --repo`, so it is held to OWNER/NAME exactly as the
+  # feedback-repo key it replaced was. The shape also excludes a host
+  # qualifier: `gh --repo ghe.attacker.example/owner/repo` files against
+  # someone else's GitHub Enterprise with this user's token, and HERO.md is
+  # repo content in a clone. `none` is a declared answer, not a destination.
+  if [ "$1" = issues ] && [ "$2" = at ] \
+    && [ "$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')" != none ] \
+    && ! printf '%s' "$value" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$'; then
+    echo "hero_connection: refusing issues.at '$value'; it reaches 'gh --repo' and must be OWNER/NAME" >&2
+    return 2
+  fi
+  printf '%s' "$value"
 }
 
 # A connection field, falling back to the flat HERO.md key it replaced.
@@ -159,7 +181,7 @@ hero_connection_compat() { # KIND KEY LEGACY_KEY [ROOT]
   return "$rc"
 }
 
-# Resolve a repo-kind connection's `at` to an absolute checkout path.
+# Resolve a repo-kind connection to an absolute checkout path.
 #   hero_connection_repo design-system
 #
 # `at` holds a FLEET.md ROW NAME when there is a fleet, because the map is
@@ -169,19 +191,43 @@ hero_connection_compat() { # KIND KEY LEGACY_KEY [ROOT]
 # becomes "$ROOT/design-system", which does not exist, and the run reports "no
 # design system" for what is actually a row it never looked up.
 #
-# Row first, path second: a row name that is also a directory name is the
-# fleet's answer, not a coincidence to resolve locally. The path branch keeps
-# resolving against ROOT rather than $PWD, because a caller may run from a
-# subdirectory and `../NAME` would then point somewhere else entirely.
+# `type` IS THE DISCRIMINATOR, and it is read before `at`. Deciding on `at`
+# alone collapses three states the standard forbids collapsing: a refused value
+# reads as none, `type: self` reads as none, and a `type: none` block with a
+# stale `at` still resolves — the dead key overriding the declared absence.
 #
-# rc: 0 resolved, 1 `at` unset or `none`, 3 set but unresolvable (a row with no
-# checkout, a path that is not a directory). 3 is NOT 1: "cannot reach it" and
-# "there is none" are the two states the standard forbids collapsing.
+# rc: 0 resolved, 1 none (or nothing to resolve), 2 refused or not a repo-kind
+# connection, 3 set but unreachable. 3 is NOT 1 and 2 is NOT 1: "cannot reach
+# it", "someone wrote something unsafe" and "there is none" are three answers,
+# and every one of them needs a different fix.
 hero_connection_repo() { # KIND [ROOT]
-  local root at fleet_root row_path
+  local root ctype at fleet_root row_path rc
   root="${2:-$(hero_root)}" || return 1
-  at=$(hero_connection "$1" at "$root") || return 1
-  [ -n "$at" ] || return 1
+
+  ctype=$(hero_connection "$1" type "$root"); rc=$?
+  [ "$rc" = 2 ] && return 2
+  ctype=$(printf '%s' "$ctype" | tr '[:upper:]' '[:lower:]')
+  case "$ctype" in
+    none) return 1 ;;
+    # The attachment exists and lives in this repo, so the checkout to read is
+    # this one. Returning 1 here would report it as absent, which is the pair
+    # docs/CONNECTIONS.md spends a paragraph keeping apart.
+    # `pwd -P`, like every other branch: a caller comparing this against a
+    # path it resolved itself must not get a symlinked spelling back from one
+    # branch and a physical one from the others.
+    self) (cd "$root" && pwd -P) || return 3
+          return 0 ;;
+    # A design project id or a tracker workspace is not a checkout. Without
+    # this, a UUID falls through to the path branch and comes back as rc 3,
+    # reporting a perfectly reachable design as a missing directory.
+    claude-design|figma|github|linear|jira)
+      echo "hero_connection_repo: $1 is type '$ctype', which names no checkout" >&2
+      return 2 ;;
+  esac
+
+  at=$(hero_connection "$1" at "$root"); rc=$?
+  [ "$rc" = 2 ] && return 2
+  [ "$rc" = 0 ] && [ -n "$at" ] || return 1
   [ "$(printf '%s' "$at" | tr '[:upper:]' '[:lower:]')" = none ] && return 1
 
   fleet_root=$(hero_fleet_root "$root" 2>/dev/null) || fleet_root=""
@@ -193,6 +239,12 @@ hero_connection_repo() { # KIND [ROOT]
     fi
   fi
 
+  # A path, resolved against ROOT rather than $PWD so a caller running from a
+  # subdirectory does not get a different answer. Unlike hero_fleet_repos there
+  # is NO containment check: a connection legitimately points outside its own
+  # tree (`../design-system`), and the fleet's check exists because a row must
+  # stay inside the fleet it is a row of. What keeps this safe is the caller,
+  # which reads the resolved path and never writes it (docs/CONNECTIONS.md).
   case "$at" in /*) row_path=$at ;; *) row_path="$root/$at" ;; esac
   [ -d "$row_path" ] || {
     echo "hero_connection_repo: $1 at '$at' is neither a FLEET.md row nor a directory" >&2
@@ -221,14 +273,13 @@ hero_connections() { # [ROOT]
   root="${1:-$(hero_root)}" || return 1
   [ -r "$root/HERO.md" ] || return 1
   awk '
-    # \034 (file separator), not a tab, and the same split hero_fleet_repos
-    # uses: `read` with a whitespace IFS collapses consecutive tabs, so an
-    # unset `at` would shift reach into its column.
+    # \034, not a tab, for the reason hero_fleet_repos gives (see its awk).
+    # No apostrophe anywhere in this program: it is single-quoted, and one
+    # would end it mid-parse. This comment lost its own quote to that once.
     #
     # awk EXTRACTS; the shell below applies the value rules. Re-implementing
     # the quote strip and the trust checks here would fork them from
-    # hero_md_field, and the two readers of one line would disagree: they did,
-    # over `- type: "github`, until this was split.
+    # hero_md_field, and the two readers of one line would disagree.
     function flush() { if (kind != "") printf "%s\034%s\034%s\034%s\n", kind, t, a, r; kind = "" }
     /^```/ { fence = !fence; next }
     fence  { next }
@@ -242,8 +293,7 @@ hero_connections() { # [ROOT]
       v = $0; sub(/^[^:]*: */, "", v); sub(/ *#.*/, "", v); gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
       # First non-empty wins, the rule hero_md_field follows. Last-wins would
       # make a duplicated key answer differently here than it does through
-      # hero_connection. No apostrophe anywhere in this program: it is
-      # single-quoted, and one would end it mid-parse.
+      # hero_connection.
       if (v == "") next
       if      (k == "type"  && t == "") t = v
       else if (k == "at"    && a == "") a = v
@@ -265,12 +315,23 @@ hero_connections() { # [ROOT]
       for v in "$t" "$a" "$r"; do
         [ -n "$reason" ] || case "$v" in -*|*[[:cntrl:]]*) reason="a value starts with '-' or holds a control character" ;; esac
       done
+      # Same rule hero_connection applies: a reach is one tool name, and the
+      # agent is told to probe it.
+      [ -n "$reason" ] || [ -z "$r" ] || printf '%s' "$r" | grep -qE '^[A-Za-z0-9._-]+$' \
+        || reason="reach is not one tool name: $r"
+      # Same rule hero_connection applies to the value that reaches `gh --repo`.
+      [ -n "$reason" ] || [ "$kind" != issues ] || [ -z "$a" ] || [ "$a" = none ] \
+        || printf '%s' "$a" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$' \
+        || reason="issues.at reaches 'gh --repo' and is not OWNER/NAME: $a"
       if [ -n "$reason" ]; then
         echo "hero_connections: skipping '$kind': $reason" >&2
         nbad=$((nbad + 1)); continue
       fi
       seen="$seen$kind "
-      printf '%s\t%s\t%s\t%s\n' "$kind" "${t:-none}" "${a:--}" "${r:--}"
+      # A block with no `type:` line is NOT a declared `none`. It is half
+      # written, and printing it as `none` is the unset-collapsed-into-absent
+      # error one level down from the missing-block case.
+      printf '%s\t%s\t%s\t%s\n' "$kind" "${t:-?}" "${a:--}" "${r:--}"
     done
     [ "$nbad" -eq 0 ] || return 3
   }
@@ -1109,7 +1170,10 @@ hero_is_msg_id() { # ID
 # instead (docs/MESSAGES.md, Sending step 2).
 hero_msg_find() { # STORE FROM ABOUT
   local f n=0 st exp today
-  [ -d "$1/inbox" ] || return 1
+  # rc 2, not 1: there is no mailbox to read, so this probe did not run. Read
+  # as 1 ("not sent yet") the sender deposits into a store it has never been
+  # able to check, which is the double-dispatch the probe exists to prevent.
+  [ -d "$1/inbox" ] || { echo "hero_msg_find: no inbox at $1/inbox; probe did not run" >&2; return 2; }
   [ -n "${3:-}" ] || { echo "hero_msg_find: ABOUT is empty; an about-less probe matches every about-less message; pass a subject token" >&2; return 2; }
   today=$(date +%Y%m%d)
   setopt localoptions nullglob 2>/dev/null || true

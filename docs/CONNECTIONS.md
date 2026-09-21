@@ -102,6 +102,19 @@ and documented where the kind is used.
 `- key: value` lines, same reader, same guards. A value that starts with `-`
 or carries a control character is refused and never used.
 
+Two keys get a shape on top of that, because they reach a command line rather
+than a comparison:
+
+- **`reach` is `[A-Za-z0-9._-]+`.** It names one tool, and this file tells the
+  agent to go check that the tool is there. A value carrying `;`, `|`, `$(` or
+  a space is a command that probe would run, and refusing a leading `-` does
+  not stop it.
+- **`issues.at` is `OWNER/NAME`.** It reaches `gh --repo`, and the shape also
+  excludes a host qualifier, which would file this repo's work into someone
+  else's GitHub Enterprise with this user's token. Passing the shape is not
+  the same as being the right repo: an outward-facing filing still has the
+  user name the destination in-session.
+
 ## Absent, unset, and unreachable are three states
 
 This is the whole reason the standard exists, and collapsing any pair of them
@@ -121,6 +134,16 @@ absent is the expensive one**: "you are logged out" becomes "there is no
 design system", the run continues on a two-layer round it should never have
 run, and the finding it silently dropped was the one worth having.
 
+One exception to *absent means stop asking*, and it is deliberate: the
+`design` connection is re-proposed every run even after `type: none`, because
+a design project can simply show up later and design-driven reconciliation is
+strictly more than self-review. A repo that structurally cannot have one opts
+out for good by writing `PERMANENT` in the comment on that line. That marker
+is prose the agent reads, not a value `hero_connection` returns, so it is the
+one piece of connection state the readers cannot see; a `permanent:` key would
+be the better shape and is not worth a second spelling until something else
+needs it.
+
 A connection may also be **refused**: `at` held something the reader rejected
 as unsafe. That is not absence either. Report it as a config defect and fix
 HERO.md; never fall through to `none`.
@@ -135,7 +158,7 @@ the stage that uses a connection, confirm the thing named is actually there.
 | --- | --- |
 | an MCP tool (`designsync`, `figma`, `linear`) | the tool is offered in this session and authorized for `at` |
 | a CLI (`gh`, `terraform`, `kubectl`) | the binary is on `PATH` and authenticated |
-| `checkout` | `at` resolves to a git checkout on disk, read-only, via `git -C` |
+| `checkout` | `at` resolves to a directory on disk (`hero_connection_repo`); a caller that needs it to be a git repo runs `git -C ... rev-parse` itself, read-only |
 | `manual` | nothing to check; a person carries the content in |
 
 Two rules about that check, both learned the hard way:
@@ -157,10 +180,13 @@ ROOT_OF_IT=$(hero_connection_repo design-system) # rc 0 resolved, 1 none, 3 unre
 ```
 
 `hero_connection_repo` is the only place that turns an `at` into a path, and
-that is deliberate: it is where the row-name-or-path question below is
-answered, and where **3 is kept distinct from 1** so a checkout that is merely
-missing never reports as a connection that does not exist. A caller that
-resolves `at` itself re-decides both, differently.
+that is deliberate. It is where the row-name-or-path question below is
+answered; where `type` is read **before** `at`, so a `type: none` block cannot
+be resurrected by a locator someone forgot to delete and a `type: self`
+resolves to this repo instead of reading as absent; and where 3, 2 and 1 stay
+apart, so a missing checkout, a refused value and a declared absence each
+reach the caller as themselves. A caller that resolves `at` itself re-decides
+all of that, differently.
 
 Never call `hero_work_store` on a connection's path. That function creates
 `.plans/` and edits `.git/info/exclude` in whatever root it is handed, and a
@@ -193,16 +219,18 @@ repo at most six connections.
 | Function (`scripts/hero-lib.sh`) | Returns |
 | --- | --- |
 | `hero_connection KIND KEY [ROOT]` | one value from `### KIND` under `## Connections` |
-| `hero_connections [ROOT]` | `KIND<TAB>TYPE<TAB>AT<TAB>REACH` per declared block, one parse |
-| `hero_connection_repo KIND [ROOT]` | `at` resolved to an absolute checkout: rc 0 resolved, 1 none, 3 set but unreachable |
+| `hero_connections [ROOT]` | `KIND<TAB>TYPE<TAB>AT<TAB>REACH` per declared block, one parse. rc 0, 1 (no readable HERO.md), 3 (a block was skipped) |
+| `hero_connection_repo KIND [ROOT]` | `at` resolved to an absolute checkout. rc 0 resolved, 1 none, 2 refused or not a repo kind, 3 set but unreachable |
 
-`hero_connections` is what Step 0 prints, so every run states which
-attachments this repo declares before any stage acts on one. It prints one row
+`hero_connections` is what the Step 0 of the wayfare skills prints, so those
+runs state which attachments this repo declares before any stage acts on one. It prints one row
 per block that exists, including blocks whose `type` is `none`. A declared
 absence is information, and dropping it from the listing makes it
-indistinguishable from unset. `TYPE` defaults to
-`none`; `AT` and `REACH` are `-` when unset, never empty, so a caller's
-`IFS=$'\t' read` is safe. An untrusted value skips the row to stderr and the
+indistinguishable from unset. `AT` and `REACH` are `-` when unset, never empty, so a caller's
+`IFS=$'\t' read` is safe, and `-` is unambiguous only because the trust rule
+refuses any value starting with `-`: relax that check and the placeholder
+stops being a placeholder. A block with **no** `type:` line prints `?` rather
+than `none`, because half-written is not the same answer as declared-absent. An untrusted value skips the row to stderr and the
 function returns 3, exactly as `hero_fleet_repos` does.
 
 ## Feedback does not route by connection

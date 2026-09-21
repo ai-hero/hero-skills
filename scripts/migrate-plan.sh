@@ -373,7 +373,7 @@ REPO=$(git -C "$ROOT" remote get-url origin 2>/dev/null \
   | sed -e 's#^git@[^:]*:##' -e 's#^https\{0,1\}://[^/]*/##' -e 's#\.git$##')
 BRANCH=$(cd "$ROOT" && hero_default_branch 2>/dev/null) || BRANCH=main
 HEAD=$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)
-DESIGN=$(hero_field design-project "$ROOT" 2>/dev/null) || DESIGN=none
+DESIGN=$(hero_connection_compat design at design-project "$ROOT" 2>/dev/null) || DESIGN=none
 
 if [ "$DRY" = 1 ]; then
   echo "would write $STORE/PLAN.md (repo ${REPO:-unknown}, next_id $((MAXID + 1)))"

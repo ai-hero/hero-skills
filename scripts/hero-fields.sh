@@ -24,7 +24,7 @@
 # `- default-branch: unset` cannot be mistaken for a field that has none.
 #
 #   (present) (absent)      a `*` row's section heading, found or not
-#   (n/a: type=none)        a connection declared absent; the block answered
+#   (n/a: type=none|self)   a connection that answered; its other keys are moot
 #   (unset)                 the file does not carry this field, or carries it empty
 #   (no-section)            the heading this field lives under is missing
 #   (refused)               the reader rejected the value as unsafe
@@ -189,9 +189,7 @@ fi
 # `hero_md_field` skips fenced code blocks because HERO.md documents its own
 # syntax in examples. This heading probe must skip them too, or a `## Section`
 # quoted inside a fence reports as present and recalibrate never asks for it.
-# SECTION is either `Heading` (a `## Heading`) or `Heading::sub` (a `### sub`
-# under it — how docs/CONNECTIONS.md declares one connection per block). The
-# separator is `::`, never `/`: `## CI/CD` is a real heading with a slash in
+# The separator is `::`, never `/`: `## CI/CD` is a real heading with a slash in
 # it, and splitting on that one reports every CI/CD field as (no-section).
 # The sub-heading is only looked for INSIDE its parent: `### design` also
 # exists under `## Projects`, and a bare search would report the connection
@@ -243,11 +241,13 @@ while IFS='|' read -r _skill section key decides; do
     if [ "$section" = "${section#*::}" ]; then
       current=$(hero_md_field "$TARGET" "$key" "## $section" 2>"$ERRF"); rc=$?
     else
-      conn_type=$(hero_md_field "$TARGET" type "### ${section#*::}" "## ${section%%::*}" 2>/dev/null)
-      if [ "$key" != type ] && [ "$conn_type" = none ]; then
-        # The block said there is nothing here. Its other keys have nothing to
-        # hold, and `(unset)` on them would read as a question.
-        current="(n/a: type=none)"; rc=0
+      conn_type=$(hero_md_field "$TARGET" type "### ${section#*::}" "## ${section%%::*}" 2>/dev/null \
+        | tr '[:upper:]' '[:lower:]')
+      if [ "$key" != type ] && { [ "$conn_type" = none ] || [ "$conn_type" = self ]; }; then
+        # The block answered. `none` has nothing to locate and `self` is
+        # located by being here, so `(unset)` on their other keys would read as
+        # a question the repo already settled.
+        current="(n/a: type=$conn_type)"; rc=0
       else
         current=$(hero_md_field "$TARGET" "$key" "### ${section#*::}" "## ${section%%::*}" 2>"$ERRF"); rc=$?
       fi
