@@ -419,8 +419,13 @@ DANGLING_REFS=0
 for ref in $REF_NAMES; do
   [[ -f "$SKILLS_DIR/$ref/SKILL.md" ]] && continue
   # Trailing-boundary match so `one-shot` never swallows a hit on `one-shots`.
+  # The SAME file set the names were extracted from. Narrowing it here (this
+  # line read docs/PIPELINES.md alone) makes the guard silently pass: a ref
+  # that lives only in another docs file is extracted, fails to resolve, then
+  # is searched somewhere it cannot appear, so HITS comes back empty and the
+  # `continue` below files it as a harmless lineage note.
   HITS=$(grep -rnE "wayfare:$ref([^a-z0-9-]|\$)" --include='*.md' \
-    "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT/docs/PIPELINES.md" 2>/dev/null \
+    "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT"/docs/*.md 2>/dev/null \
     | grep -viE 'absorb' || true)
   [[ -z "$HITS" ]] && continue # lineage-only references are fine
   DANGLING_REFS=1
