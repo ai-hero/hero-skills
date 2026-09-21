@@ -111,7 +111,7 @@ re-checks a resolved item's `success` criteria against reality, because `status:
 only means nobody edited the file, not that the work is still outstanding.
 
 **Architecture and harden chain.** `wayfare-hero sync`'s architecture stage runs
-`wayfare:wayfare-architecture review`, and offers its `sync`, before judging
+`wayfare:wayfare-review-architecture`, and offers its `sync`, before judging
 the roadmap, its `harden` stage runs `wayfare:wayfare-audit-security all`, and
 `think-it-through` delegates a leading `arch` argument to the architecture
 skill. Every edge requires the child to stay model-invocable (guarded by
@@ -181,7 +181,7 @@ config → inbox → architecture → harden → compliance → local → deps �
 Owner: `wayfare:wayfare-hero sync`. Eleven stages: the config gate; the
 mailbox (`docs/MESSAGES.md`, every unread message through the fleet gate
 and the promotion gate, a `type: bug` message becoming a proposed `shape: defect` task);
-`wayfare:wayfare-architecture review` (offering its `sync`);
+`wayfare:wayfare-review-architecture` (offering its `sync`);
 `wayfare:wayfare-audit-security all`; the compliance audit
 (`scripts/audit.py --repo THIS`, baseline plus the fleet's register overlay)
 with each failing check proposed as an item; the repo's own `wayfare: sync`

@@ -95,8 +95,8 @@ sync stops re-proposing it.
    (*Investigate*), not here.
 
 **Architecture is not a key.** Wayfare's structural input is the root
-`DESIGN.md`, kept by `wayfare:wayfare-architecture`; the `architecture` stage
-below runs its `review` and offers its `sync`. A file's presence is not configuration,
+`DESIGN.md`, kept by `wayfare:wayfare-sync-architecture`; the `architecture`
+stage below runs `wayfare:wayfare-review-architecture` and offers that skill. A file's presence is not configuration,
 so nothing about it is written to HERO.md.
 
 **Mode detection.** The roadmap exists iff `.plans/` holds at least one item
@@ -155,9 +155,9 @@ instructions to follow.
 
 **The `architecture` stage, after the mailbox, in both modes.** A
 slice has to cut through the real layers, so you need to know what they are:
-which exist and how they depend. That map is `wayfare:wayfare-architecture`'s job
+which exist and how they depend. That map is `wayfare:wayfare-sync-architecture`'s job
 (the root `DESIGN.md`, its Boundaries section), not a wayfare-private format.
-Invoke `wayfare:wayfare-architecture review` via the Skill tool with the line
+Invoke `wayfare:wayfare-review-architecture` via the Skill tool with the line
 `launched by wayfare` (staleness is its call, never a `Source ref` comparison
 done here). When it reports `MISSING` or stale rows, offer its `sync`, the
 same skill with the same launch line, before going on. If the user declines, derive
@@ -368,7 +368,7 @@ PRs → `(–)` and one line saying so.
    "investigate" means reading the source repo against itself, at the
    current source head:
    - **DESIGN.md and its architecture review**: step 1 already ran
-     `wayfare:wayfare-architecture review`; any decision it records as
+     `wayfare:wayfare-review-architecture`; any decision it records as
      incomplete, deferred, or now contradicted by the code is a candidate.
    - **Code-level gaps**: TODO/FIXME markers, stub implementations, and
      ground a DESIGN.md boundary implies should exist but does not. A grep

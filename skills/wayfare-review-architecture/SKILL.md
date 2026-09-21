@@ -1,33 +1,18 @@
 ---
-name: wayfare-architecture
+name: wayfare-review-architecture
 # prettier-ignore
-description: Run by wayfare-hero sync. Creates and converges a single root DESIGN.md covering boundaries, invariants, users, flows and decisions the code cannot state. sync converges; review reports drift.
-argument-hint: "[sync | review]"
+description: Report where DESIGN.md and the codebase have drifted apart — claims the code no longer backs, layers the file never mentions, sections describing something that was dropped, and a missing or stale Source ref. Writes nothing. Use to check the architecture record is still true before trusting it.
+argument-hint: ""
 user-invocable: false
 ---
 
-# Design: the one file the code cannot tell you
+# Review the architecture record against the code
 
-`DESIGN.md` at the repo root is the durable record of what reading the
-code cannot answer: where the boundaries are, which way dependencies must
-point, what must stay true everywhere, who the system is for, how it must
-behave toward them, and why the one-way doors were walked through. This skill
-maintains that single file. `sync` converges it with the codebase, `review`
-reports drift without writing.
-
-**This is the stage of `wayfare:wayfare-hero sync` right after the mailbox,
-not a skill a person runs.** Wayfare invokes `review` with the line `launched by wayfare` before it
-judges anything, and offers `sync` when the review reports `MISSING` or stale
-rows; the map this file holds is what orders every feature's subtasks. It has
-no config verb of its own (wayfare's `recalibrate` carries the three fields it
-reads) and no fleet fan-out (wayfare already ran in one repo by the time this
-starts). `wayfare:wayfare-grill-idea` also reaches it, to append a decision
-settled in a grill.
-
-It absorbed think-it-through's former Arch Mode (the `specs/` folder of
-per-aspect documents). The folder is gone on purpose: a spec tree mostly
-restated code structure, and restated information rots. One file, holding only
-what the code cannot say, stays true far longer.
+`DESIGN.md` is the one record of boundaries, invariants, users, flows and
+decisions the code cannot state for itself. Everything downstream navigates
+by it, so a claim it still makes after the code stopped backing it is worse
+than a gap: it is believed. This skill reports the difference and writes
+nothing. `wayfare:wayfare-sync-architecture` is what applies the rows.
 
 ## The Hard Rule
 
@@ -211,47 +196,11 @@ else, including no arguments, is `sync`, with any trailing text carried in
 as context (an area to focus on, or a decision to record). The three fields
 above are tuned by `wayfare:wayfare-hero recalibrate`, never here.
 
-### `sync`: converge DESIGN.md with the codebase
+## Investigate and report
 
-**Investigate, propose, and write only what the user confirms**, in both modes.
-
-**Bootstrap: no DESIGN.md yet.**
-
-**First, if Step 0 printed `LEGACY_ARCHITECTURE_MD`, this is a MIGRATION, not
-a bootstrap. Do not author a new file.** The document already exists under
-its pre-rename name, and bootstrapping past it writes a second one while
-orphaning the first, taking its append-only `## Decisions` trail with it. The
-one part of the file nobody can re-derive. Propose, in one confirm: `git mv
-ARCHITECTURE.md DESIGN.md`, retitle the H1 to `# Design`, keep `## Decisions`
-byte-for-byte, and then run **update** mode below, where the sections the old
-file lacks (`Tech stack`, and the product three where the repo has a surface)
-are `uncovered` rows like any other. Same rule as the legacy `specs/` tree
-above, and the same reason: never orphan a trail silently.
-
-1. **Investigate top-down.** Entry points, build/dependency manifests, module
-   roots, and HERO.md's sections. That is enough to name the layers, their
-   dependency direction, and the seams. Do not read every file; the Hard Rule
-   means the output doesn't need file-level detail anyway. Where the repo has
-   a user-facing surface, read the route tree and the auth and session path too,
-   enough to name the flows and the states they can end in. If a legacy
-   `specs/` tree exists (the retired Arch Mode format), read it: propose
-   folding its `specs/decisions/` ADRs into `## Decisions` (dated entries
-   preserved, because the trail is the value) and marking the folder superseded,
-   never orphan it silently.
-2. **Propose.** An outline per section of the file format: the layers the
-   Codemap would name, the boundary rules and invariants actually observed
-   (each with the evidence that grounds it), the users and flows the surface
-   implies, any decisions already visible in the code's shape. Flag anything
-   you could not verify as a question, not a claim. Users and their
-   anti-goals are the sections least likely to be derivable from code, so
-   propose them as questions and let the answers, not inference, fill them.
-3. **Confirm, then write** the file with `Source ref` = `$HEAD_SHA`. If
-   `HEAD_SHA` is `NO_GIT`, STOP before writing: say whether this is a
-   non-repo or an empty repo (no commits yet), and that the file cannot be
-   anchored until a commit exists, and a sentinel must never be written as
-   `Source ref`.
-
-**Update: the file exists.**
+**A missing DESIGN.md is itself the finding**: report `MISSING`, never
+"holds", and point at `wayfare:wayfare-sync-architecture` to bootstrap. An
+absent file must never produce the healthy verdict.
 
 1. **Scope the drift.** `git diff --stat "$SOURCE_REF"..HEAD` (the Step
    0-validated anchor to now, never a re-parse of the file) plus a read of
@@ -284,28 +233,10 @@ above, and the same reason: never orphan a trail silently.
      never as an append-only defect); or content that violates the Hard
      Rule (restated code detail): propose deleting or lifting it to the rule
      it was gesturing at.
-3. **Confirm, then write.** Apply confirmed rows. **Decisions are
-   append-only**: a stale decision gets a superseding entry, never an edit.
-   Refresh `Last updated` and `Source ref` to `$HEAD_SHA` **only when every
-   section was verified this pass and no stale row was declined.** A
-   declined stale row keeps the old anchor so the next `review` re-surfaces
-   it (re-anchoring would silently erase the finding from every future
-   diff), and an unverified file (`UNANCHORED`, failed diff) never gets a
-   fresh anchor stamped over it with zero rows applied.
 
-A decision brought as trailing context ("record that we picked Postgres over
-Mongo") is an append to `## Decisions` in the same confirm flow, dated today,
-with the context/decision/consequences the user gives or the grilling settled.
-
-### `review`: report drift, write nothing
-
-The read-only half of update-mode `sync`: same investigation, same findings
-table and no writes. End with `Next step: wayfare:wayfare-architecture sync` when
-any row needs applying, or "holds" when none do. **A missing DESIGN.md
-is itself the finding**: report `MISSING`, never "holds", and point at
-`sync` to bootstrap; an absent file must never produce the healthy verdict.
-This is what `wayfare:wayfare-hero` runs as its `architecture` stage (both
-modes).
+End with `Next step: wayfare:wayfare-sync-architecture` when any row needs
+applying, or "holds" when none do. Write nothing: not `DESIGN.md`, not the
+anchor, not a plan item.
 
 ## Who else touches the file
 
@@ -340,9 +271,5 @@ modes).
 
 ## Next steps
 
-When wayfare launched this run (`launched by wayfare` in the invocation),
-print nothing terminal: return the findings table (or "holds", or the
-bootstrap result) to wayfare, which offers `sync` after a `review` with rows
-and then continues its own stages. Run standalone, the next step is always
-`wayfare:wayfare-hero sync`, because a changed map changes how each feature's slice
-cuts through the layers, and that is where the map is consumed.
+- Rows to apply → `wayfare:wayfare-sync-architecture`
+- The record holds and you want work picked → `wayfare:wayfare-hero`

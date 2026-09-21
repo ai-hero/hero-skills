@@ -20,7 +20,7 @@ lives. Everything else has a better home:
 | It is… | Put it in |
 | --- | --- |
 | A fact the tree or a manifest already states (layout, stack, dependencies) | Nowhere, or `HERO.md` if a tool needs it |
-| A data model, contract, or boundary | `DESIGN.md` (`wayfare:wayfare-architecture`) |
+| A data model, contract, or boundary | `DESIGN.md` (`wayfare:wayfare-sync-architecture`) |
 | A multi-step procedure | A skill; loads only when used |
 | A rule for one area of the tree | `.claude/rules/NAME.md` with `paths:` frontmatter |
 | Something that must happen every time | A hook; prose is a request, a hook is enforcement |

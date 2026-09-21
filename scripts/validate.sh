@@ -331,7 +331,7 @@ fi
 # break every sync at its harden stage.
 # `preflight` is intentionally absent, one-shot runs
 # it via scripts/preflight.sh, not the Skill tool, so it may stay user-only.
-CHAINED_SKILLS="wayfare-grill-idea wayfare-push-pr wayfare-review-pr wayfare-respond-pr wayfare-ship-pr wayfare-run-task wayfare-architecture wayfare-audit-security"
+CHAINED_SKILLS="wayfare-grill-idea wayfare-push-pr wayfare-review-pr wayfare-respond-pr wayfare-ship-pr wayfare-run-task wayfare-review-architecture wayfare-sync-architecture wayfare-audit-security"
 for chained in $CHAINED_SKILLS; do
   chained_file="$SKILLS_DIR/$chained/SKILL.md"
   # A missing chained skill silently breaks the calling pipeline at that step, so error
