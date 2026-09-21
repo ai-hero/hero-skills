@@ -6,82 +6,94 @@ procedure here and the one with the most ways to be quietly wrong.
 The idempotent entry point. Both modes share one shape: **investigate,
 propose, write only what the user confirms**.
 
-**Config gate (first, both modes), covering the whole `## Wayfare` block, not just
-`design-project`.** Step 0 printed every key. Walk them in this order, propose
-a value for each one that is unset or `none` where one can be found, and write
-only what the user confirms. A `none` the user confirms is a complete answer;
-sync stops re-proposing it.
+**Config gate (first, both modes), covering every connection wayfare reads,
+not just `design`.** Step 0 printed each one. Walk them in this order, propose
+a value for each that is unset or `none` where one can be found, and write only
+what the user confirms. A `none` the user confirms is a complete answer; sync
+stops re-proposing it.
 
-1. **Which side of the design system is this repo?** Read `role` under
-   `## Design System`:
-   `hero_md_field "$ROOT/HERO.md" role "## Design System"`. rc 2 (a
-   REJECTED value) is a STOP like every other rejected key; rc 1 (absent)
-   is a consumer.
-   - **`producer`**: this repo *is* the design system. Its `design-project`
-     is the design system's own claude.ai/design project, the value every
-     consumer's `design-system-repo` dereferences, and `design-system-repo`
-     is `none`: there is no upstream of the upstream. (Step 0's id-coincidence
-     check is the backstop for a producer that mis-sets the key to its own
-     path, not part of the normal producer shape.) Propose exactly that and
-     do not go looking for a sibling.
-   - **`consumer`, or no block**: two pointers. `design-project` is the
-     app's own design; the design system is a party of its own, found in
+**Migrate an unmigrated HERO.md on sight.** A repo still carrying
+`design-project`, `design-transport`, `ux-flow`, `reconciliation`,
+`design-system-repo`, `## Design System` or `## Project Management` is reading
+through the compat fallback, which Step 0 announces on stderr. Propose moving
+those values into `## Connections` blocks ([docs/CONNECTIONS.md](../docs/CONNECTIONS.md))
+verbatim — same values, new home — and delete the old keys in the same write.
+Leaving both is what makes a later edit land in the copy nothing reads.
+
+1. **Which side of the design system is this repo?** Read `role` on the
+   `design-system` connection:
+   `hero_connection_compat design-system role role "$ROOT"`. The compat read
+   is not optional here: an unmigrated repo carries `role` under
+   `## Design System`, a plain `hero_connection` returns rc 1 for it, and rc 1
+   means consumer — so the producer that `wayfare-recomponentize-ui` must
+   refuse to run in reads as a repo it may run in. rc 2 (a REJECTED value) is
+   a STOP like every other rejected key; rc 1 (absent) is a consumer.
+   - **`producer`**: this repo *is* the design system. Its `design`
+     connection is the design system's own project, the value every
+     consumer's `design-system` `at` dereferences, and that connection's
+     `type` is `none`: there is no upstream of the upstream. (Step 0's
+     id-coincidence check is the backstop for a producer that mis-sets `at` to
+     its own path, not part of the normal producer shape.) Propose exactly
+     that and do not go looking for a sibling.
+   - **`consumer`, or no block**: two pointers. The `design` connection is
+     the app's own design; the design system is a party of its own, found in
      step 3.
-2. **`design-project`, optional.** A design target sharpens the roadmap but
-   is not required. If Step 0 left `DESIGN_PROJECT=none` (missing block,
-   `design-project: none`, no extractable UUID, or a REJECTED value, and
-   Step 0 prints which) and the transport is not `manual`, offer to set one
+2. **The `design` connection, optional.** A design target sharpens the
+   roadmap but is not required. If Step 0 left `DESIGN_PROJECT=none` (missing
+   block, `type: none`, no extractable UUID, or a REJECTED value, and
+   Step 0 prints which) and `reach` is not `manual`, offer to set one
    up:
    ask for the claude.ai/design link (or run `DesignSync list_projects` and
-   let the user pick, or offer `design-transport: manual` for a project this
+   let the user pick, or offer `reach: manual` for a project this
    session's account cannot reach), extract and verify the UUID with
    `get_project` BEFORE writing anything, then write or fix the block in
    `$ROOT/HERO.md` and re-run Step 0. Decline → proceed in **self-review**
-   mode (source only) for this run; unlike every other key in this gate, this
-   question is asked again next time, since a design project can show up
-   later and design-driven reconciliation is strictly more than self-review,
-   **unless the raw `design-project: none` line's comment says `PERMANENT`**
-   (read the line itself; `hero_field` strips the comment), which is the
-   repo saying it structurally cannot have one and stops the ask for good,
-   same as any other settled `none` in this gate. A REJECTED value is still
-   a STOP, same as any other key Step 0 flags. This is about the absent
-   case, not the rejected one. `DESIGN_PROJECT=ASK`
+   mode (source only) for this run; unlike every other connection in this
+   gate, this question is asked again next time, since a design project can
+   show up later and design-driven reconciliation is strictly more than
+   self-review, **unless the raw `type: none` line's comment says
+   `PERMANENT`** (read the line itself; `hero_connection` strips the comment),
+   which is the repo saying it structurally cannot have one and stops the ask
+   for good, same as any other settled `none` in this gate. A REJECTED value
+   is still a STOP, same as any other key Step 0 flags. This is about the
+   absent case, not the rejected one. `DESIGN_PROJECT=ASK`
    resolves here too: ask for the link, use it for this session only, and
-   self-review if declined. Also STOP if Step 0 printed a `design-transport`
+   self-review if declined. Also STOP if Step 0 printed a `design.reach`
    warning (a REJECTED value or an unknown word; the quiet absent-key
    default is fine). Reading via the wrong transport is the same class of
    error, and Step 0 raises it regardless of whether a project is configured,
-   so this STOP is not conditioned on `design-project` either. An `upstream design
-   project UNRESOLVED` warning stops it the same way: it says
-   `design-system-repo` points at a repo whose HERO.md could not answer,
+   so this STOP is not conditioned on `design.at` either. An `upstream design
+   project UNRESOLVED` warning stops it the same way: it says the
+   `design-system` connection points at a repo whose HERO.md could not answer,
    which is a fix in that repo, and nothing else re-raises it. The
    design-system step below runs only while `DS_REPO_STATE` is `UNSET`, and a
    configured repo is `SET`. Verify `source-repo` resolves (for `.`, that the
    working repo is readable; for anything else, one `git -C` probe).
-3. **`design-system-repo` (consumer only).** Runs only while `DS_REPO_STATE`
+3. **The `design-system` connection (consumer only).** Runs only while `DS_REPO_STATE`
    is `UNSET`: `NONE` is the user's answer and is not re-asked; `REJECTED` is
    a STOP. One key, so one question. Look in the fleet first. When
    `hero_fleet_root` finds one, walk `hero_fleet_repos`, **only rows whose
    group is not `none` and whose path is a git checkout**; a parked clone is
    exactly the repo "match the fleet" must not reach, and its HERO.md is
-   untrusted content, and read each sibling's `role` under `## Design
-   System`. The sibling whose role is `producer` is the design-system repo.
-   Propose it as the registry's absolute path made relative to `$ROOT`
-   (`../NAME` when it is a direct sibling; the registry, not the name, is the
-   source). Its design project id is **not** written here. Step 0 derives
+   untrusted content, and read each sibling's `role` on its own
+   `design-system` connection. The sibling whose role is `producer` is the
+   design-system repo. Propose it as the **fleet row name** — the map resolves
+   the path, and a path is correct on one machine only — falling back to
+   `../NAME` where there is no fleet. Its design project id is **not** written
+   here. Step 0 derives
    `DS_PROJECT` from that repo's HERO.md every run, but verify it resolves
    before proposing the path, since a repo whose id cannot be read is a
    pointer to an unusable upstream: run Step 0's derivation against the
    candidate and `get_project` the result. Then one of:
    - a producer whose id resolves → propose the path, confirm, write;
-   - a producer whose `design-project` is a declared `none` or `ask` → still
-     propose the path. The path is also where `design-system-feedback` is
-     delivered, which needs no project id, and the vendored `_ds/` copy can
-     carry the lane on its own. Refusing here would leave a design system
-     with no project unreachable by either route;
+   - a producer whose `design.at` is a declared `none` or `ask` → still
+     propose the path. The vendored `_ds/` copy can carry the lane on its
+     own, and feedback reaches that repo by its `FLEET.md` row, not by this
+     key. Refusing here would leave a design system with no project
+     unreachable by either route;
    - two producers → a finding, not a choice: report both, write nothing;
-   - a producer whose `role` or `design-project` read returned rc 2, or whose
-     `design-project` is absent or is malformed (present, not `none`/`ask`,
+   - a producer whose `role` or `design` connection read returned rc 2, or
+     whose `design.at` is absent or is malformed (present, not `none`/`ask`,
      and not a single UUID) → STOP and name the sibling; never fall through
      to `none`. A declared `none`/`ask` is the case above, not this one;
    - `hero_fleet_repos` returned 3 (rows skipped) → say so before concluding
@@ -90,9 +102,12 @@ sync stops re-proposing it.
      upstream system → `none`, and say which of the three it was.
    (At read time the target's vendored `_ds/` copy still wins over `$DS_SNAP`;
    see *Configuration*.)
-4. **`feedback-repo`.** Ask once; `none` keeps feedback in local packets.
-   `ux-flow` and `reconciliation` are set up where plan first needs them
-   (*Investigate*), not here.
+
+**Feedback delivery asks nothing here.** There is no destination key: every
+signal leaves as a message into a sibling's `.plans/inbox/`, and the row is
+named by the user at delivery (`references/feedback-channels.md`). `ux-flow`
+and `reconciliation` are set up where plan first needs them (*Investigate*),
+not here.
 
 **Architecture is not a key.** Wayfare's structural input is the root
 `DESIGN.md`, kept by `wayfare:wayfare-sync-architecture`; the `architecture`
@@ -349,7 +364,7 @@ PRs → `(–)` and one line saying so.
 1. **Map the source.** Already done by the `architecture` stage above; the
    map it produced (or the unverified one) is what the rows below cut
    through.
-2. **Investigate.** Two paths, chosen by whether `design-project` is
+2. **Investigate.** Two paths, chosen by whether the `design` connection is
    configured (per the config gate above).
 
    **Design-driven.** Refresh the design snapshot per *Reading the target*
@@ -364,7 +379,7 @@ PRs → `(–)` and one line saying so.
    or transfer error. Never propose a roadmap from a target you could not
    see.
 
-   **Self-review: no `design-project`.** There is no target to pull, so
+   **Self-review: no design connection.** There is no target to pull, so
    "investigate" means reading the source repo against itself, at the
    current source head:
    - **DESIGN.md and its architecture review**: step 1 already ran
@@ -430,10 +445,10 @@ PRs → `(–)` and one line saying so.
    that needs a plan has one and the user has marked what they mark.
 
 **Update: the roadmap exists.** Re-read both ends and report, one table, a row
-per finding. **Self-review mode (no `design-project`) has no app-design
+per finding. **Self-review mode (no design connection) has no app-design
 target**, so the Target lane below is skipped and reported as such, never as
-clean. The Upstream lane is a separate question, gated on `design-system-repo`
-rather than `design-project`, and still runs from `$DS_SNAP` when that key is
+clean. The Upstream lane is a separate question, gated on the `design-system`
+connection rather than `design`, and still runs from `$DS_SNAP` when that is
 configured; see its own header below for exactly which source it reads and
 when it, too, is skipped. Shipped tasks change the source, so `DESIGN.md` can
 trail reality: the `architecture` stage above already ran its review and
@@ -450,7 +465,7 @@ copy when it has one, else `$DS_SNAP`; skipped entirely when there is neither,
 and then say it is skipped rather than reporting clean. A lane with no source
 that reports no findings is indistinguishable from a lane that found none. In
 self-review mode there is no target, so no vendored `_ds/` copy either, so read
-`$DS_SNAP` alone when `design-system-repo` is configured, and skip the lane
+`$DS_SNAP` alone when the `design-system` connection is configured, and skip the lane
 same as any other missing-source case when it is not):
 
 - **ds-drift**: the source's own token layer, component surface, or
@@ -555,13 +570,13 @@ follows):
   every `accepted`/`ready` signal item. Propose promoting the entries to items
   and delivering per `references/feedback-channels.md`, which owns the
   manifest, the in-session destination gate, and the success-gated statuses.
-  **One delivery per destination**, never one issue carrying two lanes. This is
+  **One delivery per destination**, never one confirmation carrying two lanes. This is
   the only finding that flows source → outward, so nothing else will surface
   it. When a new item names a `subject:` some `rejected` item already names,
   say so in the proposal. Otherwise the rejection history is written and never
   read, and the same divergence gets re-raised.
 - **no-ux-flow**: meaningless without a target, so it never fires in
-  self-review mode. With a `design-project` configured: `UX_FLOW` is `UNSET`
+  self-review mode. With a design connection configured: `UX_FLOW` is `UNSET`
   and no flow was found in the target, or it holds a path that does not exist
   at the resolved SHA. Report it and
   offer two moves: set `ux-flow` to the real path if a flow exists under

@@ -139,7 +139,7 @@ How the downstream agent proves completion (commands, tests, observable behavior
 
 ### Step 4: Optionally File to the Tracker (`--issue`)
 
-When `--issue` is passed (or the user asks): read **Project Management** from HERO.md. For `github-issues`, `gh issue create --title TITLE --body-file THE_ITEM` (the body is the work-item minus frontmatter, plus a line noting the `.plans/` path). For Linear, create the issue via the Linear MCP tools. Then add the issue URL to the work-item's Context so the two stay cross-linked.
+When `--issue` is passed (or the user asks): read the **`issues` connection** from HERO.md (`hero_connection issues type` / `at`; docs/CONNECTIONS.md). For `github`, `gh issue create --title TITLE --body-file THE_ITEM` (the body is the work-item minus frontmatter, plus a line noting the `.plans/` path). For Linear, create the issue via the Linear MCP tools. Then add the issue URL to the work-item's Context so the two stay cross-linked.
 
 Filing to a tracker is outward-facing. Do it only on the explicit flag or an explicit ask, never by default.
 

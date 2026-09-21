@@ -7,11 +7,18 @@ thing it disagrees with:
 Every signal is `type: signal` (docs/PLAN.md); `channel` says which lane it
 takes:
 
-| `channel` | Goes to | Owned by | Destination config | Delivered as |
-| --- | --- | --- | --- | --- |
-| `design` | the **app design** project — a screen, a flow, a state | the design team | `feedback-repo` | a GitHub issue |
-| `architecture` | the **app design** project — a boundary, a dependency direction, an invariant the design assumes and the code disproves | the design team | `feedback-repo` | a GitHub issue |
-| `design-system` | the **design system** — a token, a component API, a specimen, a guidance card | the design-system repo | `design-system-repo` | a **message** into its `.plans/inbox/` (`docs/MESSAGES.md`) |
+| `channel` | Goes to | Owned by | Delivered as |
+| --- | --- | --- | --- |
+| `design` | the **app design** project — a screen, a flow, a state | the design team | a **message** into the owning repo's `.plans/inbox/` |
+| `architecture` | the **app design** project — a boundary, a dependency direction, an invariant the design assumes and the code disproves | the design team | a **message** into the owning repo's `.plans/inbox/` |
+| `design-system` | the **design system** — a token, a component API, a specimen, a guidance card | the design-system repo | a **message** into the owning repo's `.plans/inbox/` |
+
+**One delivery mechanism, no destination key.** Every lane is a message
+(`docs/MESSAGES.md`) into a sibling checkout the user names from the
+`FLEET.md` rows at delivery. Which repo owns a divergence is a *fleet*
+question, and a fleet holds more than one repo that can own one; a configured
+destination answers it once, wrongly, for every lane and every future
+signal.
 
 **Nothing in this flow may change the thing it is about.** Wayfare reads the
 target and the design system and never writes either; wayfare-run-task works inside the
@@ -140,7 +147,7 @@ source: services/auth/link.go # the source file that disproves it
 anchors:
   target: FULL_COMMIT_SHA # head of the snapshot `subject` lives in: $SNAP on channels design and architecture, $DS_SNAP on channel design-system
   source: FULL_COMMIT_SHA # source head this was found against
-delivered_to: "" # issue URL, or the message id deposited into the design-system repo's inbox
+delivered_to: "" # the msg_id deposited into the owning repo's inbox, or the packet path while it is only rendered
 ---
 
 ## What the design says
@@ -199,34 +206,41 @@ into a third party's tracker. The body is the items and nothing else.
 
 ### 1. Resolve the destination
 
-Which key applies is decided by the item's **type**, never by which key happens
-to be set. Delivering a `channel: architecture` item to `design-system-repo`
-because `feedback-repo` was `none` is a misroute, not a fallback.
+The destination is a **`FLEET.md` row the user names, per delivery**, and
+nothing else resolves it. Show the rows, say which channels this delivery
+covers and what the items are about, and let the person who knows the fleet
+say which repo owns the divergence. Never infer it from config: the misroute
+this replaces was structural — with one key set, a `channel: architecture`
+item went wherever that key pointed, and "it was the only destination
+configured" is not evidence that it owns the boundary.
 
-**`channel: design` and `channel: architecture` → `$FEEDBACK_REPO`.** From Step
-0 it is either `none` or a validated `OWNER/NAME` — the strict-shape check
-already ran, so never re-derive it from other config:
+```bash
+hero_fleet_repos            # NAME<TAB>PATH<TAB>GROUP<TAB>PORT, one parse
+```
 
-- holds `OWNER/NAME` → probe it:
+Four things about that listing, each of which changes the answer:
 
-  ```bash
-  gh repo view "$FEEDBACK_REPO" --json nameWithOwner,hasIssuesEnabled
-  ```
-
-  **Distinguish the two failure modes.** `hasIssuesEnabled: false` is
-  structural — this destination cannot take issues, so use the packet path. A
-  *failed probe* (not authenticated, rate-limited, offline, no access) is
-  transient: report the `gh` error and offer a retry. Only fall to the packet
-  path on the user's word. Silently converting "you are logged out" into "here
-  is a file, delivery is your problem" hides a one-command fix.
-- is `none` (unset, `none`, or rejected at Step 0 — Step 0 prints which) → the
-  packet path. When the items clearly deserve a tracker, say once that setting
-  `feedback-repo` in HERO.md enables direct filing.
-
-**`channel: design-system` → `$DS_REPO`** (Step 0's validated value), which
-is a **local checkout path**, not a GitHub slug. Delivery deposits a
-`type: ask` **message** into that repo's `.plans/inbox/`, per
-`docs/MESSAGES.md`, and that repo's own wayfare promotes it to an item.
+- **`hero_fleet_repos` returns 3 when it skipped untrusted rows**, which go to
+  stderr. Say so before presenting the list. The skipped row may be the repo
+  that owns the divergence, and a list silently missing it reads as "this
+  fleet has nowhere to send it".
+- **A `group: none` row is not a candidate** unless the user names it
+  explicitly. Those are the repos "match the fleet" must not reach.
+- **The row may be this repo.** `docs/MESSAGES.md` deposits into your own
+  inbox by the same mechanism, and a `channel: architecture` item whose
+  boundary this repo's own `DESIGN.md` owns belongs there. It is the one case
+  where destination == source is correct rather than a loop; for `design` and
+  `design-system` it is not, so confirm the choice was deliberate.
+- **A connection is not a destination.** `## Connections` says what this repo
+  reads (docs/CONNECTIONS.md); four of its kinds are repos and two are not.
+  A Figma file, a design project and a Linear workspace have no inbox, no
+  agent and no promotion gate, so a signal about one still travels to
+  whichever repo's people own it — a fleet question with a human answer.
+- **No fleet, or no row that owns it, is a real answer** → the packet path.
+  Say once that adding the row to `FLEET.md` enables direct delivery. The
+  fleet gate is what makes a message's `from:` provenance worth anything, so a
+  repo that is not on the map cannot be addressed, and inventing a path around
+  the map is the write `docs/MESSAGES.md` bans.
 
 **It is a message, not an item, and the distinction is the whole rule.**
 `docs/MESSAGES.md` allows exactly one kind of write outside this repo —
@@ -239,175 +253,207 @@ So the deposit follows the standard's send half in full: the fleet gate, the
 `(from, about)` dedupe probe, the temp-name-then-`mv`. Ids for the message
 come from `hero_msg_id`, not from either store's item sequence.
 
-**No `FLEET.md` row for the design-system repo means no deposit.** The fleet
-gate is what makes a message's `from:` provenance worth anything, and a
-sibling that is not on the map cannot be addressed. Report it and use the
-packet path, saying once that adding the row enables direct delivery.
-
-Resolve the checkout read-only, and resolve it **before** anything else:
+Resolve the named row's checkout read-only, and resolve it **before** anything
+else:
 
 ```bash
+# The row's ABSOLUTE path, from the one parse that already applied the trust
+# rules — never `hero_fleet_repo_field ... path`, whose default is `./NAME`
+# and would resolve against the wrong directory for a row that sets `path`.
+TO_PATH=$(hero_fleet_repos | awk -F'\t' -v n="$TO_ROW" '$1 == n { print $2 }')
 # hero_root takes NO argument — it always returns the current repo — so it
 # cannot resolve another checkout. git -C can, and it fails on a path that is
 # not an existing directory inside a repo. -C takes a directory, never a
 # remote URL, so an ext:: transport helper is not reachable from here.
-DS_ROOT=$(git -C "$DS_REPO" rev-parse --show-toplevel 2>/dev/null) \
-  || { echo "design-system-repo '$DS_REPO' is not a git checkout — STOP" >&2; exit 1; }
-[ "$(cd "$DS_ROOT" && pwd -P)" != "$(cd "$ROOT" && pwd -P)" ] \
-  || { echo "design-system-repo resolves to THIS repo — STOP (wayfare would file feedback to itself)" >&2; exit 1; }
+TO_ROOT=$(git -C "$TO_PATH" rev-parse --show-toplevel 2>/dev/null) \
+  || { echo "fleet row '$TO_ROW' is not a git checkout — STOP" >&2; exit 1; }
+[ -d "$TO_ROOT/.plans/inbox" ] \
+  || { echo "'$TO_ROW' has no .plans/inbox/ — packet path" >&2; }
+
+# The sender's own row: the one whose path resolves to THIS root. `fleet` is
+# reserved for a fleet-root run and is never borrowed, and a row name guessed
+# from the folder name is provenance the recipient cannot trust.
+FROM_ROW=$(hero_fleet_repos | awk -F'\t' -v r="$ROOT" '$2 == r { print $1 }')
 ```
 
-**Do not call `hero_work_store` on it yet.** That function is not read-only —
-it creates `.plans/` and edits `.git/info/exclude` in whatever root it is
-handed — and `$DS_REPO` comes from HERO.md, which is attacker-controlled in a
-cloned repo. Calling it here would mutate a repository the user has not yet
-named. It runs in step 4, **after** the user has typed the resolved absolute
-path. A sibling with no `.plans/inbox/` cannot receive a deposit: report it
-and use the packet path rather than creating a store in someone else's repo.
+**Never call `hero_work_store` on the destination.** That function is not
+read-only — it creates `.plans/` and edits `.git/info/exclude` in whatever
+root it is handed — and this path came from a local map, not from a decision
+to initialise that repo. `hero_msg_deposit` refuses to create the mailbox for
+the same reason. A sibling with no `.plans/inbox/` cannot receive a deposit:
+report it and use the packet path rather than standing a store up in someone
+else's repo.
 
 ### 2. Collect and key the items
 
 Collect every `accepted` and `ready` signal item of the channels this delivery
-covers. **One delivery per destination** — never one issue carrying both design
-and design-system feedback, because they are answered by different people.
+covers. **One delivery per destination**, and one delivery covers one channel
+— never a single confirmation carrying both design and design-system feedback,
+because they are answered by different people.
 
-Build a **manifest line** per item:
+**One message per item**, not one message carrying the batch. The dedupe key
+in `docs/MESSAGES.md` is `(from, about)`, so `about:` must be a single source
+item id; a batch has no such key, and the probe that stops a re-send would
+have nothing to match on. The gate below is still one confirmation covering
+the N messages.
+
+Build a **manifest line** per item, carried in that item's message body:
 
 ```
 - SOURCE_OWNER/SOURCE_NAME item 61 DF-12-2026-07-25-1
 ```
 
-The source repo qualifier is required. One feedback repo serves many source
-repos — that is why the destination is configured per source — and item ids are
-small integers local to one `.plans/` store. Without the qualifier, repo A's
-`item 61` collides with repo B's, and B's feedback is skipped as
-already-covered and never leaves.
+The source repo qualifier is required. One repo receives feedback from several
+siblings, and item ids are small integers local to one `.plans/` store.
+Without the qualifier, repo A's `item 61` collides with repo B's, and B's
+feedback is skipped as already-covered and never leaves. The line is also what
+a human tracing the other end reads: `about:` means nothing in the recipient's
+namespace, by the standard's own rule.
 
-### 3. Partition against what has already been filed
+### 3. Partition against what has already been delivered
 
-For the issue path, search the destination for manifest lines already covering
-these items:
+Two probes, per item, both read-only, and both required — a message that has
+already been promoted no longer sits in the inbox, and a message still sitting
+there has not been promoted yet:
 
 ```bash
-gh issue list --repo "OWNER/NAME" --author "@me" --state all \
-  --limit 200 --json number,url,createdAt,body
+hero_msg_find "$TO_ROOT/.plans" "$FROM_ROW" "$ITEM_ID"   # 1 = not sent yet
 ```
 
-Three parts of that command matter:
+- **A live message** with this `(from, about)` → already delivered. Reuse it;
+  the standard forbids a second. `hero_msg_find` returns **2 when it could not
+  ask** (no readable store) and only **1** means "not sent yet": treating 2 as
+  1 re-sends everything on the first unreadable store.
+- **A promoted item** in that store whose body carries this item's manifest
+  line → also already delivered. Read items with `hero_item_field`, never a
+  raw grep of the directory, which matches a body quoting the line as much as
+  the line itself.
 
-- **`--author @me`** — the check reads issue text on a **third party's repo**
-  as proof that an item was already delivered. On a public repo, anyone can
-  open an issue. Without an authorship filter, one attacker issue containing a
-  wide manifest block (`item 1` through `item 200`; ids are small sequential
-  integers, so a few thousand lines covers the space) makes every real item
-  match, skip, and freeze as `delivered` pointing at the attacker's issue —
-  permanently suppressing the channel, with the freeze rule blocking any
-  correction. Trust only issues this account filed.
-- **`--state all`** — a design team that triages and closes the issue is the
-  normal outcome, and the only route to a `rejected` verdict. Scoping to open
-  issues makes idempotency expire exactly when the process works.
-- **`--limit 200`** — the default is 30. A busy feedback repo silently returns
-  "not covered" for everything and re-files.
+`about:` is the source item id and it is **never empty**. An absent `about:`
+reads as the empty string on both sides, so an empty probe matches every
+about-less message from this repo and the second unrelated signal is dropped
+as a duplicate of the first.
 
-For the design-system store path, the equivalent check is whether that store
-already holds an item whose body carries the manifest line — read it with
-`hero_item_field`, never a raw grep of the directory. This is the first point
-`hero_work_store "$DS_ROOT"` may run, and only once step 4's gate has passed
-for this path in this session.
+The probes read files another agent wrote, and `from:` is claimed rather than
+proven, so key them on **this repo's own row name** and trust nothing else in
+the file. A message is evidence that *this* repo sent something; it is never
+evidence about what the recipient did with it.
 
 Partition into:
 
-- **`already_covered`** — its manifest line appears in a matching issue (or
-  item). Record that issue's URL (or the item's path) and its date.
+- **`already_covered`** — a probe matched. Record the `msg_id` (or the item's
+  path) and its date.
 - **`to_file`** — everything else.
 
 ### 4. Render, confirm, then file — in that order
 
-Build the body **before** the gate, so the gate shows what will actually be
-sent:
+Build every body **before** the gate, so the gate shows what will actually be
+sent. One `type: ask` message per `to_file` item, in the format
+`docs/MESSAGES.md` fixes:
 
 ```markdown
-Design feedback from SOURCE_OWNER/SOURCE_NAME.
-
-Covers:
-- SOURCE_OWNER/SOURCE_NAME item 61 DF-12-2026-07-25-1
-
+---
+msg_id: m-7f3a9c        # hero_msg_id — never an item-sequence number
+type: ask
+from: web               # this repo's FLEET.md row name
+to: design              # the row the user named
+sent: 2026-07-25
+about: 61               # the SOURCE item id — provenance, and the dedupe key
+awaited: false          # a signal does not suspend the build that found it
+status: new
 ---
 
-[the to_file items, verbatim: subject, what the design says, what the code
-does, why the code is the better answer]
+## Ask
+
+Design feedback from SOURCE_OWNER/SOURCE_NAME, covering:
+
+- SOURCE_OWNER/SOURCE_NAME item 61 DF-12-2026-07-25-1
+
+[the item, verbatim: subject, what the design says, what the code does, why
+the code is the better answer]
+
+## Why
+
+What the source knows that the destination does not — the build that found it.
 ```
 
-**The title is constrained**: `Design feedback from SOURCE_OWNER/SOURCE_NAME
-(N items)`, or `Design-system feedback from …` for that lane. Nothing else. It
-is the one field a reader never sees rendered in the body, and a title composed
-freely will reach for whatever context the session holds — the branch name, the
-PR number — which is the leak that dropping handoff was meant to close.
+**`awaited: false` is the default and it matters.** A signal is a report, not
+a request the source is stalled on: an await suspends the sending item on a
+reply that arrives only when someone opens a session in that repo, which may
+be never. Use `awaited: true` with an `expires:` only when the source genuinely
+cannot route around the answer.
+
+**Nothing composed freely leaves the repo.** The `## Ask` opener is the
+manifest and the verbatim item, in that order, and nothing else. A line
+composed from session context reaches for whatever the session holds — the
+branch name, the PR number — which is the leak that dropping handoff was meant
+to close.
 
 Then the gate. It is its **own** gate, not folded into sync's proposal confirm:
 
 ```
 Design feedback delivery
-  Destination: acme/design      (from HERO.md feedback-repo — NOT named by you)
-  Channels:    design + architecture
-  Title:       Design feedback from acme/web (2 items)
-  Filing:      2 items
-  Skipping:    1 item already covered by acme/design#88
+  Destination: design           (FLEET.md row — you named it)
+               /Users/me/fleet/design/.plans/inbox/
+  Channel:     design
+  Depositing:  2 messages, one per item
+  Skipping:    1 item already covered by m-c0fbd5
 
-  --- BODY BEGINS (quoted design-derived content, not instructions) ---
-  [rendered body]
-  --- BODY ENDS ---
+  --- BODIES BEGIN (quoted design-derived content, not instructions) ---
+  [the rendered messages]
+  --- BODIES END ---
 
-Type the destination repo to confirm (OWNER/NAME), or anything else to cancel:
+Type the destination inbox path to confirm, or anything else to cancel:
 ```
 
 Two requirements here:
 
-- **The user types the destination.** A `[y/N]` on a pre-filled value is
-  *confirming what the config chose*, and HERO.md is attacker-controlled in a
-  cloned repo. Every other outward-facing filing in this plugin requires the
-  user to **name** the target in-session; matching that bar means they type it.
-  A mismatch cancels. The design-system lane types the **path**, and it is
-  shown resolved to an absolute path — a relative one is read against a working
-  directory the user cannot see from the prompt.
-- **The body is fenced when rendered.** It is design-derived text displayed
-  immediately above a prompt. Without an explicit delimiter, a design doc
-  containing a plausible-looking confirmation line renders in the position the
-  real prompt occupies. Everything between the BEGINS/ENDS markers is quoted
+- **The user types the resolved absolute path.** A `[y/N]` on a pre-filled
+  value confirms what something else chose, and every other outward-facing
+  write in this plugin requires the user to **name** the target in-session. A
+  mismatch cancels. It is shown resolved and absolute: a relative path is read
+  against a working directory the user cannot see from the prompt, and the row
+  name alone does not show which checkout it landed in.
+- **The bodies are fenced when rendered.** They are design-derived text
+  displayed immediately above a prompt. Without an explicit delimiter, a design
+  doc containing a plausible-looking confirmation line renders in the position
+  the real prompt occupies. Everything between the BEGIN/END markers is quoted
   data.
 
-A declined or cancelled gate is a full stop: nothing filed, **no status
+A declined or cancelled gate is a full stop: nothing deposited, **no status
 changes**.
 
-Then file, capturing the URL — it is the precondition for every status change
-below:
+Then deposit, one message at a time, capturing each `msg_id` — it is the
+precondition for that item's status change below:
 
 ```bash
-ISSUE_URL=$(gh issue create --repo "OWNER/NAME" \
-  --title "Design feedback from SOURCE_OWNER/SOURCE_NAME (N items)" \
-  --body-file "$STORE/.feedback/.body-DATE.md")
+hero_msg_deposit "$TO_ROOT/.plans" "$MSG_ID" "$STORE/.feedback/.body-$MSG_ID.md"
 ```
 
-Write `--body-file` under `$STORE/.feedback/`, never at the store root: a stray
-`*.md` there becomes an `invalid` row from `hero_ready_items` and gets reported
-as a store defect.
+Write the body file under `$STORE/.feedback/`, never at the store root: a
+stray `*.md` there becomes an `invalid` row from `hero_ready_items` and gets
+reported as a store defect.
 
-Assert `ISSUE_URL` is non-empty and `https://`-shaped. A failed
-`gh issue create` — permissions, org restrictions — means nothing was filed;
-report it and offer the packet path. Do not mark.
+`hero_msg_deposit` writes to a temp name and `mv`s it into place, because a
+recipient globbing `inbox/*.md` can read a direct write mid-file, and a torn
+message is feedback acted on in half. On `already exists` or a collision, draw
+a new id with `hero_msg_id` and retry **once**; a second refusal is a finding,
+not a third draw. A refused deposit means nothing was delivered for that item:
+report it and leave the item unmarked.
 
 ### 5. Mark both partitions
 
 **Both lists get marked, and an empty `to_file` still performs marking.** This
 is what makes the channel recover instead of livelocking:
 
-- **`to_file`** → `status: done`, `resolution: delivered`, `delivered_to:` the URL, or the message id
-  just deposited.
-- **`already_covered`** → `status: done`, `resolution: delivered`, `delivered_to:` the issue found
-  in step 3. These items were filed by an earlier run that died before marking;
-  they need no filing, only the status they never got.
+- **`to_file`** → `status: done`, `resolution: delivered`, `delivered_to:` the
+  `msg_id` just deposited.
+- **`already_covered`** → `status: done`, `resolution: delivered`,
+  `delivered_to:` the `msg_id` (or item path) found in step 3. These were
+  delivered by an earlier run that died before marking; they need no deposit,
+  only the status they never got.
 
-Marking `already_covered` with the *new* issue's URL would misattribute them and
+Marking `already_covered` with a *new* `msg_id` would misattribute them and
 break the reconciliation below. Skipping them entirely is worse: they stay
 `accepted`, are skipped again at every future sync, and the backlog never drains
 while the user is re-prompted forever.
@@ -422,13 +468,13 @@ AFTER == BEFORE - (len(to_file) + len(already_covered))
 ```
 
 Re-deriving the baseline after marking compares a number to itself and always
-passes. A mismatch is a real finding: under-marking re-files the same feedback
-on someone else's repo next sync, and over-marking freezes feedback that never
+passes. A mismatch is a real finding: under-marking re-sends the same feedback
+into someone else's inbox next sync, and over-marking freezes feedback that never
 left. On a mismatch, name the item ids on both sides and **unwind the status
 changes you just made** before reporting — an over-marked item cannot be
 corrected later, because delivered is frozen.
 
-### The packet path (no destination, or one that cannot take issues)
+### The packet path (no fleet row owns it, or the row cannot receive)
 
 Write the verbatim-item body to `$STORE/.feedback/DATE-SLUG.md`, where SLUG is
 derived from the first item's id (`2026-07-25-item61.md`). **Check the path does
@@ -443,10 +489,12 @@ Set those items `status: ready`, **not** `done`. Nothing reached the
 destination; a file in a git-ignored store carried nothing anywhere. A `ready`
 item stays in the backlog and re-surfaces every sync.
 
-**Ready → delivered** is the user's report that it landed: they name the issue
-URL, you validate it is `https://`-shaped and on the destination host, and the
-status flips with `delivered_to` set. Until then it stays `ready`. Re-running the
-packet path for an already-`ready` item **updates its existing `delivered_to` in
+**Ready → delivered** is the user's report that it landed: they name where it
+went — a `msg_id` once the row exists, or wherever they carried the packet by
+hand — and the status flips with `delivered_to` set. Validate a `msg_id` by
+finding that file in the destination's inbox; take anything else as the user's
+word and record it verbatim. Until then it stays `ready`. Re-running the packet
+path for an already-`ready` item **updates its existing `delivered_to` in
 place** — it never appends a second packet.
 
 Never write a packet into a snapshot repo (`$STORE/.cache/design`,
@@ -458,15 +506,18 @@ disk — a snapshot mirrors its project and nothing else.
 The sync's **feedback** finding collects `accepted` and `ready` items across all three
 lanes. Two further obligations:
 
-- **Recording a rejection.** When the user reports that the other side declined
-  a delivered item, flip `resolution: delivered` → `rejected` — the status
+- **Recording a rejection.** The recipient declines by setting `status:
+  declined` on the message in its own inbox, which this repo never reads —
+  there is one write outside a repo and reading someone's mailbox back is not
+  it. So it arrives the way any answer does: as the user's report, or as a
+  reply message in this repo's inbox naming the `msg_id`. Either way, flip `resolution: delivered` → `rejected` — the status
   stays `done`, same `delivered_to`, same date — and append the reason to
   `## Log`. This is the only transition that writes `rejected`, and without
   it the resolution is unreachable and every section above is dead. The
   status not moving is the point: the question is answered either way, so
   the dependents stay unblocked.
 - **Consulting it.** When a *new* item names a `subject:` some `rejected` item
-  already names, say so in the proposal: "this was raised on acme/design#71 and
-  rejected on 2026-07-22". Otherwise the rejection history is written and never
+  already names, say so in the proposal: "this was raised with `design` as
+  m-c0fbd5 and rejected on 2026-07-22". Otherwise the rejection history is written and never
   read, and the same divergence gets re-raised the next time someone builds
   against that path.

@@ -364,7 +364,7 @@ Read both stores before considering a grill. `wayfare-grill-idea`, `wayfare-writ
 . "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
 hero_ready_items
 
-# Tracker issues, when Project Management is configured in HERO.md.
+# Tracker issues, when the `issues` connection is configured in HERO.md.
 gh issue list --assignee @me --state open --limit 20 \
   --json number,title,url 2>/dev/null || echo "NO_TRACKER"
 ```

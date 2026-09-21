@@ -68,7 +68,7 @@ Read `HERO.md` if it exists. This skill uses:
 - **Code Quality** → linters, formatters, type checkers (test phase + pre-commit steps)
 - **Projects** → language, framework, install/test/dev commands, ports (test phase; skips auto-detection)
 - **CI/CD** → platform name for PR description context and CI status reporting
-- **Project Management** → issue prefix for branch names, `Fixes:`/`Relates to:` trailers, and linking PRs to issues
+- **The `issues` connection** → issue prefix for branch names, `Fixes:`/`Relates to:` trailers, and linking PRs to issues
 
 If `HERO.md` is missing, suggest `wayfare:wayfare-init-repo` but proceed with defaults (the test phase falls back to auto-detection). If the stale-HERO hint fired, mention it once to the user but do not block.
 

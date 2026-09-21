@@ -70,6 +70,13 @@ repo's own gate while `auto-approve.yaml` is the fleet's.
   [docs/PLAN.md](./docs/PLAN.md)). Conversation uses the three
   interchangeably; the code does not. Scope a verb to the wrong noun and it
   writes the wrong file, which is the mistake below.
+- **What a repo attaches to is a connection; where it sits is the fleet.**
+  Six kinds, closed list, one `### kind` block each under `## Connections` in
+  HERO.md ([docs/CONNECTIONS.md](./docs/CONNECTIONS.md)). Three states, never
+  two: no block means nobody looked, `type: none` means looked and there is
+  none, and a set `type` whose `reach` is unavailable means broken — read
+  that last one as absent and the run silently drops the lane it should have
+  reported.
 - **`recalibrate` writes HERO.md; `sync` writes the skill's own file.**
   Eleven skills carry the verb ([docs/RECALIBRATE.md](./docs/RECALIBRATE.md));
   their field map is `scripts/hero-fields.sh`, and a field missing there is a

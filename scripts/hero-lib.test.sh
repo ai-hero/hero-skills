@@ -269,6 +269,198 @@ check "repo-ref: an existing local dir passes through" \
 # WRONG SILENTLY.
 
 W="$TMP/w/.plans"
+
+# ---------- connections (docs/CONNECTIONS.md) ------------------------------
+
+# Every case here is a way the listing could be WRONG SILENTLY: a block read
+# from the wrong section, a declared absence dropped so it looks unset, or an
+# unsafe value defaulted instead of skipped.
+CN="$TMP/conn"
+mkdir -p "$CN"
+cat > "$CN/HERO.md" <<'EOF'
+# Hero Configuration
+
+## Connections
+
+### design
+
+- type: claude-design # the substrate
+- at: 6f1c2e88
+- reach: designsync
+- ux-flow: flows/
+
+### design-system
+
+- type: registry
+- at: ../ds
+- namespace: "@aihero"
+
+### infrastructure
+
+- type: none
+
+### bad name
+
+- type: repo
+
+### dashed
+
+- at: --exec=rm
+
+## Repository
+
+- type: single
+- at: nowhere
+
+## Projects
+
+### design
+
+- language: go
+EOF
+
+check "connection: field from its own block" \
+  "claude-design" "$(hero_connection design type "$CN")"
+# `type` and `at` both exist under ## Repository, and `### design` is repeated
+# under ## Projects. A reader that ignores either boundary answers the wrong
+# question with a plausible-looking value.
+check "connection: ## Repository does not answer for a connection" \
+  "registry" "$(hero_connection design-system type "$CN")"
+check "connection: a same-named block in another section is not read" \
+  "-" "$(hero_connection design language "$CN" 2>/dev/null || echo -)"
+check "connection: kind-specific key reads" \
+  "@aihero" "$(hero_connection design-system namespace "$CN")"
+check "connection: unset field is rc 1" \
+  "1" "$(hero_connection design nosuchkey "$CN" >/dev/null 2>&1; echo $?)"
+
+check "connections: row is KIND TYPE AT REACH" \
+  "design	claude-design	6f1c2e88	designsync" \
+  "$(hero_connections "$CN" 2>/dev/null | head -1)"
+# A declared `type: none` is an ANSWER. Dropping it here would make "looked,
+# there is none" indistinguishable from "nobody has looked", which is the one
+# distinction the standard exists to keep.
+check "connections: a declared absence is listed" \
+  "infrastructure	none	-	-" \
+  "$(hero_connections "$CN" 2>/dev/null | grep '^infrastructure')"
+check "connections: unset at/reach print as -, never empty" \
+  "design-system	registry	../ds	-" \
+  "$(hero_connections "$CN" 2>/dev/null | grep '^design-system')"
+check "connections: untrusted blocks are skipped, not defaulted" \
+  "" "$(hero_connections "$CN" 2>/dev/null | grep -E '^(bad|dashed)' || true)"
+check "connections: a skipped block returns 3" \
+  "3" "$(hero_connections "$CN" >/dev/null 2>&1; echo $?)"
+check "connections: each skip names the kind on stderr" \
+  "2" "$(hero_connections "$CN" 2>&1 >/dev/null | grep -c 'skipping')"
+check "connections: sections after ## Connections are not blocks" \
+  "3" "$(hero_connections "$CN" 2>/dev/null | wc -l | tr -d ' ')"
+
+# A fenced example is documentation. HERO.md documents its own syntax, and a
+# block inside a fence declaring `type: figma` would otherwise be read as this
+# repo's real design connection.
+cat > "$CN/HERO.md" <<'EOF'
+# Hero Configuration
+
+## Connections
+
+```markdown
+### design
+
+- type: figma
+```
+
+### issues
+
+- type: github
+- at: acme/web
+EOF
+check "connections: a fenced example is not a declaration" \
+  "issues	github	acme/web	-" "$(hero_connections "$CN" 2>/dev/null)"
+
+# No ## Connections at all is not an error: it is a repo nobody has looked at
+# yet, and it prints nothing with rc 0.
+cat > "$CN/HERO.md" <<'EOF'
+# Hero Configuration
+
+## Repository
+
+- type: single
+EOF
+check "connections: no section is empty, rc 0" \
+  "yes" "$(hero_connections "$CN" >/dev/null 2>&1 && echo yes || echo no)"
+check "connections: no section prints nothing" \
+  "" "$(hero_connections "$CN" 2>/dev/null)"
+check "connections: no HERO.md is rc 1" \
+  "1" "$(hero_connections "$TMP/nope" >/dev/null 2>&1; echo $?)"
+
+# The compat read is what keeps an unmigrated repo working. Without it, a repo
+# whose design target is configured the old way reports as having none, and the
+# run silently drops to self-review.
+cat > "$CN/HERO.md" <<'EOF'
+# Hero Configuration
+
+## Wayfare
+
+- design-project: 6f1c2e88
+- design-transport: manual
+
+## Connections
+
+### design
+
+- type: claude-design
+- at: aaaabbbb
+EOF
+check "compat: the connection wins when both exist" \
+  "aaaabbbb" "$(hero_connection_compat design at design-project "$CN" 2>/dev/null)"
+check "compat: falls back to the legacy key" \
+  "manual" "$(hero_connection_compat design reach design-transport "$CN" 2>/dev/null)"
+check "compat: the legacy read is announced" \
+  "yes" "$(hero_connection_compat design reach design-transport "$CN" 2>&1 >/dev/null | grep -q "design-transport" && echo yes || echo no)"
+check "compat: neither set is rc 1" \
+  "1" "$(hero_connection_compat design nosuch nosuch-either "$CN" >/dev/null 2>&1; echo $?)"
+
+# hero_connection_repo: `at` is a fleet row name where there is a fleet and a
+# path otherwise, and the two must not be answered differently by different
+# callers. rc 3 (set, unreachable) is deliberately not rc 1 (none).
+FL="$TMP/connfleet"   # not $TMP/fleet: that fixture is git-init-ed above and reused
+mkdir -p "$FL/app" "$FL/ds"
+cat > "$FL/FLEET.md" <<'EOF'
+# Fleet
+
+## Fleet
+
+- name: t
+
+## Repos
+
+### ds
+
+- path: ./ds
+- group: apps
+EOF
+conn_at() { printf '# H\n\n## Connections\n\n### design-system\n\n%s\n' "$1" > "$FL/app/HERO.md"; }
+
+conn_at "- at: ds"
+check "connection repo: a row name resolves through the fleet map" \
+  "$(cd "$FL/ds" && pwd -P)" "$(hero_connection_repo design-system "$FL/app" 2>/dev/null)"
+conn_at "- at: ../ds"
+check "connection repo: a relative path resolves against ROOT, not cwd" \
+  "$(cd "$FL/ds" && pwd -P)" "$(hero_connection_repo design-system "$FL/app" 2>/dev/null)"
+conn_at "- at: nosuchrow"
+check "connection repo: set but unreachable is rc 3, never rc 1" \
+  "3" "$(hero_connection_repo design-system "$FL/app" >/dev/null 2>&1; echo $?)"
+# Capture first, then grep. Piping the call straight into grep makes pipefail
+# surface the function's own rc 3 as the pipeline status, and the check reads
+# "no message" for a message that was printed.
+ERRTXT=$(hero_connection_repo design-system "$FL/app" 2>&1 >/dev/null)
+check "connection repo: the unreachable case names the kind on stderr" \
+  "yes" "$(printf '%s' "$ERRTXT" | grep -q 'design-system' && echo yes || echo no)"
+conn_at "- type: none"
+check "connection repo: none is rc 1, and prints nothing" \
+  "1" "$(hero_connection_repo design-system "$FL/app" >/dev/null 2>&1; echo $?)"
+conn_at "- at: none"
+check "connection repo: at none is rc 1 too" \
+  "1" "$(hero_connection_repo design-system "$FL/app" >/dev/null 2>&1; echo $?)"
 mkdir -p "$W/items"
 
 # Every store needs a plan object; without one the listing refuses outright,
@@ -1382,7 +1574,7 @@ fi
 # SILENTLY; the suite must not be able to go quiet the same way.
 # Three cases run only where zsh exists (macOS), so the floor is the Linux
 # count: CI has no zsh and must not fail on a guard meant for a silent block.
-MIN_CASES=210
+MIN_CASES=235
 if [ "$PASS" -lt "$MIN_CASES" ]; then
   echo "hero-lib: only $PASS cases ran, expected >= $MIN_CASES — a block stopped executing" >&2
   exit 1

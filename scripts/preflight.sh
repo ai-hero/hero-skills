@@ -560,10 +560,13 @@ check_pipeline() {
   fi
 
   # 2. Issue tracker auth (only if HERO.md declares one)
-  local tool issue_tracker
-  tool=$(awk -F': ' '/^- tool:/ {print $2; exit}' "$HERO" 2>/dev/null | xargs)
-  issue_tracker=$(awk -F': ' '/^- issue-tracker:/ {print $2; exit}' "$HERO" 2>/dev/null | xargs)
-  case "${tool:-${issue_tracker:-none}}" in
+  local tracker
+  # Deleting the legacy fallback inside hero_connection_compat would make an
+  # unmigrated repo report OK by reading nothing at all, which is the one
+  # outcome this check exists to prevent.
+  tracker=$(hero_connection_compat issues type tool "$ROOT" 2>/dev/null)
+  [ -n "$tracker" ] || tracker=$(hero_connection_compat issues type issue-tracker "$ROOT" 2>/dev/null)
+  case "${tracker:-none}" in
     linear)
       # Linear MCP is the usual integration. We can't probe Anthropic's
       # MCP auth state from bash, so check whether a `linear` CLI or
@@ -571,14 +574,14 @@ check_pipeline() {
       if [ -n "${LINEAR_API_KEY:-}" ] || command -v linear >/dev/null 2>&1; then
         emit OK "pipeline: linear credentials detected"
       else
-        emit WARN "pipeline: HERO.md says tool=linear but no LINEAR_API_KEY / linear CLI found — Step 1 (plan) may prompt to re-auth"
+        emit WARN "pipeline: HERO.md says the issues connection is linear but no LINEAR_API_KEY / linear CLI found — Step 1 (plan) may prompt to re-auth"
       fi
       ;;
     jira)
       if [ -n "${JIRA_API_TOKEN:-}" ] && [ -n "${JIRA_EMAIL:-}" ]; then
         emit OK "pipeline: jira credentials detected"
       else
-        emit WARN "pipeline: HERO.md says tool=jira but JIRA_API_TOKEN / JIRA_EMAIL not set — Step 1 (plan) may fail to fetch tickets"
+        emit WARN "pipeline: HERO.md says the issues connection is jira but JIRA_API_TOKEN / JIRA_EMAIL not set — Step 1 (plan) may fail to fetch tickets"
       fi
       ;;
     github-issues|github)
@@ -586,14 +589,14 @@ check_pipeline() {
       if [ "${GH_AUTH_OK:-false}" = "true" ]; then
         emit OK "pipeline: github-issues uses the gh auth checked above"
       else
-        emit BLOCKER "pipeline: HERO.md says tool=github-issues but gh is not authenticated"
+        emit BLOCKER "pipeline: HERO.md says the issues connection is github but gh is not authenticated"
       fi
       ;;
     none|"")
       emit SKIP "pipeline: no issue tracker configured (plain-description plans only)"
       ;;
     *)
-      emit SKIP "pipeline: unknown issue tracker '$tool' — auth check skipped"
+      emit SKIP "pipeline: unknown issue tracker '$tracker' — auth check skipped"
       ;;
   esac
 }

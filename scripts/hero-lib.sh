@@ -124,6 +124,158 @@ hero_field() {
   hero_md_field "$root/HERO.md" "$1"
 }
 
+# One field from a connection block in HERO.md (docs/CONNECTIONS.md):
+#   hero_connection design at
+#   hero_connection design-system namespace
+# `hero_field` would answer from any section, and `namespace` or `type` exists
+# in more than one, so a connection field is never read without its block.
+hero_connection() { # KIND KEY [ROOT]
+  local root
+  root="${3:-$(hero_root)}" || return 1
+  hero_md_field "$root/HERO.md" "$2" "### $1" "## Connections"
+}
+
+# A connection field, falling back to the flat HERO.md key it replaced.
+#   hero_connection_compat design at design-project
+#
+# Connections moved out of `## Wayfare` and `## Project Management`
+# (docs/CONNECTIONS.md), and a repo that has not migrated still carries the old
+# key. Reading only the new shape would report a CONFIGURED attachment as
+# absent, which is the one collapse that standard exists to prevent: the run
+# then proceeds as though the repo had no design target at all. The legacy
+# read is announced on stderr, once per call, so the fix is visible rather
+# than indefinitely free.
+#
+# rc mirrors the reader that answered: 0 found, 1 neither set, 2 refused.
+hero_connection_compat() { # KIND KEY LEGACY_KEY [ROOT]
+  local root value rc
+  root="${4:-$(hero_root)}" || return 1
+  value=$(hero_connection "$1" "$2" "$root"); rc=$?
+  if [ "$rc" = 1 ]; then
+    value=$(hero_field "$3" "$root"); rc=$?
+    [ "$rc" = 0 ] && echo "hero: HERO.md still carries '$3'; it belongs under '## Connections' as '### $1' / '$2' (docs/CONNECTIONS.md)" >&2
+  fi
+  [ -n "$value" ] && printf '%s' "$value"
+  return "$rc"
+}
+
+# Resolve a repo-kind connection's `at` to an absolute checkout path.
+#   hero_connection_repo design-system
+#
+# `at` holds a FLEET.md ROW NAME when there is a fleet, because the map is
+# local and paths differ per machine, and a plain path otherwise
+# (docs/CONNECTIONS.md). Resolving it in the caller is how the two spellings
+# get answered differently in different places: a row name read as a path
+# becomes "$ROOT/design-system", which does not exist, and the run reports "no
+# design system" for what is actually a row it never looked up.
+#
+# Row first, path second: a row name that is also a directory name is the
+# fleet's answer, not a coincidence to resolve locally. The path branch keeps
+# resolving against ROOT rather than $PWD, because a caller may run from a
+# subdirectory and `../NAME` would then point somewhere else entirely.
+#
+# rc: 0 resolved, 1 `at` unset or `none`, 3 set but unresolvable (a row with no
+# checkout, a path that is not a directory). 3 is NOT 1: "cannot reach it" and
+# "there is none" are the two states the standard forbids collapsing.
+hero_connection_repo() { # KIND [ROOT]
+  local root at fleet_root row_path
+  root="${2:-$(hero_root)}" || return 1
+  at=$(hero_connection "$1" at "$root") || return 1
+  [ -n "$at" ] || return 1
+  [ "$(printf '%s' "$at" | tr '[:upper:]' '[:lower:]')" = none ] && return 1
+
+  fleet_root=$(hero_fleet_root "$root" 2>/dev/null) || fleet_root=""
+  if [ -n "$fleet_root" ]; then
+    row_path=$(hero_fleet_repos "$fleet_root" 2>/dev/null | awk -F'\t' -v n="$at" '$1 == n { print $2; exit }')
+    if [ -n "$row_path" ]; then
+      [ -d "$row_path" ] || { echo "hero_connection_repo: $1 row '$at' has no checkout at $row_path" >&2; return 3; }
+      printf '%s' "$row_path"; return 0
+    fi
+  fi
+
+  case "$at" in /*) row_path=$at ;; *) row_path="$root/$at" ;; esac
+  [ -d "$row_path" ] || {
+    echo "hero_connection_repo: $1 at '$at' is neither a FLEET.md row nor a directory" >&2
+    return 3
+  }
+  (cd "$row_path" && pwd -P)
+}
+
+# Every declared connection, one per line: KIND<TAB>TYPE<TAB>AT<TAB>REACH.
+# One awk pass, not a loop over hero_connection: that re-parses HERO.md three
+# times per block.
+#
+# A block with `type: none` IS printed. A declared absence is an answer
+# (docs/CONNECTIONS.md), and dropping it here makes it indistinguishable from
+# a kind nobody has looked at, which is the one distinction this standard
+# exists to keep. TYPE defaults to `none`; AT and REACH are `-` when unset,
+# never empty, so a caller's `IFS=$'\t' read` is safe.
+#
+# A block that cannot be trusted is SKIPPED, not defaulted: a value starting
+# with `-` (it would be read as a command-line option), a control character, a
+# kind that is not [A-Za-z0-9._-], or a duplicate kind. Each skip is one
+# stderr line and the function returns 3 — same contract as hero_fleet_repos,
+# because the caller reacts to it the same way.
+hero_connections() { # [ROOT]
+  local root
+  root="${1:-$(hero_root)}" || return 1
+  [ -r "$root/HERO.md" ] || return 1
+  awk '
+    # \034 (file separator), not a tab, and the same split hero_fleet_repos
+    # uses: `read` with a whitespace IFS collapses consecutive tabs, so an
+    # unset `at` would shift reach into its column.
+    #
+    # awk EXTRACTS; the shell below applies the value rules. Re-implementing
+    # the quote strip and the trust checks here would fork them from
+    # hero_md_field, and the two readers of one line would disagree: they did,
+    # over `- type: "github`, until this was split.
+    function flush() { if (kind != "") printf "%s\034%s\034%s\034%s\n", kind, t, a, r; kind = "" }
+    /^```/ { fence = !fence; next }
+    fence  { next }
+    /^## / { flush(); sec = $0; sub(/[[:space:]]+$/, "", sec); next }
+    sec == "## Connections" && /^### / {
+      flush(); kind = $0; sub(/^### +/, "", kind); sub(/[[:space:]]+$/, "", kind)
+      t = ""; a = ""; r = ""; next
+    }
+    kind != "" && /^- (type|at|reach):/ {
+      k = $0; sub(/^- /, "", k); sub(/:.*/, "", k)
+      v = $0; sub(/^[^:]*: */, "", v); sub(/ *#.*/, "", v); gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+      # First non-empty wins, the rule hero_md_field follows. Last-wins would
+      # make a duplicated key answer differently here than it does through
+      # hero_connection. No apostrophe anywhere in this program: it is
+      # single-quoted, and one would end it mid-parse.
+      if (v == "") next
+      if      (k == "type"  && t == "") t = v
+      else if (k == "at"    && a == "") a = v
+      else if (k == "reach" && r == "") r = v
+    }
+    END { flush() }
+  ' "$root/HERO.md" | {
+    local kind t a r v reason seen nbad
+    seen=" "; nbad=0
+    while IFS=$'\034' read -r kind t a r; do
+      reason=""
+      case "$kind" in
+        .|..|''|*[!A-Za-z0-9._-]*) reason="kind is [A-Za-z0-9._-] only, not '$kind'" ;;
+      esac
+      [ -n "$reason" ] || case "$seen" in *" $kind "*) reason="duplicate kind" ;; esac
+      t=${t#[\"\']}; t=${t%[\"\']}
+      a=${a#[\"\']}; a=${a%[\"\']}
+      r=${r#[\"\']}; r=${r%[\"\']}
+      for v in "$t" "$a" "$r"; do
+        [ -n "$reason" ] || case "$v" in -*|*[[:cntrl:]]*) reason="a value starts with '-' or holds a control character" ;; esac
+      done
+      if [ -n "$reason" ]; then
+        echo "hero_connections: skipping '$kind': $reason" >&2
+        nbad=$((nbad + 1)); continue
+      fi
+      seen="$seen$kind "
+      printf '%s\t%s\t%s\t%s\n' "$kind" "${t:-none}" "${a:--}" "${r:--}"
+    done
+    [ "$nbad" -eq 0 ] || return 3
+  }
+}
+
 # Is this a shape git will accept as a branch name? Used to gate values that
 # reach `git fetch`/`checkout`/`merge` and `gh pr create --base`.
 hero_is_valid_branch() {

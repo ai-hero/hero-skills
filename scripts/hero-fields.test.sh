@@ -265,5 +265,55 @@ check "the mapped-skills loop examined something" "yes" "$([ "$MAPPED" -gt 0 ] &
 # reports PASS having checked nothing.
 check "the declared-skills loop examined something" "yes" "$([ "$DECLARED" -gt 0 ] && echo yes || echo no)"
 
+# Connection blocks: a `### kind` under `## Connections` is reached by its
+# `Heading::kind` section, and `## CI/CD` proves the separator cannot be `/`.
+# The (n/a: type=none) sentinel is the one that keeps recalibrate from asking a
+# repo with no design system to name one on every single run.
+CR="$(cd "$TMP" && pwd -P)/connrepo"
+mkdir -p "$CR"
+cat > "$CR/HERO.md" <<'EOM'
+# Hero Configuration
+
+## CI/CD
+
+- platform: github-actions
+
+## Connections
+
+### design
+
+- type: none
+
+### issues
+
+- type: github
+- at: acme/web
+- issue-prefix: PROJ
+
+## Projects
+
+### design
+
+- language: go
+EOM
+
+OUT_C=$("$FIELDS" wayfare-sync-plan "$CR")
+check "connection field reads from its own block" \
+  "none" "$(printf '%s' "$OUT_C" | awk -F'\t' '$1 == "Connections::design" && $2 == "type" { print $3 }')"
+check "type=none marks the block's other rows n/a, not a question" \
+  "(n/a: type=none)" "$(printf '%s' "$OUT_C" | awk -F'\t' '$1 == "Connections::design" && $2 == "at" { print $3 }')"
+check "a missing connection block is (no-section)" \
+  "(no-section)" "$(printf '%s' "$OUT_C" | awk -F'\t' '$1 == "Connections::architecture" { print $3 }')"
+OUT_I=$("$FIELDS" wayfare-push-pr "$CR")
+check "a set connection field reports its value" \
+  "PROJ" "$(printf '%s' "$OUT_I" | awk -F'\t' '$1 == "Connections::issues" && $2 == "issue-prefix" { print $3 }')"
+# `## CI/CD` has a slash in the heading. Split the section name on `/` and the
+# heading probe looks for `## CI`, which is absent, so every CI/CD field
+# reports (no-section) — a field that is merely unset then reads as a whole
+# section nobody has written.
+OUT_P=$("$FIELDS" wayfare-check-preflight "$CR")
+check "a heading containing a slash still resolves to its section" \
+  "(unset)" "$(printf '%s' "$OUT_P" | awk -F'\t' '$1 == "CI/CD" && $2 == "auto-approve-installed" { print $3 }')"
+
 echo "hero-fields: $PASS passed${FAIL:+, $FAIL FAILED}" | sed 's/, 0 FAILED//'
 [ "$FAIL" -eq 0 ]
