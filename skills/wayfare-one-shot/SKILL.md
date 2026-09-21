@@ -86,7 +86,7 @@ session. Before deciding to advance to the next step, you MUST:
 
 5. **A delegated step is done when its artifact is observable, never when
    the skill "was run".** Step 4's artifact is the PR number; Step 5's is
-   the self-review comment (`hero_self_review_count "$PR_NUMBER"` ≥ 1);
+   both self-review comments (`hero_self_review_count "$PR_NUMBER"` ≥ 1 AND `hero_self_review_fixes_count "$PR_NUMBER"` ≥ 1);
    Step 9's is the auto-approve run URL and the merged SHA. Each step names
    its artifact and reads it before advancing; a missing one means the step
    did not run, so invoke it rather than reasoning past it. The mechanism these
@@ -635,7 +635,7 @@ The smoke portion of the test phase is intentionally narrow (≤5 routes, no lar
 
 Render DAG with `self-review` active. Run `wayfare:wayfare-review-pr --no-mark-ready` (auto-detects your draft PR and runs the pr-review-toolkit agents plus a security pass in parallel, applies fixes). The `--no-mark-ready` flag is **required** here so review-pr stops before its own Step 9 mark-ready prompt, because one-shot's Step 6 below owns that gate, and double-prompting would be confusing.
 
-**Artifact (contract item 5):** `hero_self_review_count "$PR_NUMBER"` ≥ 1 before Step 6 (source `hero-lib.sh` first; each bash block is a fresh shell). It is the same author-filtered signal ship-pr's Step 3a reads, so a stranger's comment carrying the marker does not count.
+**Artifact (contract item 5):** `hero_self_review_count "$PR_NUMBER"` ≥ 1 AND `hero_self_review_fixes_count "$PR_NUMBER"` ≥ 1 before Step 6 (source `hero-lib.sh` first; each bash block is a fresh shell). It is the same author-filtered signal ship-pr's Step 3a reads, so a stranger's comment carrying the marker does not count.
 
 This step covers `review-pr`'s functional work in Steps 1 to 8 only: post the review comment, ask permission to apply fixes, apply them, push the commit, post the improvements summary, and update the PR description. Mark-ready is deliberately deferred to one-shot's Step 6 so the DAG renders it as a visible, separately-tracked node. `review-pr`'s own Step 9 (mark-ready prompt) is skipped per `--no-mark-ready`; its Step 10 (summary print) still runs but is purely informational, and one-shot's own DAG and summary are what is authoritative here, not review-pr's next-step suggestion.
 

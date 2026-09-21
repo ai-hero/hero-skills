@@ -450,8 +450,9 @@ jobs:
         run: |
           # Auto-approve must NOT be the only review on a PR. Require at
           # least one of:
-          #   - a hero-skills self-review comment (carrying the hidden
-          #     <!-- ai-hero:self-review --> marker, posted by hero-skills:review-pr)
+          #   - a COMPLETE self-review: both marker-carrying comments that
+          #     wayfare:wayfare-review-pr posts, the findings comment and the
+          #     improvements comment recording what was done about them
           #   - a review (APPROVED / CHANGES_REQUESTED / COMMENTED) from an
           #     external code review bot (Copilot, CodeRabbit, Greptile, etc.)
           #     or a human reviewer
@@ -468,12 +469,36 @@ jobs:
             > pr_review_comments.json
 
           # Self-review marker, the hidden <!-- ai-hero:self-review -->
-          # comment posted by hero-skills:review-pr. Match both the current
-          # marker and the older "Hero Self-Review" heading (case-insensitive)
-          # so comments posted under the previous convention still count.
-          SELF_REVIEW=$(jq -r '
+          # comment posted by wayfare:wayfare-review-pr. Match both the
+          # current marker and the older "Hero Self-Review" heading
+          # (case-insensitive) so comments posted under the previous
+          # convention still count.
+          SELF_REVIEW_FINDINGS=$(jq -r '
             [.[] | select(.body | test("ai-hero:self-review|Hero Self-Review"; "i"))] | length
           ' issue_comments.json)
+
+          # The review posts TWO marker-carrying comments: the findings, then
+          # "Self-Review - Improvements" recording what was done about them.
+          # Counting the marker alone opened this gate on the first, so a PR
+          # shipped on findings nobody acted on. The skill posts the second
+          # comment even when it fixed nothing ("the durable record that the
+          # review ran"), so its absence means the review stopped half way.
+          # Matched on the word, not the heading, because the body is
+          # humanized before posting and the dash may not survive verbatim.
+          SELF_REVIEW_FIXES=$(jq -r '
+            [.[]
+              | select(.body | test("ai-hero:self-review|Hero Self-Review"; "i"))
+              | select(.body | test("improvements"; "i"))
+            ] | length
+          ' issue_comments.json)
+
+          # Both halves, or the self-review path does not count. The other
+          # two paths below are untouched: a human or bot review still
+          # passes on its own.
+          SELF_REVIEW=0
+          if [ "$SELF_REVIEW_FINDINGS" -gt 0 ] && [ "$SELF_REVIEW_FIXES" -gt 0 ]; then
+            SELF_REVIEW=1
+          fi
 
           # Reviews from anyone other than the PR author. Filter out
           # PENDING reviews (drafts) and the auto-approve workflow's own
@@ -501,7 +526,7 @@ jobs:
             ] | length
           ' pr_review_comments.json)
 
-          echo "self_review=$SELF_REVIEW"
+          echo "self_review=$SELF_REVIEW (findings=$SELF_REVIEW_FINDINGS fixes=$SELF_REVIEW_FIXES)"
           echo "other_reviews=$OTHER_REVIEWS"
           echo "bot_inline=$BOT_INLINE"
 
@@ -509,13 +534,17 @@ jobs:
             echo "passed=true" >> "$GITHUB_OUTPUT"
             {
               echo "## Prior Review: ✅"
-              echo "Found prior review (self-review: $SELF_REVIEW, other reviews: $OTHER_REVIEWS, bot inline: $BOT_INLINE)."
+              echo "Found prior review (self-review: $SELF_REVIEW [findings $SELF_REVIEW_FINDINGS, fixes $SELF_REVIEW_FIXES], other reviews: $OTHER_REVIEWS, bot inline: $BOT_INLINE)."
             } > prior_review.md
           else
             echo "passed=false" >> "$GITHUB_OUTPUT"
             {
               echo "## Prior Review: ❌"
-              echo "No prior review found. Run \`hero-skills:review-pr\` or wait for a code review agent (Copilot/CodeRabbit/Greptile) before requesting auto-approve."
+              if [ "$SELF_REVIEW_FINDINGS" -gt 0 ]; then
+                echo "A self-review posted findings but no improvements comment, so the review did not run to the end. Finish it — \`review-pr\` posts that comment even when it fixed nothing."
+              else
+                echo "No prior review found. Run \`wayfare:wayfare-review-pr\` (\`hero-skills:review-pr\` on a plugin older than the wayfare rename) or wait for a code review agent (Copilot/CodeRabbit/Greptile) before requesting auto-approve."
+              fi
             } > prior_review.md
           fi
 

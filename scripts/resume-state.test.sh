@@ -104,10 +104,17 @@ make_gh '[{"number":42,"url":"u","isDraft":true,"reviewDecision":null,"state":"O
         '[{"body":"lgtm","user":{"login":"reviewbot"}},{"body":"<!-- ai-hero:self-review -->","user":{"login":"stranger"}}]'
 OUT="$(run)"
 check "self-review: a stranger's marker comment counts 0" "0" "$(val SELF_REVIEW_DONE)"
+# A review that posted findings and stopped is NOT done. Both comments carry
+# the marker, so counting it routed past Step 5 on a half-finished review and
+# ship-pr's prior-review gate then refused the PR for the missing half.
 make_gh '[{"number":42,"url":"u","isDraft":true,"reviewDecision":null,"state":"OPEN"}]' \
-        '[{"body":"lgtm","user":{"login":"me"}},{"body":"<!-- ai-hero:self-review -->","user":{"login":"me"}}]'
+        '[{"body":"lgtm","user":{"login":"me"}},{"body":"## Self-Review\n<!-- ai-hero:self-review -->","user":{"login":"me"}}]'
 OUT="$(run)"
-check "self-review: own marker comment counts 1"         "1" "$(val SELF_REVIEW_DONE)"
+check "self-review: findings without improvements counts 0" "0" "$(val SELF_REVIEW_DONE)"
+make_gh '[{"number":42,"url":"u","isDraft":true,"reviewDecision":null,"state":"OPEN"}]' \
+        '[{"body":"## Self-Review\n<!-- ai-hero:self-review -->","user":{"login":"me"}},{"body":"## Self-Review - Improvements\n<!-- ai-hero:self-review -->","user":{"login":"me"}}]'
+OUT="$(run)"
+check "self-review: both comments count 1"               "1" "$(val SELF_REVIEW_DONE)"
 
 # `gh pr list` defaults to --state open, so a merged PR returned [] and read as
 # "no PR at all", killing the rows that stop a merged branch being re-pushed.

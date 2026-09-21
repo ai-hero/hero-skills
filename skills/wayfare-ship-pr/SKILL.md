@@ -233,8 +233,14 @@ PR_AUTHOR_TYPE=${PR_AUTHOR_JSON##* }
 
 # 3a — Prior review present (self-review OR reviewer review OR bot inline)
 # Branch on the rc: an empty count summed below reads as 0, "no review".
-SELF_REVIEW=$(hero_self_review_count "$PR_NUMBER") \
+# Both halves, matching the workflow gate: the findings comment alone is a
+# review that stopped half way, and triggering on it spends a run to be told so.
+SELF_REVIEW_FINDINGS=$(hero_self_review_count "$PR_NUMBER") \
   || { echo "ship-pr: cannot read PR comments — the prior-review gate cannot be evaluated"; exit 1; }
+SELF_REVIEW_FIXES=$(hero_self_review_fixes_count "$PR_NUMBER") \
+  || { echo "ship-pr: cannot read PR comments — the prior-review gate cannot be evaluated"; exit 1; }
+SELF_REVIEW=0
+[ "${SELF_REVIEW_FINDINGS:-0}" -gt 0 ] && [ "${SELF_REVIEW_FIXES:-0}" -gt 0 ] && SELF_REVIEW=1
 
 OTHER_REVIEWS=$(gh api "/repos/$OWNER/$REPO/pulls/$PR_NUMBER/reviews" \
   --jq "[.[] | select(.user.login != \"$PR_AUTHOR\") | select(.state != \"PENDING\")] | length")

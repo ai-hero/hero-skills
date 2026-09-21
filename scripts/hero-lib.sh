@@ -562,6 +562,21 @@ hero_self_review_count() { # PR_NUMBER
     --jq "[.[] | select(.user.login == \"$me\") | select(.body | test(\"$HERO_SELF_REVIEW_MARKER\"))] | length"
 }
 
+# The improvements half of the same review: the marker-carrying comment that
+# records what was done about the findings. review-pr posts it even when it
+# fixed nothing, so its absence means the review stopped half way rather than
+# that there was nothing to fix. The shared auto-approve workflow's
+# prior-review gate requires BOTH halves; a local check that asks only for
+# the findings comment passes here and is then rejected there, which spends a
+# workflow run to learn what this function can say for free. Matched on the
+# word, not the heading, because the body is humanized before it is posted.
+hero_self_review_fixes_count() { # PR_NUMBER
+  local me
+  me=$(gh api user --jq .login) || return 1
+  gh api "/repos/{owner}/{repo}/issues/$1/comments" \
+    --jq "[.[] | select(.user.login == \"$me\") | select(.body | test(\"$HERO_SELF_REVIEW_MARKER\")) | select(.body | test(\"improvements\"; \"i\"))] | length"
+}
+
 # ---------- the .plans store ------------------------------------------------
 
 # Path of the store without creating it: read-only callers must not mkdir or

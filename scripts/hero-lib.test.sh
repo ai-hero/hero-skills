@@ -1047,6 +1047,30 @@ check "self-review count: gh failure returns non-zero" "no" "$([ $? -eq 0 ] && e
 # The workflow carries its own copy of the marker; the two must agree.
 check "self-review marker matches the workflow's" "yes" "$(grep -q "$HERO_SELF_REVIEW_MARKER" "$(dirname "$0")/../.github/workflows/auto-approve.yaml" && echo yes || echo no)"
 
+# ---------- hero_self_review_fixes_count -----------------------------------
+#
+# The findings comment and the improvements comment carry the SAME marker, so
+# the fixes count must separate them on the word "improvements". A fixture
+# with only the findings comment is the case the gate exists to reject.
+cat > "$TMP/ghbin/comments.json" <<'JSON'
+[{"body":"lgtm","user":{"login":"me"}},
+ {"body":"## Self-Review\n<!-- ai-hero:self-review -->\nfindings","user":{"login":"me"}}]
+JSON
+check "fixes count: findings alone is zero"       "0" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_fixes_count 7)"
+check "fixes count: findings still counted"       "1" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_count 7)"
+
+cat > "$TMP/ghbin/comments.json" <<'JSON'
+[{"body":"## Self-Review\n<!-- ai-hero:self-review -->\nfindings","user":{"login":"me"}},
+ {"body":"## Self-Review - Improvements\n<!-- ai-hero:self-review -->\nfixed","user":{"login":"me"}},
+ {"body":"## Self-Review - Improvements\n<!-- ai-hero:self-review -->","user":{"login":"stranger"}}]
+JSON
+check "fixes count: improvements comment counts"  "1" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_fixes_count 7)"
+check "fixes count: gh failure returns non-zero" "no" "$(GH_FAIL=1 PATH="$TMP/ghbin:$PATH" hero_self_review_fixes_count 7 >/dev/null 2>&1; [ $? -eq 0 ] && echo yes || echo no)"
+
+# The workflow evaluates the same two halves; a gate that stopped requiring
+# the second would leave this helper with no caller and no reason to exist.
+check "workflow requires the fixes half" "yes" "$(grep -q 'SELF_REVIEW_FIXES' "$(dirname "$0")/../.github/workflows/auto-approve.yaml" && echo yes || echo no)"
+
 # ---------- shape, suspension, the inbox, local skills ---------------------
 # `shape` decides what a task's Definition of Done asserts and NOTHING about
 # readiness, so a defect and a story list identically. Suspension is a FLAG

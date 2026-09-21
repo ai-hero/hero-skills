@@ -190,10 +190,18 @@ if [ "$PR_EXISTS" = "false" ]; then
 elif [ "$PR_EXISTS" = "true" ]; then
   # The self-review count is author-filtered (see hero_self_review_count);
   # an unknown login must not silently count zero self-reviews.
+  #
+  # A COMPLETE review, not a started one: the findings comment and the
+  # improvements comment carry the same marker, so counting the marker made
+  # a review that stopped after findings read as done. The table below routes
+  # on `SELF_REVIEW_DONE == 0`, so that reading skipped Step 5 and handed the
+  # PR to ship-pr, whose prior-review gate then refused it for the missing
+  # half. Counting the improvements comment is counting the terminal
+  # artifact; review-pr posts it even when it fixed nothing.
   ME=$(gh api user --jq .login 2>/dev/null) || { ME=""; fail_source "gh-user"; }
   if COMMENTS=$(gh api "/repos/{owner}/{repo}/issues/$PR_NUMBER/comments" 2>/dev/null); then
     SELF_REVIEW_DONE=$(printf '%s' "$COMMENTS" \
-      | jq --arg m "$HERO_SELF_REVIEW_MARKER" --arg me "$ME" '[.[] | select(.user.login == $me) | select(.body | test($m))] | length' 2>/dev/null) \
+      | jq --arg m "$HERO_SELF_REVIEW_MARKER" --arg me "$ME" '[.[] | select(.user.login == $me) | select(.body | test($m)) | select(.body | test("improvements"; "i"))] | length' 2>/dev/null) \
       || { SELF_REVIEW_DONE=unknown; fail_source "self-review-count"; }
 
     # BOT_REPLIED is only meaningful if we know who the bot is. Without
