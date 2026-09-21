@@ -472,7 +472,7 @@ grep -E "port\|PORT\|:3000\|:8000\|:8080\|:5173\|:4000" pyproject.toml package.j
 
 - Language and framework from dependency files
 - Monorepo structure (nx, turborepo, `workspaces` in `package.json`, multiple `pyproject.toml`): one repo with many packages. A folder of sibling checkouts is a **fleet**, mapped by `FLEET.md` (`wayfare:wayfare-fleet`), and is not a monorepo
-- **Dependency file** per project (pyproject.toml, package.json, go.mod, and so on), needed by `wayfare:wayfare-harden` and `wayfare:wayfare-push-pr`'s test phase
+- **Dependency file** per project (pyproject.toml, package.json, go.mod, and so on), needed by `wayfare:wayfare-audit-security` and `wayfare:wayfare-push-pr`'s test phase
 - **Lock file** → identifies the package manager (pnpm-lock.yaml → pnpm, yarn.lock → yarn, etc.)
 - **Install command** (for example `uv sync` or `pnpm install`), needed by `wayfare:wayfare-push-pr`'s test phase before running
 - **Task runner** (Makefile, justfile, Taskfile). If present, prefer its targets as canonical commands (e.g., `make test` over `uv run pytest`)
@@ -594,7 +594,7 @@ Based on your investigation, present findings grouped by **what the hero skills 
 [NEEDS CONFIRMATION] SETTING: BEST_GUESS
   Evidence: EVIDENCE (and why ambiguous)
   Question: QUESTION
-  Used by: wayfare:wayfare-one-shot
+  Used by: wayfare:wayfare-run-task
 
 [NOT DETECTED] SETTING
   Looked for: WHAT_WAS_CHECKED
@@ -623,7 +623,7 @@ Do NOT offer to install a pre-commit hook for `wayfare:wayfare-hero init recalib
 - Linters, formatters
 - Task runner (if Makefile/justfile provides commit/push/lint targets)
 
-### Group 2: "For planning and tracking work" (`wayfare:wayfare-one-shot`)
+### Group 2: "For planning and tracking work" (`wayfare:wayfare-run-task`)
 
 - PM tool (evidence from templates, commit messages, integrations)
 - Issue ID prefix (evidence from commit/branch patterns)
@@ -638,7 +638,7 @@ Do NOT offer to install a pre-commit hook for `wayfare:wayfare-hero init recalib
 - Task runner (Makefile, justfile, etc.) and its available targets
 - Monorepo vs single repo structure
 
-### Group 4: "For CI/CD and deployment" (`wayfare:wayfare-push-pr`, `wayfare:wayfare-ship-pr`, `wayfare:wayfare-harden`)
+### Group 4: "For CI/CD and deployment" (`wayfare:wayfare-push-pr`, `wayfare:wayfare-ship-pr`, `wayfare:wayfare-audit-security`)
 
 - CI platform and workflow names
 - Deployment platform
@@ -699,7 +699,7 @@ FOR COMMITTING & PUSHING (wayfare:wayfare-push-pr)
        - PROJ-45-update-deps (ticket-first pattern)
      → Which pattern do you prefer?
 
-FOR PLANNING & TRACKING (wayfare:wayfare-one-shot)
+FOR PLANNING & TRACKING (wayfare:wayfare-run-task)
 ─────────────────────────────────────
 [??] PM tool: likely Linear
      Evidence: Found "linear" in .github/workflows/sync.yml,
@@ -744,7 +744,7 @@ FOR CI/CD & DEPLOYMENT (wayfare:wayfare-push-pr, wayfare:wayfare-ship-pr)
 [--] Namespaces: not detected
      → What k8s namespaces do you deploy to?
 
-CODING CONVENTIONS (wayfare:wayfare-one-shot, wayfare:wayfare-push-pr)
+CODING CONVENTIONS (wayfare:wayfare-run-task, wayfare:wayfare-push-pr)
 ──────────────────────────────────────────────
 [OK] Naming: snake_case functions, PascalCase classes
      Evidence: 40+ function defs follow snake_case, all classes PascalCase
@@ -799,7 +799,7 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 
 ## Code Review Agent
 <!-- External code review bot that reviews PRs automatically.
-     Used by wayfare:wayfare-respond-to-comments --loop to trigger, poll, and fix feedback iteratively. -->
+     Used by wayfare:wayfare-respond-pr --loop to trigger, poll, and fix feedback iteratively. -->
 - agent: AGENT_TYPE (greptile|coderabbit|copilot|none)
 - trigger: TRIGGER_METHOD (e.g., "@greptile review" comment, auto on push, label)
 - poll-method: POLL_METHOD (check-runs|comments|pipeline-status)
@@ -929,7 +929,7 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 ### MCP Servers
 <!-- MCP servers that hero skills or Claude need to interact with external tools -->
 <!-- Examples:
-  - linear (mcp__linear) — for wayfare:wayfare-one-shot issue planning
+  - linear (mcp__linear) — for wayfare:wayfare-run-task issue planning
 - slack (mcp__slack) — for notifications
 -->
 
@@ -1048,7 +1048,7 @@ How your hero skills will use this:
   wayfare:wayfare-push-pr       → conventional commits, pre-commit runs ruff + black + mypy,
                                PRs via gh against main, link LIN-### issues,
                                check GitHub Actions: ci, build, deploy
-  wayfare:wayfare-one-shot      → fetch from Linear (mcp__linear), branch as feature/LIN-###-DESC
+  wayfare:wayfare-run-task      → fetch from Linear (mcp__linear), branch as feature/LIN-###-DESC
   wayfare:wayfare-push-pr (test)    → uv sync, then ruff check + mypy + pytest, smoke at :8000
   wayfare:wayfare-ship-pr       → k8s namespaces: staging, production
   wayfare:wayfare-hero sync  → architecture (single repo, Python + FastAPI, k8s), harden (pyproject.toml deps, ghcr.io registry), roadmap, goals

@@ -81,25 +81,25 @@ wayfare-ship-pr|CI/CD|auto-approve-gates|the gates the approval verdict is expec
 wayfare-ship-pr|Deployment|platform|whether there is a deploy to verify after the merge
 wayfare-ship-pr|Deployment|registry|where the built image is expected to land
 wayfare-ship-pr|Deployment|argocd|whether the deploy is GitOps-synced rather than pushed
-wayfare-one-shot|Repository|default-branch|the base for every step of the pipeline
-wayfare-one-shot|Repository|branch-convention|the branch the goal's work lands on
-wayfare-one-shot|Project Management|tool|where the ticket is fetched from
-wayfare-one-shot|Project Management|issue-prefix|how a plain-text argument is recognized as a ticket ID
-wayfare-one-shot|Project Management|issue-tracker|where the issue is closed out after the merge
-wayfare-one-shot|Code Review Agent|agent|which bot's review the await-review step waits for
-wayfare-one-shot|Code Review Agent|bot-username|whose comments count as the bot's, and whose do not
-wayfare-one-shot|CI/CD|auto-approve-installed|whether the ship step can complete
-wayfare-one-shot|Projects|*|per project: test and dev commands the build and verify steps use
+wayfare-run-task|Repository|default-branch|the base for every step of the pipeline
+wayfare-run-task|Repository|branch-convention|the branch the goal's work lands on
+wayfare-run-task|Project Management|tool|where the ticket is fetched from
+wayfare-run-task|Project Management|issue-prefix|how a plain-text argument is recognized as a ticket ID
+wayfare-run-task|Project Management|issue-tracker|where the issue is closed out after the merge
+wayfare-run-task|Code Review Agent|agent|which bot's review the await-review step waits for
+wayfare-run-task|Code Review Agent|bot-username|whose comments count as the bot's, and whose do not
+wayfare-run-task|CI/CD|auto-approve-installed|whether the ship step can complete
+wayfare-run-task|Projects|*|per project: test and dev commands the build and verify steps use
 wayfare-review-pr|Repository|default-branch|the base the diff under review is taken against
 wayfare-review-pr|Code Quality|linters|the checks a finding must not simply restate
 wayfare-review-pr|Coding Conventions|*|the conventions a review judges the code against, instead of inventing house style
 wayfare-review-pr|Projects|*|per project: language and framework, which decide the review's focus
-wayfare-respond-to-comments|Code Review Agent|agent|which reviewer's threads this skill answers
-wayfare-respond-to-comments|Code Review Agent|bot-username|whose comments are the bot's, for the poll and the resolve
-wayfare-respond-to-comments|Code Review Agent|trigger|how the bot's review is requested
-wayfare-respond-to-comments|Code Review Agent|poll-method|how this skill knows the review has landed
-wayfare-respond-to-comments|Repository|default-branch|the base for the diff a comment is read against
-wayfare-respond-to-comments|Projects|*|per project: the test command run after a fix
+wayfare-respond-pr|Code Review Agent|agent|which reviewer's threads this skill answers
+wayfare-respond-pr|Code Review Agent|bot-username|whose comments are the bot's, for the poll and the resolve
+wayfare-respond-pr|Code Review Agent|trigger|how the bot's review is requested
+wayfare-respond-pr|Code Review Agent|poll-method|how this skill knows the review has landed
+wayfare-respond-pr|Repository|default-branch|the base for the diff a comment is read against
+wayfare-respond-pr|Projects|*|per project: the test command run after a fix
 wayfare-hero|Wayfare|source-repo|the codebase reconciled against the design
 wayfare-hero|Wayfare|design-project|the target design substrate, or none
 wayfare-hero|Wayfare|design-transport|how design files reach the local snapshot
@@ -119,16 +119,16 @@ wayfare-recomponentize-ui|Design System|registry-url|where the registry is fetch
 wayfare-recomponentize-ui|Design System|token-env-var|the env var holding the registry token
 wayfare-recomponentize-ui|Projects|*|per project: the framework, which decides whether there is a UI at all
 wayfare-hero|Repository|branch-convention|which branches `drop` may discard, and the shape goal branches take
-wayfare-preflight|Repository|default-branch|the branch every readiness check is made against
-wayfare-preflight|CI/CD|auto-approve-installed|whether the ship step will be a no-op
-wayfare-preflight|Code Quality|pre-commit|whether the gate is installed and current
+wayfare-check-preflight|Repository|default-branch|the branch every readiness check is made against
+wayfare-check-preflight|CI/CD|auto-approve-installed|whether the ship step will be a no-op
+wayfare-check-preflight|Code Quality|pre-commit|whether the gate is installed and current
 wayfare-setup-dev|Developer Setup|*|required tools, recommended tools, and MCP servers — the checklist this skill walks
 wayfare-setup-dev|Projects|*|per project: install and dev commands the setup verifies
 wayfare-hero|Design System|namespace|the registry a scaffolded UI is wired to
 wayfare-create-skill|Projects|*|per project: language and framework, which the new skill's examples follow
-wayfare-handoff|Project Management|tool|where the distilled work-item is filed
-wayfare-handoff|Project Management|issue-tracker|the tracker the item is created in
-wayfare-handoff|Project Management|issue-prefix|the ID shape the item is named with
+wayfare-write-handoff|Project Management|tool|where the distilled work-item is filed
+wayfare-write-handoff|Project Management|issue-tracker|the tracker the item is created in
+wayfare-write-handoff|Project Management|issue-prefix|the ID shape the item is named with
 ROWS
 }
 

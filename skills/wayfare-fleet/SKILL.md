@@ -93,7 +93,7 @@ the skill that owns it.
    | `UNLISTED` | add a row; ask the group (default `none`); port from the compose file |
    | `MISSING` | drop the row, or fix `path` if the folder moved. Ask first |
    | `NOT_GIT` | same as `MISSING`; a folder that stopped being a checkout is not a repo |
-   | `PORT_MISMATCH` | the row is the assignment, the compose default is the implementation. Ask which is right. If the repo must change, hand it to `wayfare:wayfare-one-shot` in that repo. The standard's last anti-pattern names every place the port appears. Never edit the repo from here |
+   | `PORT_MISMATCH` | the row is the assignment, the compose default is the implementation. Ask which is right. If the repo must change, hand it to `wayfare:wayfare-run-task` in that repo. The standard's last anti-pattern names every place the port appears. Never edit the repo from here |
    | `PORT_UNIMPLEMENTED` | the claim is made, the repo has no compose file yet. Nothing to fix here; it clears when the dev stack lands |
    | `PORT_UNPARSED` | a compose file the scanner cannot read a host port from. Look at it: either it publishes no port (drop the row's port) or it uses a syntax worth adding to `hero_compose_port` |
    | `PORT_COLLISION` | pick the next free port in `port-range` for the newer row, propose it; same routing as a mismatch for the repo side |

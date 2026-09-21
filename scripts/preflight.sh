@@ -625,7 +625,7 @@ esac
 
 echo ""
 if [ "$BLOCKERS" -gt 0 ]; then
-  echo "preflight: $BLOCKERS blocker(s), $WARNINGS warning(s); pipeline will fail. Fix blockers above before running wayfare:wayfare-one-shot."
+  echo "preflight: $BLOCKERS blocker(s), $WARNINGS warning(s); pipeline will fail. Fix blockers above before running wayfare:wayfare-run-task."
   exit 1
 elif [ "$WARNINGS" -gt 0 ]; then
   echo "preflight: 0 blockers, $WARNINGS warning(s): safe to proceed, warnings are advisory."

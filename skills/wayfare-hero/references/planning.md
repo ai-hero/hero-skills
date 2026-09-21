@@ -3,7 +3,7 @@
 `sync`'s postflight, not a verb of its own: how a task moves from
 `accepted` through `planning` to the user's ready-mark.
 
-Planning is `wayfare:wayfare-think-it-through FEATURE_ID`, whose **Feature mode**
+Planning is `wayfare:wayfare-grill-idea FEATURE_ID`, whose **Feature mode**
 plans the task in place, invoked by `sync`'s *Plan the set* over the whole
 roadmap, and wayfare owns only the contract it fills:
 

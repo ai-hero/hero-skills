@@ -34,7 +34,7 @@ The rule is what makes the mailbox worth building. A message that is merely
 
 ## Why a mailbox and not the tracker
 
-`wayfare:wayfare-handoff` says the store is not a transport, and it is right for
+`wayfare:wayfare-write-handoff` says the store is not a transport, and it is right for
 what it describes: *"copying a file into a sibling checkout's `.plans/` would
 land somewhere that never syncs and that no teammate can see."* That is an
 argument about **teammates**, and it still holds, work handed to another
@@ -439,8 +439,8 @@ sessions in one repo is ordinary.
 | `skills/wayfare-hero/SKILL.md` store defects | DONE: `inbox/` is the mailbox, never a legacy subdirectory; `sync`'s `inbox` stage reads it |
 | `skills/wayfare-fleet/SKILL.md` `sync` | DONE: it deposits a `type: ask` per repo instead of appending to each `AGENTS.md`, and each repo's own agent lands the section in its own PR. A row with no `.plans/` cannot receive one and is reported, never given a store to make the deposit work |
 | `docs/FLEET-MD.md` fan-out prompt | DONE: modify nothing, read a sibling only for the dedupe and deadlock probes, and deposit only into `.plans/inbox/` |
-| `skills/wayfare-handoff/SKILL.md` | DONE: the "store is not a transport" rule names the mailbox as the one narrow exception and says why it is not a handoff, a message is never work until the recipient promotes it |
-| `skills/wayfare-think-it-through/SKILL.md` | DONE: the canonical frontmatter block carries `awaiting` |
+| `skills/wayfare-write-handoff/SKILL.md` | DONE: the "store is not a transport" rule names the mailbox as the one narrow exception and says why it is not a handoff, a message is never work until the recipient promotes it |
+| `skills/wayfare-grill-idea/SKILL.md` | DONE: the canonical frontmatter block carries `awaiting` |
 | `skills/wayfare-hero/references/feedback-channels.md` | DONE: the `channel: design-system` lane deposits a `type: ask` message instead of writing an item into the sibling's `items/`. It used to write a ready-to-build item straight into that repo's roadmap, which is the promotion gate's own anti-pattern with the sender's name on it. No `FLEET.md` row means no deposit; the packet path takes it |
 
 ## Anti-patterns

@@ -359,7 +359,7 @@ memory between turns:
    landing it — a plan that was wrong about the size is a finding, and
    `budget_max` counts commits, so nothing else would catch it.
 
-   Invoke wayfare:wayfare-one-shot with task N's **store id** as the argument,
+   Invoke wayfare:wayfare-run-task with task N's **store id** as the argument,
    via the Skill tool, with the exact line
    `gates pre-authorized in-session for goal G: PERMISSIONS`, plus the exact
    line `commit only: goal G branch GOAL_BRANCH`. It builds, simplifies,
@@ -631,7 +631,7 @@ memory between turns:
    branch to one-shot once:
 
    ```
-   Invoke wayfare:wayfare-one-shot via the Skill tool with NO item argument, on
+   Invoke wayfare:wayfare-run-task via the Skill tool with NO item argument, on
    GOAL_BRANCH, carrying the permissions line.
    ```
 
@@ -823,7 +823,7 @@ exactly the items whose scope nobody wrote down.
 **An admitted item is unplanned, and planning it is `absorb`.** It was
 written mid-build, so it arrives `accepted` with no `## Approach`, no
 `## Subtasks`, and no ready-mark, and a turn launches only `ready` items.
-With `absorb: yes`, the turn plans it now: `wayfare:wayfare-think-it-through ID`
+With `absorb: yes`, the turn plans it now: `wayfare:wayfare-grill-idea ID`
 with the `launched by wayfare` line, narrowed to the DoD line it serves,
 then `ready`, then it builds on a later turn like any covered item. That
 flip is the ready-mark, which is otherwise the user's alone. `absorb` is

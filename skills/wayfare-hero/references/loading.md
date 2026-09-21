@@ -516,7 +516,7 @@ and **`recalibrate`**.
 Retired verbs get a one-line note, then the roadmap view: `goal GOAL` is now
 `next` (to start or resume) and `do GOAL_ID` (one turn); `deps [N]` is now
 `sync` (which gathers the bots' PRs into `shape: dependency` tasks) and `do ID` on the
-item. `wayfare:wayfare-harden` and `wayfare:wayfare-architecture` run inside `sync`;
+item. `wayfare:wayfare-audit-security` and `wayfare:wayfare-architecture` run inside `sync`;
 a user who types either by hand still gets that skill, but nothing in the
 workflow needs them named. A former verb name (`status`, `task`, `sync`,
 `comment`, `pin`, `gate`, `order`, `ready`, `drift`, `do-next`) in

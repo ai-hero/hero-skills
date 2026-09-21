@@ -262,10 +262,10 @@ Created:
 
 Run first: cd PROJECT_NAME
 
-Next step: wayfare:wayfare-preflight — Step 0.3, sanity-check tooling, .env, ports (print only — model-invocation-restricted, cannot auto-run)
+Next step: wayfare:wayfare-check-preflight — Step 0.3, sanity-check tooling, .env, ports (print only — model-invocation-restricted, cannot auto-run)
 ```
 
-Don't also print `wayfare:wayfare-one-shot`; `preflight`'s own next-steps lead there once it passes.
+Don't also print `wayfare:wayfare-run-task`; `preflight`'s own next-steps lead there once it passes.
 
 ## Notes
 

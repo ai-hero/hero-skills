@@ -1,5 +1,5 @@
 ---
-name: wayfare-think-it-through
+name: wayfare-grill-idea
 # prettier-ignore
 description: Brainstorm and grill an idea one question at a time into principal-level shared understanding, captured as dependency-aware work-items. Use when starting a feature, refactor or migration bigger than a one-liner, when a task arrives vague, before a decision that is expensive to reverse, or when about to build on an assumption nobody has stated. Skip it for typos, copy tweaks and dependency bumps.
 argument-hint: "[IDEA_OR_TASK]"
@@ -255,7 +255,7 @@ flip only the confirmed ones to `status: ready` and append `ready_marked:`
 with the date, leaving the
 rest in `planning` for a later session. Never flip an
 item unprompted, and never batch beyond what the user named. An unmarked item
-is invisible to `wayfare:wayfare-one-shot` by design.
+is invisible to `wayfare:wayfare-run-task` by design.
 
 **In Feature mode under `wayfare-hero sync`, the mark ends this task's grill,
 not the pass.** Flip the task to `ready`, then hand control back to wayfare,
@@ -342,8 +342,8 @@ their own they follow these meanings rather than reinventing them (the status en
 is the one lifecycle in `docs/PLAN.md` and
 `ready_marked:` keeps its meaning). `type`, `shape` and `origin` are defined by
 `docs/PLAN.md`. **Every producer writes them**: wayfare (`sync`), this
-skill, `wayfare:wayfare-one-shot` (Step 2a carve-outs), `wayfare:wayfare-handoff`, and
-`wayfare:wayfare-harden`, each stamping its own name as `origin`. Schema 1
+skill, `wayfare:wayfare-run-task` (Step 2a carve-outs), `wayfare:wayfare-write-handoff`, and
+`wayfare:wayfare-audit-security`, each stamping its own name as `origin`. Schema 1
 requires `type`; an item without one lists as invalid.
 
 ## "What's ready": the one query that matters
@@ -379,14 +379,14 @@ then `done` when it lands.
 **Readiness is about dependencies, not about the codebase.** `hero_ready_items`
 reads frontmatter; it never checks whether the work actually happened. An item
 whose work landed out-of-band stays READY until someone edits it. Consumers must
-verify before acting. `wayfare:wayfare-one-shot` Step 1c does exactly that.
+verify before acting. `wayfare:wayfare-run-task` Step 1c does exactly that.
 
 ## Notes
 
 - **The store is private.** `.plans/` is git-ignored on purpose. It is the
   user's plate, not a shared board. Never commit it; never push it.
 - **Emit, don't implement.** This skill produces understanding and work-items;
-  `wayfare:wayfare-one-shot` consumes them. The two point at each other on purpose:
+  `wayfare:wayfare-run-task` consumes them. The two point at each other on purpose:
   one-shot's `plan` step delegates here when nothing on the plate matches, and
   this skill's next step points back at one-shot once an item is READY. That is
   a hand-off, not a loop: one-shot only grills when it could not resolve an
@@ -422,6 +422,6 @@ verify before acting. `wayfare:wayfare-one-shot` Step 1c does exactly that.
 
 Pick exactly one, based on `.plans/`'s current state:
 
-- **A READY item exists**: `Next step: wayfare:wayfare-one-shot, to drive it from ticket to merge` (print only, and launch it on the user's word, never spontaneously). **Exception: this run was launched by `wayfare-hero sync`** (its postflight planning pass). Print nothing terminal and return to wayfare, which continues the pass with the next task and then reports. Building the marked task is the user's `wayfare-hero do TASK_ID`, afterwards.
+- **A READY item exists**: `Next step: wayfare:wayfare-run-task, to drive it from ticket to merge` (print only, and launch it on the user's word, never spontaneously). **Exception: this run was launched by `wayfare-hero sync`** (its postflight planning pass). Print nothing terminal and return to wayfare, which continues the pass with the next task and then reports. Building the marked task is the user's `wayfare-hero do TASK_ID`, afterwards.
 - **Only `plan` rows** (items await the ready-mark): tell the user which items are waiting and that saying so flips them. Nothing runs until they do.
-- **No READY item** (everything's still blocked, or there's another piece to grill): `Next step: wayfare:wayfare-think-it-through, to think the next piece through, or re-grill a blocked item` (print only, because re-invoking this same skill right after it finishes is not auto-chained).
+- **No READY item** (everything's still blocked, or there's another piece to grill): `Next step: wayfare:wayfare-grill-idea, to think the next piece through, or re-grill a blocked item` (print only, because re-invoking this same skill right after it finishes is not auto-chained).

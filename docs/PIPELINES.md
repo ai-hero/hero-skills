@@ -67,18 +67,18 @@ present from commit one onward.
 plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship
 ```
 
-Owner: `wayfare:wayfare-one-shot`. Invoked with an issue ID or description it starts at `plan`; invoked with no arguments it resumes the current goal (in-progress branch/diff/PR on the current branch, plus the in-flight item's `## Subtasks` checklist, the plan file is the state file, so a run that died mid-implement resumes at its first unchecked line) from the detected step and drives it, through the usual user gates, to merged + a reset checkout. Nine steps, each maps to a single skill (or `inline` when one-shot drives it directly without delegating):
+Owner: `wayfare:wayfare-run-task`. Invoked with an issue ID or description it starts at `plan`; invoked with no arguments it resumes the current goal (in-progress branch/diff/PR on the current branch, plus the in-flight item's `## Subtasks` checklist, the plan file is the state file, so a run that died mid-implement resumes at its first unchecked line) from the detected step and drives it, through the usual user gates, to merged + a reset checkout. Nine steps, each maps to a single skill (or `inline` when one-shot drives it directly without delegating):
 
 | # | Step | Skill to run standalone | Notes |
 | --- | --- | --- | --- |
-| 1 | `plan` | `wayfare:wayfare-think-it-through` | resolve `$ARGUMENTS` against `.plans/` and the tracker first; grill only if nothing matches. Re-verifies the item is still outstanding before building |
+| 1 | `plan` | `wayfare:wayfare-grill-idea` | resolve `$ARGUMENTS` against `.plans/` and the tracker first; grill only if nothing matches. Re-verifies the item is still outstanding before building |
 | 2 | `implement` | `inline` | executes the resolved work-item against its `success` criteria |
 | 3 | `simplify` | `/simplify` (external) | review the dirty diff for reuse/quality/efficiency and fix; `(–)` if `/simplify` unavailable |
 | 4 | `push` | `wayfare:wayfare-push-pr` | tests first (lint/typecheck/unit + UI smoke via Playwright MCP), then commits outstanding work with a conventional commit and pushes a draft PR |
 | 5 | `self-review` | `wayfare:wayfare-review-pr --no-mark-ready` (Steps 1 to 8) | run the pr-review-toolkit agents plus a security pass on the draft, apply fixes |
 | 6 | `mark-ready` | `wayfare:wayfare-review-pr`'s own Step 9, or `gh pr ready` | hard user gate that converts draft → ready |
 | 7 | `await-review` | `inline` (poll) | poll for the configured Code Review Agent's first comment; `(–)` if `agent: none` |
-| 8 | `respond` | `wayfare:wayfare-respond-to-comments` | address the bot's inline comments and resolve threads |
+| 8 | `respond` | `wayfare:wayfare-respond-pr` | address the bot's inline comments and resolve threads |
 | 9 | `ship` | `wayfare:wayfare-ship-pr` | `@auto-approve`, await verdict, ask the user to merge, merge, reset to default branch |
 
 UI smoke runs inside `push`'s test phase (absorbed from the former `test-changes` skill; `wayfare:wayfare-push-pr test` runs it standalone); backend-only PRs skip it.
@@ -112,7 +112,7 @@ only means nobody edited the file, not that the work is still outstanding.
 
 **Architecture and harden chain.** `wayfare-hero sync`'s architecture stage runs
 `wayfare:wayfare-architecture review`, and offers its `sync`, before judging
-the roadmap, its `harden` stage runs `wayfare:wayfare-harden all`, and
+the roadmap, its `harden` stage runs `wayfare:wayfare-audit-security all`, and
 `think-it-through` delegates a leading `arch` argument to the architecture
 skill. Every edge requires the child to stay model-invocable (guarded by
 validate.sh's `CHAINED_SKILLS`); both children are `user-invocable: false`,
@@ -127,7 +127,7 @@ in-session), and everything else (`feedback-repo: none`, a rejected value,
 or a repo with issues disabled) gets a packet under `$STORE/.feedback/`
 that the user delivers by hand. `.plans/` is git-ignored and wayfare never writes the target, so
 there is no other way out. Delivery deliberately does *not* route through
-`wayfare:wayfare-handoff`: that skill distills the *current* conversation, which
+`wayfare:wayfare-write-handoff`: that skill distills the *current* conversation, which
 would both narrate the wrong session and carry this repo's branches and PR
 numbers into a third party's tracker. See
 `skills/wayfare-hero/references/feedback-channels.md`.
@@ -182,13 +182,13 @@ Owner: `wayfare:wayfare-hero sync`. Eleven stages: the config gate; the
 mailbox (`docs/MESSAGES.md`, every unread message through the fleet gate
 and the promotion gate, a `type: bug` message becoming a proposed `shape: defect` task);
 `wayfare:wayfare-architecture review` (offering its `sync`);
-`wayfare:wayfare-harden all`; the compliance audit
+`wayfare:wayfare-audit-security all`; the compliance audit
 (`scripts/audit.py --repo THIS`, baseline plus the fleet's register overlay)
 with each failing check proposed as an item; the repo's own `wayfare: sync`
 skills (discovered in `.claude/skills/`, run with the harden contract); the
 dependency bots' open PRs written as `shape: dependency` tasks; the design snapshot
 refresh; the reconciliation lanes; the planning postflight
-(`wayfare:wayfare-think-it-through` in Roadmap mode); and goals proposed
+(`wayfare:wayfare-grill-idea` in Roadmap mode); and goals proposed
 bottom-up until every planned build item is in exactly one open goal, with
 existing `accepted` goals re-cut, coalesced when two name one outcome, split
 when one names two. Stages that do not apply render `(–)` with the reason;

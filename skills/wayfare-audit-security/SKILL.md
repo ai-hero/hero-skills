@@ -1,5 +1,5 @@
 ---
-name: wayfare-harden
+name: wayfare-audit-security
 # prettier-ignore
 description: Run by wayfare-hero sync. Audits the codebase read-only for hardening: dependency CVEs, container CVEs (Scout and Trivy), and code-level robustness. Emits execution-ready plans as .plans security items and never edits source.
 argument-hint: "[deps|docker|code|all]"
@@ -8,7 +8,7 @@ user-invocable: false
 
 # Harden: audit read-only, emit execution-ready hardening plans
 
-Deeply audit the codebase for security and robustness hardening opportunities, then write plans precise enough that a downstream executor (a cheaper model, a fresh session, or `wayfare:wayfare-one-shot`) can apply, test, and verify them with **zero context from this session**.
+Deeply audit the codebase for security and robustness hardening opportunities, then write plans precise enough that a downstream executor (a cheaper model, a fresh session, or `wayfare:wayfare-run-task`) can apply, test, and verify them with **zero context from this session**.
 
 **This is a stage of `wayfare:wayfare-hero sync`, not a skill a person runs.** Wayfare invokes it with the line `launched by wayfare` after the architecture map is current and before the roadmap is judged; the items it writes are ready-marked in wayfare's planning postflight and grouped into a security goal there. It has no verbs of its own beyond the audit scope, no config to tune (wayfare's `recalibrate` carries the fields it reads), and no fleet fan-out (wayfare already ran in one repo by the time this starts). Every path into it is a Skill-tool chain from a skill that already ran the fleet-root test, which is why Step 0 has none.
 

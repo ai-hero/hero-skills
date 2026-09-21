@@ -191,7 +191,7 @@ Delivery is **outward-facing** — it writes into someone else's repo. It happen
 on the user's explicit confirmation and never as a side effect of sync's other
 work.
 
-Wayfare delivers **itself**. It does not route through `wayfare:wayfare-handoff`:
+Wayfare delivers **itself**. It does not route through `wayfare:wayfare-write-handoff`:
 handoff distills *the current conversation*, and this material was written in a
 previous session, so handoff would narrate the wrong thing entirely — and its
 session walk would carry this repo's branch names, PR numbers, and file layout

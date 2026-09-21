@@ -1,5 +1,5 @@
 ---
-name: wayfare-respond-to-comments
+name: wayfare-respond-pr
 # prettier-ignore
 description: Read PR review comments, fix the code issues they raise, and resolve the conversations on GitHub. Handles the full respond-to-feedback cycle. Use when a reviewer or review bot has left comments on your PR, or when asked to address feedback.
 argument-hint: "[pr-number | recalibrate]"
@@ -23,7 +23,7 @@ Read review comments on your pull request, update the code to address them, and 
 
 ## `recalibrate`
 
-`wayfare:wayfare-respond-to-comments recalibrate` tunes the config that drives this skill, and
+`wayfare:wayfare-respond-pr recalibrate` tunes the config that drives this skill, and
 stops. It does not go on to run the skill. You want to see which field was
 wrong, not spend a whole run finding out.
 
@@ -35,7 +35,7 @@ follow the four phases in
 using the table below as the report, and stop.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" wayfare-respond-to-comments
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" wayfare-respond-pr
 ```
 
 Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,

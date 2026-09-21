@@ -193,7 +193,7 @@ MCP SERVERS
 ───────────
 [??] linear (mcp__linear): listed in HERO.md
      → Is the Linear MCP server configured in your Claude settings?
-     → This is needed for wayfare:wayfare-one-shot to fetch issues
+     → This is needed for wayfare:wayfare-run-task to fetch issues
 [??] slack (mcp__slack): listed in HERO.md
      → Is the Slack MCP server configured in your Claude settings?
 ```
@@ -222,10 +222,10 @@ Remaining action items:
 Your environment is ready for development! 🎉
 Run wayfare:wayfare-hero init recalibrate if the project setup has changed.
 
-Next step: wayfare:wayfare-preflight — sanity-check tooling, .env, ports before starting (print only — model-invocation-restricted, cannot auto-run)
+Next step: wayfare:wayfare-check-preflight — sanity-check tooling, .env, ports before starting (print only — model-invocation-restricted, cannot auto-run)
 ```
 
-Don't also print `wayfare:wayfare-one-shot`; `preflight`'s own next-steps lead there once it passes.
+Don't also print `wayfare:wayfare-run-task`; `preflight`'s own next-steps lead there once it passes.
 
 ## Key Principles
 

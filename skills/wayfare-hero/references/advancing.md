@@ -52,7 +52,7 @@ the next task.
    1. `active` task, mid-build: check out its branch if one exists (its
       `branch:` field names it, which is what `resume-state.sh` matches on;
       `## Log` records the PR from previous runs), then invoke
-      `wayfare:wayfare-one-shot` (via the Skill tool); resume detection takes
+      `wayfare:wayfare-run-task` (via the Skill tool); resume detection takes
       over.
    2. `review` task: its PR is recorded in `## Log` (one-shot
       appends the URL at PR-open). **Check the PR's state first**: open →
@@ -85,7 +85,7 @@ the next task.
       truly empty roadmap → `Next step: wayfare-hero sync`.
 2. **The ready-mark is the permission, and it was already given.** A READY
    task carries the user's mark from `sync`'s postflight; `do` goes
-   straight into `wayfare:wayfare-one-shot` on it, with one line:
+   straight into `wayfare:wayfare-run-task` on it, with one line:
 
    ```
    [task 12] ready → building (one-shot)
@@ -143,7 +143,7 @@ finding for the review and the user's call.
 open bot PR any more (closed or merged out-of-band → propose `done` or
 deletion with the evidence). A PR that is not a bot's is
 `wayfare:wayfare-ship-pr`'s directly, never this procedure's. Bumps that must be
-tested together are `wayfare:wayfare-harden`'s batch (its A4), which builds its
+tested together are `wayfare:wayfare-audit-security`'s batch (its A4), which builds its
 own branch for that reason and closes the bots' PRs after its own merge.
 
 1. **Current.** Read `mergeStateStatus`. `CLEAN`, `HAS_HOOKS`, `UNSTABLE`,

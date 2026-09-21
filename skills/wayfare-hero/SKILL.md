@@ -21,8 +21,8 @@ The route runs both ways. Target changes reach the roadmap as stale and
 uncovered work; what building teaches about the design travels back the other
 way as a **signal**. Wayfare reads the target; it never writes it.
 
-**Wayfare plans; it never builds.** `wayfare:wayfare-one-shot` builds `ready`
-tasks and `wayfare:wayfare-think-it-through` does the planning. The `.plans/`
+**Wayfare plans; it never builds.** `wayfare:wayfare-run-task` builds `ready`
+tasks and `wayfare:wayfare-grill-idea` does the planning. The `.plans/`
 store is the system of record and `docs/PLAN.md` is its specification: the
 plan object, the four types, the one lifecycle, the item format. **Read
 `docs/PLAN.md` before writing any item.** Nothing here restates it.
@@ -203,7 +203,7 @@ Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
 wrong. A row that already holds the right value is not a question.
 
 The table covers more than the `## Wayfare` block: because `sync` runs
-`wayfare:wayfare-architecture` and `wayfare:wayfare-harden`, the fields those two read
+`wayfare:wayfare-architecture` and `wayfare:wayfare-audit-security`, the fields those two read
 are wayfare's rows too. A person who never calls those skills directly still
 has one place to fix their config.
 

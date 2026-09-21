@@ -371,7 +371,7 @@ Pre-flight gates for PR #PR_NUMBER:
 **This is a hard gate, not a warning.** Stop and refuse to post `@auto-approve` if any of the following:
 
 - `(SELF_REVIEW + OTHER_REVIEWS + BOT_INLINE) == 0`: no prior review at all. Run `wayfare:wayfare-review-pr`.
-- `UNRESOLVED > 0`: inline review threads still open. Run `wayfare:wayfare-respond-to-comments` to address them and resolve the threads.
+- `UNRESOLVED > 0`: inline review threads still open. Run `wayfare:wayfare-respond-pr` to address them and resolve the threads.
 - `ACTIVE_CHANGES > 0`: a reviewer's latest review still says CHANGES_REQUESTED. Address the change request, push fixes, then ask the reviewer to dismiss it or submit a fresh review (a subsequent APPROVED review supersedes it in `latestReviews`).
 - `UNANSWERED_QUESTIONS > 0`: top-level questions from human reviewers with no author reply. List each one (`gh api .../issues/$PR_NUMBER/comments --jq '.[] | select(.id > LAST_AUTHOR_COMMENT_ID) | {user: .user.login, body: .body[0:200], url: .html_url}'`) and tell the user to reply to each before re-running. When `UNANSWERED_SKIPPED` is non-empty the gate did not run, so print that line in the table instead of a count, so a skip is visible rather than reading as a clean pass.
 - `CI_FAILED > 0`: a check on the head commit failed. List them (`gh pr checks $PR_NUMBER`), fix, push, and re-run. The workflow's CI gate would REQUEST_CHANGES on this anyway; failing here saves the run.
@@ -392,7 +392,7 @@ Cannot run wayfare:wayfare-ship-pr yet. Address these first:
   Unanswered reviewer questions (1):
     - @reviewer (PR_URL#issuecomment-12345): "Why not use the existing helper?"
 
-Recommended next step: wayfare:wayfare-respond-to-comments
+Recommended next step: wayfare:wayfare-respond-pr
 ```
 
 Do not proceed. Do not post `@auto-approve`.
@@ -979,7 +979,7 @@ rm -f merge_err.log
 
 If the user confirms the cleanup prompt above, run `git branch -d BRANCH_NAME` for each listed branch. Do NOT use `-D`; refuse to force-delete.
 
-After the cleanup, suggest (do not auto-execute) running `/clear` to start the next task on a fresh conversation context. The orchestrating skill (e.g. `wayfare:wayfare-one-shot`) may want to print its own summary first, so do not clobber the conversation here.
+After the cleanup, suggest (do not auto-execute) running `/clear` to start the next task on a fresh conversation context. The orchestrating skill (e.g. `wayfare:wayfare-run-task`) may want to print its own summary first, so do not clobber the conversation here.
 
 #### Step 7c: the REQUEST_CHANGES path, surfacing it and offering next steps
 
@@ -991,7 +991,7 @@ Auto-approve REQUESTED CHANGES on PR #PR_NUMBER.
 (reasons from the verdict comment)
 
 What would you like to do?
-  1. wayfare:wayfare-respond-to-comments  -> address the unresolved comments and re-run
+  1. wayfare:wayfare-respond-pr  -> address the unresolved comments and re-run
   2. Re-trigger @auto-approve once I have addressed the items above
   3. Stop here
 ```
@@ -1291,7 +1291,7 @@ Action taken:
   - Reset: switched to BASE_BRANCH, pulled, deleted PR_BRANCH (remote+local)
   - Stale-branch cleanup: deleted N | offered N | none found | skipped (sync failed)
   - Left for manual merge                                # APPROVE + user said no
-  - Suggested wayfare:wayfare-respond-to-comments             # REQUEST_CHANGES
+  - Suggested wayfare:wayfare-respond-pr             # REQUEST_CHANGES
   - Stopped, action failure surfaced                     # WORKFLOW_FAILED
 
 Next step: (one only — omit for REQUEST_CHANGES/WORKFLOW_FAILED, already covered by 7c/7d)
@@ -1300,7 +1300,7 @@ Next step: (one only — omit for REQUEST_CHANGES/WORKFLOW_FAILED, already cover
 - Merged → `/clear`. A plain suggestion, not Skill-tool invocable, with no y/N offer.
 - Abandoning mid-flight → `wayfare:wayfare-hero drop`. Restricted, so print only.
 
-Skip `wayfare:wayfare-one-shot`; it's not the deterministic next action.
+Skip `wayfare:wayfare-run-task`; it's not the deterministic next action.
 
 ## Notes
 

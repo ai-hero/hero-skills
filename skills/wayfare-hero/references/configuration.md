@@ -156,7 +156,7 @@ Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
 wrong. A row that already holds the right value is not a question.
 
 The table covers more than the `## Wayfare` block: because `sync` runs
-`wayfare:wayfare-architecture` and `wayfare:wayfare-harden`, the fields those two read
+`wayfare:wayfare-architecture` and `wayfare:wayfare-audit-security`, the fields those two read
 (repository type, deployment platform and registry, the linters already in
 the gate, the project list) are wayfare's rows too. A person who never calls
 those skills directly still has one place to fix their config.

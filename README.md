@@ -251,7 +251,7 @@ Then authenticate with the `repo` scope (required for PR creation, merge, and `g
 gh auth login -s repo
 ```
 
-`wayfare:wayfare-preflight` verifies both presence and the `repo` scope.
+`wayfare:wayfare-check-preflight` verifies both presence and the `repo` scope.
 
 **2. `pr-review-toolkit` plugin**: provides five of the six review agents that `wayfare:wayfare-review-pr` runs in parallel (code-reviewer, silent-failure-hunter, pr-test-analyzer, comment-analyzer, type-design-analyzer; the sixth, a security pass, needs no install). From inside Claude Code:
 
@@ -319,7 +319,7 @@ The build pipeline is still there when you want a single step:
 /simplify                                   # tidy the dirty diff
 wayfare:wayfare-push-pr                         # test (lint/typecheck/unit + UI smoke), commit + push, DRAFT PR
 wayfare:wayfare-review-pr                       # parallel review agents + security pass, fixes, then mark-ready gate
-wayfare:wayfare-respond-to-comments             # address Copilot/CodeRabbit/Greptile inline comments
+wayfare:wayfare-respond-pr             # address Copilot/CodeRabbit/Greptile inline comments
 wayfare:wayfare-ship-pr                         # @auto-approve, merge, reset to default branch
 ```
 
@@ -330,11 +330,11 @@ Each command reads your `HERO.md` config and adapts to your stack automatically.
 For genuinely small, low-risk PRs:
 
 ```
-wayfare:wayfare-one-shot PROJ-123   # start a new ticket (or a plain-text description)
-wayfare:wayfare-one-shot            # resume the current goal to merged + reset branch
+wayfare:wayfare-run-task PROJ-123   # start a new ticket (or a plain-text description)
+wayfare:wayfare-run-task            # resume the current goal to merged + reset branch
 ```
 
-This chains all nine steps end to end: `plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship`, with explicit user gates at plan-approval, mark-ready, and merge. `plan` resolves what you asked for against your `.plans/` store and this repo's tracker before it plans anything new, delegating to `wayfare:wayfare-think-it-through` only when nothing matches, and it re-checks a matched item against the codebase first, so already-finished work is reported rather than rebuilt. `simplify` runs the `/simplify` skill on the dirty diff so the commit lands clean. `push` tests first (lint/typecheck/unit tests plus a UI smoke check via Playwright MCP for routes affected by the diff, skipped automatically on backend-only PRs), then commits and opens the draft PR. `self-review` runs the review agents plus a security pass. `mark-ready` is the explicit draft → ready gate; `await-review` polls for your configured Code Review Agent (Copilot, CodeRabbit, Greptile, …) before `respond` addresses its feedback.
+This chains all nine steps end to end: `plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship`, with explicit user gates at plan-approval, mark-ready, and merge. `plan` resolves what you asked for against your `.plans/` store and this repo's tracker before it plans anything new, delegating to `wayfare:wayfare-grill-idea` only when nothing matches, and it re-checks a matched item against the codebase first, so already-finished work is reported rather than rebuilt. `simplify` runs the `/simplify` skill on the dirty diff so the commit lands clean. `push` tests first (lint/typecheck/unit tests plus a UI smoke check via Playwright MCP for routes affected by the diff, skipped automatically on backend-only PRs), then commits and opens the draft PR. `self-review` runs the review agents plus a security pass. `mark-ready` is the explicit draft → ready gate; `await-review` polls for your configured Code Review Agent (Copilot, CodeRabbit, Greptile, …) before `respond` addresses its feedback.
 
 At each step transition, one-shot prints a progress line so you always know where you are:
 
@@ -348,17 +348,17 @@ Each step maps to a skill you can run on its own when you don't want the whole p
 
 | # | Step | Skill to run standalone |
 | --- | --- | --- |
-| 1 | `plan` | `wayfare:wayfare-think-it-through` (only when nothing resolves from `.plans/` or the tracker) |
+| 1 | `plan` | `wayfare:wayfare-grill-idea` (only when nothing resolves from `.plans/` or the tracker) |
 | 2 | `implement` | inline (executes the resolved work-item) |
 | 3 | `simplify` | `/simplify` (external skill) |
 | 4 | `push` | `wayfare:wayfare-push-pr` (tests, verification + UI smoke, then commits + pushes a draft PR) |
 | 5 | `self-review` | `wayfare:wayfare-review-pr --no-mark-ready` |
 | 6 | `mark-ready` | `wayfare:wayfare-review-pr`'s own Step 9 gate, or `gh pr ready` |
 | 7 | `await-review` | inline poll (no separate skill) |
-| 8 | `respond` | `wayfare:wayfare-respond-to-comments` |
+| 8 | `respond` | `wayfare:wayfare-respond-pr` |
 | 9 | `ship` | `wayfare:wayfare-ship-pr` |
 
-Re-running `wayfare:wayfare-one-shot` mid-flow is safe: it inspects git + the open PR for that branch and resumes from the inferred step deterministically, no confirmation prompt. With no arguments, that resume behavior is the whole point. On the default branch with work to preserve, one-shot auto-branches off (no prompt) before resuming. It exits cleanly with a hand-off hint only when there's nothing left to do (e.g., after the PR has merged) or when state can't be inferred safely (e.g., a failed `git fetch`).
+Re-running `wayfare:wayfare-run-task` mid-flow is safe: it inspects git + the open PR for that branch and resumes from the inferred step deterministically, no confirmation prompt. With no arguments, that resume behavior is the whole point. On the default branch with work to preserve, one-shot auto-branches off (no prompt) before resuming. It exits cleanly with a hand-off hint only when there's nothing left to do (e.g., after the PR has merged) or when state can't be inferred safely (e.g., a failed `git fetch`).
 
 See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
@@ -369,7 +369,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 | Command | What it does |
 | --- | --- |
 | `wayfare:wayfare-hero init` | Investigate your repo, auto-detect stack, create `HERO.md` config |
-| `wayfare:wayfare-preflight` | Catch missing tooling, stale `HERO.md`, env mismatches, and busy ports before a pipeline step does destructive work |
+| `wayfare:wayfare-check-preflight` | Catch missing tooling, stale `HERO.md`, env mismatches, and busy ports before a pipeline step does destructive work |
 | `wayfare:wayfare-setup-dev` | Set up a developer's local environment (tools, auth, dependencies) |
 | `wayfare:wayfare-hero init` | Scaffold a new project (Python, full-stack, Node.js) |
 | `wayfare:wayfare-create-skill` | Create a new Claude Code skill, subagent, rule, or hook |
@@ -386,14 +386,14 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 | --- | --- |
 | `wayfare:wayfare-review-pr` | Review a PR with the review agents plus a security pass: your draft → applies fixes, asks before marking ready. Others' PR → inline comments only. |
 | `wayfare:wayfare-humanize-prose` | Strip AI-writing patterns from prose ([docs/HUMANIZING.md](./docs/HUMANIZING.md), from Wikipedia's "Signs of AI writing"). The pipeline steps that emit prose read the doc directly; this skill runs it on any text you hand it |
-| `wayfare:wayfare-respond-to-comments` | Fix PR review comments, resolve threads, optionally loop with external review agent |
+| `wayfare:wayfare-respond-pr` | Fix PR review comments, resolve threads, optionally loop with external review agent |
 | `wayfare:wayfare-ship-pr` | Trigger gated `@auto-approve`, wait for the verdict, merge if it passes, reset to the default branch, and wait for the merge commit's runs to report post-merge CI and deployment health |
 
 ### Pipelines (orchestrators)
 
 | Command | What it does |
 | --- | --- |
-| `wayfare:wayfare-one-shot` | Drives a small task end-to-end: plan → implement → simplify → push (tests included) → self-review → mark-ready → await-review → respond → ship. Detects a resume point on re-invocation; with no arguments, drives the current goal to merged + reset branch. Explicit user gates at each destructive step. |
+| `wayfare:wayfare-run-task` | Drives a small task end-to-end: plan → implement → simplify → push (tests included) → self-review → mark-ready → await-review → respond → ship. Detects a resume point on re-invocation; with no arguments, drives the current goal to merged + reset branch. Explicit user gates at each destructive step. |
 | `wayfare:wayfare-hero init` | Scaffolds a new project, then chains into setup-dev → config → first-commit. |
 
 ### The front door
@@ -407,15 +407,15 @@ Two skills are stages of `sync` and hidden from the slash menu (`user-invocable:
 | Stage | Skill | What it does |
 | --- | --- | --- |
 | `architecture` | `wayfare:wayfare-architecture` | Create + converge a single root `DESIGN.md`, tech stack, boundaries, dependency rules, invariants, users, flows, interaction standards, append-only decisions; never restates what the code says. `review` reports drift read-only; `sync` converges |
-| `harden` | `wayfare:wayfare-harden` | Audit read-only for hardening, dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness, and emit execution-ready plans as `.plans/` security items |
+| `harden` | `wayfare:wayfare-audit-security` | Audit read-only for hardening, dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness, and emit execution-ready plans as `.plans/` security items |
 
 ### Operations
 
 | Command | What it does |
 | --- | --- |
-| `wayfare:wayfare-think-it-through` | Brainstorm + grill an idea one question at a time into shared understanding and dependency-aware work-items |
+| `wayfare:wayfare-grill-idea` | Brainstorm + grill an idea one question at a time into shared understanding and dependency-aware work-items |
 | `wayfare:wayfare-fleet` | Create + converge `FLEET.md`, the local, unversioned map of the repos checked out beside each other (group, port). `sync` scans the folder and proposes rows, `review` reports drift read-only. Every repo skill run from the fleet root fans out to the repos you pick (see `docs/FLEET-MD.md`) |
-| `wayfare:wayfare-handoff` | Distill the current conversation into one self-contained work-item for a downstream agent (optionally filed to the tracker, or to **another repo** with `--repo OWNER/NAME`) |
+| `wayfare:wayfare-write-handoff` | Distill the current conversation into one self-contained work-item for a downstream agent (optionally filed to the tracker, or to **another repo** with `--repo OWNER/NAME`) |
 
 ### Utilities
 

@@ -1,5 +1,5 @@
 ---
-name: wayfare-one-shot
+name: wayfare-run-task
 # prettier-ignore
 description: Drive a task end to end: plan, implement, simplify, push (tests included), self-review, mark ready, await review, respond, ship. No args: resume the current goal (gated). Use for small, low-risk PRs only; larger work goes through wayfare-hero.
 argument-hint: "[ISSUE_ID [additional-context] | DESCRIPTION | recalibrate]"
@@ -37,14 +37,14 @@ Each DAG node delegates to a single skill (or runs inline when the work is just 
 
 | # | Step | Skill to run standalone |
 | --- | --- | --- |
-| 1 | `plan` | `wayfare:wayfare-think-it-through` (only when nothing resolves from `.plans/` or the tracker) |
+| 1 | `plan` | `wayfare:wayfare-grill-idea` (only when nothing resolves from `.plans/` or the tracker) |
 | 2 | `implement` | inline (executes the resolved work-item) |
 | 3 | `simplify` | `/simplify` (external skill) |
 | 4 | `push` | `wayfare:wayfare-push-pr`, which tests first (verification plus UI smoke), then commits and pushes a draft PR |
 | 5 | `self-review` | `wayfare:wayfare-review-pr --no-mark-ready` |
 | 6 | `mark-ready` | `wayfare:wayfare-review-pr`'s own Step 9 gate, or `gh pr ready` |
 | 7 | `await-review` | inline poll (no separate skill) |
-| 8 | `respond` | `wayfare:wayfare-respond-to-comments` |
+| 8 | `respond` | `wayfare:wayfare-respond-pr` |
 | 9 | `ship` | `wayfare:wayfare-ship-pr` |
 
 ## Arguments
@@ -98,7 +98,7 @@ Apply this contract at every Step 1 to 9 transition below (or every transition f
 
 ## `recalibrate`
 
-`wayfare:wayfare-one-shot recalibrate` tunes the config that drives this skill, and
+`wayfare:wayfare-run-task recalibrate` tunes the config that drives this skill, and
 stops. It does not go on to run the skill. You want to see which field was
 wrong, not spend a whole run finding out.
 
@@ -110,7 +110,7 @@ follow the four phases in
 using the table below as the report, and stop.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" wayfare-one-shot
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" wayfare-run-task
 ```
 
 Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
@@ -240,7 +240,7 @@ Do NOT silently reset `$DEFAULT_BRANCH` after the branch. That is destructive an
 
 ### Step 0.5: Detect Resume Point
 
-Before doing anything destructive, read the current git/PR state and figure out where in the pipeline this invocation should pick up. Users often hit `wayfare:wayfare-one-shot` after they have already done some of the work, possibly in a previous session, and the orchestrator should never silently re-do completed steps.
+Before doing anything destructive, read the current git/PR state and figure out where in the pipeline this invocation should pick up. Users often hit `wayfare:wayfare-run-task` after they have already done some of the work, possibly in a previous session, and the orchestrator should never silently re-do completed steps.
 
 ```bash
 PLUGIN="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}"
@@ -287,7 +287,7 @@ Use the decision tree below to pick the **resume step** (1 to 9). Each row is th
 | Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW != APPROVED`, `BOT_REPLIED=false` | Step 7 (await-review) | a ready PR with no bot reply yet. Step 7's poll will wait |
 | Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW != APPROVED`, `BOT_REPLIED=true` | Step 8 (respond) | bot has commented, run respond-to-comments |
 | Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=true`, `PR_IS_DRAFT == "false"`, `PR_REVIEW == APPROVED` | Step 9 (ship) | go straight to auto-approve + merge |
-| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=false`, `AHEAD == 0` | exit with hint | the branch has no work. Suggest a fresh `wayfare:wayfare-one-shot ISSUE_OR_DESCRIPTION` (Step 1 plans inline) |
+| Feature branch, `UNCOMMITTED == 0`, `UNPUSHED == 0`, `PR_EXISTS=false`, `AHEAD == 0` | exit with hint | the branch has no work. Suggest a fresh `wayfare:wayfare-run-task ISSUE_OR_DESCRIPTION` (Step 1 plans inline) |
 | any other combination | exit with diagnostic | an unrouted state. Print the detected variables and exit; user falls back to individual skills |
 
 **Diagnostic exit format.** When a row says "exit with diagnostic" or "exit with hint," print:
@@ -303,7 +303,7 @@ Then **halt the orchestrator.** Do not proceed to Step 1, and do not silently sk
 **No confirmation prompt.** Announce the detected state and the inferred resume point, then proceed straight into that step. Do NOT ask the user to confirm or pick an override. Broken states already exit with a diagnostic above, everything else routes deterministically.
 
 ```
-wayfare:wayfare-one-shot — resuming from detected state
+wayfare:wayfare-run-task — resuming from detected state
 
 Branch:        feat/foo (not default)
 Uncommitted:   2 files
@@ -349,7 +349,7 @@ Render the DAG with `plan` as the active step:
 Now running: plan
 ```
 
-**one-shot does not plan from scratch.** `wayfare:wayfare-think-it-through` is the planning skill; this step's job is to arrive at exactly one work-item and confirm it is still outstanding. Resolve first, grill only if nothing resolves.
+**one-shot does not plan from scratch.** `wayfare:wayfare-grill-idea` is the planning skill; this step's job is to arrive at exactly one work-item and confirm it is still outstanding. Resolve first, grill only if nothing resolves.
 
 #### 1a: Parse `$ARGUMENTS`
 
@@ -392,7 +392,7 @@ Rows are first-match, top to bottom.
 | `$ARGUMENTS` matches a **goal** row (`type: goal`) | STOP: a goal is a set of tasks, not a unit of work. Suggest `wayfare:wayfare-hero next` (to authorize and run it) or `wayfare:wayfare-hero do GOAL_ID` (one turn of it). |
 | `$ARGUMENTS` matches a **feedback** row (`type: signal`) | STOP: a signal is delivered, never built. Suggest `wayfare:wayfare-hero sync`, whose feedback finding delivers it. |
 | `$ARGUMENTS` matches an **invalid** row | STOP: a store defect (bad id, unrecognized status or type). Print `hero_ready_items`' stderr line for it and route to `wayfare-hero sync`. Never grill it as new work: an invalid item that is really a finished one would be re-planned from scratch. |
-| `$ARGUMENTS` matches a **backlog** item (a task at `status: accepted`) | STOP: the task is on the roadmap but unplanned. Suggest `wayfare:wayfare-think-it-through TASK_ID` (its Feature mode plans it in place); never build a task that skipped planning. |
+| `$ARGUMENTS` matches a **backlog** item (a task at `status: accepted`) | STOP: the task is on the roadmap but unplanned. Suggest `wayfare:wayfare-grill-idea TASK_ID` (its Feature mode plans it in place); never build a task that skipped planning. |
 | `$ARGUMENTS` matches a **review** task (`status: review`) | Check its PR first (URL recorded in the task's `## Log`; else `gh pr list --search`). Open → `gh pr checkout` its branch and let Step 0.5's resume detection route from there. Merged → the close-out was missed: run Step 9a on it now. No PR found → treat as active/in-flight and confirm with the user. Never assume the PR is open. A merged-but-not-closed-out task must not loop here. |
 | `$ARGUMENTS` matches a **done** item | STOP: report that it already landed, with the item's `success` criteria as evidence. Offer the next READY item. Do NOT re-grill it; that writes a duplicate. |
 | `$ARGUMENTS` matches an **active** item | STOP and confirm: another session may hold it. Step 2 marks items `active` before the first edit precisely so two runs cannot claim one item. |
@@ -448,7 +448,7 @@ Before implementing, check the item's `success` criteria and its `## Definition 
 | --- | --- |
 | No evidence of the work → genuinely outstanding | Continue to Step 2 |
 | Criteria already hold; history shows it landed | STOP the pipeline. Report the evidence, offer to mark the item `done`, and offer the next READY item. Do NOT implement. |
-| Partially done (some criteria hold, some don't) | Report exactly which criteria still fail. Ask whether to scope this run to the remainder or re-grill the item via `wayfare:wayfare-think-it-through`. Never silently implement the delta. |
+| Partially done (some criteria hold, some don't) | Report exactly which criteria still fail. Ask whether to scope this run to the remainder or re-grill the item via `wayfare:wayfare-grill-idea`. Never silently implement the delta. |
 | **Could not evaluate**: `EVIDENCE_OK=false`, `gh` unauthenticated, a criteria command that errored for an unrelated reason, or criteria too vague to check | **STOP and ask.** Do not treat an unevaluable criterion as a failing one. Say which check could not run and let the user decide whether to build. |
 
 The last row exists because every other uncertain path here resolves toward implementing, which is the outcome this step exists to prevent. An empty result must never stand in for a negative one.
@@ -457,7 +457,7 @@ State the verdict explicitly before advancing, as in "verified outstanding: SUCC
 
 #### 1d: Grill it (only when nothing resolved)
 
-Invoke `wayfare:wayfare-think-it-through` via the Skill tool, passing `$ARGUMENTS`. It grills the idea one question at a time and emits dependency-aware work-items into `.plans/`. It gates on the user confirming shared understanding, and one-shot does not bypass that gate.
+Invoke `wayfare:wayfare-grill-idea` via the Skill tool, passing `$ARGUMENTS`. It grills the idea one question at a time and emits dependency-aware work-items into `.plans/`. It gates on the user confirming shared understanding, and one-shot does not bypass that gate.
 
 Skip the grill and plan inline only when the task is one think-it-through itself calls out as not worth grilling (`think-it-through`'s frontmatter description: a typo, a copy tweak, a dependency bump). Say which exemption applied. For anything else, grill.
 
@@ -684,7 +684,7 @@ If no review bot is configured (`agent: none`), render `(–) await-review` and 
 
 ### Step 8: respond
 
-Render DAG with `respond` active. Run `wayfare:wayfare-respond-to-comments` to address the bot's inline comments and resolve threads, forwarding the goal's permissions line verbatim when this run carries one (Step 9). This step only runs if Step 7 saw the bot reply.
+Render DAG with `respond` active. Run `wayfare:wayfare-respond-pr` to address the bot's inline comments and resolve threads, forwarding the goal's permissions line verbatim when this run carries one (Step 9). This step only runs if Step 7 saw the bot reply.
 
 If the bot's feedback exceeds a small set of trivial fixes, render `(✗) respond` plus `Stopped: bot feedback non-trivial, escalate to a human reviewer` per `PIPELINES.md` skip/error semantics, and halt. Do not advance to Step 9.
 
@@ -761,7 +761,7 @@ You're on DEFAULT_BRANCH with the merge pulled.
 
 Next:
   wayfare:wayfare-hero do N            # the next READY roadmap item (Step 9a listed what the merge unblocked)
-  wayfare:wayfare-one-shot NEXT_TICKET   # or a ticket / description outside the roadmap
+  wayfare:wayfare-run-task NEXT_TICKET   # or a ticket / description outside the roadmap
   /clear                              # fresh context first
 ```
 

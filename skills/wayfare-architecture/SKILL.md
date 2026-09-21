@@ -21,7 +21,7 @@ judges anything, and offers `sync` when the review reports `MISSING` or stale
 rows; the map this file holds is what orders every feature's subtasks. It has
 no config verb of its own (wayfare's `recalibrate` carries the three fields it
 reads) and no fleet fan-out (wayfare already ran in one repo by the time this
-starts). `wayfare:wayfare-think-it-through` also reaches it, to append a decision
+starts). `wayfare:wayfare-grill-idea` also reaches it, to append a decision
 settled in a grill.
 
 It absorbed think-it-through's former Arch Mode (the `specs/` folder of
@@ -314,7 +314,7 @@ modes).
   down through these layers, and this file says in what order. It does **not**
   order the features themselves; that comes from the user journey. Its sync
   runs `review` first and offers `sync` when the file is missing or stale.
-- **`wayfare:wayfare-think-it-through`** grills against the file in Feature mode,
+- **`wayfare:wayfare-grill-idea`** grills against the file in Feature mode,
   and after settling a one-way-door decision offers to append it to
   `## Decisions` (dated entry, same format). The grilled answers are the
   entry; don't make the user re-derive them.

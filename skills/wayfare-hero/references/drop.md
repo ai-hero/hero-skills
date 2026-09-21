@@ -183,5 +183,5 @@ Pulled: N new commits
 Stashed: [yes — "wayfare-hero drop: WIP on {branch}" (restore with `git stash pop`) / no]
 Context: Cleared
 
-Next step: wayfare:wayfare-one-shot — start the next task (print only — launch it on the user's word, never spontaneously)
+Next step: wayfare:wayfare-run-task — start the next task (print only — launch it on the user's word, never spontaneously)
 ```

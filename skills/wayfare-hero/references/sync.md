@@ -167,7 +167,7 @@ must never make the staleness disappear. **This map orders subtasks, never
 tasks.** Task order comes from the journey.
 
 **The `harden` stage, in both modes, after the map.** Invoke
-`wayfare:wayfare-harden all` via the Skill tool with the line `launched by
+`wayfare:wayfare-audit-security all` via the Skill tool with the line `launched by
 wayfare`. It is read-only and writes `type: task` + `shape: dependency` (or `architecture`)
 items at `status: planning`, each carrying an execution recipe, a
 verification, and its failure modes, so those items skip the grill in *Plan
@@ -699,7 +699,7 @@ So the pass runs across the roadmap:
    such check and produced a long plan for finished work. Trust the criteria,
    not the status field.
 2. **Hand the set to think-it-through's Roadmap mode**: invoke
-   `wayfare:wayfare-think-it-through ID ID ID…` (every task from step 1 that
+   `wayfare:wayfare-grill-idea ID ID ID…` (every task from step 1 that
    still needs a plan) via the Skill tool, with the line `launched by
    wayfare` in the invocation: that line enables its chain-back exception and
    is the only thing that distinguishes this from a standalone planning
