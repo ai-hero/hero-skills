@@ -207,6 +207,16 @@ for d in "$PLUGIN_ROOT"/skills/*/; do
 done
 check "every skill offering recalibrate has map rows" "" "$MISSING"
 
+# Exempt by name, not by circumstance. An earlier version skipped any skill
+# that happened not to invoke the script, which is the absence of the thing
+# being checked: deleting a skill's `hero-fields.sh" NAME` block then made
+# the check pass instead of fail, and a 26-directory rename sweep is exactly
+# what deletes one. wayfare-init-repo is the only real exemption: its
+# `recalibrate` re-investigates the repo and rewrites HERO.md whole rather
+# than reporting a field table, so it reads no map. Anything else appearing
+# here is a skill that lost its call.
+NO_INVOCATION="wayfare-init-repo"
+
 # A mapped skill no longer has to offer `recalibrate` itself. The wayfare
 # verbs were split out of one skill, and tuning went with them into
 # `wayfare-recalibrate-config`, so `wayfare-sync-plan` reads Wayfare fields
@@ -220,30 +230,40 @@ for name in $("$FIELDS" --list); do
   # `hero-fields.sh" push-pr` inside another skill prints the wrong table and
   # asks about fields that skill never reads. Checked only where a skill
   # invokes the script at all; a mapped skill that never invokes it is fine.
-  if grep -q 'hero-fields.sh"' "$PLUGIN_ROOT/skills/$name/SKILL.md" 2>/dev/null; then
-    grep -q "hero-fields.sh\" $name\$" "$PLUGIN_ROOT/skills/$name/SKILL.md" ||
-      WRONG_CALL="$WRONG_CALL $name"
+  # Keyed on declaring the verb, not on being mapped. A mapped skill that
+  # offers no `recalibrate` has nothing to invoke the script FOR: since the
+  # split, wayfare-recalibrate-config tunes those fields. A skill that DOES
+  # offer the verb and reads no map asks the user about nothing.
+  if declares_verb "$PLUGIN_ROOT/skills/$name"; then
+    case " $NO_INVOCATION " in
+      *" $name "*) ;;
+      *) grep -qE "hero-fields.sh\" ($name|--all)\$" "$PLUGIN_ROOT/skills/$name/SKILL.md" ||
+           WRONG_CALL="$WRONG_CALL $name" ;;
+    esac
   fi
 done
-check "a skill that invokes hero-fields.sh passes its own name" "" "$WRONG_CALL"
+check "a skill offering recalibrate reads its own rows" "" "$WRONG_CALL"
 
 # Every field must be reachable by some recalibrate, or it is a field nobody
-# can fix. One skill claims the whole file; without it, the rows above
-# document what is read and offer no way to tune it.
-check "a skill claims every section" "wayfare-recalibrate-config" \
-  "$(awk -F'|' '$2 == "*" && $3 == "*" && $1 == "wayfare-recalibrate-config" { print $1 }' "$FIELDS" | head -1)"
-# It does not DECLARE the verb — it IS the verb, so there is no argument to
-# offer. What has to hold is that it reads the map, or the `*|*` row above
-# claims a coverage nothing delivers.
-check "the recalibrate-config skill reads the map" "yes" \
-  "$(grep -q 'hero-fields.sh" wayfare-recalibrate-config$' \
+# can fix. A `*|*` row does NOT deliver that: hero-fields.sh prints it as one
+# literal row rather than expanding it, so the earlier version of this check
+# asserted a coverage the script never had, by grepping source text instead of
+# running it. Run it: --all must reach every SECTION|KEY the map declares.
+ALL_PAIRS=$(awk -F'|' '/^wayfare-[a-z-]+\|/ && $2 != "*" { print $2 "|" $3 }' "$FIELDS" | sort -u)
+SEEN_PAIRS=$("$FIELDS" --all "$R" | awk -F'\t' 'NR > 1 { print $2 "|" $3 }' | sort -u)
+check "--all reaches every mapped field" "" "$(comm -23 <(echo "$ALL_PAIRS") <(echo "$SEEN_PAIRS") | tr '\n' ' ' | sed 's/ $//')"
+check "the recalibrate-config skill reads the whole map" "yes" \
+  "$(grep -q 'hero-fields.sh" --all$' \
       "$PLUGIN_ROOT/skills/wayfare-recalibrate-config/SKILL.md" && echo yes || echo no)"
 
 # The loop accumulates into a variable that starts empty, so it passes when it
 # examines nothing. This is what makes it mean something.
 check "the mapped-skills loop examined something" "yes" "$([ "$MAPPED" -gt 0 ] && echo yes || echo no)"
-check "the mapped-skills loop examined something" \
-  "yes" "$([ "$MAPPED" -gt 0 ] && echo yes || echo no)"
+# The OTHER loop needs its own counterweight. declares_verb parses the first
+# frontmatter block; reflow it, or rename the key, and every skill `continue`s,
+# MISSING stays empty, and "every skill offering recalibrate has map rows"
+# reports PASS having checked nothing.
+check "the declared-skills loop examined something" "yes" "$([ "$DECLARED" -gt 0 ] && echo yes || echo no)"
 
 echo "hero-fields: $PASS passed${FAIL:+, $FAIL FAILED}" | sed 's/, 0 FAILED//'
 [ "$FAIL" -eq 0 ]

@@ -56,15 +56,14 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # here-doc nested in a command substitution makes bash scan the body for shell
 # quotes, and the first apostrophe in a prose cell ("the bot's") becomes an
 # unterminated string that fails the whole script at parse time.
-# The wayfare rows for Repository/type, Deployment/platform+registry, Code
-# Quality/linters and Projects belong to its stage skills (architecture,
-# harden), which carry no recalibrate of their own. A row under either name
-# fails hero-fields.test.sh's "every mapped skill offers recalibrate", so they
-# sit under wayfare even though wayfare never reads registry or linters itself.
+# Rows for fields a skill reads but never tunes are legitimate: a skill does
+# not have to offer `recalibrate` to appear here. wayfare-recalibrate-config
+# is the one skill that reports and writes them all, and it does that with
+# --all, so a field is reachable if and only if it has a row. A field with no
+# row is a field no recalibrate can ask about.
 rows() {
   cat <<'ROWS'
 wayfare-init-repo|*|*|every section — init writes the whole file, the only whole-file pass
-wayfare-recalibrate-config|*|*|every section — recalibrate reports and tunes any field, wherever it lives
 wayfare-push-pr|Repository|default-branch|the branch to cut from and the PR base
 wayfare-push-pr|Repository|branch-convention|the shape of the branch name it creates
 wayfare-push-pr|Repository|commit-convention|the shape of the commit message it writes
@@ -119,7 +118,8 @@ wayfare-recomponentize-ui|Design System|namespace|the registry prefix components
 wayfare-recomponentize-ui|Design System|registry-url|where the registry is fetched from
 wayfare-recomponentize-ui|Design System|token-env-var|the env var holding the registry token
 wayfare-recomponentize-ui|Projects|*|per project: the framework, which decides whether there is a UI at all
-wayfare-drop-item|Repository|branch-convention|which branches `drop` may discard, and the shape goal branches take
+wayfare-drop-item|Repository|branch-convention|which branches this skill may discard
+wayfare-start-goal|Repository|branch-convention|the shape of the branch a goal's work lands on
 wayfare-check-preflight|Repository|default-branch|the branch every readiness check is made against
 wayfare-check-preflight|CI/CD|auto-approve-installed|whether the ship step will be a no-op
 wayfare-check-preflight|Code Quality|pre-commit|whether the gate is installed and current

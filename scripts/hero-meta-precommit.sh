@@ -19,7 +19,7 @@ RELEVANT_FILES=()
 while IFS= read -r file; do
   case "$file" in
     skills/*/SKILL.md) RELEVANT_FILES+=("$file") ;;
-    skills/*/references/*) RELEVANT_FILES+=("$file") ;;
+    skills/*/references/*|references/*) RELEVANT_FILES+=("$file") ;;
     HERO.md) RELEVANT_FILES+=("$file") ;;
     scripts/validate.sh) RELEVANT_FILES+=("$file") ;;
   esac

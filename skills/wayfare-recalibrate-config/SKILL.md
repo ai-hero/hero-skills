@@ -30,7 +30,7 @@ the folder itself plans nothing.
 ### Report
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" wayfare-recalibrate-config
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" --all
 ```
 
 ### Ask
@@ -56,4 +56,3 @@ fail open rather than loudly, and the reference is where that is recorded.
 
 - Config is right, converge the roadmap → `wayfare:wayfare-sync-plan`
 - No `HERO.md` at all → `wayfare:wayfare-init-repo`
-- What the route is and which skill to reach for → `wayfare:wayfare-hero`

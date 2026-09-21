@@ -10,9 +10,9 @@ argument-hint: "[recalibrate]"
 Source is the product as it is; Target is the product as it should be, a
 claude.ai/design project configured in HERO.md. With no design project the
 route reconciles Source against itself — `DESIGN.md`, its own gaps, its own
-hardening. `wayfare:wayfare-hero` explains the route and which skill to
-reach for; **`docs/PLAN.md` is the store's specification, and nothing here
-restates it.**
+hardening. The README's command table says which skill does what;
+**`docs/PLAN.md` is the store's specification, and nothing here restates
+it.**
 
 ## Instructions
 
@@ -30,7 +30,11 @@ fans out into the repos you pick, starting a run inside each. A run against
 the folder itself plans nothing.
 
 **Read `../../references/init.md`.** Run it on a repo with no `HERO.md`, on
-one with no `.plans/PLAN.md`, or with `recalibrate` when the config has gone
+one with no `.plans/PLAN.md`, or with `recalibrate` to re-investigate the repo
+and rewrite `HERO.md` whole. That is a different job from
+`wayfare:wayfare-recalibrate-config`, which reports the field table and asks
+about the ones that are unset; use this one when the repo itself has changed
+shape and the config has gone
 stale. In an empty directory, `../../references/scaffold.md` runs first and
 falls through into it.
 
@@ -50,4 +54,3 @@ an empty roadmap that reads as "nothing to do".
 ## Next steps
 
 - Converge the roadmap → `wayfare:wayfare-sync-plan`
-- What the route is and which skill to reach for → `wayfare:wayfare-hero`
