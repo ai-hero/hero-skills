@@ -49,12 +49,12 @@ followed by `Stopped: REASON`.
 scaffold → setup-dev → config → first-commit
 ```
 
-Owner: `wayfare:wayfare-hero init`. The skill scaffolds the project, then
+Owner: `wayfare:wayfare-init-repo`. The skill scaffolds the project, then
 chains forward to `wayfare:wayfare-setup-dev`, its own config stage, and a
 final commit. Each stage announces itself with the DAG line.
 
 **Naming note for `first-commit`:** When scaffolding a *standalone* repo,
-`wayfare-hero init`'s scaffold step already produces the literal first commit (the
+`wayfare-init-repo`'s scaffold step already produces the literal first commit (the
 scaffold). The DAG node `first-commit` refers specifically to **the commit
 that lands `HERO.md` and `AGENTS.md`**, for standalone repos this is the
 second commit; for "added to existing repo" it is just the next commit. The
@@ -110,7 +110,7 @@ Because nothing else observes the codebase on the store's behalf, Step 1 also
 re-checks a resolved item's `success` criteria against reality, because `status: ready`
 only means nobody edited the file, not that the work is still outstanding.
 
-**Architecture and harden chain.** `wayfare-hero sync`'s architecture stage runs
+**Architecture and harden chain.** `wayfare-sync-plan`'s architecture stage runs
 `wayfare:wayfare-review-architecture`, and offers its `sync`, before judging
 the roadmap, its `harden` stage runs `wayfare:wayfare-audit-security all`, and
 `think-it-through` delegates a leading `arch` argument to the architecture
@@ -120,7 +120,7 @@ so wayfare is the only way a person reaches them.
 
 **The design return channel.** Every other edge flows target → source. One
 flows back: one-shot logs a divergence it found while building as a
-`signal` line in the task's `## Log`, and `wayfare-hero sync` delivers it. Two
+`signal` line in the task's `## Log`, and `wayfare-sync-plan` delivers it. Two
 destinations, no third: a configured `feedback-repo` gets an issue wayfare
 files itself (entries verbatim plus a manifest, destination confirmed
 in-session), and everything else (`feedback-repo: none`, a rejected value,
@@ -154,14 +154,14 @@ merging. The skill does not skip those confirmations.
 investigate → confirm → write → commit
 ```
 
-Owner: `wayfare:wayfare-hero init`. Four steps:
+Owner: `wayfare:wayfare-init-repo`. Four steps:
 
 1. `investigate`, deeply scan the repo for evidence of stack, conventions, CI, deploy
 2. `confirm`, present findings as a numbered list and ask the user to confirm/correct
 3. `write`, write HERO.md, update AGENTS.md summary sections (CLAUDE.md is a symlink to it), and (if the user opted in during `confirm`) install `.github/workflows/auto-approve.yaml` via Step 6a and the design-system enforcement layer via Step 6b
 4. `commit`, stage and commit HERO.md + AGENTS.md + the CLAUDE.md symlink (and the auto-approve workflow / design-system rule + hook if installed this run)
 
-Run by itself (`wayfare:wayfare-hero init` or `wayfare:wayfare-hero init recalibrate`) or
+Run by itself (`wayfare:wayfare-init-repo` or `wayfare:wayfare-init-repo recalibrate`) or
 as the third step of Pipeline 1.
 
 Eleven other skills carry a scoped slice of this pipeline as their own
@@ -172,13 +172,13 @@ skill's work. The
 field map is `scripts/hero-fields.sh`; the contract is
 [RECALIBRATE.md](./RECALIBRATE.md).
 
-### Pipeline 4: wayfare-hero sync, one round of convergence
+### Pipeline 4: wayfare-sync-plan, one round of convergence
 
 ```
 config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals
 ```
 
-Owner: `wayfare:wayfare-hero sync`. Eleven stages: the config gate; the
+Owner: `wayfare:wayfare-sync-plan`. Eleven stages: the config gate; the
 mailbox (`docs/MESSAGES.md`, every unread message through the fleet gate
 and the promotion gate, a `type: bug` message becoming a proposed `shape: defect` task);
 `wayfare:wayfare-review-architecture` (offering its `sync`);
@@ -193,22 +193,22 @@ bottom-up until every planned build item is in exactly one open goal, with
 existing `accepted` goals re-cut, coalesced when two name one outcome, split
 when one names two. Stages that do not apply render `(–)` with the reason;
 the goals stage never does. It ends with the roadmap
-view and, when a goal is runnable, `Next step: wayfare:wayfare-hero next`.
+view and, when a goal is runnable, `Next step: wayfare:wayfare-start-goal`.
 
-`wayfare:wayfare-hero improve` is the compliance stage on its own, plus the
+`wayfare:wayfare-audit-compliance` is the compliance stage on its own, plus the
 backport half sync never does: where this repo is the reference for a check
 the template fails, it drafts the message to the template's inbox. At a
 fleet root it runs the whole family, regenerates the register's
 CONSISTENCY.md (fleet-root form only; consistency.py refuses to run outside
 a fleet), and offers the per-repo fan-out.
 
-### Pipeline 5: wayfare-hero do, a bot's PR to merged and deployed
+### Pipeline 5: wayfare-advance-item, a bot's PR to merged and deployed
 
 ```
 current → test → review → ship → close-out
 ```
 
-Owner: `wayfare:wayfare-hero do ITEM_ID` on a `shape: dependency` task with `bot:`
+Owner: `wayfare:wayfare-advance-item ITEM_ID` on a `shape: dependency` task with `bot:`
 (written and ready-marked by Pipeline 4), see *Carrying a bot's PR* in the
 skill. The bot already implemented the bump, so there is no `implement` and
 no PR of ours; `test` and `ship` delegate to `wayfare:wayfare-push-pr test` and
@@ -217,12 +217,12 @@ verifies. A goal turn runs the same steps for each bot item among its members, o
 branch. A bot item never joins the goal's own branch: its PR is the bot's and
 has to stay bot-authored.
 
-### Goals: `wayfare-hero next` runs the turn; `/goal` only re-runs it
+### Goals: `wayfare-start-goal` runs the turn; `/goal` only re-runs it
 
-`wayfare:wayfare-hero next` picks the next goal in bottom-up order, reads its
+`wayfare:wayfare-start-goal` picks the next goal in bottom-up order, reads its
 `## Permissions` aloud (`mark-ready`, `respond`, `auto-approve`, `merge`,
 `deploy`, `absorb`), takes the user's in-session authorization, and runs
-one turn of the goal in that session; `wayfare:wayfare-hero do GOAL_ID` is
+one turn of the goal in that session; `wayfare:wayfare-advance-item GOAL_ID` is
 that same turn on its own. A turn that ends on a stop line prints the
 `/goal` line that would re-run it unattended, for the person to paste;
 wayfare cannot set `/goal` itself.

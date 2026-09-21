@@ -60,7 +60,7 @@ Read `HERO.md` if it exists. This skill uses:
 - **Code Quality** → linters, formatters, pre-commit
 - **Code Review Agent** → agent name, trigger method, poll method, bot username (for review loop)
 
-If `HERO.md` is missing, suggest `wayfare:wayfare-hero init` but proceed with defaults.
+If `HERO.md` is missing, suggest `wayfare:wayfare-init-repo` but proceed with defaults.
 
 ### Step 1: Identify the PR
 
@@ -452,7 +452,7 @@ URL: {pr-url}
 Next step: (pick exactly one)
 ```
 
-- **This cycle touched dependency files** (`package.json`, `pyproject.toml`, lockfiles, `.github/workflows/*.yml` version pins, or `Dockerfile*`, the same definition as `push-pr`'s equivalent bullet): `Next step: wayfare:wayfare-hero sync, whose harden stage audits the new dependency surface and writes any fix as a security item` (print only).
+- **This cycle touched dependency files** (`package.json`, `pyproject.toml`, lockfiles, `.github/workflows/*.yml` version pins, or `Dockerfile*`, the same definition as `push-pr`'s equivalent bullet): `Next step: wayfare:wayfare-sync-plan, whose harden stage audits the new dependency surface and writes any fix as a security item` (print only).
 - **Otherwise**: `Next step: wayfare:wayfare-ship-pr, which posts @auto-approve, merges, and resets to the default branch (it blocks if any threads remain unresolved)` (offer to auto-run: ask "Run it now? [y/N]", invoke via Skill tool on yes).
 
 **If changes were stashed in Step 2, remind the user:**

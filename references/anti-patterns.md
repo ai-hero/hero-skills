@@ -93,9 +93,9 @@ The failures this skill exists to prevent, each one observed.
 
 Pick exactly one, from the store's current state:
 
-- **A goal is runnable** (`active`, or `accepted` with its goal deps `done` and its members all planned): `Next step: wayfare:wayfare-hero next, to authorize its permissions and run it`; `wayfare:wayfare-hero do GOAL_ID` is one turn of it.
-- **An item is mid-flight and no goal has it as a member**: `Next step: wayfare:wayfare-hero do N, to build item N` (the active one).
-- **An item is READY and no goal has it as a member**: `Next step: wayfare:wayfare-hero sync, because item N is ready and no goal has it as a member; the goals stage groups it`. `do N` builds it by hand and leaves the roadmap as it was.
-- **Tasks are unplanned (`accepted`), no roadmap yet, or the world moved** (target changed, work landed out-of-band, design feedback awaits delivery, tasks look horizontal, alerts or bot PRs appeared): `Next step: wayfare:wayfare-hero sync, which converges architecture, design, hardening, compliance, dependencies and the roadmap, plans the set, then proposes goals`.
-- **A compliance finding names this repo as the reference for something the template fails**: `Next step: wayfare:wayfare-hero improve, to draft the backport message`.
+- **A goal is runnable** (`active`, or `accepted` with its goal deps `done` and its members all planned): `Next step: wayfare:wayfare-start-goal, to authorize its permissions and run it`; `wayfare:wayfare-advance-item GOAL_ID` is one turn of it.
+- **An item is mid-flight and no goal has it as a member**: `Next step: wayfare:wayfare-advance-item N, to build item N` (the active one).
+- **An item is READY and no goal has it as a member**: `Next step: wayfare:wayfare-sync-plan, because item N is ready and no goal has it as a member; the goals stage groups it`. `do N` builds it by hand and leaves the roadmap as it was.
+- **Tasks are unplanned (`accepted`), no roadmap yet, or the world moved** (target changed, work landed out-of-band, design feedback awaits delivery, tasks look horizontal, alerts or bot PRs appeared): `Next step: wayfare:wayfare-sync-plan, which converges architecture, design, hardening, compliance, dependencies and the roadmap, plans the set, then proposes goals`.
+- **A compliance finding names this repo as the reference for something the template fails**: `Next step: wayfare:wayfare-audit-compliance, to draft the backport message`.
 - **Everything blocked or done**: print the roadmap view. It names each blocker's unmet deps, or the route is complete.

@@ -260,7 +260,7 @@ hero_check_staleness() {
     .github/workflows .pre-commit-config.yaml \
     CLAUDE.md Makefile justfile Taskfile.yml 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
   if [ "${config_time:-0}" -gt "${hero_time:-0}" ]; then
-    echo "note: HERO.md may be out of date; run wayfare:wayfare-hero init recalibrate to refresh." >&2
+    echo "note: HERO.md may be out of date; run wayfare:wayfare-init-repo recalibrate to refresh." >&2
   fi
   return 0
 }
@@ -820,7 +820,7 @@ hero_idea_count() { # [STORE]
 
 # Print the ids of a goal's members, ordered by `rank` then id, one per line.
 # `depends_on` is not consulted: it gates each member's readiness in the
-# listing, and a rank that contradicts it is a store defect `wayfare-hero sync`
+# listing, and a rank that contradicts it is a store defect `wayfare-sync-plan`
 # reports. The second argument is the STORE, like every sibling here.
 #
 # Derived from each item's `parent`, never stored on the goal. The old schema
@@ -1212,7 +1212,7 @@ hero_deploy_pending_clear() { # STORE SHA
 # Repo-local skills that plug into wayfare: every .claude/skills/*/SKILL.md
 # whose frontmatter carries `wayfare: HOOK`, as `name<TAB>hook<TAB>path`, one
 # per line; HOOK filters to one hook. The three hooks are sync (a stage of
-# `wayfare-hero sync`), verify (a Definition-of-Done verifier) and recipe (a way to
+# `wayfare-sync-plan`), verify (a Definition-of-Done verifier) and recipe (a way to
 # build that planning may name). Discovery, not configuration: a list of these
 # in HERO.md would be a copy of the directory and would go stale.
 hero_local_skills() { # ROOT [HOOK]
@@ -1323,7 +1323,7 @@ hero_ready_items() (
   # would print an empty roadmap for a repo that has a full one — and an empty
   # roadmap reads as "nothing to do", not as "this did not work".
   if [ ! -f "$store/PLAN.md" ] || [ -z "$(hero_item_field "$store/PLAN.md" schema)" ]; then
-    echo "hero_ready_items: '$store' has no PLAN.md at schema 1; run 'bash scripts/migrate-plan.sh $store', or wayfare:wayfare-hero init on a repo with no plan yet" >&2
+    echo "hero_ready_items: '$store' has no PLAN.md at schema 1; run 'bash scripts/migrate-plan.sh $store', or wayfare:wayfare-init-repo on a repo with no plan yet" >&2
     return 1
   fi
 
@@ -1478,7 +1478,7 @@ hero_ready_items() (
       continue
     fi
 
-    # A planned task outside every open goal is invisible to `wayfare-hero next`,
+    # A planned task outside every open goal is invisible to `wayfare-start-goal`,
     # which walks goals and never items, so it sits READY forever unless
     # someone runs `do N` by hand. A committed one is worse: it is the residue
     # of an abandoned goal branch, claiming work the repo does not have. Warn
@@ -1489,7 +1489,7 @@ hero_ready_items() (
         parent=$(hero_norm_id "$(hero_item_field "$f" parent)")
         case "$open_goals" in
           *" ${parent:-__none__} "*) ;;
-          *) echo "hero_ready_items: $f is $state and no open goal has it as a member; wayfare-hero sync groups it into a goal" >&2 ;;
+          *) echo "hero_ready_items: $f is $state and no open goal has it as a member; wayfare-sync-plan groups it into a goal" >&2 ;;
         esac ;;
     esac
 
@@ -1523,7 +1523,7 @@ hero_ready_items() (
       task:committed) echo "committed $f — $title"; continue ;;
       task:review) echo "review  $f — $title"; continue ;;
       # A goal is a container, never a unit of work: READY means "hand this to
-      # one-shot", and one-shot builds tasks. `wayfare-hero next` selects goals by
+      # one-shot", and one-shot builds tasks. `wayfare-start-goal` selects goals by
       # type and `do GOAL_ID` takes one by id, never off the READY tier.
       goal:accepted) echo "goal    $f — $title"; continue ;;
       # A signal is delivered, not built, so it never reaches READY either.

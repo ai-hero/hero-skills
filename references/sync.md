@@ -852,13 +852,13 @@ So the pass runs across the roadmap:
 
    **The sync writes the item and stops there. It never authorizes.** The
    approval that grants a goal's `## Permissions` is typed by a person at
-   `wayfare-hero next`'s gate, in-session, and is never written to the item; a
+   `wayfare-start-goal`'s gate, in-session, and is never written to the item; a
    plan that carried it would put into a file exactly the flag *Starting a
    goal* step 4 forbids. A user may decline a proposed goal; the item it
    would have covered is then named in the report as uncovered, with the
    `do N` line that builds it by hand, and the next sync proposes it again.
    End the run with the roadmap view; when a goal is runnable, the last line
-   is `Next step: wayfare:wayfare-hero next`.
+   is `Next step: wayfare:wayfare-start-goal`.
 
 **This is not a gate on building.** The roadmap does not have to be fully
 planned before the first task ships. That would be waterfall, and it
@@ -885,7 +885,7 @@ nothing else. It costs one file and it stops the proposal table filling with
 guesses.
 
 **The parking lot is reported as a count, never as rows.** End the roadmap
-view with one line, `N ideas parked (wayfare-hero sync ideas to review)`, from
+view with one line, `N ideas parked (wayfare-sync-plan ideas to review)`, from
 `hero_idea_count`. Printing one row per idea puts a growing list between the
 reader and the READY set, which is how the actionable rows stop being read.
 

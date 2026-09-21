@@ -70,7 +70,7 @@ Read `HERO.md` if it exists. This skill uses:
 - **CI/CD** → platform name for PR description context and CI status reporting
 - **Project Management** → issue prefix for branch names, `Fixes:`/`Relates to:` trailers, and linking PRs to issues
 
-If `HERO.md` is missing, suggest `wayfare:wayfare-hero init` but proceed with defaults (the test phase falls back to auto-detection). If the stale-HERO hint fired, mention it once to the user but do not block.
+If `HERO.md` is missing, suggest `wayfare:wayfare-init-repo` but proceed with defaults (the test phase falls back to auto-detection). If the stale-HERO hint fired, mention it once to the user but do not block.
 
 ### Step 1: Branch if on Default Branch
 
@@ -244,7 +244,7 @@ If Step 2a detected no frontend indicator at all (no `next.config.*`, `vite.conf
 This is expected on backend-only PRs.
 ```
 
-Otherwise, confirm which project to drive using HERO.md's `## Projects` section (already loaded in Step 0). UI detection there is **heuristic, not a closed enum**. `wayfare-hero init` does not constrain the `framework` value, so treat the list below as a hint and fall back to asking the user when nothing matches.
+Otherwise, confirm which project to drive using HERO.md's `## Projects` section (already loaded in Step 0). UI detection there is **heuristic, not a closed enum**. `wayfare-init-repo` does not constrain the `framework` value, so treat the list below as a hint and fall back to asking the user when nothing matches.
 
 **Known-UI frameworks (auto-detected as UI):**
 
@@ -284,7 +284,7 @@ Record `UI_PORT`, `UI_DEV_COMMAND`, `UI_PATH` from the matched project. Validate
 if [ ! -d "$ROOT/$UI_PATH" ]; then
   echo "ERROR: UI project path '$ROOT/$UI_PATH' does not exist."
   echo "       Check the 'path:' field for this project in HERO.md, or run"
-  echo "       wayfare:wayfare-hero init recalibrate to re-detect."
+  echo "       wayfare:wayfare-init-repo recalibrate to re-detect."
   exit 1
 fi
 ```
@@ -835,7 +835,7 @@ Next step: wayfare:wayfare-review-pr — self-review, runs pr-review-toolkit age
 
 If the PR was created with `ready` (non-draft), report `PR created` instead of `Draft PR created`, skip the self-review hint, and pick exactly one next step instead:
 
-- **This PR touched dependency files** (`package.json`, `pyproject.toml`, lockfiles, `.github/workflows/*.yml` version pins, or `Dockerfile*`, since harden covers Docker image hardening too): `Next step: wayfare:wayfare-hero sync, whose harden stage audits the new dependency surface and writes any fix as a security item` (print only).
+- **This PR touched dependency files** (`package.json`, `pyproject.toml`, lockfiles, `.github/workflows/*.yml` version pins, or `Dockerfile*`, since harden covers Docker image hardening too): `Next step: wayfare:wayfare-sync-plan, whose harden stage audits the new dependency surface and writes any fix as a security item` (print only).
 - **Otherwise**: `Next step: wayfare:wayfare-ship-pr, which once green posts @auto-approve, merges, verifies the deploy, and resets` (offer to auto-run).
 
 ### A5: Report CI Status

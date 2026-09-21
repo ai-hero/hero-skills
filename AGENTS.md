@@ -73,8 +73,8 @@ repo's own gate while `auto-approve.yaml` is the fleet's.
 - **`recalibrate` writes HERO.md; `sync` writes the skill's own file.**
   Eleven skills carry the verb ([docs/RECALIBRATE.md](./docs/RECALIBRATE.md));
   their field map is `scripts/hero-fields.sh`, and a field missing there is a
-  field no recalibrate can ask about. `wayfare-sync-fleet` and `wayfare-hero sync` are
-  unrelated: they converge FLEET.md and the plan, not config. `wayfare-hero improve`
+  field no recalibrate can ask about. `wayfare-sync-fleet` and `wayfare-sync-plan` are
+  unrelated: they converge FLEET.md and the plan, not config. `wayfare-audit-compliance`
   writes no config at all — it is the compliance audit and the backport drafts
   — so the config verb is always `recalibrate`, however much `improve` sounds
   like one.
@@ -82,7 +82,7 @@ repo's own gate while `auto-approve.yaml` is the fleet's.
   Both are `user-invocable: false` and chained (`CHAINED_SKILLS` in
   `scripts/validate.sh`), and neither carries `recalibrate`, because wayfare's rows
   in `scripts/hero-fields.sh` cover their fields. A verb added to either is a
-  verb nobody reaches unless `wayfare-hero sync` (or, for architecture,
+  verb nobody reaches unless `wayfare-sync-plan` (or, for architecture,
   think-it-through's `arch` dispatch) calls it.
 - **Assets are vendored downstream, not authored there.** Fix a bug here, then
   re-vendor. A consuming repo's copy is output.

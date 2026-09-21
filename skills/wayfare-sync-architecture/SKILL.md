@@ -82,14 +82,14 @@ is a permissions problem to surface, not an absent file.
 which project the file should describe, or whether one file covers the whole,
 and record the answer in `## Overview`'s first line. `NO_HERO_SECTIONS`
 covers both a missing HERO.md and one without these sections: suggest
-`wayfare:wayfare-hero init` but proceed from a direct read.
+`wayfare:wayfare-init-repo` but proceed from a direct read.
 
 Then dispatch, and **announce the dispatched verb first** (`architecture:
 running sync` / `running review`), so a typo'd `review` never lands in the
 write verb silently: `review` runs the verb below of that name; anything
 else, including no arguments, is `sync`, with any trailing text carried in
 as context (an area to focus on, or a decision to record). The three fields
-above are tuned by `wayfare:wayfare-hero recalibrate`, never here.
+above are tuned by `wayfare:wayfare-recalibrate-config`, never here.
 
 ## Bootstrap: no DESIGN.md yet
 

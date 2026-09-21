@@ -207,7 +207,7 @@ elif [ "$PR_EXISTS" = "true" ]; then
     # BOT_REPLIED is only meaningful if we know who the bot is. Without
     # bot-username configured, a `false` here is indistinguishable from "no
     # reply yet" and await-review waits forever for a reply already posted.
-    # `agent: none` is a first-class supported setting (`wayfare-hero init` writes it when
+    # `agent: none` is a first-class supported setting (`wayfare-init-repo` writes it when
     # no review bot is detected), and such a repo has no bot-username. Treating
     # that as a failed source made STATE_OK=false on every resume, so one-shot
     # stopped with a diagnostic on a perfectly valid configuration.

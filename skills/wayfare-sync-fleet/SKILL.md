@@ -89,8 +89,8 @@ the skill that owns it.
    | `PORT_UNIMPLEMENTED` | the claim is made, the repo has no compose file yet. Nothing to fix here; it clears when the dev stack lands |
    | `PORT_UNPARSED` | a compose file the scanner cannot read a host port from. Look at it: either it publishes no port (drop the row's port) or it uses a syntax worth adding to `hero_compose_port` |
    | `PORT_COLLISION` | pick the next free port in `port-range` for the newer row, propose it; same routing as a mismatch for the repo side |
-   | `NO_HERO` | offer `wayfare:wayfare-hero init` in that repo (a subagent, per the standard's fan-out) |
-   | `NO_AGENTS` | same, via `wayfare-hero init`'s Step 1 |
+   | `NO_HERO` | offer `wayfare:wayfare-init-repo` in that repo (a subagent, per the standard's fan-out) |
+   | `NO_AGENTS` | same, via `wayfare-init-repo`'s Step 1 |
    | `NOT_FLEET_AWARE` | *Make the repos fleet-aware*, below |
 
 2. If `org` is set, list what exists there and is not on disk.
@@ -139,7 +139,7 @@ per the *Sending* procedure in `docs/MESSAGES.md`, with:
 
 Show the drafts and the list once, confirm once, then deposit with
 `hero_msg_deposit`. Report the repos that now have mail and the one line each
-runs to act on it (`wayfare:wayfare-hero sync`, whose `inbox` stage promotes
+runs to act on it (`wayfare:wayfare-sync-plan`, whose `inbox` stage promotes
 the ask).
 
 A row whose `.plans/` does not exist cannot receive one: no mailbox, and no

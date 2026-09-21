@@ -1,10 +1,10 @@
 # `init` on an empty directory: scaffold, then initialize
 
-Run by `wayfare:wayfare-hero init` when there is no repo yet, or when adding a
+Run by `wayfare:wayfare-init-repo` when there is no repo yet, or when adding a
 subproject to a monorepo. Scaffold the project, then fall through to
 `references/init.md`, which writes `HERO.md` and the plan object.
 
-This was `wayfare:wayfare-hero init`. Same procedure, same templates; it is
+This was `wayfare:wayfare-init-repo`. Same procedure, same templates; it is
 the empty-directory case of one verb rather than a second entry point, so
 nobody has to decide which of the two to run.
 
@@ -18,7 +18,7 @@ cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 
 If `FLEET_ROOT` printed, this folder is a fleet, not a repo: stop and follow **At the fleet root** in `docs/FLEET-MD.md`.
 
-Read `HERO.md` for repo type (single vs monorepo), code quality tools, and coding conventions. If missing, suggest `wayfare:wayfare-hero init` and proceed with defaults.
+Read `HERO.md` for repo type (single vs monorepo), code quality tools, and coding conventions. If missing, suggest `wayfare:wayfare-init-repo` and proceed with defaults.
 
 ## Step 1: Parse Arguments
 
@@ -159,7 +159,7 @@ ln -s AGENTS.md CLAUDE.md
 If `ln -s` fails (Windows without Developer Mode), write a one-line `CLAUDE.md`
 containing `See [AGENTS.md](./AGENTS.md).` and tell the user why.
 
-`wayfare:wayfare-hero init` (Step 1) fills in the Tech Stack / Best Practices /
+`wayfare:wayfare-init-repo` (Step 1) fills in the Tech Stack / Best Practices /
 Coding Conventions sections after it investigates, so leave them out here.
 
 ```markdown
@@ -218,7 +218,7 @@ Then run `wayfare:wayfare-setup-dev` to install required CLIs and authenticate. 
 Now running: the config pass (references/init.md)
 ```
 
-Run `wayfare:wayfare-hero init` to investigate the freshly scaffolded project and write `HERO.md`. (Pipeline 3 runs as a nested DAG inside this step.)
+Run `wayfare:wayfare-init-repo` to investigate the freshly scaffolded project and write `HERO.md`. (Pipeline 3 runs as a nested DAG inside this step.)
 
 Finally render:
 
@@ -233,7 +233,7 @@ If the repo was initialized standalone in Step 6 with an initial commit, the `fi
 ```bash
 git add HERO.md AGENTS.md CLAUDE.md
 git commit -m "$(cat <<'EOF'
-chore: add HERO.md and AGENTS.md from wayfare:wayfare-hero init
+chore: add HERO.md and AGENTS.md from wayfare:wayfare-init-repo
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 EOF

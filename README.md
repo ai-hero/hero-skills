@@ -46,10 +46,10 @@ the world it read.
 flowchart TB
   SRC["<b>Source</b> · this repo<br/>code + DESIGN.md"]
   TGT["<b>Target</b> · claude.ai/design<br/>optional"]
-  PLAN["<b>wayfare-hero sync</b><br/>reconcile · audit · propose"]
+  PLAN["<b>wayfare-sync-plan</b><br/>reconcile · audit · propose"]
   STORE[("<b>.plans/</b><br/>PLAN.md + items/")]
-  NEXT["<b>wayfare-hero next</b><br/>authorize a goal"]
-  DO["<b>wayfare-hero do ID</b><br/>advance one item"]
+  NEXT["<b>wayfare-start-goal</b><br/>authorize a goal"]
+  DO["<b>wayfare-advance-item ID</b><br/>advance one item"]
   BUILD["one-shot → push-pr<br/>→ review-pr → ship-pr"]
 
   SRC -- read --> PLAN
@@ -71,7 +71,7 @@ flowchart TB
 ```
 
 With no design project configured the target end is simply absent, and
-`wayfare-hero sync` reconciles the repo against `DESIGN.md`, its own gaps and its
+`wayfare-sync-plan` reconciles the repo against `DESIGN.md`, its own gaps and its
 own hardening instead — a self-review.
 
 ### The plan store
@@ -90,7 +90,7 @@ Definition of Done has to assert.
 An **idea** is the parking lot: a thought worth keeping that nobody has
 committed to. It carries no plan, no paths and no Definition of Done — an
 idea that can state one is a task that was mis-filed. Nothing builds an idea
-and nothing may depend on one; `wayfare-hero sync` reports the parked set as a
+and nothing may depend on one; `wayfare-sync-plan` reports the parked set as a
 count and promotes only what you pick, at which point whatever it becomes
 carries `discovered_from` pointing back at it.
 
@@ -108,7 +108,7 @@ stateDiagram-v2
   active --> review: PR opens
   committed --> review: goal's PR opens
   review --> done: merged, deploy verified
-  active --> dropped: wayfare-hero drop
+  active --> dropped: wayfare-drop-item
   done --> [*]
   dropped --> [*]
 ```
@@ -119,7 +119,7 @@ not, because the prerequisite was abandoned. The full specification is
 
 ### From tasks to goals
 
-Grouping is the **last stage of every `wayfare-hero sync`**, not a separate step
+Grouping is the **last stage of every `wayfare-sync-plan`**, not a separate step
 you run. It works bottom-up from the dependency graph: the first goal is the
 smallest outcome whose tasks depend on nothing outside the group, the next is
 the smallest outcome whose remaining dependencies are already inside a formed
@@ -162,7 +162,7 @@ became two outcomes splits. An `active` goal is frozen, because its members
 and permissions were authorized as a set at `next`'s gate.
 
 `sync` writes the goal. It never authorizes it — that is typed by a person at
-`wayfare-hero next`, in-session, and is never stored in the file.
+`wayfare-start-goal`, in-session, and is never stored in the file.
 
 ## Across repos
 
@@ -281,7 +281,7 @@ Three commands. Everything else is run by them.
 
 ```
 # 1. Configure your project (run once per repo)
-wayfare:wayfare-hero init
+wayfare:wayfare-init-repo
 
 # 2. Converge the world into a plan. One round, eleven stages:
 #    config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals
@@ -293,7 +293,7 @@ wayfare:wayfare-hero init
 #    reconciles source against design, plans every feature with you, then
 #    proposes goals bottom-up over what was planned, and re-cuts the ones
 #    already there. Writes only what you confirm; your ready-mark is the gate.
-wayfare:wayfare-hero sync
+wayfare:wayfare-sync-plan
 
 # 3. Take the next goal. It reads the goal's permissions aloud (mark-ready,
 #    respond, auto-approve, merge, deploy, absorb), you authorize them
@@ -302,10 +302,10 @@ wayfare:wayfare-hero sync
 #    opened at the end. Work it finds along the way is absorbed into the same
 #    goal rather than spawning a new one. A run that stops hands back to you,
 #    with a /goal line to paste if you would rather have it loop unattended.
-wayfare:wayfare-hero next
+wayfare:wayfare-start-goal
 ```
 
-`wayfare:wayfare-hero do ID` advances one thing on its own, a feature through
+`wayfare:wayfare-advance-item ID` advances one thing on its own, a feature through
 one-shot, a Dependabot PR to merged and deployed, or one goal turn. `improve`
 runs the compliance audit alone, in one repo, or across the whole fleet from
 its root, and drafts backports where this repo is ahead of the template.
@@ -368,10 +368,10 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
 | Command | What it does |
 | --- | --- |
-| `wayfare:wayfare-hero init` | Investigate your repo, auto-detect stack, create `HERO.md` config |
+| `wayfare:wayfare-init-repo` | Investigate your repo, auto-detect stack, create `HERO.md` config |
 | `wayfare:wayfare-check-preflight` | Catch missing tooling, stale `HERO.md`, env mismatches, and busy ports before a pipeline step does destructive work |
 | `wayfare:wayfare-setup-dev` | Set up a developer's local environment (tools, auth, dependencies) |
-| `wayfare:wayfare-hero init` | Scaffold a new project (Python, full-stack, Node.js) |
+| `wayfare:wayfare-init-repo` | Scaffold a new project (Python, full-stack, Node.js) |
 | `wayfare:wayfare-create-skill` | Create a new Claude Code skill, subagent, rule, or hook |
 
 ### Development Cycle
@@ -394,7 +394,7 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 | Command | What it does |
 | --- | --- |
 | `wayfare:wayfare-run-task` | Drives a small task end-to-end: plan → implement → simplify → push (tests included) → self-review → mark-ready → await-review → respond → ship. Detects a resume point on re-invocation; with no arguments, drives the current goal to merged + reset branch. Explicit user gates at each destructive step. |
-| `wayfare:wayfare-hero init` | Scaffolds a new project, then chains into setup-dev → config → first-commit. |
+| `wayfare:wayfare-init-repo` | Scaffolds a new project, then chains into setup-dev → config → first-commit. |
 
 ### The front door
 
@@ -423,7 +423,7 @@ Two skills are stages of `sync` and hidden from the slash menu (`user-invocable:
 
 | Command | What it does |
 | --- | --- |
-| `wayfare:wayfare-hero drop` | Abandon or pause an unmerged branch, stash uncommitted work, switch to default, clear context |
+| `wayfare:wayfare-drop-item` | Abandon or pause an unmerged branch, stash uncommitted work, switch to default, clear context |
 | `wayfare:wayfare-audit-plugin` | Audit the hero-skills plugin itself for quality and consistency |
 
 ## Updating vendored assets in a downstream repo
@@ -495,19 +495,19 @@ with what `auto-approve.yaml` declares.
 
 Every skill reads `HERO.md` from your repo root. It declares your stack so skills don't have to guess. **HERO.md is committed to the repo**. It's team-shared, so every developer and every skill works from the same config.
 
-When project config drifts (new deps, CI changes, switched task runner), skills detect the staleness and remind you to run `wayfare:wayfare-hero init recalibrate` to refresh. There is no auto-pre-commit hook for this. It was too slow. Run the refresh on demand.
+When project config drifts (new deps, CI changes, switched task runner), skills detect the staleness and remind you to run `wayfare:wayfare-init-repo recalibrate` to refresh. There is no auto-pre-commit hook for this. It was too slow. Run the refresh on demand.
 
 **`recalibrate` is on fourteen skills.** When a skill does the wrong thing
 because its config is wrong, you fix it where you noticed:
 `wayfare:wayfare-ship-pr recalibrate` asks about the eight fields `ship-pr` reads
 across Repository, CI/CD and Deployment, writes what you confirm, commits, and
-stops. It does not then ship. `wayfare:wayfare-hero init recalibrate` is the
+stops. It does not then ship. `wayfare:wayfare-init-repo recalibrate` is the
 whole-file pass. `scripts/hero-fields.sh SKILL` prints the fields of any skill
 that carries the verb, with their current values. See
 [docs/RECALIBRATE.md](docs/RECALIBRATE.md).
 
 Note that `recalibrate` is not `sync`: `wayfare-sync-fleet` converges `FLEET.md`,
-and `wayfare-hero sync` converges the plan (and, through its architecture stage,
+and `wayfare-sync-plan` converges the plan (and, through its architecture stage,
 `DESIGN.md`). Those keep their own verbs, and none of them is configuration.
 
 Here's what a minimal config looks like:
@@ -535,7 +535,7 @@ Here's what a minimal config looks like:
 - Dev command: uvicorn main:app --reload
 ```
 
-No `HERO.md`? Skills fall back to auto-detection. Run `wayfare:wayfare-hero init` to generate one. It investigates your repo and asks smart questions to fill in what it can't detect.
+No `HERO.md`? Skills fall back to auto-detection. Run `wayfare:wayfare-init-repo` to generate one. It investigates your repo and asks smart questions to fill in what it can't detect.
 
 <details>
 <summary><strong>Full config reference</strong></summary>
@@ -570,5 +570,5 @@ and your fleet's private **overlay**, reference repos, incident history,
 .fleet/`). Inside a fleet the family is FLEET.md's rows whose group is not
 `none`; anywhere else, the current repo alone against the baseline.
 `scripts/consistency.py` writes the fleet's human table into that checkout.
-`wayfare-hero sync` runs the audit as its `compliance` stage; `wayfare-hero improve`
+`wayfare-sync-plan` runs the audit as its `compliance` stage; `wayfare-audit-compliance`
 runs it alone. See `assets/compliance/README.md`.

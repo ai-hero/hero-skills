@@ -10,7 +10,7 @@ dependency bot's PR to merged and deployed.
 - **A task** (any `shape`, unless it is a `dependency` with `bot:`) runs *Advancing one item* below on it, with the item
   given rather than selected: one item, as far as the gates allow, then
   stop. It never plans. An item that is not `ready` (or further along) is
-  refused with `Next step: wayfare-hero sync`, whose postflight plans the set; an
+  refused with `Next step: wayfare-sync-plan`, whose postflight plans the set; an
   item with unmet deps is refused naming them. `do` on a task is
   unaffected by an active `/goal`.
 - **A `shape: dependency` task with `bot:`** runs *Carrying a bot's PR* below,
@@ -45,7 +45,7 @@ the next task.
    would be built against a tree that lacks it. `hero_ready_items` lists
    the dependent as `blocked` with a `[committed dep: ID]` annotation;
    report the goal that id's `parent` names instead of building.
-   `wayfare-hero next` is already safe (the goal stays `active` until its PR
+   `wayfare-start-goal` is already safe (the goal stays `active` until its PR
    merges, and a goal's derived `depends_on` holds the order), so this is
    the gap `do ID` has to cover.
 
@@ -71,9 +71,9 @@ the next task.
    3. `READY` task, planned, marked and unblocked: invoke one-shot on it.
       A `committed` task is not a tier: its work is on the goal branch
       its `branch:` names, and the goal it belongs to owns the merge.
-      Report that goal and suggest `wayfare-hero do GOAL_ID`.
+      Report that goal and suggest `wayfare-advance-item GOAL_ID`.
    4. `sync` or `backlog` task, not planned. STOP with
-      `Next step: wayfare-hero sync, whose postflight plans the set`. Never invoke
+      `Next step: wayfare-sync-plan, whose postflight plans the set`. Never invoke
       think-it-through from here: the decisions that cut across tasks are
       the ones a single-task run gets wrong, and it gets them wrong
       silently. (The codebase check and the `launched by wayfare` line live in
@@ -82,7 +82,7 @@ the next task.
       how many and that each needs an explicit move to `accepted`; a roadmap of
       only `new` items is NOT empty), blocked/`[deps unmet]` rows and their
       unmet deps, `invalid` rows (store defects, routed to `sync`), or a
-      truly empty roadmap → `Next step: wayfare-hero sync`.
+      truly empty roadmap → `Next step: wayfare-sync-plan`.
 2. **The ready-mark is the permission, and it was already given.** A READY
    task carries the user's mark from `sync`'s postflight; `do` goes
    straight into `wayfare:wayfare-run-task` on it, with one line:
@@ -139,7 +139,7 @@ and reviewed; nothing here writes to it. Something that needs a change is a
 finding for the review and the user's call.
 
 **One PR per item, as the bot wrote it.** An item is refused when it is not
-`ready` or further (`Next step: wayfare-hero sync`), or when its `pr:` is not an
+`ready` or further (`Next step: wayfare-sync-plan`), or when its `pr:` is not an
 open bot PR any more (closed or merged out-of-band → propose `done` or
 deletion with the evidence). A PR that is not a bot's is
 `wayfare:wayfare-ship-pr`'s directly, never this procedure's. Bumps that must be

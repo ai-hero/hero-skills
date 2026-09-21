@@ -828,7 +828,7 @@ check "idea: never warned about as an uncovered task" "1" "$?"
 
 # ---------- goal membership (parent, not covers) ------------------------------
 #
-# `wayfare-hero next` walks goals, never items, so a planned task outside every
+# `wayfare-start-goal` walks goals, never items, so a planned task outside every
 # open goal is never handed out: it sits READY until someone runs `do N` by
 # hand. Membership is ONE edge in ONE direction now, so two goals claiming one
 # task is not representable and needs no defect check.

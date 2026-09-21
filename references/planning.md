@@ -58,7 +58,7 @@ roadmap, and wayfare owns only the contract it fills:
   checklist lines, and one-shot works through them in order (PR granularity
   is one-shot's call, per its Step 2).
 - The ready-mark is the user's (think-it-through's Step 5): a confirmed
-  task flips to `ready`, which is what `wayfare-hero do ID` builds next. One
+  task flips to `ready`, which is what `wayfare-advance-item ID` builds next. One
   exception, granted by a person at `next`'s gate and nowhere else: a goal
   with `absorb: yes` marks an **admitted** item ready inside its own run
   (*Admitting discovered work*).

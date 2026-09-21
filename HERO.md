@@ -1,5 +1,5 @@
 # Hero Configuration
-<!-- This file configures hero-skills. See wayfare:wayfare-hero init to update. -->
+<!-- This file configures hero-skills. See wayfare:wayfare-init-repo to update. -->
 
 ## Project Management
 

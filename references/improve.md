@@ -30,7 +30,7 @@ audit:
    one finding nobody else surfaces.
 4. Offer the per-repo fan-out per **At the fleet root** in
    `docs/FLEET-MD.md`: the user picks repos, and each gets
-   `wayfare:wayfare-hero improve` in a subagent, which proposes its own
+   `wayfare:wayfare-audit-compliance` in a subagent, which proposes its own
    items in its own store. The fleet form writes into no repo's store,
    items are a repo's own decision, made in that repo.
 

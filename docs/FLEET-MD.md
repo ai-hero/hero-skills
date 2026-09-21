@@ -68,7 +68,7 @@ Rules:
    *not* cloned; `port-range` is where `sync` picks the next free port for a
    collision and what lets the scanner pick the app's port over a database's
    in a multi-service compose file. `template` names the row the compliance
-   engine compares callers against and the repo `wayfare-hero improve` backports
+   engine compares callers against and the repo `wayfare-audit-compliance` backports
    to; `template-port` is recorded for the operator. `register` names the
    checkout holding the fleet's compliance overlay (default `.fleet/`); a
    mapped register that is not cloned stops the engine rather than running
@@ -160,7 +160,7 @@ running a repo skill against it either fails late or, worse, half-works.
 5. **Relay every report, per repo.** The user sees one summary block per
    repo, what happened, what stopped, what needs them.
 
-Two exceptions. `wayfare-hero init` at the fleet root scaffolds *into* the
+Two exceptions. `wayfare-init-repo` at the fleet root scaffolds *into* the
 folder (`FLEET_ROOT/NAME`) and then runs `wayfare-sync-fleet` to add the row. That
 is the natural place to create a project. `fleet` itself is the only skill
 whose subject is the folder.

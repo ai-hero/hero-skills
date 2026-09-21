@@ -15,7 +15,7 @@
 # An existing file is never overwritten: the new version lands beside it as
 # .new and the operator decides.
 #
-# Exit codes are a contract, wayfare-hero init (references/init.md) branches on them:
+# Exit codes are a contract, wayfare-init-repo (references/init.md) branches on them:
 #   0  installed, or already up to date (safe to stage)
 #   2  a different file exists; .new written beside it (do NOT stage)
 #   3  the plugin's own source is missing (the plugin is broken)

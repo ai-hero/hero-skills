@@ -3,7 +3,7 @@
 # All Rights Reserved.
 
 # Migrate a `.plans/` store from the nine-kind schema to schema 1
-# (docs/PLAN.md). Run once per repo; `wayfare-hero init` runs it on sight of an
+# (docs/PLAN.md). Run once per repo; `wayfare-init-repo` runs it on sight of an
 # unmigrated store.
 #
 # Usage: bash scripts/migrate-plan.sh [STORE] [--dry-run]
@@ -400,7 +400,7 @@ fi
   echo "## Scope"
   echo ""
   echo "TODO — one paragraph: what this repo is and what the plan over it is"
-  echo "for. \`wayfare-hero init\` fills this in; the migrator cannot know it."
+  echo "for. \`wayfare-init-repo\` fills this in; the migrator cannot know it."
   echo ""
   echo "## Log"
   echo ""

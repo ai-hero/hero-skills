@@ -23,9 +23,9 @@ walk the goals:
 2. Else the first `accepted` goal in bottom-up order (its `depends_on` goals all
    `done`, lowest id among those) whose members are all `ready` or further.
    A `accepted` goal whose deps are met but whose members hold an unplanned
-   item is reported as blocked on planning: `Next step: wayfare-hero sync`.
+   item is reported as blocked on planning: `Next step: wayfare-sync-plan`.
 3. Else say why there is nothing to hand out, in one line each: no goals
-   (tasks ready but ungrouped → `wayfare-hero sync`'s goals stage covers
+   (tasks ready but ungrouped → `wayfare-sync-plan`'s goals stage covers
    them; that stage was skipped or cut short); every goal blocked on another
    (name the chain); every goal `done` (the route is complete).
 
@@ -95,7 +95,7 @@ children answer, and a name they do not know has no business travelling on
 it. The values are an enum (`yes` or `no`, and `verify` or `none` for
 `deploy`) and the section is required: a goal with no `## Permissions`, a missing
 key, or a value outside its enum is a **store defect** (`sync` reports it),
-and `next` STOPs on it with `Next step: wayfare-hero sync` rather than reading
+and `next` STOPs on it with `Next step: wayfare-sync-plan` rather than reading
 anything aloud. "The sync writes" is what `sync` puts on a new goal; it is never
 what an absent line means.
 
@@ -135,14 +135,14 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
 `active` goal is frozen for the same reason its member set is: change it and
 `next` re-asks.
 
-### Starting a goal: `wayfare-hero next`, or `do GOAL_ID` on an unauthorized goal
+### Starting a goal: `wayfare-start-goal`, or `do GOAL_ID` on an unauthorized goal
 
 1. **Resolve the goal item.** `next` picked it (or the user named one by
    asking `do GOAL_ID` on a `accepted` goal, which routes here). It arrives
    `accepted` with its members (`parent` on each), `depends_on`, `budget`,
    `## Permissions` and a DoD already written by `sync`, needing only the
    authorization below. Every member must already be planned (`ready` or further along): an
-   unplanned one is a STOP with `Next step: wayfare-hero sync`, because planning is
+   unplanned one is a STOP with `Next step: wayfare-sync-plan`, because planning is
    `sync`'s postflight, and the loop never stops to plan halfway through.
    The one unplanned item that is not a STOP is an **admission** a previous
    turn of this same goal wrote, whose `discovered_from` is a member and
@@ -153,7 +153,7 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
    a `depends_on` entry that is not a goal is a store defect, same STOP. A
    missing or malformed `## Permissions` (see *Permissions*), or a `budget`
    or `budget_max` that is not a positive integer, is a STOP with
-   `Next step: wayfare-hero sync`, because the gate reads the item aloud and cannot read
+   `Next step: wayfare-sync-plan`, because the gate reads the item aloud and cannot read
    what is not there.
 2. **Get the approval, and show the whole run.** Read `## Permissions`
    aloud; the approval grants exactly those, for every member:
@@ -221,7 +221,7 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
    Keep the condition short and point it at the item:
 
    ```
-   /goal Run wayfare:wayfare-hero do 7 once per turn. Met when the turn
+   /goal Run wayfare:wayfare-advance-item 7 once per turn. Met when the turn
    report shows every member of goal 7 at status done AND every
    line of goal 7's Definition of Done verified directly, each naming what
    was checked. Impossible if a turn report shows a stop line other than
@@ -235,7 +235,7 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
 4. **The authorization lives in this session only. Never write it to the
    item.** A stored "approved" flag outlives the conversation that granted it
    and sits in a file anyone can edit. A `/goal` line restores its condition
-   on resume, not this, so a resumed goal re-asks (`wayfare-hero next` finds it
+   on resume, not this, so a resumed goal re-asks (`wayfare-start-goal` finds it
    `active` and runs this gate again before its turn). That re-ask is what
    keeps the authorization attached to a person who is present.
 
@@ -285,7 +285,7 @@ memory between turns:
    can commit an item that says exactly that. If it is not present, whether
    in a resumed session or a fresh one, do not prompt from inside a turn: in
    a headless run that hangs. Stop with `stop: reauthorize`, and say to run
-   `wayfare-hero next` again: it re-authorizes and runs the turn. When present,
+   `wayfare-start-goal` again: it re-authorizes and runs the turn. When present,
    and the goal is still `accepted`, write `status: active`. This is the one
    writer of that transition. Then every launch below carries the
    permissions line from *Permissions*, `gates pre-authorized in-session for
@@ -731,7 +731,7 @@ memory between turns:
    `awaiting-human`, `reauthorize`. On the final turn `dod:` lists each line
    with its check. To the `/goal` evaluator any value but `none` reads as
    "impossible". For `awaiting-human` that is the designed hand-back, not a
-   defect to fix: the loop ends, the person acts, `wayfare-hero next` resumes.
+   defect to fix: the loop ends, the person acts, `wayfare-start-goal` resumes.
 
 **A failure stops the goal. It never skips to the next task.** Skipping is
 how a goal is reported done with a hole in it, invisible afterwards because
@@ -830,8 +830,8 @@ flip is the ready-mark, which is otherwise the user's alone. `absorb` is
 what a person granted at the gate in place of it, and it reaches nothing
 outside an admission. With `absorb: no`, the item still joins the goal, at
 `accepted`; the turn ends `stop: awaiting-human` naming it and the planning it
-needs. Either way the goal keeps the work: `wayfare-hero sync` plans it, the user
-marks it ready, and `wayfare-hero next` resumes **this** goal. No new goal is
+needs. Either way the goal keeps the work: `wayfare-sync-plan` plans it, the user
+marks it ready, and `wayfare-start-goal` resumes **this** goal. No new goal is
 minted for it in either branch, which is the whole point.
 
 **Adjudicate from the store, not from the reports.** A subagent that STOPs
@@ -921,7 +921,7 @@ catches the case where every local decision looked fine and the total did not.
 `sync` sets it to twice `budget`, which is the "type of fungible" range: a
 goal that needs half again as much as planned just gets on with it, and one
 that needs triple stops and asks. Raising `budget_max` is not a turn's to do;
-that is `wayfare-hero next`, a person, and a fresh gate.
+that is `wayfare-start-goal`, a person, and a fresh gate.
 
 The spend itself is a set, not a count. Each commit appends its SHA to
 `commits` as it lands, with the task it served. That set is a record for a

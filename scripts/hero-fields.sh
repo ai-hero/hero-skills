@@ -63,7 +63,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # sit under wayfare even though wayfare never reads registry or linters itself.
 rows() {
   cat <<'ROWS'
-wayfare-hero|*|*|every section — `init` writes the whole file, the only whole-file pass
+wayfare-init-repo|*|*|every section — init writes the whole file, the only whole-file pass
+wayfare-recalibrate-config|*|*|every section — recalibrate reports and tunes any field, wherever it lives
 wayfare-push-pr|Repository|default-branch|the branch to cut from and the PR base
 wayfare-push-pr|Repository|branch-convention|the shape of the branch name it creates
 wayfare-push-pr|Repository|commit-convention|the shape of the commit message it writes
@@ -100,31 +101,31 @@ wayfare-respond-pr|Code Review Agent|trigger|how the bot's review is requested
 wayfare-respond-pr|Code Review Agent|poll-method|how this skill knows the review has landed
 wayfare-respond-pr|Repository|default-branch|the base for the diff a comment is read against
 wayfare-respond-pr|Projects|*|per project: the test command run after a fix
-wayfare-hero|Wayfare|source-repo|the codebase reconciled against the design
-wayfare-hero|Wayfare|design-project|the target design substrate, or none
-wayfare-hero|Wayfare|design-transport|how design files reach the local snapshot
-wayfare-hero|Wayfare|feedback-repo|where design feedback is filed, or none for local packets
-wayfare-hero|Wayfare|ux-flow|the authoritative journey the codebase is reconciled against
-wayfare-hero|Wayfare|design-system-repo|the registry the UI work sources primitives from
-wayfare-hero|Wayfare|reconciliation|how far a sync is allowed to go on its own
-wayfare-hero|Repository|default-branch|the base for every PR the goal turns open
-wayfare-hero|Repository|type|single or monorepo, which decides whether one DESIGN.md covers the repo (the architecture stage) and where `init` scaffolds a new project
-wayfare-hero|Deployment|platform|the deploy shape DESIGN.md's invariants hold under, and whether the harden stage has images to scan
-wayfare-hero|Deployment|registry|where the image the harden stage scans is pulled from
-wayfare-hero|Code Quality|linters|the security checks already in the gate, which the harden stage must not re-propose
-wayfare-hero|Projects|*|per project: language and dependency file (the CVE scanners), in a monorepo which project DESIGN.md describes, and the names a new project must not collide with
+wayfare-sync-plan|Wayfare|source-repo|the codebase reconciled against the design
+wayfare-sync-plan|Wayfare|design-project|the target design substrate, or none
+wayfare-sync-plan|Wayfare|design-transport|how design files reach the local snapshot
+wayfare-sync-plan|Wayfare|feedback-repo|where design feedback is filed, or none for local packets
+wayfare-sync-plan|Wayfare|ux-flow|the authoritative journey the codebase is reconciled against
+wayfare-sync-plan|Wayfare|design-system-repo|the registry the UI work sources primitives from
+wayfare-sync-plan|Wayfare|reconciliation|how far a sync is allowed to go on its own
+wayfare-start-goal|Repository|default-branch|the base for every PR the goal turns open
+wayfare-init-repo|Repository|type|single or monorepo, which decides whether one DESIGN.md covers the repo (the architecture stage) and where `init` scaffolds a new project
+wayfare-sync-plan|Deployment|platform|the deploy shape DESIGN.md's invariants hold under, and whether the harden stage has images to scan
+wayfare-sync-plan|Deployment|registry|where the image the harden stage scans is pulled from
+wayfare-sync-plan|Code Quality|linters|the security checks already in the gate, which the harden stage must not re-propose
+wayfare-sync-plan|Projects|*|per project: language and dependency file (the CVE scanners), in a monorepo which project DESIGN.md describes, and the names a new project must not collide with
 wayfare-recomponentize-ui|Design System|role|producer refuses the run; consumer is what the pass is for
 wayfare-recomponentize-ui|Design System|namespace|the registry prefix components are sourced under
 wayfare-recomponentize-ui|Design System|registry-url|where the registry is fetched from
 wayfare-recomponentize-ui|Design System|token-env-var|the env var holding the registry token
 wayfare-recomponentize-ui|Projects|*|per project: the framework, which decides whether there is a UI at all
-wayfare-hero|Repository|branch-convention|which branches `drop` may discard, and the shape goal branches take
+wayfare-drop-item|Repository|branch-convention|which branches `drop` may discard, and the shape goal branches take
 wayfare-check-preflight|Repository|default-branch|the branch every readiness check is made against
 wayfare-check-preflight|CI/CD|auto-approve-installed|whether the ship step will be a no-op
 wayfare-check-preflight|Code Quality|pre-commit|whether the gate is installed and current
 wayfare-setup-dev|Developer Setup|*|required tools, recommended tools, and MCP servers — the checklist this skill walks
 wayfare-setup-dev|Projects|*|per project: install and dev commands the setup verifies
-wayfare-hero|Design System|namespace|the registry a scaffolded UI is wired to
+wayfare-init-repo|Design System|namespace|the registry a scaffolded UI is wired to
 wayfare-create-skill|Projects|*|per project: language and framework, which the new skill's examples follow
 wayfare-write-handoff|Project Management|tool|where the distilled work-item is filed
 wayfare-write-handoff|Project Management|issue-tracker|the tracker the item is created in

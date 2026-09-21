@@ -76,7 +76,7 @@ Read `HERO.md` for:
 - **Code Quality** → pre-commit (re-run after fixes in self-review mode)
 - **Code Review Agent** → bot username (to avoid duplicating its comments)
 
-If `HERO.md` is missing, suggest `wayfare:wayfare-hero init` but proceed with defaults.
+If `HERO.md` is missing, suggest `wayfare:wayfare-init-repo` but proceed with defaults.
 
 Detect the PR and mode:
 

@@ -237,12 +237,12 @@ else
     # The one-shot pipeline's skills are executable specs, not prose guides:
     # the procedure IS the content, and every guard sits inline with the step
     # it constrains. Splitting one across files is how a step comes to be
-    # executed without its STOP. The list is wayfare-hero plus one-shot and the
-    # skills its DAG nodes delegate to. `wayfare-hero init` writes the config
+    # executed without its STOP. The list is the wayfare verbs plus run-task and the
+    # skills its DAG nodes delegate to. `wayfare-init-repo` writes the config
     # they all read. Everything else keeps the 500/5000 guideline, where a
     # breach really does mean reference material has leaked into the
     # instructions: an oversized reference warns today and should.
-    PIPELINE_SKILLS=" wayfare-hero wayfare-run-task wayfare-ship-pr wayfare-push-pr wayfare-review-pr wayfare-respond-pr "
+    PIPELINE_SKILLS=" wayfare-sync-plan wayfare-start-goal wayfare-init-repo wayfare-run-task wayfare-ship-pr wayfare-push-pr wayfare-review-pr wayfare-respond-pr "
     LIMIT_LINES=500; LIMIT_WORDS=5000
     case "$PIPELINE_SKILLS" in
       *" $SKILL_NAME "*) LIMIT_LINES=3500; LIMIT_WORDS=35000 ;;
@@ -321,7 +321,7 @@ fi
 # Keep this list in sync with one-shot's step→skill mapping AND
 # a goal turn's tiers. `one-shot` is here because re-adding its flag
 # would silently break every goal turn. `architecture` is chained three
-# ways: wayfare-hero sync runs its review/sync in both modes, and
+# ways: wayfare-sync-plan runs its review/sync in both modes, and
 # think-it-through's `arch` dispatch
 # delegates to it. `handoff` is deliberately NOT here: wayfare's
 # design-feedback delivery files its issue directly rather than routing

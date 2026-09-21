@@ -1,7 +1,7 @@
 # How a task is shaped
 
 The slice rule and the fine-tuning pass. Read before proposing any item in
-`wayfare-hero sync`, and before accepting one a person brings.
+`wayfare-sync-plan`, and before accepting one a person brings.
 
 ## Slices, not layers: every `story` task is SLC
 

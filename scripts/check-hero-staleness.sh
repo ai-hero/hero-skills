@@ -7,7 +7,7 @@
 # Compares the last-commit time of HERO.md against the last-commit time of
 # files that affect the HERO.md schema (deps, CI, deploy, code quality, agent
 # configs, task runners). If any of those is newer, prints a hint to stderr
-# suggesting `wayfare:wayfare-hero init recalibrate`.
+# suggesting `wayfare:wayfare-init-repo recalibrate`.
 #
 # Always exits 0. This is purely informational.
 #
@@ -78,7 +78,7 @@ NEWEST=${NEWEST:-0}
 if (( NEWEST > HERO_TIME )); then
   cat >&2 <<'EOF'
 note: HERO.md may be out of date — project config has changed since the last sync.
-      Run `wayfare:wayfare-hero init recalibrate` to refresh.
+      Run `wayfare:wayfare-init-repo recalibrate` to refresh.
 EOF
 fi
 

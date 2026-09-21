@@ -136,7 +136,7 @@ the strict `OWNER/NAME` shape.
 
 ## `recalibrate`
 
-`wayfare:wayfare-hero recalibrate` tunes the config that drives this skill, and
+`wayfare:wayfare-recalibrate-config` tunes the config that drives this skill, and
 stops. It does not go on to run the skill. You want to see which field was
 wrong, not spend a whole run finding out.
 

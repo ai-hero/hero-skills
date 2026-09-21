@@ -123,7 +123,7 @@ check "a heading inside a code fence is not present" \
   "(absent)" "$("$FIELDS" wayfare-setup-dev "$TMP/fenced" | awk -F'\t' '$1 == "Developer Setup" { print $3 }')"
 
 # No HERO.md at all: every row says so, and the command still succeeds, so
-# recalibrate reads the rows and sends the user to `wayfare-hero init`.
+# recalibrate reads the rows and sends the user to `wayfare-init-repo`.
 mkdir -p "$TMP/bare"
 BARE=$("$FIELDS" wayfare-push-pr "$TMP/bare"); check "missing HERO.md exits 0" "0" "$?"
 check "every row is no-file when there is no HERO.md" \
@@ -186,11 +186,6 @@ for name in $("$FIELDS" --list); do
 done
 check "every mapped name is a skill directory" "" "$BAD_NAME"
 
-# Every mapped skill invokes this script. There is no exemption now that the
-# whole-file pass belongs to `wayfare-hero init`, and wayfare's own recalibrate
-# does invoke it. An empty list is the claim; the loop below is the check.
-NO_INVOCATION=""
-
 # The map is the claim and the skills are the truth. Match the frontmatter
 # anchored to the first block: create-skill/SKILL.md carries a second
 # `argument-hint:` at column 0 inside a fenced template, so an unanchored grep
@@ -212,27 +207,41 @@ for d in "$PLUGIN_ROOT"/skills/*/; do
 done
 check "every skill offering recalibrate has map rows" "" "$MISSING"
 
-EXTRA=""
+# A mapped skill no longer has to offer `recalibrate` itself. The wayfare
+# verbs were split out of one skill, and tuning went with them into
+# `wayfare-recalibrate-config`, so `wayfare-sync-plan` reads Wayfare fields
+# and offers no verb of its own. What still has to hold is that every field
+# is reachable by SOME recalibrate, which the `*|*` row below is.
 MAPPED=0
 WRONG_CALL=""
 for name in $("$FIELDS" --list); do
   MAPPED=$((MAPPED + 1))
-  declares_verb "$PLUGIN_ROOT/skills/$name" || EXTRA="$EXTRA $name"
   # The binding a 16-file copy-paste actually breaks: a block still reading
   # `hero-fields.sh" push-pr` inside another skill prints the wrong table and
-  # asks about fields that skill never reads.
-  case " $NO_INVOCATION " in
-    *" $name "*) ;;
-    *) grep -q "hero-fields.sh\" $name\$" "$PLUGIN_ROOT/skills/$name/SKILL.md" ||
-         WRONG_CALL="$WRONG_CALL $name" ;;
-  esac
+  # asks about fields that skill never reads. Checked only where a skill
+  # invokes the script at all; a mapped skill that never invokes it is fine.
+  if grep -q 'hero-fields.sh"' "$PLUGIN_ROOT/skills/$name/SKILL.md" 2>/dev/null; then
+    grep -q "hero-fields.sh\" $name\$" "$PLUGIN_ROOT/skills/$name/SKILL.md" ||
+      WRONG_CALL="$WRONG_CALL $name"
+  fi
 done
-check "every mapped skill offers recalibrate" "" "$EXTRA"
-check "every mapped skill invokes hero-fields.sh with its own name" "" "$WRONG_CALL"
+check "a skill that invokes hero-fields.sh passes its own name" "" "$WRONG_CALL"
 
-# Both loops accumulate into a variable that starts empty, so each passes when
-# it examines nothing. These two are what make them mean something.
-check "the declared-skills loop examined every mapped skill" "$MAPPED" "$DECLARED"
+# Every field must be reachable by some recalibrate, or it is a field nobody
+# can fix. One skill claims the whole file; without it, the rows above
+# document what is read and offer no way to tune it.
+check "a skill claims every section" "wayfare-recalibrate-config" \
+  "$(awk -F'|' '$2 == "*" && $3 == "*" && $1 == "wayfare-recalibrate-config" { print $1 }' "$FIELDS" | head -1)"
+# It does not DECLARE the verb — it IS the verb, so there is no argument to
+# offer. What has to hold is that it reads the map, or the `*|*` row above
+# claims a coverage nothing delivers.
+check "the recalibrate-config skill reads the map" "yes" \
+  "$(grep -q 'hero-fields.sh" wayfare-recalibrate-config$' \
+      "$PLUGIN_ROOT/skills/wayfare-recalibrate-config/SKILL.md" && echo yes || echo no)"
+
+# The loop accumulates into a variable that starts empty, so it passes when it
+# examines nothing. This is what makes it mean something.
+check "the mapped-skills loop examined something" "yes" "$([ "$MAPPED" -gt 0 ] && echo yes || echo no)"
 check "the mapped-skills loop examined something" \
   "yes" "$([ "$MAPPED" -gt 0 ] && echo yes || echo no)"
 

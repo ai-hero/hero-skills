@@ -4,7 +4,7 @@ Stop work on a branch that never merged: stash anything uncommitted, switch
 back to the default branch, pull, and mark the item so the roadmap tells the
 truth about it.
 
-This was `wayfare:wayfare-hero drop`. Two things changed in the move. It takes an
+This was `wayfare:wayfare-drop-item`. Two things changed in the move. It takes an
 **item id**, and it writes `status: dropped` on that item — the state
 `docs/PLAN.md` defines and that nothing previously set, so an abandoned
 branch used to leave its item sitting at `active` forever, claiming work
@@ -67,7 +67,7 @@ You have uncommitted changes on '$CURRENT':
   (list changed files from git status)
 
 Options:
-1. Stash changes (saved as "wayfare-hero drop: WIP on $CURRENT") — you can restore later with `git stash pop`
+1. Stash changes (saved as "wayfare-drop-item: WIP on $CURRENT") — you can restore later with `git stash pop`
 2. Cancel — go back and commit or handle changes first
 ```
 
@@ -76,13 +76,13 @@ Options:
 **If user chooses option 1 (stash):**
 
 ```bash
-git stash push -m "wayfare-hero drop: WIP on $CURRENT"
+git stash push -m "wayfare-drop-item: WIP on $CURRENT"
 ```
 
 Report the stash ref:
 
 ```
-Stashed as: stash@{0} — "wayfare-hero drop: WIP on $CURRENT"
+Stashed as: stash@{0} — "wayfare-drop-item: WIP on $CURRENT"
 You can restore later with: git stash pop
 ```
 
@@ -180,7 +180,7 @@ Status: Up to date with origin
 
 Previous branch: {previous-branch} [paused, kept locally / deleted (local + remote/PR, if confirmed) / was already on default]
 Pulled: N new commits
-Stashed: [yes — "wayfare-hero drop: WIP on {branch}" (restore with `git stash pop`) / no]
+Stashed: [yes — "wayfare-drop-item: WIP on {branch}" (restore with `git stash pop`) / no]
 Context: Cleared
 
 Next step: wayfare:wayfare-run-task — start the next task (print only — launch it on the user's word, never spontaneously)

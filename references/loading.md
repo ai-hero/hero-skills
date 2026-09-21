@@ -564,10 +564,10 @@ then goal, then feedback, then one line for the idea count
   (see `references/feedback-channels.md`). Count the markers and the rows, not
   the prose: this is the return channel's only backlog surface, so a miscount
   of zero is indistinguishable from "no feedback exists",
-- the single next action: `wayfare-hero next` when a goal is runnable (see
+- the single next action: `wayfare-start-goal` when a goal is runnable (see
   `next`: an `active` goal, else the first `accepted` goal in bottom-up order
-  whose members are all planned), `wayfare-hero do N` for a mid-flight item,
-  `wayfare-hero sync` for unplanned tasks, READY items no goal has as a member, stale
+  whose members are all planned), `wayfare-advance-item N` for a mid-flight item,
+  `wayfare-sync-plan` for unplanned tasks, READY items no goal has as a member, stale
   rows, defects, and undelivered design feedback.
 
 Print the `hero_ready_items` "no open goal has it as a member" warnings as their own
@@ -602,8 +602,8 @@ invisibility the `new` default was added to end.
 
 **`goal` rows are their own group**, in bottom-up order (see *Goals* under
 `sync`), listing each goal's member progress (committed / done / total), its unmet goal
-dependencies, and its next command (`wayfare-hero next` for the first runnable
-one, `wayfare-hero do ID` for an `active` one mid-run).
+dependencies, and its next command (`wayfare-start-goal` for the first runnable
+one, `wayfare-advance-item ID` for an `active` one mid-run).
 
 **Print the open feedback rows as their own group**, after the build groups.
 They are not blocked work and they are not done work; folding them into either
