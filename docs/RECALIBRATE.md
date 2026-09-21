@@ -71,7 +71,9 @@ Four phases, in this order, in every skill.
    what each one decides for this skill. `scripts/hero-fields.sh SKILL` is
    that table. Anything in parentheses is a finding rather than a value:
    `(unset)`, `(no-section)`, `(refused)`, `(no-file)`, and `(absent)` for a
-   missing section. Then look at the repo for those rows, a field the tree
+   missing section. The one exception is `(n/a: type=...)` on a connection row:
+   the block has answered (`docs/CONNECTIONS.md`) or is blocked on its own
+   `type`, so it is parenthesised and is **not** a question. Then look at the repo for those rows, a field the tree
    can answer should reach the user as a proposal with its evidence, not as an
    open question. `(no-file)` on every row is not a recalibrate at all: send
    the user to `wayfare:wayfare-init-repo`.

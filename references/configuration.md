@@ -40,6 +40,12 @@ needs. Wayfare reads four of the six kinds:
 - source-repo: . # the repo wayfare runs in; virtually always `.`
 ```
 
+Step 0 prints a connection's **state**, not just its value, where the two
+differ: `ds-repo=none(UNSET)` is a repo nobody has looked at, `none(NONE)` one
+that answered, and `...(SELF)` this repo itself. The config gate branches on
+that difference, so a summary line carrying only `none` is a gate deciding by
+guess.
+
 `source-repo` is the one key that is **not** a connection: it names this repo,
 and a thing is not attached to itself. Everything else wayfare used to keep in
 `## Wayfare` — `design-project`, `design-transport`, `ux-flow`,
@@ -199,10 +205,13 @@ has looked" state, which is a question. A block that exists and says
 `type: none` reports that value, not a sentinel, and is therefore **not** a
 question: it is the answer already given ([docs/CONNECTIONS.md](../docs/CONNECTIONS.md)).
 
-**`type: none` silences that connection's other rows too.** `at` and `reach`
-report `(unset)` on a `none` connection because there is nothing to locate,
-and asking for the address of something that does not exist is how a settled
-`none` gets re-litigated every run.
+**`type: none` silences that connection's other rows too.** They report
+`(n/a: type=none)` — and `(n/a: type=self)` for a connection that lives in this
+repo, `(n/a: type=refused)` for one whose `type` the reader rejected. Those are
+the **one parenthesised value that is not a question**: the block has already
+answered, or is blocked on its own discriminator, and asking for the address of
+something that does not exist is how a settled `none` gets re-litigated every
+run.
 
 The table covers more than wayfare's own connections: because `sync` runs
 `wayfare:wayfare-review-architecture`, `wayfare:wayfare-sync-architecture` and

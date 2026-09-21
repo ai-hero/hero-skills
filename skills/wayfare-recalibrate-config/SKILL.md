@@ -40,8 +40,11 @@ Ask only about rows whose CURRENT is parenthesised: `(unset)`,
 the user says is wrong. **A row that already holds the right value is not a
 question.**
 
-`Connections::KIND` rows carry two sentinels of their own, `(no-section)` and
-`(n/a: type=none)`; `references/configuration.md` says which is a question.
+`Connections::KIND` rows carry two sentinels of their own. `(no-section)` is
+the whole block missing, which IS a question. `(n/a: type=...)` is the block
+having answered (`none`, `self`) or being blocked on a refused `type`, and it
+is the one parenthesised value that is **not** a question. See
+`references/configuration.md`.
 
 The table covers more than wayfare's own connections: because
 `wayfare:wayfare-sync-plan` runs `wayfare:wayfare-review-architecture`,

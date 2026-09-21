@@ -373,7 +373,16 @@ REPO=$(git -C "$ROOT" remote get-url origin 2>/dev/null \
   | sed -e 's#^git@[^:]*:##' -e 's#^https\{0,1\}://[^/]*/##' -e 's#\.git$##')
 BRANCH=$(cd "$ROOT" && hero_default_branch 2>/dev/null) || BRANCH=main
 HEAD=$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)
-DESIGN=$(hero_connection_compat design at design-project "$ROOT" 2>/dev/null) || DESIGN=none
+# rc 2 is a value someone WROTE and the reader refused. Writing it into
+# PLAN.md as `none` persists that collapse: the plan then claims the repo has
+# no design target, and nothing ever said otherwise.
+DESIGN=$(hero_connection_compat design at design-project "$ROOT"); rc=$?
+if [ "$rc" = 2 ]; then
+  echo "migrate-plan: design connection REJECTED as unsafe; writing design: none — fix HERO.md and re-run" >&2
+  DESIGN=none
+elif [ "$rc" != 0 ]; then
+  DESIGN=none
+fi
 
 if [ "$DRY" = 1 ]; then
   echo "would write $STORE/PLAN.md (repo ${REPO:-unknown}, next_id $((MAXID + 1)))"

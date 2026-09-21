@@ -295,6 +295,10 @@ cat > "$CR/HERO.md" <<'EOM'
 ### design
 
 - language: go
+
+### reference
+
+- language: go
 EOM
 
 OUT_C=$("$FIELDS" wayfare-sync-plan "$CR")
@@ -304,6 +308,24 @@ check "type=none marks the block's other rows n/a, not a question" \
   "(n/a: type=none)" "$(printf '%s' "$OUT_C" | awk -F'\t' '$1 == "Connections::design" && $2 == "at" { print $3 }')"
 check "a missing connection block is (no-section)" \
   "(no-section)" "$(printf '%s' "$OUT_C" | awk -F'\t' '$1 == "Connections::architecture" { print $3 }')"
+# `### reference` exists under ## Projects and nowhere else. A probe that does
+# not scope the H3 to its parent H2 reports the CONNECTION as present, and
+# recalibrate then never asks for a connection an unrelated project shadowed.
+check "a block under another section does not count as the connection" \
+  "(no-section)" "$(printf '%s' "$OUT_C" | awk -F'\t' '$1 == "Connections::reference" && $2 == "type" { print $3 }')"
+# The two guarded keys are refused by every runtime reader; a table that
+# reports one as configured is a table recalibrate never asks about.
+CR2="$(cd "$TMP" && pwd -P)/connrepo2"
+mkdir -p "$CR2"
+printf '# Hero\n\n## Connections\n\n### issues\n\n- type: github\n- at: ghe.attacker.example/owner/repo\n' > "$CR2/HERO.md"
+check "a guarded value the readers refuse reports (refused)" \
+  "(refused)" "$("$FIELDS" wayfare-run-task "$CR2" | awk -F'\t' '$1 == "Connections::issues" && $2 == "at" { print $3 }')"
+printf '# Hero\n\n## Connections\n\n### design\n\n- type: -none\n- at: x\n' > "$CR2/HERO.md"
+check "a refused discriminator blocks its block's other rows" \
+  "(n/a: type=refused)" "$("$FIELDS" wayfare-sync-plan "$CR2" | awk -F'\t' '$1 == "Connections::design" && $2 == "at" { print $3 }')"
+printf '# Hero\n\n## Connections\n\n### design-system\n\n- type: self\n' > "$CR2/HERO.md"
+check "type self answers for its block too" \
+  "(n/a: type=self)" "$("$FIELDS" wayfare-sync-plan "$CR2" | awk -F'\t' '$1 == "Connections::design-system" && $2 == "at" { print $3 }')"
 OUT_I=$("$FIELDS" wayfare-push-pr "$CR")
 check "a set connection field reports its value" \
   "PROJ" "$(printf '%s' "$OUT_I" | awk -F'\t' '$1 == "Connections::issues" && $2 == "issue-prefix" { print $3 }')"
@@ -315,5 +337,16 @@ OUT_P=$("$FIELDS" wayfare-check-preflight "$CR")
 check "a heading containing a slash still resolves to its section" \
   "(unset)" "$(printf '%s' "$OUT_P" | awk -F'\t' '$1 == "CI/CD" && $2 == "auto-approve-installed" { print $3 }')"
 
-echo "hero-fields: $PASS passed${FAIL:+, $FAIL FAILED}" | sed 's/, 0 FAILED//'
-[ "$FAIL" -eq 0 ]
+if [ "$FAIL" -gt 0 ]; then
+  echo "hero-fields: $PASS passed, $FAIL FAILED"
+  exit 1
+fi
+# Floor on the case count, for the reason hero-lib.test.sh carries one: the
+# suite runs without `set -e`, so a block that stops executing reports zero
+# failures and exits 0.
+MIN_CASES=40
+if [ "$PASS" -lt "$MIN_CASES" ]; then
+  echo "hero-fields: only $PASS cases ran, expected >= $MIN_CASES — a block stopped executing" >&2
+  exit 1
+fi
+echo "hero-fields: $PASS passed"

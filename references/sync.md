@@ -70,8 +70,9 @@ Leaving both is what makes a later edit land in the copy nothing reads.
    configured repo is `SET`. Verify `source-repo` resolves (for `.`, that the
    working repo is readable; for anything else, one `git -C` probe).
 3. **The `design-system` connection (consumer only).** Runs only while `DS_REPO_STATE`
-   is `UNSET`: `NONE` is the user's answer and is not re-asked; `REJECTED` is
-   a STOP. One key, so one question. Look in the fleet first. When
+   is `UNSET`: `NONE` is the user's answer and is not re-asked; `SELF` means
+   this repo IS the design system (a producer, which has no upstream) and is
+   not a question either; `REJECTED` is a STOP. One key, so one question. Look in the fleet first. When
    `hero_fleet_root` finds one, walk `hero_fleet_repos`, **only rows whose
    group is not `none` and whose path is a git checkout**; a parked clone is
    exactly the repo "match the fleet" must not reach, and its HERO.md is

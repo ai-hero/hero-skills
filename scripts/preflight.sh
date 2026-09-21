@@ -566,12 +566,14 @@ check_pipeline() {
   # is a value someone WROTE and the reader refused — reported as an empty
   # tracker it lands in the `none` arm and this check says "no issue tracker
   # configured" for a repo that has one it cannot trust.
-  nudge=$(mktemp)
+  nudge=$(mktemp) || { emit WARN "pipeline: cannot create a temp file for the tracker probe"; return 0; }
   tracker=$(hero_connection_compat issues type tool "$ROOT" 2>"$nudge"); rc=$?
   if [ "$rc" = 1 ]; then
     tracker=$(hero_connection_compat issues type issue-tracker "$ROOT" 2>"$nudge"); rc=$?
   fi
-  [ -s "$nudge" ] && emit WARN "pipeline: $(head -1 "$nudge")"
+  # Every line: a refusal and a migration nudge can both be waiting, and
+  # `head -1` reports whichever came first and drops the other.
+  [ -s "$nudge" ] && while IFS= read -r line; do emit WARN "pipeline: $line"; done < "$nudge"
   rm -f "$nudge"
   if [ "$rc" = 2 ]; then
     emit BLOCKER "pipeline: the issues connection's type was REJECTED as unsafe — fix HERO.md"
@@ -595,7 +597,11 @@ check_pipeline() {
         emit WARN "pipeline: HERO.md says the issues connection is jira but JIRA_API_TOKEN / JIRA_EMAIL not set — Step 1 (plan) may fail to fetch tickets"
       fi
       ;;
-    github-issues|github)
+    # `self` is legal on every connection (docs/CONNECTIONS.md) and for a
+    # tracker it means "this repo's own GitHub issues". Without this arm it
+    # falls to `*)` and SKIPs, so a repo whose tracker is its own issues passes
+    # preflight with gh logged out.
+    github-issues|github|self)
       # Reuse GH_AUTH_OK from check_tooling rather than re-shell gh auth.
       if [ "${GH_AUTH_OK:-false}" = "true" ]; then
         emit OK "pipeline: github-issues uses the gh auth checked above"

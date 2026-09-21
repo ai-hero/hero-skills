@@ -109,11 +109,18 @@ than a comparison:
   agent to go check that the tool is there. A value carrying `;`, `|`, `$(` or
   a space is a command that probe would run, and refusing a leading `-` does
   not stop it.
-- **`issues.at` is `OWNER/NAME`.** It reaches `gh --repo`, and the shape also
-  excludes a host qualifier, which would file this repo's work into someone
-  else's GitHub Enterprise with this user's token. Passing the shape is not
-  the same as being the right repo: an outward-facing filing still has the
-  user name the destination in-session.
+- **`issues.at` is shaped by its `type`.** `github` puts a repo there and it
+  reaches `gh --repo`, so it is `OWNER/NAME` — a shape that also excludes a
+  host qualifier, which would file this repo's work into someone else's
+  GitHub Enterprise with this user's token. `linear` and `jira` put a
+  workspace there instead, and holding those to `OWNER/NAME` would refuse the
+  config `wayfare-init-repo` itself writes. Passing a shape is not being the
+  right destination: an outward-facing filing still has the user name it
+  in-session.
+
+Both rules live in one place, `hero_connection_guard`, and every reader calls
+it. The listing and the field reader each carrying their own copy is not
+hypothetical: they disagreed about `at: None` until a review caught it.
 
 ## Absent, unset, and unreachable are three states
 
@@ -220,7 +227,8 @@ repo at most six connections.
 | --- | --- |
 | `hero_connection KIND KEY [ROOT]` | one value from `### KIND` under `## Connections` |
 | `hero_connections [ROOT]` | `KIND<TAB>TYPE<TAB>AT<TAB>REACH` per declared block, one parse. rc 0, 1 (no readable HERO.md), 3 (a block was skipped) |
-| `hero_connection_repo KIND [ROOT]` | `at` resolved to an absolute checkout. rc 0 resolved, 1 none, 2 refused or not a repo kind, 3 set but unreachable |
+| `hero_connection_repo KIND [ROOT]` | `at` resolved to an absolute checkout. rc 0 resolved, 1 none, 2 refused or not a repo kind, 3 unreachable **or half-written** (a `type` with no `at`, an `at` with no `type`) |
+| `hero_connection_guard KIND KEY VALUE [TYPE]` | the shape rules for the values that reach a command line. rc 0 allowed, 2 refused |
 
 `hero_connections` is what the Step 0 of the wayfare skills prints, so those
 runs state which attachments this repo declares before any stage acts on one. It prints one row

@@ -18,13 +18,14 @@
 # SECTION is `Heading`, or `Heading::sub` for one connection block. `--all`
 # fills CURRENT with `-` because it reads no file.
 #
-# CURRENT is either a HERO.md value or one of six parenthesised sentinels.
+# CURRENT is either a HERO.md value or one of seven parenthesised sentinels.
 # The parentheses are what keep the two domains disjoint: no branch name,
 # command or registry URL starts with `(`, so a file that literally says
 # `- default-branch: unset` cannot be mistaken for a field that has none.
 #
 #   (present) (absent)      a `*` row's section heading, found or not
-#   (n/a: type=none|self)   a connection that answered; its other keys are moot
+#   (n/a: type=...)         a connection whose `type` answered (none, self) or
+#                           was refused; its other keys are moot or blocked
 #   (unset)                 the file does not carry this field, or carries it empty
 #   (no-section)            the heading this field lives under is missing
 #   (refused)               the reader rejected the value as unsafe
@@ -145,10 +146,10 @@ ROWS
 }
 
 # The header block above IS the help text, so this range tracks it: line 6 is
-# the first line after the copyright, line 41 the last of the exit contract.
+# the first line after the copyright, line 42 the last of the exit contract.
 # Reflowing that block without moving these numbers prints the copyright as
 # usage and truncates the range mid-sentence.
-usage() { sed -n '6,41p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '6,42p' "$0" | sed 's/^# \{0,1\}//'; }
 
 case "${1:-}" in
   ''|-h|--help) usage; exit 0 ;;
@@ -241,15 +242,27 @@ while IFS='|' read -r _skill section key decides; do
     if [ "$section" = "${section#*::}" ]; then
       current=$(hero_md_field "$TARGET" "$key" "## $section" 2>"$ERRF"); rc=$?
     else
-      conn_type=$(hero_md_field "$TARGET" type "### ${section#*::}" "## ${section%%::*}" 2>/dev/null \
-        | tr '[:upper:]' '[:lower:]')
-      if [ "$key" != type ] && { [ "$conn_type" = none ] || [ "$conn_type" = self ]; }; then
+      # Not piped into `tr`: a pipeline reports the LAST command's rc, so
+      # hero_md_field's refusal would arrive as 0 and a rejected discriminator
+      # would read as an unmigrated block.
+      conn_type=$(hero_md_field "$TARGET" type "### ${section#*::}" "## ${section%%::*}" 2>/dev/null); type_rc=$?
+      conn_type=$(printf '%s' "$conn_type" | tr '[:upper:]' '[:lower:]')
+      if [ "$key" != type ] && [ "$type_rc" = 2 ]; then
+        # The discriminator holds something the reader refuses. Asking about
+        # this block's other keys invites recalibrate to interview the user
+        # about a connection nothing can act on until the `type` is fixed.
+        current="(n/a: type=refused)"; rc=0
+      elif [ "$key" != type ] && { [ "$conn_type" = none ] || [ "$conn_type" = self ]; }; then
         # The block answered. `none` has nothing to locate and `self` is
         # located by being here, so `(unset)` on their other keys would read as
         # a question the repo already settled.
         current="(n/a: type=$conn_type)"; rc=0
       else
-        current=$(hero_md_field "$TARGET" "$key" "### ${section#*::}" "## ${section%%::*}" 2>"$ERRF"); rc=$?
+        # Through hero_connection for a connection's own keys: it carries the
+        # shape rules for `reach` and `issues.at`, and a table that reports a
+        # value every runtime reader refuses is a table recalibrate never asks
+        # about.
+        current=$(hero_connection "${section#*::}" "$key" "$ROOT" 2>"$ERRF"); rc=$?
       fi
     fi
     case "$rc" in

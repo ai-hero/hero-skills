@@ -15,7 +15,12 @@ hero_at_fleet_root && echo "FLEET_ROOT"
 # (docs/CONNECTIONS.md). Printed before any stage acts on one: a `type: none`
 # row and a kind with no row at all mean different things, and a run that
 # never states which it saw cannot be argued with afterwards.
-hero_connections "$ROOT" || true   # rc 3 = some block was skipped; it said which on stderr
+hero_connections "$ROOT"; rc=$?
+# rc 1 prints NOTHING, which is identical to a repo with no `## Connections`
+# section, so say which it was. rc 3 means a block was skipped and stderr named
+# it — that is a config defect to report, not a listing to read past.
+[ "$rc" = 1 ] && echo "wayfare: no readable HERO.md at $ROOT — no connections"
+[ "$rc" = 3 ] && echo "wayfare: at least one connection block was SKIPPED (see stderr) — fix HERO.md"
 # The Wayfare block is one key, but keep displaying it: `source-repo` is read
 # below and a repo that set it to something odd should show that here.
 # Gate on CONTENT, not awk's exit code: awk exits 0 with empty output when
@@ -52,12 +57,16 @@ fi
 # absent here means "ask the values", not "none".
 DESIGN_TYPE=$(hero_connection design type "$ROOT"); rc=$?
 if [ "$rc" = 2 ]; then
+  # REJECTED, not `none`. Mapping it to `none` would make the block's other
+  # keys report as declared-absent, so a configured ux-flow would be discarded
+  # and sync would stop re-proposing one — on the strength of a value the
+  # reader refused to use.
   echo "wayfare: connection design.type REJECTED as unsafe — target DISABLED (fix HERO.md)" >&2
-  DESIGN_TYPE=none
+  DESIGN_TYPE=REJECTED
 elif [ "$rc" != 0 ]; then
   DESIGN_TYPE=UNSET                                  # no block, or an unmigrated repo
 fi
-DESIGN_TYPE=$(printf '%s' "$DESIGN_TYPE" | tr '[:upper:]' '[:lower:]')
+case "$DESIGN_TYPE" in REJECTED|UNSET) ;; *) DESIGN_TYPE=$(printf '%s' "$DESIGN_TYPE" | tr '[:upper:]' '[:lower:]') ;; esac
 
 # The `design` connection's `at` names the design substrate — a claude.ai/design
 # project, a Figma file (docs/CONNECTIONS.md). It never reaches git or
@@ -131,9 +140,7 @@ esac
 # path. Collapsing UNSET into NONE is what would make a missing UX flow
 # silently stop being reported.
 UX_FLOW=$(hero_connection_compat design ux-flow ux-flow "$ROOT"); rc=$?
-if [ "$DESIGN_TYPE" = none ]; then
-  UX_FLOW=NONE; rc=0
-elif [ "$rc" = 2 ]; then
+if [ "$rc" = 2 ]; then
   echo "wayfare: ux-flow REJECTED as unsafe — STOP and fix HERO.md" >&2
   UX_FLOW=REJECTED
 elif [ "$rc" != 0 ]; then
@@ -148,6 +155,11 @@ case "$UX_FLOW" in *' -'*)
 esac
 # Lowercase before the sentinel test: `None` must not slip through as a path.
 [ "$(printf '%s' "$UX_FLOW" | tr '[:upper:]' '[:lower:]')" = none ] && UX_FLOW=NONE
+# The block answered for its own keys: `type: none` means there is nothing to
+# point a flow or a reconciliation document at. It applies AFTER the reads
+# above, so a REJECTED value still reports as rejected rather than being
+# swallowed by the shortcut.
+[ "$DESIGN_TYPE" = none ] && [ "$UX_FLOW" != REJECTED ] && UX_FLOW=NONE
 
 # The design-system connection's `at` is a fleet row name or LOCAL PATH; it
 # reaches `git -C` and the filesystem,
@@ -161,11 +173,18 @@ esac
 # reading only `at` reports it as UNSET, which is the state sync re-proposes.
 DS_TYPE=$(hero_connection design-system type "$ROOT"); rc=$?
 DS_REPO=none; DS_REPO_STATE=UNSET
+DS_TYPE_LC=$(printf '%s' "$DS_TYPE" | tr '[:upper:]' '[:lower:]')
 if [ "$rc" = 2 ]; then
   echo "wayfare: connection design-system.type REJECTED as unsafe — STOP and fix HERO.md" >&2
   DS_REPO=REJECTED; DS_REPO_STATE=REJECTED
-elif [ "$(printf '%s' "$DS_TYPE" | tr '[:upper:]' '[:lower:]')" = none ]; then
+elif [ "$DS_TYPE_LC" = none ]; then
   DS_REPO_STATE=NONE
+elif [ "$DS_TYPE_LC" = self ]; then
+  # THIS repo is the design system. Falling through to the `at` read would find
+  # nothing (a `self` block has no locator) and land on UNSET, and the config
+  # gate re-proposes a design system to every repo whose state is UNSET — so
+  # the producer would be asked to name its own upstream, every run.
+  DS_REPO=$ROOT; DS_REPO_STATE=SELF
 else
   DS_REPO=$(hero_connection_compat design-system at design-system-repo "$ROOT"); rc=$?
   DS_REPO_STATE=SET
@@ -272,6 +291,8 @@ fi
 # reconciliation is a path INSIDE the design project, so it rides `git show`
 # pathspecs exactly as ux-flow does and needs ux-flow's three-state split.
 RECON=$(hero_connection_compat design reconciliation reconciliation "$ROOT"); rc=$?
+# Same block-answered rule as ux-flow above.
+[ "$DESIGN_TYPE" = none ] && [ "$rc" = 1 ] && { RECON=none; rc=0; }
 if [ "$rc" = 2 ]; then
   echo "wayfare: reconciliation REJECTED as unsafe — STOP and fix HERO.md" >&2
   RECON=REJECTED
@@ -301,7 +322,15 @@ SOURCE_HEAD=$(git -C "$SOURCE_REPO" rev-parse --verify HEAD 2>/dev/null) && [ -n
 # Same reason, one key over: a `none` we were HANDED and a `none` we failed to
 # resolve must not print alike.
 [ "$DS_PROJECT_STATE" = UNRESOLVED ] && DS_SHOW="none(UNRESOLVED)" || DS_SHOW=$DS_PROJECT
-echo "wayfare: source=$SOURCE_REPO@${SOURCE_HEAD} design=$DP_SHOW reach=$DESIGN_TRANSPORT ux-flow=$UX_FLOW ds-project=$DS_SHOW ds-repo=$DS_REPO reconciliation=$RECON"
+# ds-repo carries its STATE, not just its value: UNSET, NONE and SELF all
+# print `none` otherwise, and references/sync.md gates the design-system step
+# on exactly that distinction. A summary line the gate cannot read is a gate
+# deciding by guess.
+case "$DS_REPO_STATE" in
+  SET|REJECTED) DS_REPO_SHOW=$DS_REPO ;;
+  *)            DS_REPO_SHOW="$DS_REPO($DS_REPO_STATE)" ;;
+esac
+echo "wayfare: source=$SOURCE_REPO@${SOURCE_HEAD} design=$DP_SHOW reach=$DESIGN_TRANSPORT ux-flow=$UX_FLOW ds-project=$DS_SHOW ds-repo=$DS_REPO_SHOW reconciliation=$RECON"
 # The mailbox and this repo's own plug-ins. Printed on every verb, not only
 # sync's: a `do` or `next` run that built over a reply already sitting in the
 # inbox would act on a plan the answer changed. Local skills are DISCOVERED,
