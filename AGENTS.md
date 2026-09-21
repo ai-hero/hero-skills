@@ -1,8 +1,19 @@
 # AGENTS.md
 
-hero-skills is the A.I. Hero **plugin** repo: the skills agents invoke, the
+This repo is **wayfare**, the A.I. Hero plugin: the skills agents invoke, the
 assets they install into other repos, and the one workflow the whole fleet
-executes. It ships no product and has no build.
+executes. It ships no product and has no build. The checkout is
+`~/.claude/plugins/wayfare-skills`, which is what the `CLAUDE_PLUGIN_ROOT`
+fallback in every skill points at.
+
+**The repo was renamed from `hero-skills` on 2026-09-21, and around 25
+consumers still pin the old path.** Their vendored `caller.yaml` says
+`ai-hero/hero-skills/.github/workflows/auto-approve.yaml@main`, which resolves
+today only because GitHub redirects a renamed repo. Two consequences, neither
+optional: re-vendor the caller into every consumer so the fleet stops leaning
+on a redirect, and **never let a repo named `ai-hero/hero-skills` exist
+again**. Creating one silently claims the old path, and every consumer that
+has not been re-vendored would call that repo's workflow instead of this one.
 
 Instructions for coding agents working here. Follow these strictly; ask before
 deviating.

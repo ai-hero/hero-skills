@@ -4,7 +4,7 @@ What every wayfare verb does before it does anything else: the fleet check,
 the config gate, the store read, the snapshot, visual verification.
 
 ```bash
-HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
 [ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel)/scripts/hero-lib.sh"
 # shellcheck source=/dev/null
 . "$HERO_LIB"

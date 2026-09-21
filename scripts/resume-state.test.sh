@@ -44,8 +44,8 @@ git init -q "$REPO"
 # the guard is here so it stays that way. If a future case does start depending
 # on a real HEAD, the `|| exit 1` below makes the setup failure loud instead of
 # letting that case quietly assert against an unborn HEAD.
-git -C "$REPO" config user.email "tests@hero-skills.invalid"
-git -C "$REPO" config user.name "hero-skills tests"
+git -C "$REPO" config user.email "tests@wayfare.invalid"
+git -C "$REPO" config user.name "wayfare tests"
 git -C "$REPO" commit -q --allow-empty -m init || {
   echo "FATAL: fixture setup failed — could not create the initial commit." >&2
   exit 1

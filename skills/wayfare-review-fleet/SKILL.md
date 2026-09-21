@@ -21,7 +21,7 @@ is what writes. The standard is [docs/FLEET-MD.md](../../docs/FLEET-MD.md).
 # No `git rev-parse` fallback here: this is one of two skills built to run
 # outside a repo, where that fallback resolves to /scripts/hero-lib.sh and a
 # failed source would print a plausible NO_FLEET.
-HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
 # shellcheck source=/dev/null
 . "$HERO_LIB" || { echo "review-fleet: cannot load $HERO_LIB — STOP (reinstall the plugin)"; exit 1; }
 SCAN="$(dirname "$HERO_LIB")/fleet-scan.sh"

@@ -2,7 +2,7 @@
 # Copyright (c) 2026 A.I. Hero, Inc.
 # All Rights Reserved.
 
-# hero-lib.sh: shared helpers for hero-skills.
+# hero-lib.sh: shared helpers for wayfare.
 #
 # Sourced by skills, not executed. Every function here exists because the same
 # logic was previously inlined in two or more SKILL.md files and had already
@@ -11,7 +11,7 @@
 #
 # Usage from a skill:
 #
-#   HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+#   HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
 #   [ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel)/scripts/hero-lib.sh"
 #   # shellcheck source=/dev/null
 #   . "$HERO_LIB"

@@ -30,7 +30,7 @@ the folder itself plans nothing.
 ### Report
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" --all
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-fields.sh" --all
 ```
 
 ### Ask

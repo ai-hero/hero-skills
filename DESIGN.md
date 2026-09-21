@@ -2,7 +2,7 @@
 
 > Last updated: 2026-08-07 · Source ref: ffe17a28a74d0a0f23730ad438e01486d297f880
 
-Why hero-skills is shaped the way it is. Facts the code cannot state about
+Why wayfare is shaped the way it is. Facts the code cannot state about
 itself, and decisions someone would otherwise undo.
 
 ## Overview
@@ -107,5 +107,5 @@ repo's normal feedback loop would surface them.
 ### Compliance
 
 Controls are defined in `hero-template` (`CONTROLS.yaml` / `CHECKS.yaml`), not
-here. hero-skills is audited as a family member, and open gaps are recorded as
+here. This repo is audited as a family member, and open gaps are recorded as
 `known_violations` there rather than silently tolerated.

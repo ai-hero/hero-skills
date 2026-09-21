@@ -35,7 +35,7 @@ follow the four phases in
 using the table below as the report, and stop.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" wayfare-push-pr
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-fields.sh" wayfare-push-pr
 ```
 
 Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
@@ -47,7 +47,7 @@ wrong. A row that already holds the right value is not a question.
 ### Step 0: Load Hero Configuration
 
 ```bash
-HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
 [ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel)/scripts/hero-lib.sh"
 # shellcheck source=/dev/null
 . "$HERO_LIB" || { echo "ERROR: cannot source hero-lib.sh — reinstall the plugin."; exit 1; }
@@ -90,7 +90,7 @@ Never commit or push directly to the default branch.
 
 ```bash
 # shellcheck source=/dev/null
-. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
 BRANCH=$(git branch --show-current)
 # _verbose: this value is branched off and pulled, so a silent fallback to the
 # wrong branch would rebase the work onto an unrelated base.
@@ -118,7 +118,7 @@ Generate `BRANCH_NAME` by applying `hero_branch_policy`, the shared naming rules
 
 ```bash
 # shellcheck source=/dev/null
-. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
 hero_branch_policy   # apply these rules to the diff to derive BRANCH_NAME
 ```
 
@@ -448,7 +448,7 @@ For each route in order, run the same recipe via Playwright MCP:
 
    ```bash
    # shellcheck source=/dev/null
-   . "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+   . "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
    mkdir -p "$ROOT/.test-output/playwright-mcp"
    # Idempotent, and safe whether or not the dev-server block above already ran.
    hero_exclude_add .test-output/
@@ -459,7 +459,7 @@ For each route in order, run the same recipe via Playwright MCP:
    rm -f "$ROOT/.test-output/playwright-mcp"/smoke-*.png
    ```
 
-   `$ROOT/.test-output/` is the canonical local-only test-artifacts directory for hero-skills. All disposable outputs from any hero skill (Playwright screenshots, traces, videos, network logs, dev-server logs, coverage reports) land somewhere under it so the repo root stays clean and a single exclude entry covers them all.
+   `$ROOT/.test-output/` is the canonical local-only test-artifacts directory for wayfare. All disposable outputs from any wayfare skill (Playwright screenshots, traces, videos, network logs, dev-server logs, coverage reports) land somewhere under it so the repo root stays clean and a single exclude entry covers them all.
 
 For routes that involve a form change (detected by reading the diff: `<form>` / `useForm` / `onSubmit` added or modified), additionally:
 
@@ -751,7 +751,7 @@ gh pr list --head $(git branch --show-current) --json number,url,title,state
 
 ```bash
 # shellcheck source=/dev/null
-. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
 ROOT=$(hero_root)
 # The _verbose variant reports whether the value came from HERO.md or the
 # fallback, so a missing/mistyped default-branch key can't silently open the PR
@@ -787,7 +787,7 @@ fi
 PR_TITLE="$(git log origin/$DEFAULT_BRANCH..HEAD --pretty=%s | head -1)"
 ```
 
-**Generate PR content by listing each commit as a changeset with its files and description.** Keep the title unbranded (no "Hero"/"hero-skills"). Humanize the drafted body (3c) before creating. End the body with exactly one attribution line, `_Generated using hero-skills._`:
+**Generate PR content by listing each commit as a changeset with its files and description.** Keep the title unbranded (no "Hero"/"wayfare"). Humanize the drafted body (3c) before creating. End the body with exactly one attribution line, `_Generated using wayfare._`:
 
 ```bash
 gh pr create $DRAFT_FLAG --base "$DEFAULT_BRANCH" --title "$PR_TITLE" --body "$(cat <<'EOF'
@@ -813,7 +813,7 @@ Brief description of what this commit does and why
 ## Related Issues
 [Link issues if mentioned in commits]
 
-_Generated using hero-skills._
+_Generated using wayfare._
 EOF
 )"
 ```

@@ -1,14 +1,14 @@
 ---
 name: wayfare-audit-plugin
 # prettier-ignore
-description: Audit the hero-skills plugin. Checks skill quality, consistency, DRY violations, HERO.md field coverage, and readability. Use before releasing changes to the plugin.
+description: Audit the wayfare plugin. Checks skill quality, consistency, DRY violations, HERO.md field coverage, and readability. Use before releasing changes to the plugin.
 argument-hint: [--fix]
 disable-model-invocation: true
 ---
 
 # Audit: check the plugin's own quality
 
-Audit the hero-skills plugin for quality, consistency, and maintainability. This skill is specific to the hero-skills repo itself. It reviews the skills that make up the plugin.
+Audit the wayfare plugin for quality, consistency, and maintainability. This skill is specific to the plugin repo itself. It reviews the skills that make up the plugin.
 
 ## Arguments
 
@@ -113,7 +113,7 @@ it against the HERO.md template in `wayfare-init-repo`'s reference and against w
 actually read, and report both directions of drift.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" --all
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-fields.sh" --all
 ```
 
 A field the map omits is a field no `recalibrate` will ever ask about, which
@@ -201,7 +201,7 @@ If `--fix` is passed, automatically fix:
 
 ## Key Principles
 
-- **This skill is for the hero-skills repo only.** It audits the plugin, not user projects.
+- **This skill is for the plugin repo only.** It audits the plugin, not user projects.
 - **DRY is not always better.** Skills run independently, so some repetition is by design.
 - **Field coverage matters.** Every HERO.md field should be produced by `wayfare-init-repo` and consumed by at least one skill.
 - **Size awareness.** Skills consume context window. Large skills slow down every invocation.

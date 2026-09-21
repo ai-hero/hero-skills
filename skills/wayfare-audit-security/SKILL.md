@@ -37,7 +37,7 @@ Inspired by [shadcn/improve](https://github.com/shadcn/improve): the expensive, 
 ### Step 0: Load Hero Configuration and the .plans Store
 
 ```bash
-HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
 [ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel)/scripts/hero-lib.sh"
 # shellcheck source=/dev/null
 . "$HERO_LIB"

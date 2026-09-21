@@ -62,7 +62,7 @@ jobs:
     #    review and spends an API key, so without it any commenter, e.g.
     #    on a public fork or clone, could trigger an approval and burn
     #    the key.
-    # 2. The command must START the comment, and a hero-skills self-review is
+    # 2. The command must START the comment, and a wayfare self-review is
     #    never a command. With `contains`, MENTIONING @auto-approve anywhere in
     #    any comment ran this and posted a real APPROVE, and review-pr's
     #    self-review comment both says the string in prose AND carries the
@@ -985,12 +985,12 @@ jobs:
           TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M UTC")
 
           COMMENT_BODY="<!-- claude-approve -->
-          🤖 **hero-skills Pre-Approve Check**
+          🤖 **wayfare Pre-Approve Check**
 
           $REVIEW_BODY
 
           ---
-          *Verified using hero-skills ($CLAUDE_MODEL) • $TIMESTAMP*"
+          *Verified using wayfare ($CLAUDE_MODEL) • $TIMESTAMP*"
 
           # Update existing or create new
           # --paginate: an unpaginated read returns only the first 30 comments,
@@ -1100,7 +1100,7 @@ jobs:
           [ -s lane_error.txt ] && REASON="
           $(cat lane_error.txt)"
           BODY="<!-- claude-approve -->
-          🤖 **hero-skills Pre-Approve Check**
+          🤖 **wayfare Pre-Approve Check**
 
           ## Verdict
           REQUEST_CHANGES

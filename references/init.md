@@ -323,7 +323,7 @@ grep -l "test\|lint\|build\|deploy\|release" .github/workflows/*.yml 2>/dev/null
 - Whether `.github/workflows/auto-approve.yaml` (or `.yml`) already exists, which `wayfare:wayfare-ship-pr` needs
 
 ```bash
-# Check whether the hero-skills auto-approve workflow is installed
+# Check whether the shared auto-approve workflow is installed
 # Either spelling counts — GitHub honours both, and repos in this family
 # carry a mix. Checking only one reinstalls a workflow that already exists.
 AA=$(ls .github/workflows/auto-approve.yaml .github/workflows/auto-approve.yml 2>/dev/null | head -1)
@@ -332,7 +332,7 @@ AA=$(ls .github/workflows/auto-approve.yaml .github/workflows/auto-approve.yml 2
 # depend on a COMMENT in the caller — the trigger itself moved into the shared
 # workflow — so trimming that comment would have reported every migrated repo
 # as missing and re-prompted to install what it already has.
-[ -n "$AA" ] && grep -qE 'hero-skills/\.github/workflows/auto-approve\.yml@|@auto-approve' "$AA" 2>/dev/null && \
+[ -n "$AA" ] && grep -qE '(hero|wayfare)-skills/\.github/workflows/auto-approve\.ya?ml@|@auto-approve' "$AA" 2>/dev/null && \
   echo "AUTO_APPROVE_INSTALLED" || echo "AUTO_APPROVE_MISSING"
 
 # And whether it has been merged to the default branch — issue_comment
@@ -1138,8 +1138,8 @@ If the user agreed to install `.github/workflows/auto-approve.yml` (Group 4 conf
 # bails out if neither matches.
 PLUGIN_ROOT=""
 for candidate in \
-  "$HOME/.claude/plugins/hero-skills" \
-  "$HOME/.config/claude/plugins/hero-skills"; do
+  "$HOME/.claude/plugins/wayfare-skills" \
+  "$HOME/.config/claude/plugins/wayfare-skills"; do
   if [ -x "$candidate/scripts/install-auto-approve.sh" ]; then
     PLUGIN_ROOT="$candidate"
     break
@@ -1163,8 +1163,8 @@ for ext in yaml yml; do
 done
 
 if [ -z "$PLUGIN_ROOT" ]; then
-  echo "Could not locate hero-skills plugin root in standard locations."
-  echo "Install /hero-skills under ~/.claude/plugins/hero-skills, or copy"
+  echo "Could not locate the wayfare plugin root in standard locations."
+  echo "Install the plugin under ~/.claude/plugins/wayfare-skills, or copy"
   echo ".github/workflows/auto-approve.yml from the plugin into this repo manually."
 else
   set +e
@@ -1192,7 +1192,7 @@ case "$INSTALL_RC" in
     echo "instructions above, then re-run."
     ;;
   3)
-    echo "The hero-skills plugin is missing assets/auto-approve/caller.yml."
+    echo "The wayfare plugin is missing assets/auto-approve/caller.yml."
     echo "Reinstall the plugin; this is not a problem with your repo."
     ;;
   255)
@@ -1330,7 +1330,7 @@ Three cases, decided by what is already on disk:
    unmigrated store from the nine-kind schema. Run the migrator and say so:
 
    ```bash
-   bash "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/migrate-plan.sh" "$(hero_store_path)"
+   bash "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/migrate-plan.sh" "$(hero_store_path)"
    ```
 
    Report its warnings rather than swallowing them; an unrecognized `kind`

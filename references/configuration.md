@@ -192,7 +192,7 @@ Follow the four phases in [docs/RECALIBRATE.md](../docs/RECALIBRATE.md)
 (report, ask, write, commit), using the whole field map as the report.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" --all
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-fields.sh" --all
 ```
 
 Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,

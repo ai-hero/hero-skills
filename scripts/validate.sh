@@ -2,7 +2,7 @@
 # Copyright (c) 2026 A.I. Hero, Inc.
 # All Rights Reserved.
 
-# Validate hero-skills plugin structure against Claude Code official requirements.
+# Validate wayfare plugin structure against Claude Code official requirements.
 # Usage: ./scripts/validate.sh [--verbose]
 
 set -euo pipefail

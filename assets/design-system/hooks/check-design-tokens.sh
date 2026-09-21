@@ -5,7 +5,7 @@
 # PostToolUse hook — flag off-token styling in UI files after a write.
 #
 # Vendored by scripts/install-design-system.sh, which refuses to overwrite a
-# drifted copy. Fix bugs here in hero-skills and re-run the installer; a local
+# drifted copy. Fix bugs here in the wayfare plugin and re-run the installer; a local
 # patch in a consuming repo makes that repo permanently decline updates,
 # including fixes for the checks below.
 #

@@ -54,7 +54,7 @@ subdirectory is what makes the plan object possible at all, not tidiness.
 ```markdown
 ---
 schema: 1
-repo: ai-hero/hero-skills
+repo: ai-hero/wayfare-skills
 default_branch: main
 initialized: 2026-09-19
 next_id: 3

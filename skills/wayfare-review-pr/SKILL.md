@@ -52,7 +52,7 @@ follow the four phases in
 using the table below as the report, and stop.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" wayfare-review-pr
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-fields.sh" wayfare-review-pr
 ```
 
 Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
@@ -150,7 +150,7 @@ behind the base, and a review of a stale head reviews code that is not what
 will merge.
 
 ```bash
-HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
 [ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel)/scripts/hero-lib.sh"
 # shellcheck source=/dev/null
 . "$HERO_LIB"
@@ -252,7 +252,7 @@ gh pr comment $PR_NUMBER --body "$(cat <<'EOF'
 - {what's well-done}
 
 ---
-_Generated using hero-skills._
+_Generated using wayfare._
 EOF
 )"
 ```
@@ -361,7 +361,7 @@ gh pr comment $PR_NUMBER --body "$(cat <<'EOF'
 Commits: SHA1, SHA2
 
 ---
-_Generated using hero-skills._
+_Generated using wayfare._
 EOF
 )"
 ```
@@ -382,7 +382,7 @@ Leave unchanged for: style/typo/comment fixes only. Default to update when uncer
 gh pr view $PR_NUMBER --json title,body --jq '{title, body}'
 ```
 
-Draft the full new body preserving structure (Summary, Changesets, Test Plan) and ending with `_Generated using hero-skills._` as the final line (humanized with Step 7's summary), then apply:
+Draft the full new body preserving structure (Summary, Changesets, Test Plan) and ending with `_Generated using wayfare._` as the final line (humanized with Step 7's summary), then apply:
 
 ```bash
 gh pr edit $PR_NUMBER --title "NEW_TITLE_UNDER_70_CHARS" --body "$(cat <<'EOF'
@@ -391,7 +391,7 @@ EOF
 )"
 ```
 
-Substitute `DRAFTED_FULL_BODY_HERE` with actual Markdown before running. The drafted body must end with `_Generated using hero-skills._`.
+Substitute `DRAFTED_FULL_BODY_HERE` with actual Markdown before running. The drafted body must end with `_Generated using wayfare._`.
 
 ### Step 9: Ask to Mark Ready
 
@@ -516,7 +516,7 @@ gh pr review $PR_NUMBER {DECISION_FLAG} --body "$(cat <<'EOF'
 - {positive observations}
 
 ---
-_Generated using hero-skills._
+_Generated using wayfare._
 EOF
 )"
 ```

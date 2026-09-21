@@ -1,5 +1,5 @@
 # Hero Configuration
-<!-- This file configures hero-skills. See wayfare:wayfare-init-repo to update. -->
+<!-- This file configures wayfare. See wayfare:wayfare-init-repo to update. -->
 
 ## Repository
 
@@ -55,7 +55,7 @@
 
 ### design
 
-- type: none # PERMANENT — hero-skills is a plugin repo with no product and no UI (per AGENTS.md); it will never have a design project. Do not re-propose at sync
+- type: none # PERMANENT — wayfare is a plugin repo with no product and no UI (per AGENTS.md); it will never have a design project. Do not re-propose at sync
 
 ### design-system
 
@@ -76,7 +76,7 @@
 ### issues
 
 - type: github
-- at: ai-hero/hero-skills
+- at: ai-hero/wayfare-skills
 - reach: gh
 - issue-prefix: none
 
@@ -86,7 +86,7 @@
 
 ## Projects
 
-### hero-skills
+### wayfare-skills
 
 - path: ./
 - language: markdown

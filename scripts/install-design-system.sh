@@ -2,7 +2,7 @@
 # Copyright (c) 2026 A.I. Hero, Inc.
 # All Rights Reserved.
 
-# Install hero-skills' design-system enforcement layer into a target repository.
+# Install the wayfare design-system enforcement layer into a target repository.
 #
 # Usage: ./install-design-system.sh [TARGET_REPO_ROOT]
 #   If TARGET_REPO_ROOT is omitted, uses the current git repo's toplevel.
