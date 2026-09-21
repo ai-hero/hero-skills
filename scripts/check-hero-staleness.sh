@@ -17,7 +17,7 @@
 # every commit). Pre-commit was too slow; we let skills surface the hint
 # on demand instead.
 #
-# Note: the daily-flow skills (push-pr / one-shot) call hero_check_staleness
+# Note: the daily-flow skills (push-pr / wayfare-run-task) call hero_check_staleness
 # in scripts/hero-lib.sh, a deliberately *fast subset* of this check. The two
 # are meant to be roughly aligned but NOT byte-for-byte identical. This script
 # can carry a longer pattern list (Cargo, ruff, biome, agent configs, etc.)

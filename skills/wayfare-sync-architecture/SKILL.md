@@ -149,7 +149,7 @@ with the context/decision/consequences the user gives or the grilling settled.
 
 ## Who else touches the file
 
-- **`wayfare:wayfare-hero`** uses Boundaries' dependency direction to order the
+- **`wayfare:wayfare-sync-plan`** uses Boundaries' dependency direction to order the
   **subtasks inside** a feature. Each feature is a vertical slice that cuts
   down through these layers, and this file says in what order. It does **not**
   order the features themselves; that comes from the user journey. Its sync
@@ -181,4 +181,3 @@ with the context/decision/consequences the user gives or the grilling settled.
 ## Next steps
 
 - Check the record still holds later → `wayfare:wayfare-review-architecture`
-- Back to picking work → `wayfare:wayfare-hero`

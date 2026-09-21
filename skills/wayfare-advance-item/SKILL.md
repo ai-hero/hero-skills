@@ -10,9 +10,9 @@ argument-hint: "ID"
 Source is the product as it is; Target is the product as it should be, a
 claude.ai/design project configured in HERO.md. With no design project the
 route reconciles Source against itself — `DESIGN.md`, its own gaps, its own
-hardening. `wayfare:wayfare-hero` explains the route and which skill to
-reach for; **`docs/PLAN.md` is the store's specification, and nothing here
-restates it.**
+hardening. The README's command table says which skill does what;
+**`docs/PLAN.md` is the store's specification, and nothing here restates
+it.**
 
 ## Instructions
 
@@ -57,4 +57,3 @@ dependencies is refused naming them.
 
 - Nothing ready → `wayfare:wayfare-sync-plan`
 - Abandon the work instead → `wayfare:wayfare-drop-item ID`
-- What the route is and which skill to reach for → `wayfare:wayfare-hero`

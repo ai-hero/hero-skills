@@ -39,8 +39,8 @@
 
 <!-- No external review bot posts to PRs here (checked #68-#72: only
      github-actions[bot], which is this repo's own auto-approve workflow).
-     `agent: none` — not a made-up value — is what tells one-shot's Step 7
-     to skip the bot-await poll; self-review already runs as one-shot's own
+     `agent: none` — not a made-up value — is what tells wayfare-run-task's Step 7
+     to skip the bot-await poll; self-review already runs as wayfare-run-task's own
      Step 5 via wayfare:wayfare-review-pr regardless of this field. -->
 - agent: none
 - trigger: none

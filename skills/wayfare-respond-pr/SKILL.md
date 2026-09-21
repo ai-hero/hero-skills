@@ -29,7 +29,7 @@ wrong, not spend a whole run finding out.
 
 Dispatch on it before parsing any other argument, in whichever step does
 that parsing. When the first token of
-`$ARGUMENTS` is exactly `recalibrate`, print `respond-to-comments: running recalibrate`,
+`$ARGUMENTS` is exactly `recalibrate`, print `wayfare-respond-pr: running recalibrate`,
 follow the four phases in
 [docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) (report, ask, write, commit)
 using the table below as the report, and stop.
@@ -102,7 +102,7 @@ You have uncommitted changes on '$CURRENT':
 Need to switch to '$PR_BRANCH' to address PR comments.
 
 Options:
-1. Stash changes (saved as "respond-to-comments: WIP on $CURRENT") — will NOT auto-restore since you're moving to a different branch
+1. Stash changes (saved as "wayfare-respond-pr: WIP on $CURRENT") — will NOT auto-restore since you're moving to a different branch
 2. Cancel — go back and commit or handle changes first
 ```
 
@@ -111,10 +111,10 @@ Options:
 **If user chooses option 1 (stash):**
 
 ```bash
-git stash push -m "respond-to-comments: WIP on $CURRENT"
+git stash push -m "wayfare-respond-pr: WIP on $CURRENT"
 ```
 
-Report: `Stashed as: stash@{0}, "respond-to-comments: WIP on $CURRENT". Restore later with: git checkout $CURRENT && git stash pop`
+Report: `Stashed as: stash@{0}, "wayfare-respond-pr: WIP on $CURRENT". Restore later with: git checkout $CURRENT && git stash pop`
 
 Note: Since the user is switching to a different branch to do PR work, do NOT auto-pop the stash. Remind the user in the final summary how to restore.
 
@@ -225,7 +225,7 @@ Already resolved: K threads
 ```
 
 Ask the user to confirm the plan before proceeding, unless the invocation
-that ran this skill (one-shot's Step 8 under a goal turn) carries the exact
+that ran this skill (wayfare-run-task's Step 8 under a goal turn) carries the exact
 line `gates pre-authorized in-session for goal GOAL_ID: NAMES` with
 `respond` among the names, in which case the actionable items proceed as
 listed and the plan is printed, not asked. A goal line without `respond`

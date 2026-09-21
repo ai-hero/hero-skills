@@ -240,7 +240,7 @@ anchor, not a plan item.
 
 ## Who else touches the file
 
-- **`wayfare:wayfare-hero`** uses Boundaries' dependency direction to order the
+- **`wayfare:wayfare-sync-plan`** uses Boundaries' dependency direction to order the
   **subtasks inside** a feature. Each feature is a vertical slice that cuts
   down through these layers, and this file says in what order. It does **not**
   order the features themselves; that comes from the user journey. Its sync
@@ -272,4 +272,3 @@ anchor, not a plan item.
 ## Next steps
 
 - Rows to apply → `wayfare:wayfare-sync-architecture`
-- The record holds and you want work picked → `wayfare:wayfare-hero`

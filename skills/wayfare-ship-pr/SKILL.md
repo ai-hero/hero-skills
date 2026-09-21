@@ -11,7 +11,7 @@ This skill posts `@auto-approve` on the PR, waits for the workflow run to finish
 
 ## Pipeline DAG
 
-This skill is the final step of Pipeline 2 (one-shot) from `PIPELINES.md`, but it also runs standalone. Its internal DAG is:
+This skill is the final step of Pipeline 2 (wayfare-run-task) from `PIPELINES.md`, but it also runs standalone. Its internal DAG is:
 
 ```
 gates → trigger → verdict → merge → reset → verify-deploy
@@ -431,7 +431,7 @@ still not clean after that, STOP and say what keeps moving underneath it.
 ### Step 4: Post the @auto-approve Trigger Comment
 
 **Pre-authorized gates, from a goal turn.** When the invocation that ran
-this skill (one-shot's Step 9, or wayfare's *Carrying a bot's PR* step 4)
+this skill (wayfare-run-task's Step 9, or wayfare's *Carrying a bot's PR* step 4)
 carries the exact line `gates pre-authorized in-session for goal GOAL_ID:
 NAMES`, three of this skill's stops read that line and nothing else: this
 step posts the trigger only when `auto-approve` is named; Step 7a's

@@ -56,7 +56,7 @@ ROOT=$(hero_root)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 hero_at_fleet_root && echo "FLEET_ROOT"
 
-# Same git-ignored store think-it-through and harden use.
+# Same git-ignored store wayfare-grill-idea and harden use.
 hero_ready_items "$(hero_work_store)"
 ```
 
@@ -85,7 +85,7 @@ Show the user a three to six line synthesis (goal, key decisions, remaining work
 
 ### Step 3: Write the Work-Item
 
-One file at `.plans/items/NNN-slug.md`, id continuing from the highest existing id (think-it-through's numbering rules: integer `id`, zero-padded filename only). Use the shared format plus the handoff sections:
+One file at `.plans/items/NNN-slug.md`, id continuing from the highest existing id (wayfare-grill-idea's numbering rules: integer `id`, zero-padded filename only). Use the shared format plus the handoff sections:
 
 ```markdown
 ---
@@ -122,7 +122,7 @@ Hard-won session knowledge: failed approaches, environment quirks, gate/hook beh
 
 ## Subtasks
 
-1. The remaining work above, as an ordered checklist one-shot can tick.
+1. The remaining work above, as an ordered checklist wayfare-run-task can tick.
 
 ## Definition of Done
 

@@ -33,4 +33,3 @@ register-defect reporting and `CONSISTENCY.md` regeneration.
 
 - Items the audit proposed, now on the roadmap → `wayfare:wayfare-advance-item ID`
 - A full convergence instead of compliance alone → `wayfare:wayfare-sync-plan`
-- What the route is and which skill to reach for → `wayfare:wayfare-hero`

@@ -50,7 +50,7 @@ flowchart TB
   STORE[("<b>.plans/</b><br/>PLAN.md + items/")]
   NEXT["<b>wayfare-start-goal</b><br/>authorize a goal"]
   DO["<b>wayfare-advance-item ID</b><br/>advance one item"]
-  BUILD["one-shot → push-pr<br/>→ review-pr → ship-pr"]
+  BUILD["wayfare-run-task → push-pr<br/>→ review-pr → ship-pr"]
 
   SRC -- read --> PLAN
   TGT -- read --> PLAN
@@ -101,9 +101,9 @@ it is the gate: nothing is built without it.
 stateDiagram-v2
   [*] --> new
   new --> accepted: plan accepts it
-  accepted --> planning: think-it-through
+  accepted --> planning: wayfare-grill-idea
   planning --> ready: your ready-mark
-  ready --> active: one-shot starts
+  ready --> active: wayfare-run-task starts
   active --> committed: on a goal branch
   active --> review: PR opens
   committed --> review: goal's PR opens
@@ -231,9 +231,9 @@ Skills are immediately available in any Claude Code session. No restart needed.
 
 ### Companion installs (for full pipeline coverage)
 
-Three pieces ride along with one-shot, install them so Steps 4 (`push`, tests included), 5 (`self-review`), 8 (`respond`), and 9 (`ship`) work out of the box:
+Three pieces ride along with wayfare-run-task, install them so Steps 4 (`push`, tests included), 5 (`self-review`), 8 (`respond`), and 9 (`ship`) work out of the box:
 
-**1. GitHub CLI (`gh`)**: required by `push-pr`, `review-pr`, `respond-to-comments`, and `ship-pr` for every PR / comment / workflow operation. Without it, every step from `push` onward fails immediately.
+**1. GitHub CLI (`gh`)**: required by `push-pr`, `review-pr`, `wayfare-respond-pr`, and `ship-pr` for every PR / comment / workflow operation. Without it, every step from `push` onward fails immediately.
 
 ```bash
 # macOS (Homebrew)
@@ -327,7 +327,7 @@ wayfare:wayfare-ship-pr                         # @auto-approve, merge, reset to
 
 Each command reads your `HERO.md` config and adapts to your stack automatically.
 
-### Or: one-shot the whole thing
+### Or: wayfare-run-task the whole thing
 
 For genuinely small, low-risk PRs:
 
@@ -338,7 +338,7 @@ wayfare:wayfare-run-task            # resume the current goal to merged + reset 
 
 This chains all nine steps end to end: `plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship`, with explicit user gates at plan-approval, mark-ready, and merge. `plan` resolves what you asked for against your `.plans/` store and this repo's tracker before it plans anything new, delegating to `wayfare:wayfare-grill-idea` only when nothing matches, and it re-checks a matched item against the codebase first, so already-finished work is reported rather than rebuilt. `simplify` runs the `/simplify` skill on the dirty diff so the commit lands clean. `push` tests first (lint/typecheck/unit tests plus a UI smoke check via Playwright MCP for routes affected by the diff, skipped automatically on backend-only PRs), then commits and opens the draft PR. `self-review` runs the review agents plus a security pass. `mark-ready` is the explicit draft → ready gate; `await-review` polls for your configured Code Review Agent (Copilot, CodeRabbit, Greptile, …) before `respond` addresses its feedback.
 
-At each step transition, one-shot prints a progress line so you always know where you are:
+At each step transition, wayfare-run-task prints a progress line so you always know where you are:
 
 ```
 [5/9] (✓) plan → (✓) implement → (✓) simplify → (✓) push → (▶) self-review → ( ) mark-ready → ( ) await-review → ( ) respond → ( ) ship
@@ -360,22 +360,21 @@ Each step maps to a skill you can run on its own when you don't want the whole p
 | 8 | `respond` | `wayfare:wayfare-respond-pr` |
 | 9 | `ship` | `wayfare:wayfare-ship-pr` |
 
-Re-running `wayfare:wayfare-run-task` mid-flow is safe: it inspects git + the open PR for that branch and resumes from the inferred step deterministically, no confirmation prompt. With no arguments, that resume behavior is the whole point. On the default branch with work to preserve, one-shot auto-branches off (no prompt) before resuming. It exits cleanly with a hand-off hint only when there's nothing left to do (e.g., after the PR has merged) or when state can't be inferred safely (e.g., a failed `git fetch`).
+Re-running `wayfare:wayfare-run-task` mid-flow is safe: it inspects git + the open PR for that branch and resumes from the inferred step deterministically, no confirmation prompt. With no arguments, that resume behavior is the whole point. On the default branch with work to preserve, wayfare-run-task auto-branches off (no prompt) before resuming. It exits cleanly with a hand-off hint only when there's nothing left to do (e.g., after the PR has merged) or when state can't be inferred safely (e.g., a failed `git fetch`).
 
-See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
+See [`PIPELINES.md`](./docs/PIPELINES.md) for the full DAG and stop conditions.
 
 ## Commands
 
 ### The front door
 
-`wayfare:wayfare-hero` runs nothing. It is the signpost: the route, the
-shaping rule, the ideas and signals rules, and a table from what you want to
-the skill that does it. Each verb below is its own skill, so its description
-is what an agent matches your request against.
+Source is the product as it is; Target is the product as it should be. Every
+task is one leg of the route between them, and each leg is its own skill, so
+its description is what an agent matches your request against. This table is
+the map; there is no skill whose job is to hold it.
 
 | Command | What it does |
 | --- | --- |
-| `wayfare:wayfare-hero` | The route from source to target, and which of the skills below to run |
 | `wayfare:wayfare-init-repo` | Investigate the repo, write `HERO.md`, create the plan object `.plans/PLAN.md`, migrating an older store on sight. Scaffolds first in an empty directory |
 | `wayfare:wayfare-sync-plan` | One round of convergence (`config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals`), writing every `.plans/` item and proposing goals bottom-up over what was planned. Writes only what you confirm |
 | `wayfare:wayfare-start-goal` | Pick the next runnable goal, read its `## Permissions` aloud (mark-ready, respond, auto-approve, merge, deploy, absorb) for your in-session authorization, and run its first turn |
@@ -394,7 +393,7 @@ Three skills are stages of `sync` and hidden from the slash menu (`user-invocabl
 | --- | --- | --- |
 | `architecture` | `wayfare:wayfare-review-architecture` | Report where a single root `DESIGN.md` and the code have drifted — tech stack, boundaries, dependency rules, invariants, users, flows, interaction standards, append-only decisions. Writes nothing |
 | `architecture` | `wayfare:wayfare-sync-architecture` | Bootstrap `DESIGN.md`, and apply the drift rows the review found. Never restates what the code says |
-| `harden` | `wayfare:wayfare-audit-security` | Audit read-only for hardening, dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness, and emit execution-ready plans as `.plans/` security items |
+| `wayfare-audit-security` | `wayfare:wayfare-audit-security` | Audit read-only for hardening, dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness, and emit execution-ready plans as `.plans/` security items |
 
 ### Setup
 
@@ -517,7 +516,7 @@ Every skill reads `HERO.md` from your repo root. It declares your stack so skill
 
 When project config drifts (new deps, CI changes, switched task runner), skills detect the staleness and remind you to run `wayfare:wayfare-init-repo recalibrate` to refresh. There is no auto-pre-commit hook for this. It was too slow. Run the refresh on demand.
 
-**`recalibrate` is on fourteen skills.** When a skill does the wrong thing
+**`recalibrate` is on ten skills, and is a skill of its own.** When a skill does the wrong thing
 because its config is wrong, you fix it where you noticed:
 `wayfare:wayfare-ship-pr recalibrate` asks about the eight fields `ship-pr` reads
 across Repository, CI/CD and Deployment, writes what you confirm, commits, and

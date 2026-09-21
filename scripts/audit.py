@@ -1161,7 +1161,7 @@ def _(r):
                 bad.append(f"{name}: no deploy.restart_policy")
             continue
         pol = svc.get("restart", None)
-        # `restart: no` is YAML false, and is CORRECT for a one-shot setup job
+        # `restart: no` is YAML false, and is CORRECT for a wayfare-run-task setup job
         # — it must not be restarted. Treat an explicit false as a policy.
         if pol is None:
             # Setup/init jobs that simply omit it are still wrong: compose

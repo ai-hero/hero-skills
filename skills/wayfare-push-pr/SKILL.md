@@ -114,7 +114,7 @@ fi
 
 Then derive a feature-branch name from the diff and check out a new branch. Uncommitted changes follow the checkout automatically, so do **not** stash.
 
-Generate `BRANCH_NAME` by applying `hero_branch_policy`, the shared naming rules, which one-shot's auto-branch step also uses so the two cannot drift:
+Generate `BRANCH_NAME` by applying `hero_branch_policy`, the shared naming rules, which wayfare-run-task's auto-branch step also uses so the two cannot drift:
 
 ```bash
 # shellcheck source=/dev/null
@@ -122,7 +122,7 @@ Generate `BRANCH_NAME` by applying `hero_branch_policy`, the shared naming rules
 hero_branch_policy   # apply these rules to the diff to derive BRANCH_NAME
 ```
 
-Deriving the name is a model task, not a shell one: read the diff, then apply the policy. Unlike one-shot (which derives and proceeds), push-pr proposes and waits for confirmation.
+Deriving the name is a model task, not a shell one: read the diff, then apply the policy. Unlike wayfare-run-task (which derives and proceeds), push-pr proposes and waits for confirmation.
 
 Present the proposed name and let the user confirm or modify:
 
@@ -705,7 +705,7 @@ Pre-commit: PASSED (or SKIPPED)
 
 **If `$FIRST_ARG` is exactly `commit`, STOP here.** Print the commit SHA as
 the deliverable and do not continue. The caller (a wayfare goal turn, through
-one-shot's commit-only mode) pushes and opens the PR once, after every feature
+wayfare-run-task's commit-only mode) pushes and opens the PR once, after every feature
 is in and the branch has passed locally.
 
 Proceed to Step 4.

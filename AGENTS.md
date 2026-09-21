@@ -78,12 +78,14 @@ repo's own gate while `auto-approve.yaml` is the fleet's.
   writes no config at all — it is the compliance audit and the backport drafts
   — so the config verb is always `recalibrate`, however much `improve` sounds
   like one.
-- **`wayfare` is the front door; `architecture` and `harden` are its stages.**
-  Both are `user-invocable: false` and chained (`CHAINED_SKILLS` in
-  `scripts/validate.sh`), and neither carries `recalibrate`, because wayfare's rows
-  in `scripts/hero-fields.sh` cover their fields. A verb added to either is a
+- **Three skills are stages, reached only by another skill.**
+  `wayfare-review-architecture`, `wayfare-sync-architecture` and
+  `wayfare-audit-security` are `user-invocable: false` and chained
+  (`CHAINED_SKILLS` in `scripts/validate.sh`). None carries `recalibrate`;
+  `wayfare-recalibrate-config` reads the whole field map with `--all`, so
+  their fields are reachable without it. A verb added to one of them is a
   verb nobody reaches unless `wayfare-sync-plan` (or, for architecture,
-  think-it-through's `arch` dispatch) calls it.
+  `wayfare-grill-idea`'s `arch` dispatch) calls it.
 - **Assets are vendored downstream, not authored there.** Fix a bug here, then
   re-vendor. A consuming repo's copy is output.
 - **Tests are `scripts/*.test.sh` and both runners glob.** Add a suite and it

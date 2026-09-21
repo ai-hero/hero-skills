@@ -5,8 +5,8 @@ What a plan is, what is in it, and what shape every item takes.
 Wayfare offers one thing: **a way to plan work and have agents execute it, in
 a repo.** The plan is the durable object that makes that possible. This
 document specifies it. `scripts/hero-lib.sh` reads and writes it,
-`wayfare:wayfare-hero` is the skill that creates items from a sync; handoff,
-think-it-through, one-shot and harden author items too and each stamps its
+`wayfare:wayfare-sync-plan` is the skill that creates items from a sync; handoff,
+wayfare-grill-idea, wayfare-run-task and harden author items too and each stamps its
 name in `origin`. Every skill that touches work touches it through here.
 
 The store is local and private (`.git/info/exclude`, via `hero_exclude_add`).
@@ -109,7 +109,7 @@ and nothing else; that column is the test a fifth type would have to pass.
 nine kinds distinguished beyond that is now a field.
 
 **Tasks are built. Signals are delivered. Goals and ideas are neither** — a
-goal is never handed out as READY because one-shot builds tasks, and an idea
+goal is never handed out as READY because wayfare-run-task builds tasks, and an idea
 is not work at all yet.
 
 ### `idea`: the parking lot
@@ -159,7 +159,7 @@ Definition of Done has to assert, and how that assertion is verified.
 | `dependency` | exempt | the bump merged, the alert closed, the deploy healthy | the PR and the platform |
 | `docs` | exempt | prose that describes code now describes what the code does, or is gone | reading the prose against the code it describes |
 
-**The slice rule** (`wayfare:wayfare-hero`, *Slices, not layers*) is that a
+**The slice rule** (`references/shaping.md`, *Slices, not layers*) is that a
 `story` task is Simple, Lovable and Complete: a vertical cut through every
 layer it needs, shaped `AS_A user I_CAN do X SO_THAT Y`, never a layer of one.
 The five exemptions are narrow and all for the same reason: the surface
@@ -225,10 +225,10 @@ new → accepted → planning → ready → active → committed → review → 
 | `accepted` | on the roadmap, not yet planned | `wayfare-sync-plan`, accepting a proposal |
 | `planning` | a plan is being written, or is written and not yet approved | `wayfare-sync-plan`'s planning postflight |
 | `ready` | plan approved, eligible to build | **the user, only ever explicitly** |
-| `active` | being built or being delivered | one-shot at its first edit |
-| `committed` | committed on a goal's branch, absent from the default branch | one-shot's commit-only mode |
-| `review` | PR open, awaiting review and merge | one-shot when the PR opens |
-| `done` | finished; dependents are unblocked | one-shot at merge, or the goal's final turn |
+| `active` | being built or being delivered | wayfare-run-task at its first edit |
+| `committed` | committed on a goal's branch, absent from the default branch | wayfare-run-task's commit-only mode |
+| `review` | PR open, awaiting review and merge | wayfare-run-task when the PR opens |
+| `done` | finished; dependents are unblocked | wayfare-run-task at merge, or the goal's final turn |
 | `dropped` | abandoned; dependents stay blocked | `wayfare-drop-item` |
 
 Not every item visits every state. A `signal` runs
@@ -346,10 +346,10 @@ What must be observably true when this ships — every line verified before
 ## Log
 
 - 2026-07-24 (rahul) note: dated, append-only; never rewrite or delete a line
-- 2026-07-24 (one-shot) mistake: wired the callback against the session cookie,
+- 2026-07-24 (wayfare-run-task) mistake: wired the callback against the session cookie,
   then redid it against the token — the cookie is not set until after the
   redirect, which the approach assumed the other way round
-- 2026-07-25 (one-shot) signal: design/auth/sign-in.md orders consent before
+- 2026-07-25 (wayfare-run-task) signal: design/auth/sign-in.md orders consent before
   account linking; the code links first, because consent cannot be scoped
   until the account is known
 ```
@@ -406,7 +406,7 @@ A `signal` line carries the capture id and a state marker after the tag, and
 the marker is the one part of a log line that changes after it is written:
 
 ```text
-- 2026-07-25 (one-shot) signal: DF-12-2026-07-25-1 [undelivered] design/auth/sign-in.md orders consent before account linking; the code links first, because consent cannot be scoped until the account is known
+- 2026-07-25 (wayfare-run-task) signal: DF-12-2026-07-25-1 [undelivered] design/auth/sign-in.md orders consent before account linking; the code links first, because consent cannot be scoped until the account is known
 ```
 
 `[undelivered]` becomes `[item: 61]` when `wayfare-sync-plan` promotes the entry,

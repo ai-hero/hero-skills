@@ -13,7 +13,7 @@ given and return the rewrite.
 **Read that file first.** It is the whole substance of this skill: the tells,
 the rewrites, the words to watch, and the rules about what not to change. It
 lives in `docs/` rather than here because four pipeline steps read it too
-(`push-pr`, `review-pr`, `respond-to-comments`, and wayfare's review step),
+(`push-pr`, `review-pr`, `wayfare-respond-pr`, and wayfare's review step),
 and they read it directly rather than invoking this skill.
 
 ## Instructions

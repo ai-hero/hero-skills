@@ -61,13 +61,13 @@ second commit; for "added to existing repo" it is just the next commit. The
 node is named for the canonical case where everything begins with HERO.md
 present from commit one onward.
 
-### Pipeline 2: one-shot, ticket to merged PR in a single invocation
+### Pipeline 2: wayfare-run-task, ticket to merged PR in a single invocation
 
 ```
 plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship
 ```
 
-Owner: `wayfare:wayfare-run-task`. Invoked with an issue ID or description it starts at `plan`; invoked with no arguments it resumes the current goal (in-progress branch/diff/PR on the current branch, plus the in-flight item's `## Subtasks` checklist, the plan file is the state file, so a run that died mid-implement resumes at its first unchecked line) from the detected step and drives it, through the usual user gates, to merged + a reset checkout. Nine steps, each maps to a single skill (or `inline` when one-shot drives it directly without delegating):
+Owner: `wayfare:wayfare-run-task`. Invoked with an issue ID or description it starts at `plan`; invoked with no arguments it resumes the current goal (in-progress branch/diff/PR on the current branch, plus the in-flight item's `## Subtasks` checklist, the plan file is the state file, so a run that died mid-implement resumes at its first unchecked line) from the detected step and drives it, through the usual user gates, to merged + a reset checkout. Nine steps, each maps to a single skill (or `inline` when wayfare-run-task drives it directly without delegating):
 
 | # | Step | Skill to run standalone | Notes |
 | --- | --- | --- | --- |
@@ -85,7 +85,7 @@ UI smoke runs inside `push`'s test phase (absorbed from the former `test-changes
 
 `simplify` sits between `implement` and `push` so the dirty diff is tidied
 before it lands in git history. `push-pr` also invokes `/simplify`
-internally for standalone use; running one-shot just makes that step visible
+internally for standalone use; running wayfare-run-task just makes that step visible
 in the DAG and pays a no-op cost on the second invocation.
 
 **A fan-out subagent is never a fork.** Every parallel launch in this
@@ -100,10 +100,10 @@ returns; the pipeline's remaining steps stay with the parent. `/simplify`
 ships outside this plugin and leaves the agent type to its caller, so the
 callers here say it.
 
-**The work-item store closes this pipeline's loop.** `think-it-through`,
-`handoff`, `harden`, and `wayfare` write items into the git-ignored `.plans/`
+**The work-item store closes this pipeline's loop.** `wayfare-grill-idea`,
+`wayfare-write-handoff`, `wayfare-audit-security`, and `wayfare` write items into the git-ignored `.plans/`
 store, and all read it back so they build on the plate rather than beside it. What
-one-shot alone does is *execute* an item and close it out: Step 1 resolves
+wayfare-run-task alone does is *execute* an item and close it out: Step 1 resolves
 against the store before grilling anything new, and Step 9a marks the merged
 item `done`, no other skill does that automatically.
 Because nothing else observes the codebase on the store's behalf, Step 1 also
@@ -112,14 +112,14 @@ only means nobody edited the file, not that the work is still outstanding.
 
 **Architecture and harden chain.** `wayfare-sync-plan`'s architecture stage runs
 `wayfare:wayfare-review-architecture`, and offers its `sync`, before judging
-the roadmap, its `harden` stage runs `wayfare:wayfare-audit-security all`, and
-`think-it-through` delegates a leading `arch` argument to the architecture
+the roadmap, its `wayfare-audit-security` stage runs `wayfare:wayfare-audit-security all`, and
+`wayfare-grill-idea` delegates a leading `arch` argument to the architecture
 skill. Every edge requires the child to stay model-invocable (guarded by
 validate.sh's `CHAINED_SKILLS`); both children are `user-invocable: false`,
 so wayfare is the only way a person reaches them.
 
 **The design return channel.** Every other edge flows target → source. One
-flows back: one-shot logs a divergence it found while building as a
+flows back: wayfare-run-task logs a divergence it found while building as a
 `signal` line in the task's `## Log`, and `wayfare-sync-plan` delivers it. Two
 destinations, no third: a configured `feedback-repo` gets an issue wayfare
 files itself (entries verbatim plus a manifest, destination confirmed
@@ -130,12 +130,12 @@ there is no other way out. Delivery deliberately does *not* route through
 `wayfare:wayfare-write-handoff`: that skill distills the *current* conversation, which
 would both narrate the wrong session and carry this repo's branches and PR
 numbers into a third party's tracker. See
-`skills/wayfare-hero/references/feedback-channels.md`.
+`references/feedback-channels.md`.
 
-**one-shot authors only Step 2a items.** Step 2a pushes discovered or
+**wayfare-run-task authors only Step 2a items.** Step 2a pushes discovered or
 mis-scoped work out of the running item into its own `.plans/` item, a
 `shape: story` task when it satisfies target-design paths, a `structural`
-or `defect` one otherwise (`origin: one-shot`, `status: accepted` either way),
+or `defect` one otherwise (`origin: wayfare-run-task`, `status: accepted` either way),
 which is how the one-item-one-PR scope guard survives contact with
 implementation. Everything else in the store is authored by the producers
 above.
@@ -164,7 +164,7 @@ Owner: `wayfare:wayfare-init-repo`. Four steps:
 Run by itself (`wayfare:wayfare-init-repo` or `wayfare:wayfare-init-repo recalibrate`) or
 as the third step of Pipeline 1.
 
-Eleven other skills carry a scoped slice of this pipeline as their own
+The other skills carry a scoped slice of this pipeline as their own
 `recalibrate` verb. RECALIBRATE.md names its phases `report → ask → write →
 commit`, where `report` is this pipeline's `investigate` narrowed to the fields
 that skill reads, and the verb ends at `commit` without going on to do the
@@ -233,12 +233,12 @@ order, running the test phase after each commit. Each build is handed to one
 subagent on a cheaper model, scoped to that task's `source` paths, one at a
 time because they share the checkout; a failing branch test gets its own
 scoped fix agent and its own commit rather than being repaired in the parent. Nothing is pushed until every
-task is in and the whole branch has passed locally; only then does one-shot
+task is in and the whole branch has passed locally; only then does wayfare-run-task
 run once over the branch to push, review, and ship it. That is one review pass,
 one auto-approve and one merge for the goal, instead of one of each per
 task, and the commits still separate the work for whoever reads the PR.
 
-Every one-shot invocation carries the granted permissions as one literal line.
+Every wayfare-run-task invocation carries the granted permissions as one literal line.
 A gate the goal was not granted rests the goal at its PR and ends the loop with
 `stop: awaiting-human`. Work a turn finds inside a member task does not
 become a new goal: if it serves a line of this goal's Definition of Done it is

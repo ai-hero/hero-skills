@@ -135,8 +135,8 @@ running a repo skill against it either fails late or, worse, half-works.
    `all` means every row whose group is not `none`. Never assume `all`, and
    never include a `none` row the user did not name: those are the repos
    "match the fleet" must not reach.
-3. **Conversational skills stay in this session.** `think-it-through` and
-   `handoff` are a dialogue with the user; a subagent has no one to talk to.
+3. **Conversational skills stay in this session.** `wayfare-grill-idea` and
+   `wayfare-write-handoff` are a dialogue with the user; a subagent has no one to talk to.
    Pick one repo, `cd` into it, and continue here.
 4. **Every other skill runs once per chosen repo, in a subagent, in
    parallel.** Use the Agent tool (`general-purpose`) with a prompt of this
@@ -154,7 +154,7 @@ running a repo skill against it either fails late or, worse, half-works.
    that needs the user.
    ```
 
-   A subagent cannot ask the user, so a skill with a user gate (one-shot's
+   A subagent cannot ask the user, so a skill with a user gate (wayfare-run-task's
    mark-ready and merge, push-pr's confirm) stops at the gate and reports it.
    That is correct: answer the gate from inside that repo, not fleet-wide.
 5. **Relay every report, per repo.** The user sees one summary block per
@@ -163,7 +163,7 @@ running a repo skill against it either fails late or, worse, half-works.
 Two exceptions. `wayfare-init-repo` at the fleet root scaffolds *into* the
 folder (`FLEET_ROOT/NAME`) and then runs `wayfare-sync-fleet` to add the row. That
 is the natural place to create a project. `fleet` itself is the only skill
-whose subject is the folder.
+whose subject is the folder rather than a repo.
 
 ## Anti-patterns
 

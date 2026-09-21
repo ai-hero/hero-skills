@@ -101,7 +101,7 @@ regions of the screen would be fixed by different people in different files.
 
 **Visual work never gates coverage, and nothing enforces that but you.**
 `hero_ready_items` groups by status and never by type, so a `ready` visual task
-with no `depends_on` lists as READY next to any task and one-shot will offer
+with no `depends_on` lists as READY next to any task and wayfare-run-task will offer
 it. The ordering is therefore a rule about *authoring*: a screen that is
 half-built does not need its padding audited, and a roadmap that spends its
 next three PRs on 4px is one that has stopped shipping. So give a visual task a

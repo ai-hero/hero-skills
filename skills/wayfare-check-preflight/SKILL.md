@@ -1,14 +1,14 @@
 ---
 name: wayfare-check-preflight
 # prettier-ignore
-description: Run pre-flight checks for the hero-skills pipeline. Catches missing tooling, stale HERO.md, .env mismatches and busy ports before any step does destructive work. Use before push-pr, ship-pr or one-shot, or when a pipeline step fails on setup.
+description: Run pre-flight checks for the hero-skills pipeline. Catches missing tooling, stale HERO.md, .env mismatches and busy ports before any step does destructive work. Use before push-pr, ship-pr or wayfare-run-task, or when a pipeline step fails on setup.
 argument-hint: "[--bucket tooling|repo|runtime|pipeline|all] [--projects p1,p2] | recalibrate"
 disable-model-invocation: true
 ---
 
 # Preflight: fail fast before the pipeline does damage
 
-Runs the union of every downstream skill's blocking check so a `one-shot` (or any individual hero skill) fails fast: before code is edited, before a branch is created, before a PR is pushed.
+Runs the union of every downstream skill's blocking check so a `wayfare-run-task` (or any individual hero skill) fails fast: before code is edited, before a branch is created, before a PR is pushed.
 
 The actual checks live in `scripts/preflight.sh`. This skill is a thin wrapper: it invokes the script, renders the result for the user, and tells them what to fix next.
 
@@ -116,11 +116,11 @@ Next step: wayfare:wayfare-run-task $ARGUMENTS, which runs Steps 1-10 in one go.
 Print this line only. Launch it on the user's word, never on your own.
 ```
 
-If `Result: BLOCKED`, do not print the `one-shot` next step at all. List the recommended fix commands from the script output instead, then suggest re-running a single bucket after fixing (`wayfare:wayfare-check-preflight --bucket repo`, or `tooling|runtime|pipeline` as applicable) as that block's next step.
+If `Result: BLOCKED`, do not print the `wayfare-run-task` next step at all. List the recommended fix commands from the script output instead, then suggest re-running a single bucket after fixing (`wayfare:wayfare-check-preflight --bucket repo`, or `tooling|runtime|pipeline` as applicable) as that block's next step.
 
 ## When This Skill Runs Automatically
 
-`wayfare:wayfare-run-task` calls `scripts/preflight.sh --bucket all` (with `--projects` scoped to the projects the diff touches) at **Step 0.3**, before auto-branching and resume detection. If any blocker fires, one-shot halts before any branch is created.
+`wayfare:wayfare-run-task` calls `scripts/preflight.sh --bucket all` (with `--projects` scoped to the projects the diff touches) at **Step 0.3**, before auto-branching and resume detection. If any blocker fires, wayfare-run-task halts before any branch is created.
 
 You can also call it standalone any time: after adding a new project to HERO.md, after editing a project's `.env`, or when something in the pipeline looks wrong and you want a single command to see the whole environmental state.
 

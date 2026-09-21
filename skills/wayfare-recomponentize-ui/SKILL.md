@@ -39,7 +39,7 @@ shadcn or the project's existing UI library instead of a private registry.
 - `$ARGUMENTS`:
   - `recalibrate` - tune the `HERO.md` fields this skill reads, then stop (see below). Matched before every other form.
   - (none) - full pass using the component source resolved in Step 0
-  - `--audit-only` - run `preflight`, `inventory`, `map`; report the plan, change nothing. Skips `enforce` too: installing the rule and hook writes files, which `--audit-only` promises not to do.
+  - `--audit-only` - run `wayfare-check-preflight`, `inventory`, `map`; report the plan, change nothing. Skips `enforce` too: installing the rule and hook writes files, which `--audit-only` promises not to do.
   - `REGISTRY_NAMESPACE` - override the registry, for example `@acme`
 
 ## `recalibrate`
@@ -117,7 +117,7 @@ and consumer SKILL.md. Install those rather than re-deriving them.
 Never introduce a UI library into a project that has none without asking. The
 atomic refactor is valuable on its own and carries no new dependency.
 
-## Step 1: Preflight (`preflight`)
+## Step 1: Preflight (`wayfare-check-preflight`)
 
 **Skip to Step 2 when the source is "recomponentize only". The enforcement layer still applies.** Otherwise, never run
 `npx shadcn init` on an existing project. It does not add the `registries` block

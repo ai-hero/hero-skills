@@ -263,7 +263,7 @@ takeover to the claim.
 `.claude/skills/` whose frontmatter says `wayfare: sync` runs as the `local`
 stage of `sync`; `wayfare: verify` is called wherever a Definition-of-Done
 line needs a repo-specific check; `wayfare: recipe` is a way to build that
-planning may name in an item's `## Approach` and one-shot then invokes. The
+planning may name in an item's `## Approach` and wayfare-run-task then invokes. The
 plugin stays generic. It never learns Terraform or a product's test rig,
 and each repo brings its own. Step 0 prints them; the stages below use them.
 
@@ -492,36 +492,24 @@ never reach a `DesignSync` call as a project id. Only a value that passes its
 own test is a path (or a project id), and only then may it reach git (or the
 tool).
 
-Then dispatch. Five verbs: **`sync`**, **`next`**, **`do`**, **`improve`**,
-and **`recalibrate`**.
+Then run the verb this skill is. Step 0 is shared by the skills that were
+once one skill's verbs, so nothing here dispatches: `wayfare-sync-plan`,
+`wayfare-start-goal`, `wayfare-advance-item`, `wayfare-drop-item` and
+`wayfare-audit-compliance` each do one thing and own their own argument
+contract. A skill reached with an argument it does not take says so and
+names the skill that takes it; it never falls through to a sync.
 
-- `recalibrate` tunes the `## Wayfare` block plus every other field `sync`'s
-  stages read, and stops. It is matched before everything else, because the
-  catch-all below would otherwise read it as plan context. See the
-  `recalibrate` section above.
-- `next` picks the next goal, gets its permissions authorized in-session, and
-  runs one turn of it right here. It never plans, except what a turn
-  admits under `absorb: yes`. See `next` below.
-- `do ID` advances one thing and stops. A task id runs *Advancing one
-  item* on it; a `shape: dependency` id with `bot:` runs *Carrying a bot's
-  PR*; a goal id runs *One
-  turn* of that goal, the same turn `next` runs after its gate. `do`
-  without an id prints the roadmap view and asks which.
-- `improve` runs the `compliance` stage on its own and adds the backport
-  half `sync` never does; at a fleet root it audits the whole family. See
-  `improve` below.
-- Anything else is `sync`, with the trailing text carried in as context for its
-  proposals (a task idea to add, an area to focus on).
-
-Retired verbs get a one-line note, then the roadmap view: `goal GOAL` is now
-`next` (to start or resume) and `do GOAL_ID` (one turn); `deps [N]` is now
-`sync` (which gathers the bots' PRs into `shape: dependency` tasks) and `do ID` on the
-item. `wayfare:wayfare-audit-security` and `wayfare:wayfare-review-architecture` run inside `sync`;
-a user who types either by hand still gets that skill, but nothing in the
-workflow needs them named. A former verb name (`status`, `task`, `sync`,
-`comment`, `pin`, `gate`, `order`, `ready`, `drift`, `do-next`) in
-`$ARGUMENTS` gets the same one-line "the surface is now plan | next | do"
-note before being treated as plan context.
+Someone typing a verb that used to live here gets a one-line note and the
+roadmap view: `goal GOAL` is now `wayfare:wayfare-start-goal` (to start or
+resume) and `wayfare:wayfare-advance-item GOAL_ID` (one turn); `deps [N]` is
+now `wayfare:wayfare-sync-plan` (which gathers the bots' PRs into
+`shape: dependency` tasks) and `wayfare:wayfare-advance-item ID` on the item;
+`improve` is `wayfare:wayfare-audit-compliance`.
+`wayfare:wayfare-audit-security` and `wayfare:wayfare-review-architecture`
+run inside `wayfare:wayfare-sync-plan`; typing either by hand still works,
+but nothing in the workflow needs them named. A former verb name (`status`,
+`task`, `comment`, `pin`, `gate`, `order`, `ready`, `drift`, `do-next`) gets
+the same note before its text is treated as context.
 
 **`sync` is a pipeline, and it renders as one** (`docs/PIPELINES.md`):
 
@@ -533,7 +521,7 @@ Print the DAG line at every stage transition. The order is the order the
 stages below run in: `design` is the snapshot refresh inside *Investigate*,
 which comes after the three read-only audits. A stage that does not apply
 (no design target: `design` and the target lane; no Dockerfile: the image
-half of `harden`) renders `(–)` and says why in one line, never silently.
+half of `wayfare-audit-security`) renders `(–)` and says why in one line, never silently.
 
 **The roadmap view**, which is how every verb reports. Run `hero_ready_items "$STORE"`
 and print the items grouped by row state (new → backlog → plan →

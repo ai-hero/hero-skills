@@ -880,7 +880,7 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - type-checkers: [mypy, tsc]
 
 ## Wayfare
-<!-- Used by wayfare:wayfare-hero — key semantics documented in that skill's
+<!-- Used by wayfare:wayfare-sync-plan — key semantics documented in that skill's
      Configuration section. Omit unless this repo tracks features against a
      claude.ai/design project. -->
 - source-repo: .

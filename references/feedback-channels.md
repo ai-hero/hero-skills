@@ -14,7 +14,7 @@ takes:
 | `design-system` | the **design system** — a token, a component API, a specimen, a guidance card | the design-system repo | `design-system-repo` | a **message** into its `.plans/inbox/` (`docs/MESSAGES.md`) |
 
 **Nothing in this flow may change the thing it is about.** Wayfare reads the
-target and the design system and never writes either; one-shot works inside the
+target and the design system and never writes either; wayfare-run-task works inside the
 source. So a divergence is *logged where it happened*, *promoted to an item*,
 and *delivered separately, on the user's word*.
 
@@ -29,9 +29,9 @@ one channel is how the architectural ones get triaged as visual nitpicks.
 Feedback is written twice on purpose, and exactly one of the two forms owns its
 state at any moment.
 
-1. **Capture, during the build.** one-shot appends a `signal` line to the
+1. **Capture, during the build.** wayfare-run-task appends a `signal` line to the
    task's `## Log`. Mid-build is the wrong time to allocate a store id and
-   author a full item, and those lines are what one-shot's close-out gate
+   author a full item, and those lines are what wayfare-run-task's close-out gate
    reads when a Definition-of-Done line legitimately fails.
 2. **Promote, at `sync`.** Each undelivered entry becomes a `type: signal`
    item on the right `channel` (`origin: wayfare`, `discovered_from` = the
@@ -53,9 +53,9 @@ position, followed by indented continuation lines:
 ```markdown
 ## Log
 
-- 2026-07-24 (one-shot) signal: DF-12-2026-07-24-1 [item: 61] design/auth/flow.md
+- 2026-07-24 (wayfare-run-task) signal: DF-12-2026-07-24-1 [item: 61] design/auth/flow.md
   has no post-logout state; the code returns to the marketing page.
-- 2026-07-25 (one-shot) signal: DF-12-2026-07-25-1 [undelivered] design/auth/sign-in.md
+- 2026-07-25 (wayfare-run-task) signal: DF-12-2026-07-25-1 [undelivered] design/auth/sign-in.md
   orders consent before account linking; the code links first, because
   consent cannot be scoped until the account is known.
 ```
@@ -66,7 +66,7 @@ position, followed by indented continuation lines:
 for each entry written on the same task on the same day. It is assigned at
 write time and never changes.
 
-The ordinal is not decoration: one-shot appends one entry per divergence found
+The ordinal is not decoration: wayfare-run-task appends one entry per divergence found
 during a build, and two divergences on one task in one day is ordinary.
 Without it, two entries share a key, and the delivery check below cannot tell
 them apart — it would skip one as already-covered and that entry would never
@@ -233,7 +233,7 @@ is a **local checkout path**, not a GitHub slug. Delivery deposits a
 a file in another checkout's `.plans/inbox/` — and requires the recipient to
 promote it before it becomes work. Writing a ready item into the sibling's
 `items/` instead, which this lane used to do, is a sibling writing that
-repo's roadmap: its one-shot builds it, and its `sync` reads it as existing
+repo's roadmap: its wayfare-run-task builds it, and its `sync` reads it as existing
 coverage and suppresses the `uncovered` finding that would have caught it.
 So the deposit follows the standard's send half in full: the fleet gate, the
 `(from, about)` dedupe probe, the temp-name-then-`mv`. Ids for the message

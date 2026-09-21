@@ -136,19 +136,16 @@ the strict `OWNER/NAME` shape.
 
 ## `recalibrate`
 
-`wayfare:wayfare-recalibrate-config` tunes the config that drives this skill, and
-stops. It does not go on to run the skill. You want to see which field was
-wrong, not spend a whole run finding out.
+`wayfare:wayfare-recalibrate-config` tunes the config the route reads, and
+stops. It does not go on to run anything else: you want to see which field
+was wrong, not spend a whole run finding out. It is a skill rather than a
+verb on each of them, so nothing here dispatches on an argument.
 
-Dispatch on it before parsing any other argument, in whichever step does
-that parsing. When the first token of
-`$ARGUMENTS` is exactly `recalibrate`, print `wayfare: running recalibrate`,
-follow the four phases in
-[docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) (report, ask, write, commit)
-using the table below as the report, and stop.
+Follow the four phases in [docs/RECALIBRATE.md](../docs/RECALIBRATE.md)
+(report, ask, write, commit), using the whole field map as the report.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" wayfare
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" --all
 ```
 
 Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,

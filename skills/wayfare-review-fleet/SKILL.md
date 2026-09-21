@@ -60,4 +60,3 @@ or a repo-side skill fixes it. Write nothing: not `FLEET.md`, not a repo.
 ## Next steps
 
 - Rows to add, remove, or a port to claim → `wayfare:wayfare-sync-fleet`
-- The map is right and you want work picked → `wayfare:wayfare-hero`

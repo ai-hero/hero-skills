@@ -45,7 +45,7 @@ HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-
 ROOT=$(hero_root)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
 
-# Same store think-it-through and handoff emit into — one plate per repo,
+# Same store wayfare-grill-idea and handoff emit into — one plate per repo,
 # git-ignored via .git/info/exclude so no tracked file is ever dirtied.
 hero_ready_items "$(hero_work_store)"
 ```
@@ -213,7 +213,7 @@ Rank everything found by `severity × blast radius ÷ effort`. Cluster related f
 
 ## Step 3: Emit Plan Items
 
-Write each unit as a work-item in `.plans/` using think-it-through's format (id numbering continues from the highest existing id; filename `NNN-slug.md`; `depends_on` when one plan must land first, `discovered_from` for provenance only), with two extra sections the executor needs. Emit every plan with `status: planning`.
+Write each unit as a work-item in `.plans/` using wayfare-grill-idea's format (id numbering continues from the highest existing id; filename `NNN-slug.md`; `depends_on` when one plan must land first, `discovered_from` for provenance only), with two extra sections the executor needs. Emit every plan with `status: planning`.
 
 ```markdown
 ---
@@ -245,7 +245,7 @@ N. After `wayfare:wayfare-ship-pr` merges this batch: `gh pr close 41 --comment 
 
 ## Subtasks
 
-- [ ] 1. The execution recipe above, one line per step, for one-shot to tick.
+- [ ] 1. The execution recipe above, one line per step, for wayfare-run-task to tick.
 
 ## Definition of Done
 
@@ -297,7 +297,7 @@ Source files modified: NONE (read-only by contract)
 
 ```
 
-Then return to wayfare. The summary above is what its `harden` stage reads
+Then return to wayfare. The summary above is what its `wayfare-audit-security` stage reads
 back: every `skipped (unavailable)` and every `Deferred:` line becomes an
 `unverified` row in the sync report, and the emitted items are ready-marked
 in its planning postflight. Print no terminal next step of your own, because the

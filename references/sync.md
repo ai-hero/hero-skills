@@ -166,7 +166,7 @@ and carry the review's findings into this run's report: a declined refresh
 must never make the staleness disappear. **This map orders subtasks, never
 tasks.** Task order comes from the journey.
 
-**The `harden` stage, in both modes, after the map.** Invoke
+**The `wayfare-audit-security` stage, in both modes, after the map.** Invoke
 `wayfare:wayfare-audit-security all` via the Skill tool with the line `launched by
 wayfare`. It is read-only and writes `type: task` + `shape: dependency` (or `architecture`)
 items at `status: planning`, each carrying an execution recipe, a
@@ -181,7 +181,7 @@ line, a `Trivy: skipped (unavailable)` or `Docker/Scout: skipped
 partial, not clean), never "clean".
 
 **The `comments` stage: prose that has gone false about the code.** Runs
-after `harden`, before `compliance`, in both modes.
+after `wayfare-audit-security`, before `compliance`, in both modes.
 
 `review-pr` already runs `pr-review-toolkit:comment-analyzer` over a PR's
 diff, which catches a comment that was wrong *when written*. It cannot catch
@@ -423,7 +423,7 @@ PRs → `(–)` and one line saying so.
    welcome: drop rows, reword, re-scope), write each task in the format
    below: `status: accepted`, `anchors.target` = the target head resolved in step 2
    (self-review mode resolved no target head, so leave it absent). Ids
-   continue the store's single sequence (think-it-through's numbering
+   continue the store's single sequence (wayfare-grill-idea's numbering
    rules).
 6. **Plan the set: the postflight.** See *Plan the set* below. `sync` is
    not finished when the rows are written; it is finished when every task
@@ -486,7 +486,7 @@ follows):
   refactor is exactly the moment a pre-existing source-side rendering bug
   gets looked at again and noticed for the first time.
 - **covered**: Source now satisfies a task's target paths (work landed
-  out-of-band or via one-shot): propose marking it `done`, citing its
+  out-of-band or via wayfare-run-task): propose marking it `done`, citing its
   `## Definition of Done` lines as the evidence, or, for a task never
   planned (empty DoD), the source-vs-target diff of its paths. For a task
   whose `target` paths render a page, "satisfies" means rendered, not merely
@@ -698,7 +698,7 @@ So the pass runs across the roadmap:
    **already-satisfied** finding, never grilled: the planning path once had no
    such check and produced a long plan for finished work. Trust the criteria,
    not the status field.
-2. **Hand the set to think-it-through's Roadmap mode**: invoke
+2. **Hand the set to wayfare-grill-idea's Roadmap mode**: invoke
    `wayfare:wayfare-grill-idea ID ID ID…` (every task from step 1 that
    still needs a plan) via the Skill tool, with the line `launched by
    wayfare` in the invocation: that line enables its chain-back exception and
@@ -872,7 +872,7 @@ implementation time*, not batching the work.
 proposal table: investigate its source paths and target design first, because a
 task captures conclusions rather than guesses, and it is written with the same
 confirm flow, same format, same `status: accepted`. Ids continue the store's
-sequence per think-it-through's numbering rules, re-checked immediately
+sequence per wayfare-grill-idea's numbering rules, re-checked immediately
 before writing; zero-pad only the filename.
 
 **Parking something instead is the other half of that.** Not everything a

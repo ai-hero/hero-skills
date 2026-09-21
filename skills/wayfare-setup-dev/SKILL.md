@@ -225,7 +225,7 @@ Run wayfare:wayfare-init-repo recalibrate if the project setup has changed.
 Next step: wayfare:wayfare-check-preflight — sanity-check tooling, .env, ports before starting (print only — model-invocation-restricted, cannot auto-run)
 ```
 
-Don't also print `wayfare:wayfare-run-task`; `preflight`'s own next-steps lead there once it passes.
+Don't also print `wayfare:wayfare-run-task`; `wayfare-check-preflight`'s own next-steps lead there once it passes.
 
 ## Key Principles
 

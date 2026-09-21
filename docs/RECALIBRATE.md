@@ -1,6 +1,6 @@
 # The recalibrate verb
 
-Eleven skills accept `recalibrate`: ask me the questions that decide how this
+Ten skills accept `recalibrate`, and `wayfare-recalibrate-config` is the verb itself: ask me the questions that decide how this
 skill works, and write the answers. `scripts/hero-fields.sh` holds the map of
 which skill reads which fields, and `scripts/hero-fields.test.sh` ties the map
 and the skills to each other in both directions, a skill declaring the verb
@@ -41,15 +41,19 @@ never touches the files those skills keep:
 | `wayfare-sync-fleet` | `FLEET.md` | converge the map with the folder beside it |
 | `wayfare-sync-plan` | `.plans/` and `DESIGN.md` | converge the plan with the world. Its architecture stage converges the design record on the way |
 
-`wayfare` has both: `sync` for the plan (and, through its architecture stage,
-`DESIGN.md`), `recalibrate` for the `HERO.md` fields that tell it and its
-stages (`architecture` and `harden`) how to run. Those two stages carry no
-`recalibrate` of their own.
+The route has both: `wayfare-sync-plan` for the plan (and, through its
+architecture stage, `DESIGN.md`), and `wayfare-recalibrate-config` for the
+`HERO.md` fields that tell every stage how to run. The three stages
+(`wayfare-review-architecture`, `wayfare-sync-architecture`,
+`wayfare-audit-security`) carry no `recalibrate` of their own.
 
-Five skills read `HERO.md` and deliberately have no `recalibrate`, the two stages above, and three more. `fleet`
-runs at the fleet root, where there is no `HERO.md` to recalibrate.
-`audit-plugin` reads the file as the *subject* of its audit rather than as its
-own config. `think-it-through` is a dialogue with the user, and stopping it to
+Several skills read `HERO.md` and deliberately have no `recalibrate`: the
+three stages above, and the verbs split out of the old front door
+(`wayfare-sync-plan`, `wayfare-start-goal`, `wayfare-advance-item`,
+`wayfare-drop-item`), whose fields `wayfare-recalibrate-config` now tunes.
+`wayfare-sync-fleet` and `wayfare-review-fleet` run at the fleet root, where
+there is no `HERO.md` to recalibrate. `wayfare-audit-plugin` reads the file
+as the *subject* of its audit rather than as its own config. `wayfare-grill-idea` is a dialogue with the user, and stopping it to
 ask about config fields is the interruption the verb exists to avoid,
 recalibrate the skill that acts on its output instead.
 
