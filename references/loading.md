@@ -11,10 +11,21 @@ HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-
 
 ROOT=$(hero_root)
 hero_at_fleet_root && echo "FLEET_ROOT"
-# Only the Wayfare block matters here — don't cat the whole HERO.md into context.
+# What this repo is attached to, one row per declared connection
+# (docs/CONNECTIONS.md). Printed before any stage acts on one: a `type: none`
+# row and a kind with no row at all mean different things, and a run that
+# never states which it saw cannot be argued with afterwards.
+hero_connections "$ROOT"; rc=$?
+# rc 1 prints NOTHING, which is identical to a repo with no `## Connections`
+# section, so say which it was. rc 3 means a block was skipped and stderr named
+# it — that is a config defect to report, not a listing to read past.
+[ "$rc" = 1 ] && echo "wayfare: no readable HERO.md at $ROOT — no connections"
+[ "$rc" = 3 ] && echo "wayfare: at least one connection block was SKIPPED (see stderr) — fix HERO.md"
+# The Wayfare block is one key, but keep displaying it: `source-repo` is read
+# below and a repo that set it to something odd should show that here.
 # Gate on CONTENT, not awk's exit code: awk exits 0 with empty output when
-# HERO.md exists but has no `## Wayfare` block, so `|| echo` would never fire.
-WF_BLOCK=$(awk '/^## Wayfare/{f=1;next} /^## /{f=0} f' "$ROOT/HERO.md" 2>/dev/null) # hero-lint: allow-inline — display only; values are read via hero_field below
+# HERO.md exists but has no such block, so `|| echo` would never fire.
+WF_BLOCK=$(awk '/^## Wayfare/{f=1;next} /^## /{f=0} f' "$ROOT/HERO.md" 2>/dev/null) # hero-lint: allow-inline — display only; values are read via the readers below
 [ -n "$WF_BLOCK" ] && printf '%s\n' "$WF_BLOCK" || echo "NO_HERO_CONFIG"
 # Guard the store before anything derives a path from it: hero_work_store can
 # fail (non-repo root, symlinked store), and an empty $STORE would put the
@@ -26,7 +37,8 @@ STORE=$(hero_work_store) && [ -n "$STORE" ] || {
   STORE=REJECTED
 }
 
-# source-repo gets the same rc=2-vs-rc=1 split design-project does below: a
+# source-repo gets the same rc=2-vs-rc=1 split the design connection does
+# below: a
 # REJECTED-unsafe value must never silently become the default (`.`) — that
 # hides that wayfare was TOLD something and dropped it.
 SOURCE_REPO=$(hero_field source-repo); rc=$?
@@ -37,16 +49,40 @@ elif [ "$rc" != 0 ]; then
   SOURCE_REPO=.                                     # absent: quiet default
 fi
 
-# design-project names a claude.ai/design project. It never reaches git or
+# `type` is the block's DISCRIMINATOR and is read first. A block written the
+# way docs/CONNECTIONS.md prescribes — `type: none`, and no `at`, `ux-flow` or
+# `reconciliation`, because there is nothing to locate — would otherwise reach
+# every read below as UNSET, and sync would go looking for a design target in a
+# repo that already answered. Unmigrated repos have no `type` key at all, so
+# absent here means "ask the values", not "none".
+DESIGN_TYPE=$(hero_connection design type "$ROOT"); rc=$?
+if [ "$rc" = 2 ]; then
+  # REJECTED, not `none`. Mapping it to `none` would make the block's other
+  # keys report as declared-absent, so a configured ux-flow would be discarded
+  # and sync would stop re-proposing one — on the strength of a value the
+  # reader refused to use.
+  echo "wayfare: connection design.type REJECTED as unsafe — target DISABLED (fix HERO.md)" >&2
+  DESIGN_TYPE=REJECTED
+elif [ "$rc" != 0 ]; then
+  DESIGN_TYPE=UNSET                                  # no block, or an unmigrated repo
+fi
+case "$DESIGN_TYPE" in REJECTED|UNSET) ;; *) DESIGN_TYPE=$(printf '%s' "$DESIGN_TYPE" | tr '[:upper:]' '[:lower:]') ;; esac
+
+# The `design` connection's `at` names the design substrate — a claude.ai/design
+# project, a Figma file (docs/CONNECTIONS.md). It never reaches git or
 # gh argv — DesignSync takes the id as a tool parameter — so extraction
 # IS the sanitizer: the value must be none, ask, or text holding exactly one
-# project UUID. Two failure modes must NOT look alike: hero_field returns 2
+# project UUID. Two failure modes must NOT look alike: the reader returns 2
 # for a REJECTED-unsafe value and 1 for absent. Silently mapping both to `none`
 # hides that wayfare was TOLD to track a target and dropped it. Report the
 # rejection loudly; only true absence is quiet.
-DESIGN_PROJECT_RAW=$(hero_field design-project); rc=$?; rc_design=$rc
+#
+# _compat, not hero_connection, on every connection field below: a repo that
+# has not moved its keys into `## Connections` still has a design target, and
+# reading only the new shape reports it as having none.
+DESIGN_PROJECT_RAW=$(hero_connection_compat design at design-project "$ROOT"); rc=$?; rc_design=$rc
 if [ "$rc" = 2 ]; then
-  echo "wayfare: design-project REJECTED as unsafe — target DISABLED (fix HERO.md)" >&2
+  echo "wayfare: connection design.at REJECTED as unsafe — target DISABLED (fix HERO.md)" >&2
   DESIGN_PROJECT=none
 elif [ "$rc" != 0 ]; then
   DESIGN_PROJECT=none                               # absent: quiet default
@@ -63,10 +99,10 @@ else
         | grep -oiE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' \
         | tr '[:upper:]' '[:lower:]' | sort -u)
       if [ -z "$MATCHES" ]; then
-        echo "wayfare: design-project '$DESIGN_PROJECT_RAW' holds no project UUID — target DISABLED" >&2
+        echo "wayfare: connection design.at '$DESIGN_PROJECT_RAW' holds no project UUID — target DISABLED" >&2
         DESIGN_PROJECT=none
       elif [ "$(printf '%s\n' "$MATCHES" | wc -l)" -gt 1 ]; then
-        echo "wayfare: design-project holds MORE THAN ONE UUID — target DISABLED (fix HERO.md to name exactly one)" >&2
+        echo "wayfare: connection design.at holds MORE THAN ONE UUID — target DISABLED (fix HERO.md to name exactly one)" >&2
         DESIGN_PROJECT=none
       else
         DESIGN_PROJECT=$MATCHES
@@ -74,53 +110,43 @@ else
   esac
 fi
 
-# design-transport picks how the snapshot is refreshed. Same rc=2-vs-rc=1
+# The design connection's `reach` picks how the snapshot is refreshed, and is
+# the session-availability check the standard describes. Same rc=2-vs-rc=1
 # split as every other key: a REJECTED-unsafe value and an unknown word are
 # both loud (sync's config gate stops on those warnings); only true absence
 # quietly means `auto`, since `auto` is the documented default.
-DESIGN_TRANSPORT=$(hero_field design-transport); rc=$?
+DESIGN_TRANSPORT=$(hero_connection_compat design reach design-transport "$ROOT"); rc=$?
 if [ "$rc" = 2 ]; then
-  echo "wayfare: design-transport REJECTED as unsafe — using auto; fix HERO.md" >&2
+  echo "wayfare: connection design.reach REJECTED as unsafe — using auto; fix HERO.md" >&2
   DESIGN_TRANSPORT=auto
 elif [ "$rc" != 0 ]; then
   DESIGN_TRANSPORT=auto                              # absent: quiet default
 fi
 DESIGN_TRANSPORT=$(printf '%s' "$DESIGN_TRANSPORT" | tr '[:upper:]' '[:lower:]')
-case "$DESIGN_TRANSPORT" in auto|designsync|manual) ;; *)
-  echo "wayfare: design-transport '$DESIGN_TRANSPORT' is not auto|designsync|manual — using auto" >&2
+case "$DESIGN_TRANSPORT" in auto|designsync|figma|manual) ;; *)
+  echo "wayfare: connection design.reach '$DESIGN_TRANSPORT' is not auto|designsync|figma|manual — using auto" >&2
   DESIGN_TRANSPORT=auto ;;
 esac
 
-# feedback-repo reaches `gh --repo`, so hold it to the strict OWNER/NAME
-# shape — no URLs, no hosts, no flags. Lowercase-test the sentinel first,
-# same as every sibling key: `feedback-repo: None` is the sentinel, not a
-# malformed repo name.
-FEEDBACK_REPO=$(hero_field feedback-repo); rc=$?
-[ "$(printf '%s' "$FEEDBACK_REPO" | tr '[:upper:]' '[:lower:]')" = none ] && FEEDBACK_REPO=none
-if [ "$rc" = 2 ]; then
-  echo "wayfare: feedback-repo REJECTED as unsafe — packet path only (fix HERO.md)" >&2
-  FEEDBACK_REPO=none
-elif [ "$rc" != 0 ]; then
-  FEEDBACK_REPO=none
-elif [ "$FEEDBACK_REPO" != none ] \
-  && ! printf '%s' "$FEEDBACK_REPO" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$'; then
-  echo "wayfare: feedback-repo '$FEEDBACK_REPO' is not OWNER/NAME — packet path only" >&2
-  FEEDBACK_REPO=none
-fi
-
+# A declared `type: none` answers for the block's other keys: the three reads
+# below stay NONE rather than UNSET, because "there is no design" is not
+# "nobody has looked at the UX flow". hero-fields.sh's `(n/a: type=none)`
+# sentinel says the same thing to recalibrate; the two readers disagreeing
+# about whether the block has answered is the split-brain to avoid.
+#
 # ux-flow also reaches `git show`/`git diff` in pathspec position, so it gets
 # the same rc split. Three states must stay distinct: UNSET (never looked —
 # sync goes looking), NONE (declared absent — sync stops re-proposing), and a
 # path. Collapsing UNSET into NONE is what would make a missing UX flow
 # silently stop being reported.
-UX_FLOW=$(hero_field ux-flow); rc=$?
+UX_FLOW=$(hero_connection_compat design ux-flow ux-flow "$ROOT"); rc=$?
 if [ "$rc" = 2 ]; then
   echo "wayfare: ux-flow REJECTED as unsafe — STOP and fix HERO.md" >&2
   UX_FLOW=REJECTED
 elif [ "$rc" != 0 ]; then
   UX_FLOW=UNSET
 fi
-# hero_field blocks a LEADING `-` only. An embedded ` -` is still an option the
+# The readers block a LEADING `-` only. An embedded ` -` is still an option the
 # moment the value is word-split ahead of `--` (`git diff --output=` writes a
 # file), so the path-shaped key gets the stricter check here.
 case "$UX_FLOW" in *' -'*)
@@ -129,90 +155,144 @@ case "$UX_FLOW" in *' -'*)
 esac
 # Lowercase before the sentinel test: `None` must not slip through as a path.
 [ "$(printf '%s' "$UX_FLOW" | tr '[:upper:]' '[:lower:]')" = none ] && UX_FLOW=NONE
+# The block answered for its own keys: `type: none` means there is nothing to
+# point a flow or a reconciliation document at. It applies AFTER the reads
+# above, so a REJECTED value still reports as rejected rather than being
+# swallowed by the shortcut.
+[ "$DESIGN_TYPE" = none ] && [ "$UX_FLOW" != REJECTED ] && UX_FLOW=NONE
 
-# design-system-repo is a LOCAL PATH that reaches `git -C` and the filesystem,
+# The design-system connection's `at` is a fleet row name or LOCAL PATH; it
+# reaches `git -C` and the filesystem,
 # so it gets source-repo's rc split and ux-flow's embedded-option check. It is
 # the ONLY upstream key. DS_REPO_STATE is what the config gate reads, and it
 # keeps the three cases DS_REPO folds together apart: UNSET (never looked —
 # the gate proposes), NONE (the user said none — the gate stops re-proposing),
 # REJECTED (the gate STOPs).
-DS_REPO=$(hero_field design-system-repo); rc=$?
-DS_REPO_STATE=SET
-[ "$(printf '%s' "$DS_REPO" | tr '[:upper:]' '[:lower:]')" = none ] && { DS_REPO=none; DS_REPO_STATE=NONE; }
+# `type` first here too, and for the same reason: `type: none` with no `at` is
+# the shape the standard prescribes for "this repo has no upstream", and
+# reading only `at` reports it as UNSET, which is the state sync re-proposes.
+DS_TYPE=$(hero_connection design-system type "$ROOT"); rc=$?
+DS_REPO=none; DS_REPO_STATE=UNSET
+DS_TYPE_LC=$(printf '%s' "$DS_TYPE" | tr '[:upper:]' '[:lower:]')
 if [ "$rc" = 2 ]; then
-  echo "wayfare: design-system-repo REJECTED as unsafe — STOP and fix HERO.md" >&2
+  echo "wayfare: connection design-system.type REJECTED as unsafe — STOP and fix HERO.md" >&2
   DS_REPO=REJECTED; DS_REPO_STATE=REJECTED
-elif [ "$rc" != 0 ]; then
-  DS_REPO=none; DS_REPO_STATE=UNSET
+elif [ "$DS_TYPE_LC" = none ]; then
+  DS_REPO_STATE=NONE
+elif [ "$DS_TYPE_LC" = self ]; then
+  # THIS repo is the design system. Falling through to the `at` read would find
+  # nothing (a `self` block has no locator) and land on UNSET, and the config
+  # gate re-proposes a design system to every repo whose state is UNSET — so
+  # the producer would be asked to name its own upstream, every run.
+  DS_REPO=$ROOT; DS_REPO_STATE=SELF
+else
+  DS_REPO=$(hero_connection_compat design-system at design-system-repo "$ROOT"); rc=$?
+  DS_REPO_STATE=SET
+  [ "$(printf '%s' "$DS_REPO" | tr '[:upper:]' '[:lower:]')" = none ] && { DS_REPO=none; DS_REPO_STATE=NONE; }
+  if [ "$rc" = 2 ]; then
+    echo "wayfare: connection design-system.at REJECTED as unsafe — STOP and fix HERO.md" >&2
+    DS_REPO=REJECTED; DS_REPO_STATE=REJECTED
+  elif [ "$rc" != 0 ]; then
+    DS_REPO=none; DS_REPO_STATE=UNSET
+  fi
+  # The REJECTED sentinel has to reach DS_REPO_STATE as well: sync's config
+  # gate branches on the STATE, so a rejected value that left the state SET
+  # arrives there as a configured repo.
+  case "$DS_REPO" in *' -'*)
+    echo "wayfare: connection design-system.at contains an embedded option — REJECTED" >&2
+    DS_REPO=REJECTED; DS_REPO_STATE=REJECTED ;;
+  esac
 fi
-case "$DS_REPO" in *' -'*)
-  echo "wayfare: design-system-repo contains an embedded option — REJECTED" >&2
-  DS_REPO=REJECTED ;;
-esac
 
 # DS_PROJECT is DERIVED from that repo's HERO.md, never configured here. A
 # consumer that kept its own copy of the id holds a second source of truth: the
 # design system moves its project, updates its own HERO.md, and the stale copy
 # keeps reconciling against the abandoned one — reporting drift that is an
 # artifact of the copy. The sibling HERO.md is repo content, so the value gets
-# design-project's IDENTICAL extraction; it is the same class of value reaching
+# the design connection's IDENTICAL extraction; it is the same class of value reaching
 # the same tool, and a weaker check here would be the one hole in the pair.
 # `none` here is not fatal: the lane prefers the target's vendored `_ds/` copy
 # and only falls back to $DS_SNAP, so the gate on the lane is BOTH sources.
 # DS_PROJECT_STATE keeps apart the two things `none` folds together, exactly as
-# DP_SHOW does for design-project: NONE (that repo declares it has no project —
+# DP_SHOW does for design.at: NONE (that repo declares it has no project —
 # a real answer, and the `_ds/` lane still works) and UNRESOLVED (we went
 # looking and could not read one — a fix someone has to make). Collapsing them
 # would let a broken sibling read as a settled one on the summary line.
 DS_PROJECT=none; DS_PROJECT_STATE=NONE
 if [ "$DS_REPO" != none ] && [ "$DS_REPO" != REJECTED ]; then
-  # Resolve `../NAME` against $ROOT, not cwd. hero_field builds "$root/HERO.md",
-  # and a goal turn used to run Step 0 from a worktree, where `../NAME` pointed
-  # inside .worktrees/ and read nothing. Goals no longer use worktrees, but the
-  # absolute form costs nothing and still holds for any other caller.
-  case "$DS_REPO" in /*) DS_REPO_ABS=$DS_REPO ;; *) DS_REPO_ABS="$ROOT/$DS_REPO" ;; esac
-  # rc 2 and rc 1 must not look alike here either: rc 2 means that repo's
-  # HERO.md holds a value someone WROTE and this sanitizer refused, which is a
-  # fix in the design system's repo, not an absence to shrug at.
-  DS_PROJECT_RAW=$(hero_field design-project "$DS_REPO_ABS"); rc=$?
-  if [ "$rc" = 2 ]; then
-    echo "wayfare: design-system-repo '$DS_REPO' has a design-project REJECTED as unsafe — upstream design project UNRESOLVED (fix that repo's HERO.md)" >&2
-    DS_PROJECT_STATE=UNRESOLVED
-  elif [ "$rc" != 0 ]; then
-    echo "wayfare: design-system-repo '$DS_REPO' has no readable design-project in its HERO.md — upstream design project UNRESOLVED" >&2
+  # `at` is a FLEET.md row name where there is a fleet and a path otherwise, so
+  # never resolve it here: hero_connection_repo answers both, resolves against
+  # $ROOT rather than cwd, and returns 3 for a value that is set but reaches no
+  # checkout. Reading a row name as a path yields "$ROOT/design-system", which
+  # does not exist, and the run then reports NO design system for a row it
+  # never looked up.
+  DS_REPO_ABS=$(hero_connection_repo design-system "$ROOT"); rc_abs=$?
+  # Only rc 0 yields a path. An unmigrated repo answers `at` through the compat
+  # read above but NOT through hero_connection_repo, which reads the new shape
+  # only, so rc is 1 with DS_REPO_ABS empty — and an empty ROOT argument makes
+  # every hero_* reader fall back to THIS repo. That silently derefs this
+  # repo's own design project as the upstream and then reports the two ids
+  # matching as "a producer has none", which is a confident wrong answer for a
+  # consumer whose upstream was configured all along.
+  # rc 1 with a DS_REPO in hand means the value came from the LEGACY key: the
+  # resolver reads the new shape only. Resolve it as a path, the way this did
+  # before connections existed, so an unmigrated repo keeps its upstream lane.
+  if [ "$rc_abs" = 1 ] && [ -n "$DS_REPO" ] && [ "$DS_REPO" != none ] && [ "$DS_REPO" != REJECTED ]; then
+    case "$DS_REPO" in /*) DS_REPO_ABS=$DS_REPO ;; *) DS_REPO_ABS="$ROOT/$DS_REPO" ;; esac
+    [ -d "$DS_REPO_ABS" ] && rc_abs=0 || DS_REPO_ABS=""
+  fi
+  if [ "$rc_abs" != 0 ] || [ -z "$DS_REPO_ABS" ]; then
+    case "$rc_abs" in
+      2) echo "wayfare: design-system '$DS_REPO' REJECTED as unsafe — upstream design project UNRESOLVED (fix HERO.md)" >&2 ;;
+      *) echo "wayfare: design-system '$DS_REPO' resolves to no checkout — upstream design project UNRESOLVED (fix the FLEET.md row or the path)" >&2 ;;
+    esac
     DS_PROJECT_STATE=UNRESOLVED
   else
-    # `none`/`ask` are DECLARED answers and must be tested before extraction:
-    # sent through the UUID grep they come back as "holds no single project
-    # UUID", which reports a deliberate setting as a malformed one and makes
-    # the config gate refuse a design system that simply has no project.
-    case "$(printf '%s' "$DS_PROJECT_RAW" | tr '[:upper:]' '[:lower:]')" in
-      none|ask) ;;
-      *)
-        DS_MATCHES=$(printf '%s' "$DS_PROJECT_RAW" \
-          | grep -oiE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' \
-          | tr '[:upper:]' '[:lower:]' | sort -u)
-        if [ -z "$DS_MATCHES" ] || [ "$(printf '%s\n' "$DS_MATCHES" | wc -l)" -gt 1 ]; then
-          echo "wayfare: design-system-repo's design-project holds no single project UUID — upstream design project UNRESOLVED" >&2
-          DS_PROJECT_STATE=UNRESOLVED
-        else
-          DS_PROJECT=$DS_MATCHES; DS_PROJECT_STATE=SET
-        fi ;;
-    esac
+    # rc 2 and rc 1 must not look alike here either: rc 2 means that repo's
+    # HERO.md holds a value someone WROTE and this sanitizer refused, which is a
+    # fix in the design system's repo, not an absence to shrug at.
+    DS_PROJECT_RAW=$(hero_connection_compat design at design-project "$DS_REPO_ABS"); rc=$?
+    if [ "$rc" = 2 ]; then
+      echo "wayfare: design-system '$DS_REPO' has a design connection REJECTED as unsafe — upstream design project UNRESOLVED (fix that repo's HERO.md)" >&2
+      DS_PROJECT_STATE=UNRESOLVED
+    elif [ "$rc" != 0 ]; then
+      echo "wayfare: design-system '$DS_REPO' has no readable design connection in its HERO.md — upstream design project UNRESOLVED" >&2
+      DS_PROJECT_STATE=UNRESOLVED
+    else
+      # `none`/`ask` are DECLARED answers and must be tested before extraction:
+      # sent through the UUID grep they come back as "holds no single project
+      # UUID", which reports a deliberate setting as a malformed one and makes
+      # the config gate refuse a design system that simply has no project.
+      case "$(printf '%s' "$DS_PROJECT_RAW" | tr '[:upper:]' '[:lower:]')" in
+        none|ask) ;;
+        *)
+          DS_MATCHES=$(printf '%s' "$DS_PROJECT_RAW" \
+            | grep -oiE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' \
+            | tr '[:upper:]' '[:lower:]' | sort -u)
+          if [ -z "$DS_MATCHES" ] || [ "$(printf '%s\n' "$DS_MATCHES" | wc -l)" -gt 1 ]; then
+            echo "wayfare: design-system's design connection holds no single project UUID — upstream design project UNRESOLVED" >&2
+            DS_PROJECT_STATE=UNRESOLVED
+          else
+            DS_PROJECT=$DS_MATCHES; DS_PROJECT_STATE=SET
+          fi ;;
+      esac
+    fi
   fi
 fi
-# The same id at both ends means design-system-repo resolves back to this repo's
+# The same id at both ends means design-system.at resolves back to this repo's
 # own design — the producer case, where there is no upstream. Left alone, the
 # two snapshots would fight over one directory and every upstream finding would
 # be reported against itself.
 [ "$DS_PROJECT" != none ] && [ "$DS_PROJECT" = "$DESIGN_PROJECT" ] && {
-  echo "wayfare: design-system-repo's design-project equals this repo's — no upstream (a producer has none)" >&2
+  echo "wayfare: design-system's design project equals this repo's — no upstream (a producer has none)" >&2
   DS_PROJECT=none
 }
 
 # reconciliation is a path INSIDE the design project, so it rides `git show`
 # pathspecs exactly as ux-flow does and needs ux-flow's three-state split.
-RECON=$(hero_field reconciliation); rc=$?
+RECON=$(hero_connection_compat design reconciliation reconciliation "$ROOT"); rc=$?
+# Same block-answered rule as ux-flow above.
+[ "$DESIGN_TYPE" = none ] && [ "$rc" = 1 ] && { RECON=none; rc=0; }
 if [ "$rc" = 2 ]; then
   echo "wayfare: reconciliation REJECTED as unsafe — STOP and fix HERO.md" >&2
   RECON=REJECTED
@@ -242,7 +322,15 @@ SOURCE_HEAD=$(git -C "$SOURCE_REPO" rev-parse --verify HEAD 2>/dev/null) && [ -n
 # Same reason, one key over: a `none` we were HANDED and a `none` we failed to
 # resolve must not print alike.
 [ "$DS_PROJECT_STATE" = UNRESOLVED ] && DS_SHOW="none(UNRESOLVED)" || DS_SHOW=$DS_PROJECT
-echo "wayfare: source=$SOURCE_REPO@${SOURCE_HEAD} design-project=$DP_SHOW transport=$DESIGN_TRANSPORT feedback-repo=$FEEDBACK_REPO ux-flow=$UX_FLOW ds-project=$DS_SHOW ds-repo=$DS_REPO reconciliation=$RECON"
+# ds-repo carries its STATE, not just its value: UNSET, NONE and SELF all
+# print `none` otherwise, and references/sync.md gates the design-system step
+# on exactly that distinction. A summary line the gate cannot read is a gate
+# deciding by guess.
+case "$DS_REPO_STATE" in
+  SET|REJECTED) DS_REPO_SHOW=$DS_REPO ;;
+  *)            DS_REPO_SHOW="$DS_REPO($DS_REPO_STATE)" ;;
+esac
+echo "wayfare: source=$SOURCE_REPO@${SOURCE_HEAD} design=$DP_SHOW reach=$DESIGN_TRANSPORT ux-flow=$UX_FLOW ds-project=$DS_SHOW ds-repo=$DS_REPO_SHOW reconciliation=$RECON"
 # The mailbox and this repo's own plug-ins. Printed on every verb, not only
 # sync's: a `do` or `next` run that built over a reply already sitting in the
 # inbox would act on a plan the answer changed. Local skills are DISCOVERED,
@@ -286,14 +374,14 @@ If `FLEET_ROOT` printed, this folder is a fleet, not a repo: for every verb but 
 **If any variable above was set to REJECTED** (`STORE`, `SOURCE_REPO`,
 `SOURCE_HEAD`, `UX_FLOW`, `DS_REPO`, or `RECON`) **STOP**, on every verb, not just plan. Those sentinels must never
 reach a git call; fix the store or HERO.md and re-run Step 0.
-`design-project` and `feedback-repo` degrade differently, and loudly, per
-their own messages (target DISABLED / packet path only): a warning from
-either means HERO.md needs fixing, and `sync`'s config gate stops on it, but
-other verbs may proceed in the degraded state the message names.
+The `design` connection degrades differently, and loudly, per its own message
+(target DISABLED): that warning means HERO.md needs fixing, and `sync`'s
+config gate stops on it, but other verbs may proceed in the degraded state
+the message names.
 
 `DESIGN_PROJECT` is now `none`, `ASK`, or a bare lowercase project UUID, and
 `DS_PROJECT` is `none` or a bare lowercase UUID, so use those (never the raw
-HERO.md values, and never `design-system-repo`'s HERO.md directly) everywhere
+HERO.md values, and never the design-system repo's HERO.md directly) everywhere
 below. Neither id ever reaches git or `gh` argv, where a crafted value could
 parse as a URL or option. `DesignSync` takes it as a tool parameter, and the sanitizer's own
 quoted `printf`/`echo` lines are its only shell contact.
@@ -388,7 +476,7 @@ config gate.
 **The upstream snapshot is the same mechanism, one directory over.** One
 trigger, stated once: refresh `$DS_SNAP` when the target snapshot has no
 vendored `_ds/` copy **and** `$DS_PROJECT` is a project id (derived in Step 0
-from `design-system-repo`'s HERO.md). Where there is a `_ds/`, that is the
+from the design-system connection's HERO.md). Where there is a `_ds/`, that is the
 better read and this refresh is skipped. Refresh by the identical route of
 `get_project`, `list_files`, `get_file`, harvest and commit, with its own
 meta, its own head, and its own `updatedAt` predicate. It is read for the
@@ -401,7 +489,7 @@ the refresh; whether the *lane* runs is a separate question, answered by
 **A `$DS_SNAP` directory on disk is not a usable snapshot.** The path is set
 unconditionally in Step 0, so its existence proves nothing: a run whose
 `$DS_PROJECT` is `none` can still find a tree left by an earlier run, from
-before the design system moved projects or before `design-system-repo` was
+before the design system moved projects or before the design-system connection was
 corrected. Usable means **refreshed this run**, or its meta `project id`
 equal to the `$DS_PROJECT` derived this run. Anything else is an abandoned
 copy, and reading it reports findings against a design system nobody is
@@ -445,7 +533,7 @@ comparison based on text/markup diffing alone can pass clean while the page
 is visibly broken: an `object-cover` crop that zooms into an illegible
 fragment, an overflow, a missing responsive breakpoint carry no signal in a
 `git diff` or a source read. Where the target's pages are self-contained
-static assets (as design-project prototypes typically are), extract the
+static assets (as design prototypes typically are), extract the
 target tree at the ref under test from the snapshot repo with
 `git -C "$SNAP" archive REF | tar -x -C SCRATCH_DIR` (never `git checkout`
 in `$SNAP`, whose worktree must keep tracking the latest pull) and serve it

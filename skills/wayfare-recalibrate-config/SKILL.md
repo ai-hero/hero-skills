@@ -1,7 +1,7 @@
 ---
 name: wayfare-recalibrate-config
 # prettier-ignore
-description: Report and tune the config every wayfare skill reads — the `## Wayfare` block in HERO.md plus the fields the architecture and security stages read. Asks only about fields that are unset or wrong, then writes. Use when a run complained about config, or after the repo changed shape.
+description: Report and tune the config every wayfare skill reads — the `## Connections` blocks and `## Wayfare` in HERO.md plus the fields the architecture and security stages read. Asks only about fields that are unset or wrong, then writes. Use when a run complained about config, or after the repo changed shape.
 argument-hint: ""
 ---
 
@@ -40,7 +40,13 @@ Ask only about rows whose CURRENT is parenthesised: `(unset)`,
 the user says is wrong. **A row that already holds the right value is not a
 question.**
 
-The table covers more than the `## Wayfare` block: because
+`Connections::KIND` rows carry two sentinels of their own. `(no-section)` is
+the whole block missing, which IS a question. `(n/a: type=...)` is the block
+having answered (`none`, `self`) or being blocked on a refused `type`, and it
+is the one parenthesised value that is **not** a question. See
+`references/configuration.md`.
+
+The table covers more than wayfare's own connections: because
 `wayfare:wayfare-sync-plan` runs `wayfare:wayfare-review-architecture`,
 `wayfare:wayfare-sync-architecture` and `wayfare:wayfare-audit-security`,
 the fields those read are in scope here too. A person who never calls those

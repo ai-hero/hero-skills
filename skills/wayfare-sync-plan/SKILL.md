@@ -34,7 +34,7 @@ repos you pick. A run against the folder itself plans nothing.
 Progress:
 
 - [ ] 1. Fleet check — the command above
-- [ ] 2. Config gate — the `## Wayfare` block (`../../references/configuration.md`)
+- [ ] 2. Config gate — the `## Connections` blocks and `## Wayfare` (`../../references/configuration.md`)
 - [ ] 3. Store read — `hero_ready_items`, the inbox, the plan object
 - [ ] 4. Snapshot — pull the design snapshot, resolve both heads
 - [ ] 5. Local stages — this repo's own `wayfare: sync` skills, at the trust gate

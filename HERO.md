@@ -1,12 +1,6 @@
 # Hero Configuration
 <!-- This file configures hero-skills. See wayfare:wayfare-init-repo to update. -->
 
-## Project Management
-
-- tool: github-issues
-- issue-prefix: none
-- issue-tracker: github
-
 ## Repository
 
 - type: single
@@ -53,15 +47,42 @@
 - linters: markdownlint, shellcheck, codespell
 - hooks: detect-secrets, validate-plugin, audit, shell-unit-tests, agents-md, agents-md-commit-msg
 
+## Connections
+
+<!-- What this repo is attached to on the outside; see docs/CONNECTIONS.md.
+     `type: none` means LOOKED, there is none — an absent block would mean
+     nobody has looked, and sync would ask again every run. -->
+
+### design
+
+- type: none # PERMANENT — hero-skills is a plugin repo with no product and no UI (per AGENTS.md); it will never have a design project. Do not re-propose at sync
+
+### design-system
+
+- type: none # no fleet folder or sibling checkout with `role: producer` found
+
+### reference
+
+- type: none # this repo IS the fleet's plugin; hero-template is a consumer of it, not a template for it
+
+### architecture
+
+- type: self # the root DESIGN.md is the record; nothing outside this repo holds it
+
+### infrastructure
+
+- type: none # no dev stack, no IaC (this repo ships no product)
+
+### issues
+
+- type: github
+- at: ai-hero/hero-skills
+- reach: gh
+- issue-prefix: none
+
 ## Wayfare
 
 - source-repo: .
-- design-project: none # PERMANENT — hero-skills is a plugin repo with no product and no UI (per AGENTS.md); it will never have a claude.ai/design app-design project. Do not re-propose at sync
-- design-transport: auto # auto | designsync | manual — unused while design-project is permanently none, but still validated by sync's config gate, so keep it one of the three valid words
-- feedback-repo: none # OWNER/NAME GitHub repo where design-feedback issues are filed; none keeps feedback in local packets
-- ux-flow: none # no design-project (permanent) — no UX flow path to point at
-- design-system-repo: none # no fleet folder or sibling checkout with `role: producer` under `## Design System` found
-- reconciliation: none # no design-project (permanent)
 
 ## Projects
 

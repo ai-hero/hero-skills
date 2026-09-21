@@ -195,7 +195,7 @@ grep -rlE '#[0-9a-fA-F]{3,6}\b' --include="*.tsx" src/ 2>/dev/null | wc -l
 
 **What to look for:**
 
-- `registry.json` + `registry-dist/` + a `shadcn build` script → this repo is a **producer**. Set `role: producer` in HERO.md so `wayfare:wayfare-recomponentize-ui` refuses to run here. A registry repo's pipeline is mockup → design system; consuming its own output would invert it.
+- `registry.json` + `registry-dist/` + a `shadcn build` script → this repo is a **producer**. Set `role: producer` on the `design-system` connection so `wayfare:wayfare-recomponentize-ui` refuses to run here. A registry repo's pipeline is mockup → design system; consuming its own output would invert it.
 - `components.json` with a `registries` block → already a consumer; read the namespace and URL from it rather than asking.
 - `components.json` whose `"ui"` alias points at an internal atomic dir (e.g. `@/components/atoms`) rather than `@/components/ui` → another producer signal.
 - A frontend with no `components.json` → candidate consumer. Ask (see Group 6).
@@ -238,6 +238,39 @@ gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed,del
 - Allowed merge methods → `merge-method` field. Prefer `squash` when allowed; otherwise `rebase`; otherwise `merge`. If multiple are allowed, ask the user once to pin the team's choice.
 - `deleteBranchOnMerge` → `auto-delete-branches` field. If true, GitHub already deletes merged branches and `wayfare:wayfare-ship-pr` will skip cleanup. If false, the skill will delete the remote and local branch after a successful merge unless `auto-delete-branches: false` overrides it in HERO.md.
 
+### 3c-2: The other connections
+
+The remaining kinds in `## Connections` (docs/CONNECTIONS.md). Each is cheap
+to probe and expensive to guess, and the answer that matters most is which of
+the three states it is in: unset, `type: none`, or set.
+
+```bash
+# reference — the template this repo was cloned from
+git log --reverse --format='%s' | head -3          # a template's initial commit often survives
+grep -n '^- template:' ../FLEET.md 2>/dev/null     # the fleet names its template row
+
+# architecture — is the record here, or somewhere else?
+ls DESIGN.md docs/architecture* 2>/dev/null
+
+# infrastructure — IaC in this repo, or a sibling that holds it
+ls -d terraform infra deploy k8s helm charts 2>/dev/null
+grep -n '^### ' ../FLEET.md 2>/dev/null | head -20
+```
+
+**What to look for:**
+
+- A root `DESIGN.md`, or agreement that this repo owns its own record →
+  `architecture` is `type: self`. A separate docs repo → `type: repo` and the
+  row name.
+- IaC directories **here** → `type: self`. Not `none`: the infrastructure
+  exists, it just is not somewhere else, and `none` would say this system has
+  no IaC at all. A sibling holding the manifests → `type: terraform`/
+  `kubernetes` and its row.
+- No template, no IaC repo, no external architecture record → write
+  `type: none`, which is the answer "looked, there is none". Write nothing at
+  all only when you genuinely did not look; an empty block and a `none` block
+  mean different things and sync treats them differently.
+
 ### 3d: Project Management & Issue Tracking
 
 ```bash
@@ -257,9 +290,12 @@ grep -r "linear\|jira\|asana\|shortcut" .github/ 2>/dev/null | head -5
 
 **What to look for:**
 
-- Ticket IDs like `PROJ-123` in commits/branches → extract the prefix
-- Linear/Jira mentions in templates → identifies PM tool
-- GitHub issue references (`#123`, `Fixes #123`) → GitHub Issues
+- Ticket IDs like `PROJ-123` in commits/branches → extract the prefix; it is
+  `issue-prefix` on the `issues` connection
+- Linear/Jira mentions in templates → the connection's `type`, and `reach` is
+  the MCP server or CLI that reads it
+- GitHub issue references (`#123`, `Fixes #123`) → `type: github`, `at` the
+  repo slug, `reach: gh`
 
 ### 3e: CI/CD Platform & Workflows
 
@@ -805,11 +841,6 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - poll-method: POLL_METHOD (check-runs|comments|pipeline-status)
 - bot-username: BOT_USERNAME (GitHub username of the bot, for filtering comments)
 
-## Project Management
-- tool: Linear # or Jira, GitHub Issues
-- mcp-server:
-- issue-prefix: PROJ
-
 ## Repository
 - type: single # or monorepo
 - hosting: github # or gitlab, bitbucket, other
@@ -842,9 +873,60 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - namespaces:
   - NAMESPACE
 
-## Design System
-<!-- Used by wayfare:wayfare-recomponentize-ui. Omit this whole section for projects
-     with no frontend. -->
+## Connections
+<!-- Everything this repo is attached to on the outside, one `### kind` block
+     each; see docs/CONNECTIONS.md. `type: none` means LOOKED, there is none.
+     An ABSENT block means nobody has looked, which is what makes wayfare go
+     looking — the two are not the same and must not be collapsed. -->
+
+### issues
+<!-- The tracker work is filed in. -->
+- type: linear # or jira, github, none
+- at: WORKSPACE_OR_OWNER/NAME
+- reach: linear # the MCP server or CLI that reaches it
+- issue-prefix: PROJ
+
+### design
+<!-- Used by wayfare:wayfare-sync-plan — field semantics in
+     references/configuration.md. `type: none` unless this repo tracks
+     features against a design project. -->
+- type: none # claude-design | figma | none
+- at: none # a claude.ai/design link or project UUID; `ask` prompts for the link each session and stores nothing
+- reach: auto # auto | designsync | figma | manual — manual = you carry exported design files into the local snapshot (two-account setups)
+<!-- reconciliation: path, in the DESIGN PROJECT, of a rolling reconciliation
+     document the target already keeps. Left unset for the same reason ux-flow is:
+     unset means "nobody has looked", and `none` asserts "looked, it keeps none"
+     on your behalf. -->
+<!-- ux-flow: path of the UX prototype flow / guided tour in the design project, or
+     `none` if the design genuinely has none. Left unset on purpose: unset means
+     "nobody has looked yet", which is what wayfare needs in order to go looking.
+     Writing `none` here would assert "looked, there isn't one" on your behalf and
+     permanently suppress its no-ux-flow report. Uncomment and set a real path:
+       - ux-flow: flows/
+     NOTE the leading indent on that example — the reader skips fenced blocks but
+     NOT HTML comments, so a `- key:` at column 1 inside a comment is read as live
+     config. Keep commented examples indented. -->
+
+### reference
+<!-- The template or reference implementation this repo should still resemble;
+     wayfare-audit-compliance backports to it. -->
+- type: none # repo | none
+- at: none # a FLEET.md row name, or OWNER/NAME
+
+### architecture
+<!-- Where the architecture record lives. `self` = this repo's root DESIGN.md. -->
+- type: self # self | repo | docs | none
+
+### infrastructure
+<!-- The repo holding this system's Terraform / Kubernetes manifests. -->
+- type: none # terraform | kubernetes | self (it is in this repo) | none
+- at: none # a FLEET.md row name
+
+### design-system
+<!-- Used by wayfare:wayfare-recomponentize-ui and the upstream reconciliation
+     lane. `type: none` for a project with no frontend. -->
+- type: registry # registry | none
+- at: none # a FLEET.md row name (preferred — a path is right on one machine only), or ../NAME where there is no fleet. Its own `design` connection is where the design system's design is read from
 - role: consumer # or producer
 <!-- producer = this repo PUBLISHES the design system (builds registry.json,
      serves /r/*). wayfare:wayfare-recomponentize-ui refuses to run in a producer
@@ -858,7 +940,7 @@ After the user responds, merge confirmed findings + user answers and write `HERO
      only — the CLI expands /\$\{(\w+)\}/g, so ${VAR:-default} ships as a
      literal string and surfaces as a confusing 401. -->
 - docs: https://design.aihero.studio
-- handbook: handbook/consuming-the-registry.md # in the ai-hero/design-system repo
+- handbook: handbook/consuming-the-registry.md # in the design-system repo
 - atomic-layers: true # app components use atoms/molecules/organisms/templates
 - enforcement: rules+hook # or none
 <!-- rules+hook installs .claude/rules/design-system.md (path-scoped to UI files)
@@ -880,27 +962,9 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 - type-checkers: [mypy, tsc]
 
 ## Wayfare
-<!-- Used by wayfare:wayfare-sync-plan — key semantics documented in that skill's
-     Configuration section. Omit unless this repo tracks features against a
-     claude.ai/design project. -->
+<!-- The one wayfare key that is not a connection: a repo is not attached to
+     itself. Everything else wayfare reads lives in ## Connections above. -->
 - source-repo: .
-- design-project: none # a claude.ai/design link or project UUID; `ask` prompts for the link each session; none disables the target substrate (unless design-transport is manual)
-- design-transport: auto # auto | designsync | manual — manual = you carry exported design files into the local snapshot (two-account setups)
-- feedback-repo: none # OWNER/NAME GitHub repo where design-feedback and architecture-feedback issues are filed; none keeps feedback in local packets
-- design-system-repo: none # LOCAL PATH to a design-system checkout; none skips the upstream reconciliation lane. Its own HERO.md design-project is where the design system's design is read from, and design-system feedback is written into its .plans/ store rather than filed as an issue
-<!-- reconciliation: path, in the DESIGN PROJECT, of a rolling reconciliation
-     document the target already keeps. Left unset for the same reason ux-flow is:
-     unset means "nobody has looked", and `none` asserts "looked, it keeps none"
-     on your behalf. -->
-<!-- ux-flow: path of the UX prototype flow / guided tour in the design project, or
-     `none` if the design genuinely has none. Left unset on purpose: unset means
-     "nobody has looked yet", which is what wayfare needs in order to go looking.
-     Writing `none` here would assert "looked, there isn't one" on your behalf and
-     permanently suppress its no-ux-flow report. Uncomment and set a real path:
-       - ux-flow: flows/
-     NOTE the leading indent on that example — hero_field skips fenced blocks but
-     NOT HTML comments, so a `- key:` at column 1 inside a comment is read as live
-     config. Keep commented examples indented. -->
 
 ## Developer Setup
 <!-- What every developer needs installed to work on this project.
@@ -1256,7 +1320,8 @@ Three cases, decided by what is already on disk:
 1. **No `.plans/` at all** → create the store and write `PLAN.md`: `schema: 1`,
    the repo slug, the default branch, today's date, `next_id: 1`, the
    `source.root` and `source.head` this run resolved, and a `target:` block
-   only when `design-project` is a project id rather than `none`. Fill
+   only when the `design` connection's `at` is a project id rather than
+   `none`. Fill
    `## Scope` from the investigation: one paragraph on what this repo is and
    what the plan over it is for. Every planning round reads it as the frame
    its proposals have to fit, so "TODO" there is a round planning against

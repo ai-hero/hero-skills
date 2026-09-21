@@ -560,10 +560,26 @@ check_pipeline() {
   fi
 
   # 2. Issue tracker auth (only if HERO.md declares one)
-  local tool issue_tracker
-  tool=$(awk -F': ' '/^- tool:/ {print $2; exit}' "$HERO" 2>/dev/null | xargs)
-  issue_tracker=$(awk -F': ' '/^- issue-tracker:/ {print $2; exit}' "$HERO" 2>/dev/null | xargs)
-  case "${tool:-${issue_tracker:-none}}" in
+  local tracker rc nudge
+  # Two things must not be swallowed here. The stderr is hero_connection_compat's
+  # migration nudge, which is the whole point of the fallback existing, and rc 2
+  # is a value someone WROTE and the reader refused — reported as an empty
+  # tracker it lands in the `none` arm and this check says "no issue tracker
+  # configured" for a repo that has one it cannot trust.
+  nudge=$(mktemp) || { emit WARN "pipeline: cannot create a temp file for the tracker probe"; return 0; }
+  tracker=$(hero_connection_compat issues type tool "$ROOT" 2>"$nudge"); rc=$?
+  if [ "$rc" = 1 ]; then
+    tracker=$(hero_connection_compat issues type issue-tracker "$ROOT" 2>"$nudge"); rc=$?
+  fi
+  # Every line: a refusal and a migration nudge can both be waiting, and
+  # `head -1` reports whichever came first and drops the other.
+  [ -s "$nudge" ] && while IFS= read -r line; do emit WARN "pipeline: $line"; done < "$nudge"
+  rm -f "$nudge"
+  if [ "$rc" = 2 ]; then
+    emit BLOCKER "pipeline: the issues connection's type was REJECTED as unsafe — fix HERO.md"
+    return 0
+  fi
+  case "${tracker:-none}" in
     linear)
       # Linear MCP is the usual integration. We can't probe Anthropic's
       # MCP auth state from bash, so check whether a `linear` CLI or
@@ -571,29 +587,33 @@ check_pipeline() {
       if [ -n "${LINEAR_API_KEY:-}" ] || command -v linear >/dev/null 2>&1; then
         emit OK "pipeline: linear credentials detected"
       else
-        emit WARN "pipeline: HERO.md says tool=linear but no LINEAR_API_KEY / linear CLI found — Step 1 (plan) may prompt to re-auth"
+        emit WARN "pipeline: HERO.md says the issues connection is linear but no LINEAR_API_KEY / linear CLI found — Step 1 (plan) may prompt to re-auth"
       fi
       ;;
     jira)
       if [ -n "${JIRA_API_TOKEN:-}" ] && [ -n "${JIRA_EMAIL:-}" ]; then
         emit OK "pipeline: jira credentials detected"
       else
-        emit WARN "pipeline: HERO.md says tool=jira but JIRA_API_TOKEN / JIRA_EMAIL not set — Step 1 (plan) may fail to fetch tickets"
+        emit WARN "pipeline: HERO.md says the issues connection is jira but JIRA_API_TOKEN / JIRA_EMAIL not set — Step 1 (plan) may fail to fetch tickets"
       fi
       ;;
-    github-issues|github)
+    # `self` is legal on every connection (docs/CONNECTIONS.md) and for a
+    # tracker it means "this repo's own GitHub issues". Without this arm it
+    # falls to `*)` and SKIPs, so a repo whose tracker is its own issues passes
+    # preflight with gh logged out.
+    github-issues|github|self)
       # Reuse GH_AUTH_OK from check_tooling rather than re-shell gh auth.
       if [ "${GH_AUTH_OK:-false}" = "true" ]; then
         emit OK "pipeline: github-issues uses the gh auth checked above"
       else
-        emit BLOCKER "pipeline: HERO.md says tool=github-issues but gh is not authenticated"
+        emit BLOCKER "pipeline: HERO.md says the issues connection is github but gh is not authenticated"
       fi
       ;;
     none|"")
       emit SKIP "pipeline: no issue tracker configured (plain-description plans only)"
       ;;
     *)
-      emit SKIP "pipeline: unknown issue tracker '$tool' — auth check skipped"
+      emit SKIP "pipeline: unknown issue tracker '$tracker' — auth check skipped"
       ;;
   esac
 }

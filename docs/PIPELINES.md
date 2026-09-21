@@ -121,12 +121,15 @@ so wayfare is the only way a person reaches them.
 **The design return channel.** Every other edge flows target → source. One
 flows back: wayfare-run-task logs a divergence it found while building as a
 `signal` line in the task's `## Log`, and `wayfare-sync-plan` delivers it. Two
-destinations, no third: a configured `feedback-repo` gets an issue wayfare
-files itself (entries verbatim plus a manifest, destination confirmed
-in-session), and everything else (`feedback-repo: none`, a rejected value,
-or a repo with issues disabled) gets a packet under `$STORE/.feedback/`
-that the user delivers by hand. `.plans/` is git-ignored and wayfare never writes the target, so
-there is no other way out. Delivery deliberately does *not* route through
+destinations, no third: a sibling checkout the user names from the `FLEET.md`
+rows gets a **message** in its `.plans/inbox/` (entries verbatim plus a
+manifest, its own agent promotes it), and everything else — no fleet, no row
+that owns the divergence, no `.plans/inbox/` to deposit into — gets a packet
+under `$STORE/.feedback/` that the user delivers by hand. There is no
+configured destination: a fleet holds more than one repo that can own a
+divergence, and a stored one sends every lane to whichever was set first.
+`.plans/` is git-ignored and wayfare never writes the target, so there is no
+other way out. Delivery deliberately does *not* route through
 `wayfare:wayfare-write-handoff`: that skill distills the *current* conversation, which
 would both narrate the wrong session and carry this repo's branches and PR
 numbers into a third party's tracker. See

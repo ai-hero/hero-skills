@@ -15,14 +15,17 @@
 #
 # Output is TSV with a header: SECTION KEY CURRENT DECIDES, the same four
 # columns in every mode, so one record type describes the whole command.
-# `--all` fills CURRENT with `-` because it reads no file.
+# SECTION is `Heading`, or `Heading::sub` for one connection block. `--all`
+# fills CURRENT with `-` because it reads no file.
 #
-# CURRENT is either a HERO.md value or one of six parenthesised sentinels.
+# CURRENT is either a HERO.md value or one of seven parenthesised sentinels.
 # The parentheses are what keep the two domains disjoint: no branch name,
 # command or registry URL starts with `(`, so a file that literally says
 # `- default-branch: unset` cannot be mistaken for a field that has none.
 #
 #   (present) (absent)      a `*` row's section heading, found or not
+#   (n/a: type=...)         a connection whose `type` answered (none, self) or
+#                           was refused; its other keys are moot or blocked
 #   (unset)                 the file does not carry this field, or carries it empty
 #   (no-section)            the heading this field lives under is missing
 #   (refused)               the reader rejected the value as unsafe
@@ -30,7 +33,10 @@
 #
 # `(unset)` and `(refused)` are different findings and must stay that way:
 # collapsing them would send `recalibrate` to ask about a field that is
-# actually set to something dangerous.
+# actually set to something dangerous. `(n/a: type=none)` is the same argument
+# one level up: a connection whose `type` is `none` has answered for its whole
+# block, and reporting its `at` as `(unset)` is what makes recalibrate ask a
+# repo with no design system to name one, every single run.
 #
 # Exit: 0 rows printed, 1 cannot run (no lib, bad ROOT, reader failure),
 # 2 unknown skill.
@@ -68,7 +74,7 @@ wayfare-push-pr|Repository|default-branch|the branch to cut from and the PR base
 wayfare-push-pr|Repository|branch-convention|the shape of the branch name it creates
 wayfare-push-pr|Repository|commit-convention|the shape of the commit message it writes
 wayfare-push-pr|Repository|task-runner|the tool (just, make, …) whose targets the test phase prefers over per-project raw commands, when set
-wayfare-push-pr|Project Management|issue-prefix|the ticket ID in the branch name and the PR trailers
+wayfare-push-pr|Connections::issues|issue-prefix|the ticket ID in the branch name and the PR trailers
 wayfare-push-pr|Code Quality|pre-commit|whether the commit step expects hooks to run and re-stage
 wayfare-push-pr|Code Quality|linters|the static checks the verify phase runs
 wayfare-push-pr|CI/CD|platform|where the post-push CI status report is read from
@@ -83,9 +89,9 @@ wayfare-ship-pr|Deployment|registry|where the built image is expected to land
 wayfare-ship-pr|Deployment|argocd|whether the deploy is GitOps-synced rather than pushed
 wayfare-run-task|Repository|default-branch|the base for every step of the pipeline
 wayfare-run-task|Repository|branch-convention|the branch the goal's work lands on
-wayfare-run-task|Project Management|tool|where the ticket is fetched from
-wayfare-run-task|Project Management|issue-prefix|how a plain-text argument is recognized as a ticket ID
-wayfare-run-task|Project Management|issue-tracker|where the issue is closed out after the merge
+wayfare-run-task|Connections::issues|type|the tracker a ticket is fetched from and closed out in
+wayfare-run-task|Connections::issues|at|the repo or workspace the ticket lives in
+wayfare-run-task|Connections::issues|issue-prefix|how a plain-text argument is recognized as a ticket ID
 wayfare-run-task|Code Review Agent|agent|which bot's review the await-review step waits for
 wayfare-run-task|Code Review Agent|bot-username|whose comments count as the bot's, and whose do not
 wayfare-run-task|CI/CD|auto-approve-installed|whether the ship step can complete
@@ -101,22 +107,28 @@ wayfare-respond-pr|Code Review Agent|poll-method|how this skill knows the review
 wayfare-respond-pr|Repository|default-branch|the base for the diff a comment is read against
 wayfare-respond-pr|Projects|*|per project: the test command run after a fix
 wayfare-sync-plan|Wayfare|source-repo|the codebase reconciled against the design
-wayfare-sync-plan|Wayfare|design-project|the target design substrate, or none
-wayfare-sync-plan|Wayfare|design-transport|how design files reach the local snapshot
-wayfare-sync-plan|Wayfare|feedback-repo|where design feedback is filed, or none for local packets
-wayfare-sync-plan|Wayfare|ux-flow|the authoritative journey the codebase is reconciled against
-wayfare-sync-plan|Wayfare|design-system-repo|the registry the UI work sources primitives from
-wayfare-sync-plan|Wayfare|reconciliation|how far a sync is allowed to go on its own
+wayfare-sync-plan|Connections::design|type|which design substrate this repo is built toward, or none
+wayfare-sync-plan|Connections::design|at|the project or file the design is read from
+wayfare-sync-plan|Connections::design|reach|how the design gets to the local snapshot, or manual
+wayfare-sync-plan|Connections::design|ux-flow|the authoritative journey the codebase is reconciled against
+wayfare-sync-plan|Connections::design|reconciliation|the target's own rolling reconciliation document, the starting point a sync reads
+wayfare-sync-plan|Connections::design-system|type|whether there is an upstream design system at all
+wayfare-sync-plan|Connections::design-system|at|the registry repo the UI work sources primitives from
+wayfare-sync-plan|Connections::reference|type|whether there is a template this repo should still resemble
+wayfare-sync-plan|Connections::reference|at|the template this repo is compared against for drift
+wayfare-sync-plan|Connections::architecture|type|whether the architecture record is this repo's own DESIGN.md or lives elsewhere
+wayfare-sync-plan|Connections::infrastructure|type|whether this system's IaC lives in a repo of its own
+wayfare-sync-plan|Connections::infrastructure|at|the repo holding this system's IaC, when the harden stage must read it
 wayfare-start-goal|Repository|default-branch|the base for every PR the goal turns open
 wayfare-init-repo|Repository|type|single or monorepo, which decides whether one DESIGN.md covers the repo (the architecture stage) and where `init` scaffolds a new project
 wayfare-sync-plan|Deployment|platform|the deploy shape DESIGN.md's invariants hold under, and whether the harden stage has images to scan
 wayfare-sync-plan|Deployment|registry|where the image the harden stage scans is pulled from
 wayfare-sync-plan|Code Quality|linters|the security checks already in the gate, which the harden stage must not re-propose
 wayfare-sync-plan|Projects|*|per project: language and dependency file (the CVE scanners), in a monorepo which project DESIGN.md describes, and the names a new project must not collide with
-wayfare-recomponentize-ui|Design System|role|producer refuses the run; consumer is what the pass is for
-wayfare-recomponentize-ui|Design System|namespace|the registry prefix components are sourced under
-wayfare-recomponentize-ui|Design System|registry-url|where the registry is fetched from
-wayfare-recomponentize-ui|Design System|token-env-var|the env var holding the registry token
+wayfare-recomponentize-ui|Connections::design-system|role|producer refuses the run; consumer is what the pass is for
+wayfare-recomponentize-ui|Connections::design-system|namespace|the registry prefix components are sourced under
+wayfare-recomponentize-ui|Connections::design-system|registry-url|where the registry is fetched from
+wayfare-recomponentize-ui|Connections::design-system|token-env-var|the env var holding the registry token
 wayfare-recomponentize-ui|Projects|*|per project: the framework, which decides whether there is a UI at all
 wayfare-drop-item|Repository|branch-convention|which branches this skill may discard
 wayfare-start-goal|Repository|branch-convention|the shape of the branch a goal's work lands on
@@ -125,19 +137,19 @@ wayfare-check-preflight|CI/CD|auto-approve-installed|whether the ship step will 
 wayfare-check-preflight|Code Quality|pre-commit|whether the gate is installed and current
 wayfare-setup-dev|Developer Setup|*|required tools, recommended tools, and MCP servers — the checklist this skill walks
 wayfare-setup-dev|Projects|*|per project: install and dev commands the setup verifies
-wayfare-init-repo|Design System|namespace|the registry a scaffolded UI is wired to
+wayfare-init-repo|Connections::design-system|namespace|the registry a scaffolded UI is wired to
 wayfare-create-skill|Projects|*|per project: language and framework, which the new skill's examples follow
-wayfare-write-handoff|Project Management|tool|where the distilled work-item is filed
-wayfare-write-handoff|Project Management|issue-tracker|the tracker the item is created in
-wayfare-write-handoff|Project Management|issue-prefix|the ID shape the item is named with
+wayfare-write-handoff|Connections::issues|type|the tracker the distilled work-item is filed in
+wayfare-write-handoff|Connections::issues|at|the repo or workspace it is filed against
+wayfare-write-handoff|Connections::issues|issue-prefix|the ID shape the item is named with
 ROWS
 }
 
 # The header block above IS the help text, so this range tracks it: line 6 is
-# the first line after the copyright, line 36 the last of the exit contract.
+# the first line after the copyright, line 42 the last of the exit contract.
 # Reflowing that block without moving these numbers prints the copyright as
 # usage and truncates the range mid-sentence.
-usage() { sed -n '6,36p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '6,42p' "$0" | sed 's/^# \{0,1\}//'; }
 
 case "${1:-}" in
   ''|-h|--help) usage; exit 0 ;;
@@ -178,12 +190,27 @@ fi
 # `hero_md_field` skips fenced code blocks because HERO.md documents its own
 # syntax in examples. This heading probe must skip them too, or a `## Section`
 # quoted inside a fence reports as present and recalibrate never asks for it.
+# The separator is `::`, never `/`: `## CI/CD` is a real heading with a slash in
+# it, and splitting on that one reports every CI/CD field as (no-section).
+# The sub-heading is only looked for INSIDE its parent: `### design` also
+# exists under `## Projects`, and a bare search would report the connection
+# as present because a project shares its name.
 has_section() { # SECTION FILE
-  awk -v want="## $1" '
+  local want sub_want
+  want="## ${1%%::*}"
+  sub_want=""
+  # Not `case "$1" in *::*)` inside the awk -v: a case statement in a command
+  # substitution is a bash-3.2 parse error, and macOS still ships 3.2.
+  if [ "$1" != "${1#*::}" ]; then sub_want="### ${1#*::}"; fi
+  # The "an H3 counts only inside its parent H2" rule is also implemented in
+  # hero_md_field's awk (hero-lib.sh). Change one and the probe and the read
+  # disagree about whether a block exists.
+  awk -v want="$want" -v sub_want="$sub_want" '
     /^```/ { fence = !fence; next }
     fence  { next }
     { line = $0; sub(/[[:space:]]+$/, "", line) }
-    line == want { found = 1; exit }
+    line ~ /^## / { insec = (line == want); if (insec && sub_want == "") { found = 1; exit } ; next }
+    insec && sub_want != "" && line == sub_want { found = 1; exit }
     END { exit !found }
   ' "$2"
 }
@@ -212,7 +239,32 @@ while IFS='|' read -r _skill section key decides; do
     # a section rather than filling a blank in one.
     current="(no-section)"
   else
-    current=$(hero_md_field "$TARGET" "$key" "## $section" 2>"$ERRF"); rc=$?
+    if [ "$section" = "${section#*::}" ]; then
+      current=$(hero_md_field "$TARGET" "$key" "## $section" 2>"$ERRF"); rc=$?
+    else
+      # Not piped into `tr`: a pipeline reports the LAST command's rc, so
+      # hero_md_field's refusal would arrive as 0 and a rejected discriminator
+      # would read as an unmigrated block.
+      conn_type=$(hero_md_field "$TARGET" type "### ${section#*::}" "## ${section%%::*}" 2>/dev/null); type_rc=$?
+      conn_type=$(printf '%s' "$conn_type" | tr '[:upper:]' '[:lower:]')
+      if [ "$key" != type ] && [ "$type_rc" = 2 ]; then
+        # The discriminator holds something the reader refuses. Asking about
+        # this block's other keys invites recalibrate to interview the user
+        # about a connection nothing can act on until the `type` is fixed.
+        current="(n/a: type=refused)"; rc=0
+      elif [ "$key" != type ] && { [ "$conn_type" = none ] || [ "$conn_type" = self ]; }; then
+        # The block answered. `none` has nothing to locate and `self` is
+        # located by being here, so `(unset)` on their other keys would read as
+        # a question the repo already settled.
+        current="(n/a: type=$conn_type)"; rc=0
+      else
+        # Through hero_connection for a connection's own keys: it carries the
+        # shape rules for `reach` and `issues.at`, and a table that reports a
+        # value every runtime reader refuses is a table recalibrate never asks
+        # about.
+        current=$(hero_connection "${section#*::}" "$key" "$ROOT" 2>"$ERRF"); rc=$?
+      fi
+    fi
     case "$rc" in
       0) ;;
       1) current="(unset)" ;;

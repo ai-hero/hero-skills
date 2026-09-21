@@ -77,8 +77,12 @@ own output.
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-# Reads a whole SECTION, not a scalar field — hero_field cannot express this.
-sed -n '/## Design System/,/^## /p' "$ROOT/HERO.md" 2>/dev/null `# hero-lint: allow-inline` || echo "NO_DESIGN_SYSTEM_CONFIG"
+# Reads a whole BLOCK, not a scalar field — hero_connection cannot express this.
+# Both spellings: the connection block, and the `## Design System` section an
+# unmigrated repo still carries. Matching only the first returns empty on those
+# repos, and `sed` exits 0 on empty, so the `||` fallback never fires and the
+# run reads as "no registry configured" for a repo that has one.
+sed -n -e '/^### design-system/,/^#\{2,3\} /p' -e '/^## Design System/,/^## /p' "$ROOT/HERO.md" 2>/dev/null `# hero-lint: allow-inline` | grep . || echo "NO_DESIGN_SYSTEM_CONFIG"
 [ -f "$PWD/FLEET.md" ] && [ ! -f "$PWD/HERO.md" ] && echo "FLEET_ROOT" || true
 ```
 
@@ -95,14 +99,16 @@ Resolve in this order and **state which one you picked** before proceeding:
 
 | Condition | Source |
 | --- | --- |
-| `HERO.md` `## Design System` present with `namespace` | That registry |
+| The `design-system` connection carries a `namespace` | That registry |
 | No config, but the user wants one | Offer `@aihero` at `https://design.aihero.studio`. Needs a token (Step 1) |
 | No registry, `components.json` exists | Stock shadcn: `npx shadcn@latest add ITEM` |
 | No registry, another UI lib in `package.json` (MUI, Chakra, Mantine, Ant) | That library's primitives; do not migrate libraries uninvited |
 | Nothing, just plain HTML and CSS | Recomponentize and codemod only; **ask** before introducing any dependency |
 
-Expected `HERO.md` keys: `namespace`, `registry-url`, `token-env-var`, `docs`,
-`atomic-layers`. AI Hero defaults:
+Expected keys on the `design-system` connection (docs/CONNECTIONS.md):
+`namespace`, `registry-url`, `token-env-var`, `docs`, `atomic-layers`.
+A repo that has not migrated still carries them under `## Design System`;
+read that as the same block rather than reporting no registry. AI Hero defaults:
 
 - namespace: `@aihero`
 - registry-url: `https://design.aihero.studio/r/{name}.json`

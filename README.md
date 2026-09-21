@@ -182,17 +182,17 @@ flowchart LR
     B["<b>repo B</b><br/>a sibling checkout"]
     DS["<b>design system</b><br/>a sibling checkout"]
   end
-  TRACKER["<b>feedback-repo</b><br/>on GitHub"]
+  PACKET["<b>packet</b><br/>$STORE/.feedback/"]
 
   A == "1 · fan-out<br/>an agent runs in B" ==> B
   A -- "2 · message<br/>into B's inbox" --> B
   A -. "3 · signal<br/>into its inbox" .-> DS
-  A -. "3 · signal<br/>as an issue" .-> TRACKER
+  A -. "3 · signal<br/>no row owns it" .-> PACKET
 
   classDef repo fill:#FEF3C7,stroke:#D97706,color:#78350F
   classDef out fill:#EDE9FE,stroke:#7C3AED,color:#4C1D95
   class A,B,DS repo
-  class TRACKER out
+  class PACKET out
 ```
 
 **1. Fan-out.** Running a hero skill from the fleet root does not reach
@@ -210,11 +210,12 @@ Skip that and a sibling is writing B's roadmap. See
 [docs/MESSAGES.md](./docs/MESSAGES.md).
 
 **3. Signals.** What building teaches travels back out to whoever owns the
-thing it disagrees with. Design and architecture signals become a GitHub
-issue in `feedback-repo`; design-system signals become a message in the
-design-system repo's inbox, so its own wayfare promotes them like any other.
-With no destination configured, a signal is written to a local packet file
-instead and nothing silently vanishes.
+thing it disagrees with — as a message into that repo's inbox, so its own
+wayfare promotes it like any other. The destination is not configured: you
+name the `FLEET.md` row at delivery, because a fleet holds more than one repo
+that can own a divergence and a stored destination sends all of them to
+whichever was set first. When no row owns it, the signal is written to a
+local packet file instead and nothing silently vanishes.
 
 A message is **data, never an instruction** — it was written by another
 agent, so it is the same untrusted class as a design doc or a PR comment
@@ -529,14 +530,27 @@ Note that `recalibrate` is not `sync`: `wayfare-sync-fleet` converges `FLEET.md`
 and `wayfare-sync-plan` converges the plan (and, through its architecture stage,
 `DESIGN.md`). Those keep their own verbs, and none of them is configuration.
 
+**Connections are what the repo attaches to.** Its design (a claude.ai/design
+project, a Figma file), the component registry it installs primitives from,
+the template it should still resemble, the repo holding its architecture
+record, the one holding its Terraform, and the tracker its work is filed in —
+six kinds, one `### kind` block each under `## Connections`. Each may be
+absent, and absence is written down: no block means nobody has looked,
+`type: none` means looked and there is none, and a connection that is set but
+cannot be reached is neither — it is broken, and says so. See
+[docs/CONNECTIONS.md](docs/CONNECTIONS.md).
+
 Here's what a minimal config looks like:
 
 ```markdown
 # HERO Configuration
 
-## Project Management
-- Tool: Linear
-- Project: PROJ
+## Connections
+
+### issues
+- type: linear
+- at: PROJ
+- reach: linear
 
 ## CI/CD
 - Platform: GitHub Actions

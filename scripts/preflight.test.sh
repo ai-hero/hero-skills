@@ -143,6 +143,39 @@ OUT6=$(run_tooling_full "$FAKE_HOME_6")
 check "both present -> OK" "OK" "$OUT6"
 check_absent "both present -> no malformed warning" "malformed" "$OUT6"
 
+# ---------- the issues connection's tracker probe --------------------------
+# Three emit-level behaviours, all new: the compat chain that keeps an
+# unmigrated repo readable, the BLOCKER on a refused type, and the `self` arm.
+# Each fails silently in the direction of "no tracker configured", which reads
+# as a clean repo rather than an unchecked one.
+
+run_pipeline() { # REPO -> the pipeline lines
+  ( cd "$1" && "$SCRIPT" --bucket pipeline 2>&1 ) | grep -i 'tracker\|issues connection\|github-issues\|linear'
+}
+mkrepo_pf() { # DIR
+  mkdir -p "$1"
+  git -C "$1" init -q 2>/dev/null
+  git -C "$1" config user.email t@example.com
+  git -C "$1" config user.name t
+}
+
+PF="$TMP/pf"
+mkrepo_pf "$PF/legacy"
+printf '# Hero\n\n## Project Management\n\n- tool: linear\n' > "$PF/legacy/HERO.md"
+OUT_PF1=$(run_pipeline "$PF/legacy")
+check "unmigrated tracker is still checked" "linear" "$OUT_PF1"
+
+mkrepo_pf "$PF/refused"
+printf '# Hero\n\n## Connections\n\n### issues\n\n- type: -evil\n' > "$PF/refused/HERO.md"
+OUT_PF2=$(run_pipeline "$PF/refused")
+check "a refused tracker type is a BLOCKER, not 'none configured'" "REJECTED" "$OUT_PF2"
+check_absent "and it does not report the repo as tracker-less" "no issue tracker configured" "$OUT_PF2"
+
+mkrepo_pf "$PF/self"
+printf '# Hero\n\n## Connections\n\n### issues\n\n- type: self\n' > "$PF/self/HERO.md"
+OUT_PF3=$(run_pipeline "$PF/self")
+check_absent "type self is a known tracker, not an unknown one" "unknown issue tracker" "$OUT_PF3"
+
 echo ""
 echo "preflight.test.sh: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
