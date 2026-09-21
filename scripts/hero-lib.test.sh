@@ -1713,11 +1713,12 @@ fi
 # refactor that silently stops executing 25 cases still reports 0 failures and
 # exits 0. The whole reason these cases exist is that each one could be wrong
 # SILENTLY; the suite must not be able to go quiet the same way.
-# Three cases run only where zsh exists (macOS), and one needs a non-root uid,
-# so the floor is the count a Linux CI container actually reaches. Kept TIGHT
-# on purpose: a floor with a hundred cases of slack protects nothing, which is
-# how this suite came to run 365 against a floor of 210.
-MIN_CASES=380
+# Seven cases run only where zsh exists (macOS), so the floor is the count a
+# Linux CI container reaches, not the local one. Kept TIGHT on purpose: a
+# floor with a hundred cases of slack protects nothing, which is how this
+# suite came to run 365 against a floor of 210. Raise it with every block you
+# add, and read the CI number rather than the local one when you do.
+MIN_CASES=377
 if [ "$PASS" -lt "$MIN_CASES" ]; then
   echo "hero-lib: only $PASS cases ran, expected >= $MIN_CASES — a block stopped executing" >&2
   exit 1
