@@ -38,7 +38,7 @@ never touches the files those skills keep:
 | Verb | File | What it means |
 | --- | --- | --- |
 | `recalibrate` | `HERO.md` | how this skill should behave |
-| `wayfare-fleet sync` | `FLEET.md` | converge the map with the folder beside it |
+| `wayfare-sync-fleet` | `FLEET.md` | converge the map with the folder beside it |
 | `wayfare-hero sync` | `.plans/` and `DESIGN.md` | converge the plan with the world. Its architecture stage converges the design record on the way |
 
 `wayfare` has both: `sync` for the plan (and, through its architecture stage,

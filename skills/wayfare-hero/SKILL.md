@@ -77,7 +77,7 @@ through into it.
 
 Progress:
 
-- [ ] 1. Fleet check (below) — at a fleet root this is `wayfare-fleet sync`, not `init`
+- [ ] 1. Fleet check (below) — at a fleet root this is `wayfare-sync-fleet`, not `init`
 - [ ] 2. Scaffold, only when there is no repo yet (`references/scaffold.md`)
 - [ ] 3. Investigate, then confirm the findings with evidence-based questions
 - [ ] 4. Write `HERO.md` and refresh `AGENTS.md`'s managed sections

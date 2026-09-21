@@ -414,7 +414,8 @@ Two skills are stages of `sync` and hidden from the slash menu (`user-invocable:
 | Command | What it does |
 | --- | --- |
 | `wayfare:wayfare-grill-idea` | Brainstorm + grill an idea one question at a time into shared understanding and dependency-aware work-items |
-| `wayfare:wayfare-fleet` | Create + converge `FLEET.md`, the local, unversioned map of the repos checked out beside each other (group, port). `sync` scans the folder and proposes rows, `review` reports drift read-only. Every repo skill run from the fleet root fans out to the repos you pick (see `docs/FLEET-MD.md`) |
+| `wayfare:wayfare-sync-fleet` | Create + converge `FLEET.md`, the local, unversioned map of the repos checked out beside each other (group, port). Scans the folder and proposes rows, writing only what you confirm. Every repo skill run from the fleet root fans out to the repos you pick (see `docs/FLEET-MD.md`) |
+| `wayfare:wayfare-review-fleet` | Report drift between `FLEET.md` and the checkouts beside it — repos missing from the map, rows with no checkout, port collisions. Writes nothing |
 | `wayfare:wayfare-write-handoff` | Distill the current conversation into one self-contained work-item for a downstream agent (optionally filed to the tracker, or to **another repo** with `--repo OWNER/NAME`) |
 
 ### Utilities
@@ -504,7 +505,7 @@ whole-file pass. `scripts/hero-fields.sh SKILL` prints the fields of any skill
 that carries the verb, with their current values. See
 [docs/RECALIBRATE.md](docs/RECALIBRATE.md).
 
-Note that `recalibrate` is not `sync`: `wayfare-fleet sync` converges `FLEET.md`,
+Note that `recalibrate` is not `sync`: `wayfare-sync-fleet` converges `FLEET.md`,
 and `wayfare-hero sync` converges the plan (and, through its architecture stage,
 `DESIGN.md`). Those keep their own verbs, and none of them is configuration.
 

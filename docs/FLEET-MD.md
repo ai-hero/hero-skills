@@ -2,7 +2,7 @@
 
 What a fleet folder's map must be, why, and how the skills behave when run
 from it. `scripts/hero-lib.sh` reads it, `scripts/fleet-scan.sh` checks it,
-and `wayfare:wayfare-fleet` writes it.
+and `wayfare:wayfare-sync-fleet` writes it.
 
 ## The principle
 
@@ -22,14 +22,14 @@ Three things it is for:
 | --- | --- |
 | **Discovery**, a skill run at the fleet root knows the repos | `hero_fleet_repos` lists them; the skill fans out (below) |
 | **Membership**: "match the fleet" applies to some folders and not others | `group:` per repo; `none` means *lives here, is not fleet* |
-| **Ports**, every dev stack publishes one host port and they must not collide | `port:` per repo is where a port is **claimed**; `wayfare-fleet review` checks the compose file implements it |
+| **Ports**, every dev stack publishes one host port and they must not collide | `port:` per repo is where a port is **claimed**; `wayfare-review-fleet` checks the compose file implements it |
 | **Awareness**, a repo's own instructions say it belongs to a fleet | `sync` writes a `## Fleet` section into each fleet repo's `AGENTS.md` |
 
 ## The file format
 
 ```markdown
 # Fleet
-<!-- Local map of the checkouts beside this file. wayfare:wayfare-fleet sync updates it. -->
+<!-- Local map of the checkouts beside this file. wayfare:wayfare-sync-fleet updates it. -->
 
 ## Fleet
 
@@ -114,7 +114,7 @@ longer exists.
 
 `FLEET.md` is local, so a fresh clone of a fleet repo knows nothing about it.
 The repo's own `AGENTS.md` carries the pointer: a `## Fleet` section, vendored
-from `assets/fleet/agents-md-fleet-section.md` by `wayfare-fleet sync`, saying that
+from `assets/fleet/agents-md-fleet-section.md` by `wayfare-sync-fleet`, saying that
 the repo lives beside its siblings, that the map is unversioned, that the
 host port is claimed in the map and not invented in the repo, and that hero
 skills fan out from the folder. It is generic on purpose. It names no fleet,
@@ -161,7 +161,7 @@ running a repo skill against it either fails late or, worse, half-works.
    repo, what happened, what stopped, what needs them.
 
 Two exceptions. `wayfare-hero init` at the fleet root scaffolds *into* the
-folder (`FLEET_ROOT/NAME`) and then runs `wayfare-fleet sync` to add the row. That
+folder (`FLEET_ROOT/NAME`) and then runs `wayfare-sync-fleet` to add the row. That
 is the natural place to create a project. `fleet` itself is the only skill
 whose subject is the folder.
 

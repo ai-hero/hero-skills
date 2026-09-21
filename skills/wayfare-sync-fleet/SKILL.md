@@ -1,8 +1,8 @@
 ---
-name: wayfare-fleet
+name: wayfare-sync-fleet
 # prettier-ignore
-description: Create and converge FLEET.md, the local unversioned map of sibling checkouts (group, port). sync scans the folder and proposes rows; review reports drift read-only. Use from the folder that holds the repos, when adding a checkout or claiming a port.
-argument-hint: "[sync | review]"
+description: Create and converge FLEET.md, the local unversioned map of sibling checkouts (group, port). Scans the folder, proposes rows, and writes only what the user confirms. Use from the folder that holds the repos, when adding a checkout or claiming a port. To report drift without writing, use wayfare-review-fleet.
+argument-hint: ""
 ---
 
 # Fleet: the map of the checkouts beside you
@@ -13,13 +13,6 @@ claims, so a skill run from the folder can fan out to the right repos, and
 two stacks never fight over one port. The standard is
 [docs/FLEET-MD.md](../../docs/FLEET-MD.md); read it once before the first
 `sync`.
-
-## Arguments
-
-- `sync` - bootstrap or converge `FLEET.md`. Investigate, propose, write only
-  what the user confirms.
-- `review` - report drift between the rows and the folder. Writes nothing.
-- (none) - same as `review`.
 
 ## Instructions
 
@@ -49,12 +42,11 @@ fi
 
 > Each bash block below runs in a fresh shell, so re-source `hero-lib.sh` at the top of any block that calls a `hero_*` function.
 
-`NO_FLEET` with `review` → STOP: say there is nothing to review and offer
-`sync`. `NO_FLEET` with `sync` → bootstrap (below), but **confirm the
-candidate folder first**: show its path and the checkouts the scan found, and
-ask. A wrong guess writes a registry into someone's home directory.
+`NO_FLEET` → bootstrap (below), but **confirm the candidate folder first**:
+show its path and the checkouts the scan found, and ask. A wrong guess writes
+a registry into someone's home directory.
 
-### `sync`: converge FLEET.md with the folder
+## Converge FLEET.md with the folder
 
 Both modes share one shape: **scan, propose, write only what the user
 confirms.** `sync` writes one file, `FLEET.md`, and sends the `## Fleet`
@@ -158,16 +150,6 @@ is the second kind of write, and it is the one that does not exist.
 A repo whose section is present but differs from the asset gets the same
 message, saying so; the asset is authored here, and a per-repo edit to it is
 output to be overwritten.
-
-### `review`: report drift, write nothing
-
-```bash
-"$SCAN" "$FLEET_ROOT" --review
-```
-
-Print each finding with its meaning from the standard and the repo it names.
-Exit 1 means there is something to fix; say which of `sync` or a repo-side
-skill fixes it. Do not write `FLEET.md`, and do not touch a repo.
 
 ## Anti-patterns
 

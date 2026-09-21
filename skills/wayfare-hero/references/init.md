@@ -471,7 +471,7 @@ grep -E "port\|PORT\|:3000\|:8000\|:8080\|:5173\|:4000" pyproject.toml package.j
 **What to look for:**
 
 - Language and framework from dependency files
-- Monorepo structure (nx, turborepo, `workspaces` in `package.json`, multiple `pyproject.toml`): one repo with many packages. A folder of sibling checkouts is a **fleet**, mapped by `FLEET.md` (`wayfare:wayfare-fleet`), and is not a monorepo
+- Monorepo structure (nx, turborepo, `workspaces` in `package.json`, multiple `pyproject.toml`): one repo with many packages. A folder of sibling checkouts is a **fleet**, mapped by `FLEET.md` (`wayfare:wayfare-sync-fleet`), and is not a monorepo
 - **Dependency file** per project (pyproject.toml, package.json, go.mod, and so on), needed by `wayfare:wayfare-audit-security` and `wayfare:wayfare-push-pr`'s test phase
 - **Lock file** → identifies the package manager (pnpm-lock.yaml → pnpm, yarn.lock → yarn, etc.)
 - **Install command** (for example `uv sync` or `pnpm install`), needed by `wayfare:wayfare-push-pr`'s test phase before running

@@ -5,7 +5,7 @@ once this exists, it may never again reach into that checkout and change it.
 
 `scripts/hero-lib.sh` reads the mailbox and carries the send half
 (*Sending*), `wayfare:wayfare-hero sync`'s `inbox` stage triages, one-shot's
-Step 2a and `wayfare-fleet sync` send, and the Step 0 of wayfare, one-shot and
+Step 2a and `wayfare-sync-fleet` send, and the Step 0 of wayfare, one-shot and
 think-it-through reports what is waiting.
 
 ## The principle
@@ -222,7 +222,7 @@ sender never re-derives them.
    from that sender and the second of two unrelated asks is dropped as a
    duplicate of the first. A sender with no local item passes a **subject
    token** instead: a short stable string naming what the ask is about, and the
-   way `wayfare-fleet sync` passes `fleet-section`. The probe returns 2 rather than 1
+   way `wayfare-sync-fleet` passes `fleet-section`. The probe returns 2 rather than 1
    when it cannot ask; only 1 means "not sent yet".
 3. **Allocate an id.** `hero_msg_id` gives `m-` plus real entropy. Never a
    sequential number: `.plans/` ids are the *recipient's* integer namespace,
@@ -437,7 +437,7 @@ sessions in one repo is ordinary.
 | The `enum=` strings in `hero_ready_items` | DONE: no enum names `suspended`; the flag is `awaiting` |
 | Every per-repo skill's Step 0 | DONE for wayfare, one-shot and think-it-through: each prints `hero_inbox_count`. Nothing else will make an agent notice, and a miscount of zero is indistinguishable from an empty inbox. The remaining per-repo skills are reached through one of those three |
 | `skills/wayfare-hero/SKILL.md` store defects | DONE: `inbox/` is the mailbox, never a legacy subdirectory; `sync`'s `inbox` stage reads it |
-| `skills/wayfare-fleet/SKILL.md` `sync` | DONE: it deposits a `type: ask` per repo instead of appending to each `AGENTS.md`, and each repo's own agent lands the section in its own PR. A row with no `.plans/` cannot receive one and is reported, never given a store to make the deposit work |
+| `skills/wayfare-sync-fleet/SKILL.md` `sync` | DONE: it deposits a `type: ask` per repo instead of appending to each `AGENTS.md`, and each repo's own agent lands the section in its own PR. A row with no `.plans/` cannot receive one and is reported, never given a store to make the deposit work |
 | `docs/FLEET-MD.md` fan-out prompt | DONE: modify nothing, read a sibling only for the dedupe and deadlock probes, and deposit only into `.plans/inbox/` |
 | `skills/wayfare-write-handoff/SKILL.md` | DONE: the "store is not a transport" rule names the mailbox as the one narrow exception and says why it is not a handoff, a message is never work until the recipient promotes it |
 | `skills/wayfare-grill-idea/SKILL.md` | DONE: the canonical frontmatter block carries `awaiting` |
