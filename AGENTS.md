@@ -73,8 +73,8 @@ repo's own gate while `auto-approve.yaml` is the fleet's.
 - **`recalibrate` writes HERO.md; `sync` writes the skill's own file.**
   Eleven skills carry the verb ([docs/RECALIBRATE.md](./docs/RECALIBRATE.md));
   their field map is `scripts/hero-fields.sh`, and a field missing there is a
-  field no recalibrate can ask about. `fleet sync` and `wayfare sync` are
-  unrelated: they converge FLEET.md and the plan, not config. `wayfare improve`
+  field no recalibrate can ask about. `wayfare-fleet sync` and `wayfare-hero sync` are
+  unrelated: they converge FLEET.md and the plan, not config. `wayfare-hero improve`
   writes no config at all — it is the compliance audit and the backport drafts
   — so the config verb is always `recalibrate`, however much `improve` sounds
   like one.
@@ -82,7 +82,7 @@ repo's own gate while `auto-approve.yaml` is the fleet's.
   Both are `user-invocable: false` and chained (`CHAINED_SKILLS` in
   `scripts/validate.sh`), and neither carries `recalibrate`, because wayfare's rows
   in `scripts/hero-fields.sh` cover their fields. A verb added to either is a
-  verb nobody reaches unless `wayfare sync` (or, for architecture,
+  verb nobody reaches unless `wayfare-hero sync` (or, for architecture,
   think-it-through's `arch` dispatch) calls it.
 - **Assets are vendored downstream, not authored there.** Fix a bug here, then
   re-vendor. A consuming repo's copy is output.
@@ -100,9 +100,9 @@ bash scripts/validate.sh       # plugin structure
 ## Fleet
 
 This repo is one checkout in a fleet: sibling repos in the folder above it,
-mapped by that folder's `FLEET.md` (`hero-skills:fleet`). The map is local and
+mapped by that folder's `FLEET.md` (`wayfare:wayfare-fleet`). The map is local and
 unversioned, so clone this repo beside the others and run
-`hero-skills:fleet review`. The host port this dev stack publishes is claimed
+`wayfare:wayfare-fleet review`. The host port this dev stack publishes is claimed
 in that map, not chosen here: take the next free port there first, then set
 it in every place this repo names it (compose defaults, health checks).
 Any hero skill run from the fleet folder fans out to the repos you pick.

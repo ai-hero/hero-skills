@@ -69,7 +69,7 @@ cell() { # key column — output is TSV, so a field is addressed by its column
   awk -F'\t' -v k="$1" -v c="$2" '$2 == k { print $c }'
 }
 
-OUT=$("$FIELDS" push-pr "$R"); RC=$?
+OUT=$("$FIELDS" wayfare-push-pr "$R"); RC=$?
 check "a clean read exits 0" "0" "$RC"
 
 check "set field reports its value" \
@@ -91,7 +91,7 @@ check "section row with the heading present" \
   "(present)" "$(printf '%s\n' "$OUT" | awk -F'\t' '$1 == "Projects" { print $3 }')"
 
 check "section row with the heading absent" \
-  "(absent)" "$("$FIELDS" setup-dev "$R" | awk -F'\t' '$1 == "Developer Setup" { print $3 }')"
+  "(absent)" "$("$FIELDS" wayfare-setup-dev "$R" | awk -F'\t' '$1 == "Developer Setup" { print $3 }')"
 
 # A field under a heading that does not exist needs a different question than
 # a blank under a heading that does, because phase 3 has to create the section.
@@ -103,7 +103,7 @@ check "field under a missing section is no-section" \
 check "CI/CD platform is read from CI/CD" \
   "github-actions" "$(printf '%s\n' "$OUT" | awk -F'\t' '$1 == "CI/CD" && $2 == "platform" { print $3 }')"
 check "Deployment platform is read from Deployment" \
-  "fly" "$("$FIELDS" ship-pr "$R" | awk -F'\t' '$1 == "Deployment" && $2 == "platform" { print $3 }')"
+  "fly" "$("$FIELDS" wayfare-ship-pr "$R" | awk -F'\t' '$1 == "Deployment" && $2 == "platform" { print $3 }')"
 
 # hero_md_field skips fenced blocks; the heading probe must agree with it, or
 # a HERO.md quoting its own template reports sections it does not have.
@@ -120,12 +120,12 @@ Example of what this file can hold:
 ```
 EOM
 check "a heading inside a code fence is not present" \
-  "(absent)" "$("$FIELDS" setup-dev "$TMP/fenced" | awk -F'\t' '$1 == "Developer Setup" { print $3 }')"
+  "(absent)" "$("$FIELDS" wayfare-setup-dev "$TMP/fenced" | awk -F'\t' '$1 == "Developer Setup" { print $3 }')"
 
 # No HERO.md at all: every row says so, and the command still succeeds, so
-# recalibrate reads the rows and sends the user to `wayfare init`.
+# recalibrate reads the rows and sends the user to `wayfare-hero init`.
 mkdir -p "$TMP/bare"
-BARE=$("$FIELDS" push-pr "$TMP/bare"); check "missing HERO.md exits 0" "0" "$?"
+BARE=$("$FIELDS" wayfare-push-pr "$TMP/bare"); check "missing HERO.md exits 0" "0" "$?"
 check "every row is no-file when there is no HERO.md" \
   "9" "$(printf '%s\n' "$BARE" | tail -n +2 | grep -c '(no-file)' | tr -d ' ')"
 
@@ -134,14 +134,14 @@ check "every row is no-file when there is no HERO.md" \
 mkdir -p "$TMP/shim"
 sed 's/^hero_md_field() {/hero_md_field() { return 127;/' "$PLUGIN_ROOT/scripts/hero-lib.sh" > "$TMP/shim/hero-lib.sh"
 cp "$FIELDS" "$TMP/shim/hero-fields.sh"
-SHIM_OUT=$(bash "$TMP/shim/hero-fields.sh" push-pr "$R" 2>/dev/null); SHIM_RC=$?
+SHIM_OUT=$(bash "$TMP/shim/hero-fields.sh" wayfare-push-pr "$R" 2>/dev/null); SHIM_RC=$?
 check "a broken reader is not reported as unset" \
   "0" "$(printf '%s\n' "$SHIM_OUT" | grep -c '(unset)' | tr -d ' ')"
 check "a broken reader fails the command" "1" "$SHIM_RC"
 
 # A ROOT that does not exist is a caller bug, not a repo without config.
 check "nonexistent ROOT exits 1" \
-  "1" "$("$FIELDS" push-pr "$TMP/nope" >/dev/null 2>&1; echo $?)"
+  "1" "$("$FIELDS" wayfare-push-pr "$TMP/nope" >/dev/null 2>&1; echo $?)"
 
 # `grep "^$SKILL|"` used to interpolate the argument as a regex, so `push.pr`
 # printed push-pr's table and exited 0.
@@ -187,7 +187,7 @@ done
 check "every mapped name is a skill directory" "" "$BAD_NAME"
 
 # Every mapped skill invokes this script. There is no exemption now that the
-# whole-file pass belongs to `wayfare init`, and wayfare's own recalibrate
+# whole-file pass belongs to `wayfare-hero init`, and wayfare's own recalibrate
 # does invoke it. An empty list is the claim; the loop below is the check.
 NO_INVOCATION=""
 

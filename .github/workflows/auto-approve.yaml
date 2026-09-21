@@ -451,7 +451,7 @@ jobs:
           # Auto-approve must NOT be the only review on a PR. Require at
           # least one of:
           #   - a hero-skills self-review comment (carrying the hidden
-          #     <!-- ai-hero:self-review --> marker, posted by hero-skills:review-pr)
+          #     <!-- ai-hero:self-review --> marker, posted by wayfare:wayfare-review-pr)
           #   - a review (APPROVED / CHANGES_REQUESTED / COMMENTED) from an
           #     external code review bot (Copilot, CodeRabbit, Greptile, etc.)
           #     or a human reviewer
@@ -468,7 +468,7 @@ jobs:
             > pr_review_comments.json
 
           # Self-review marker, the hidden <!-- ai-hero:self-review -->
-          # comment posted by hero-skills:review-pr. Match both the current
+          # comment posted by wayfare:wayfare-review-pr. Match both the current
           # marker and the older "Hero Self-Review" heading (case-insensitive)
           # so comments posted under the previous convention still count.
           SELF_REVIEW=$(jq -r '
@@ -515,7 +515,7 @@ jobs:
             echo "passed=false" >> "$GITHUB_OUTPUT"
             {
               echo "## Prior Review: ❌"
-              echo "No prior review found. Run \`hero-skills:review-pr\` or wait for a code review agent (Copilot/CodeRabbit/Greptile) before requesting auto-approve."
+              echo "No prior review found. Run \`wayfare:wayfare-review-pr\` or wait for a code review agent (Copilot/CodeRabbit/Greptile) before requesting auto-approve."
             } > prior_review.md
           fi
 

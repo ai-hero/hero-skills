@@ -3,7 +3,7 @@
 # All Rights Reserved.
 
 # Enumerate the repos checked out in a fleet folder, and diff them against
-# FLEET.md. The read-only half of hero-skills:fleet: `review` prints this
+# FLEET.md. The read-only half of wayfare:wayfare-fleet: `review` prints this
 # output, and `sync` uses it to propose rows.
 #
 # Usage: fleet-scan.sh [FLEET_ROOT] [--list | --review]
@@ -72,7 +72,7 @@ if [ "$MODE" = list ]; then
   exit 0
 fi
 
-[ -f "$ROOT/FLEET.md" ] || { echo "fleet-scan: no FLEET.md in $ROOT; run hero-skills:fleet sync to create one" >&2; exit 2; }
+[ -f "$ROOT/FLEET.md" ] || { echo "fleet-scan: no FLEET.md in $ROOT; run wayfare:wayfare-fleet sync to create one" >&2; exit 2; }
 hero_at_fleet_root "$ROOT" || { echo "fleet-scan: $ROOT holds HERO.md beside FLEET.md, which is a repo, not a fleet" >&2; exit 2; }
 
 BAD=$(mktemp) || exit 2

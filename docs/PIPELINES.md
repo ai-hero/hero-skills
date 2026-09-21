@@ -49,12 +49,12 @@ followed by `Stopped: REASON`.
 scaffold → setup-dev → config → first-commit
 ```
 
-Owner: `hero-skills:wayfare init`. The skill scaffolds the project, then
-chains forward to `hero-skills:setup-dev`, its own config stage, and a
+Owner: `wayfare:wayfare-hero init`. The skill scaffolds the project, then
+chains forward to `wayfare:wayfare-setup-dev`, its own config stage, and a
 final commit. Each stage announces itself with the DAG line.
 
 **Naming note for `first-commit`:** When scaffolding a *standalone* repo,
-`wayfare init`'s scaffold step already produces the literal first commit (the
+`wayfare-hero init`'s scaffold step already produces the literal first commit (the
 scaffold). The DAG node `first-commit` refers specifically to **the commit
 that lands `HERO.md` and `AGENTS.md`**, for standalone repos this is the
 second commit; for "added to existing repo" it is just the next commit. The
@@ -67,21 +67,21 @@ present from commit one onward.
 plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship
 ```
 
-Owner: `hero-skills:one-shot`. Invoked with an issue ID or description it starts at `plan`; invoked with no arguments it resumes the current goal (in-progress branch/diff/PR on the current branch, plus the in-flight item's `## Subtasks` checklist, the plan file is the state file, so a run that died mid-implement resumes at its first unchecked line) from the detected step and drives it, through the usual user gates, to merged + a reset checkout. Nine steps, each maps to a single skill (or `inline` when one-shot drives it directly without delegating):
+Owner: `wayfare:wayfare-one-shot`. Invoked with an issue ID or description it starts at `plan`; invoked with no arguments it resumes the current goal (in-progress branch/diff/PR on the current branch, plus the in-flight item's `## Subtasks` checklist, the plan file is the state file, so a run that died mid-implement resumes at its first unchecked line) from the detected step and drives it, through the usual user gates, to merged + a reset checkout. Nine steps, each maps to a single skill (or `inline` when one-shot drives it directly without delegating):
 
 | # | Step | Skill to run standalone | Notes |
 | --- | --- | --- | --- |
-| 1 | `plan` | `hero-skills:think-it-through` | resolve `$ARGUMENTS` against `.plans/` and the tracker first; grill only if nothing matches. Re-verifies the item is still outstanding before building |
+| 1 | `plan` | `wayfare:wayfare-think-it-through` | resolve `$ARGUMENTS` against `.plans/` and the tracker first; grill only if nothing matches. Re-verifies the item is still outstanding before building |
 | 2 | `implement` | `inline` | executes the resolved work-item against its `success` criteria |
 | 3 | `simplify` | `/simplify` (external) | review the dirty diff for reuse/quality/efficiency and fix; `(–)` if `/simplify` unavailable |
-| 4 | `push` | `hero-skills:push-pr` | tests first (lint/typecheck/unit + UI smoke via Playwright MCP), then commits outstanding work with a conventional commit and pushes a draft PR |
-| 5 | `self-review` | `hero-skills:review-pr --no-mark-ready` (Steps 1 to 8) | run the pr-review-toolkit agents plus a security pass on the draft, apply fixes |
-| 6 | `mark-ready` | `hero-skills:review-pr`'s own Step 9, or `gh pr ready` | hard user gate that converts draft → ready |
+| 4 | `push` | `wayfare:wayfare-push-pr` | tests first (lint/typecheck/unit + UI smoke via Playwright MCP), then commits outstanding work with a conventional commit and pushes a draft PR |
+| 5 | `self-review` | `wayfare:wayfare-review-pr --no-mark-ready` (Steps 1 to 8) | run the pr-review-toolkit agents plus a security pass on the draft, apply fixes |
+| 6 | `mark-ready` | `wayfare:wayfare-review-pr`'s own Step 9, or `gh pr ready` | hard user gate that converts draft → ready |
 | 7 | `await-review` | `inline` (poll) | poll for the configured Code Review Agent's first comment; `(–)` if `agent: none` |
-| 8 | `respond` | `hero-skills:respond-to-comments` | address the bot's inline comments and resolve threads |
-| 9 | `ship` | `hero-skills:ship-pr` | `@auto-approve`, await verdict, ask the user to merge, merge, reset to default branch |
+| 8 | `respond` | `wayfare:wayfare-respond-to-comments` | address the bot's inline comments and resolve threads |
+| 9 | `ship` | `wayfare:wayfare-ship-pr` | `@auto-approve`, await verdict, ask the user to merge, merge, reset to default branch |
 
-UI smoke runs inside `push`'s test phase (absorbed from the former `test-changes` skill; `hero-skills:push-pr test` runs it standalone); backend-only PRs skip it.
+UI smoke runs inside `push`'s test phase (absorbed from the former `test-changes` skill; `wayfare:wayfare-push-pr test` runs it standalone); backend-only PRs skip it.
 
 `simplify` sits between `implement` and `push` so the dirty diff is tidied
 before it lands in git history. `push-pr` also invokes `/simplify`
@@ -110,9 +110,9 @@ Because nothing else observes the codebase on the store's behalf, Step 1 also
 re-checks a resolved item's `success` criteria against reality, because `status: ready`
 only means nobody edited the file, not that the work is still outstanding.
 
-**Architecture and harden chain.** `wayfare sync`'s architecture stage runs
-`hero-skills:architecture review`, and offers its `sync`, before judging
-the roadmap, its `harden` stage runs `hero-skills:harden all`, and
+**Architecture and harden chain.** `wayfare-hero sync`'s architecture stage runs
+`wayfare:wayfare-architecture review`, and offers its `sync`, before judging
+the roadmap, its `harden` stage runs `wayfare:wayfare-harden all`, and
 `think-it-through` delegates a leading `arch` argument to the architecture
 skill. Every edge requires the child to stay model-invocable (guarded by
 validate.sh's `CHAINED_SKILLS`); both children are `user-invocable: false`,
@@ -120,17 +120,17 @@ so wayfare is the only way a person reaches them.
 
 **The design return channel.** Every other edge flows target → source. One
 flows back: one-shot logs a divergence it found while building as a
-`signal` line in the task's `## Log`, and `wayfare sync` delivers it. Two
+`signal` line in the task's `## Log`, and `wayfare-hero sync` delivers it. Two
 destinations, no third: a configured `feedback-repo` gets an issue wayfare
 files itself (entries verbatim plus a manifest, destination confirmed
 in-session), and everything else (`feedback-repo: none`, a rejected value,
 or a repo with issues disabled) gets a packet under `$STORE/.feedback/`
 that the user delivers by hand. `.plans/` is git-ignored and wayfare never writes the target, so
 there is no other way out. Delivery deliberately does *not* route through
-`hero-skills:handoff`: that skill distills the *current* conversation, which
+`wayfare:wayfare-handoff`: that skill distills the *current* conversation, which
 would both narrate the wrong session and carry this repo's branches and PR
 numbers into a third party's tracker. See
-`skills/wayfare/references/feedback-channels.md`.
+`skills/wayfare-hero/references/feedback-channels.md`.
 
 **one-shot authors only Step 2a items.** Step 2a pushes discovered or
 mis-scoped work out of the running item into its own `.plans/` item, a
@@ -154,14 +154,14 @@ merging. The skill does not skip those confirmations.
 investigate → confirm → write → commit
 ```
 
-Owner: `hero-skills:wayfare init`. Four steps:
+Owner: `wayfare:wayfare-hero init`. Four steps:
 
 1. `investigate`, deeply scan the repo for evidence of stack, conventions, CI, deploy
 2. `confirm`, present findings as a numbered list and ask the user to confirm/correct
 3. `write`, write HERO.md, update AGENTS.md summary sections (CLAUDE.md is a symlink to it), and (if the user opted in during `confirm`) install `.github/workflows/auto-approve.yaml` via Step 6a and the design-system enforcement layer via Step 6b
 4. `commit`, stage and commit HERO.md + AGENTS.md + the CLAUDE.md symlink (and the auto-approve workflow / design-system rule + hook if installed this run)
 
-Run by itself (`hero-skills:wayfare init` or `hero-skills:wayfare init recalibrate`) or
+Run by itself (`wayfare:wayfare-hero init` or `wayfare:wayfare-hero init recalibrate`) or
 as the third step of Pipeline 1.
 
 Eleven other skills carry a scoped slice of this pipeline as their own
@@ -172,57 +172,57 @@ skill's work. The
 field map is `scripts/hero-fields.sh`; the contract is
 [RECALIBRATE.md](./RECALIBRATE.md).
 
-### Pipeline 4: wayfare sync, one round of convergence
+### Pipeline 4: wayfare-hero sync, one round of convergence
 
 ```
 config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals
 ```
 
-Owner: `hero-skills:wayfare sync`. Eleven stages: the config gate; the
+Owner: `wayfare:wayfare-hero sync`. Eleven stages: the config gate; the
 mailbox (`docs/MESSAGES.md`, every unread message through the fleet gate
 and the promotion gate, a `type: bug` message becoming a proposed `shape: defect` task);
-`hero-skills:architecture review` (offering its `sync`);
-`hero-skills:harden all`; the compliance audit
+`wayfare:wayfare-architecture review` (offering its `sync`);
+`wayfare:wayfare-harden all`; the compliance audit
 (`scripts/audit.py --repo THIS`, baseline plus the fleet's register overlay)
 with each failing check proposed as an item; the repo's own `wayfare: sync`
 skills (discovered in `.claude/skills/`, run with the harden contract); the
 dependency bots' open PRs written as `shape: dependency` tasks; the design snapshot
 refresh; the reconciliation lanes; the planning postflight
-(`hero-skills:think-it-through` in Roadmap mode); and goals proposed
+(`wayfare:wayfare-think-it-through` in Roadmap mode); and goals proposed
 bottom-up until every planned build item is in exactly one open goal, with
 existing `accepted` goals re-cut, coalesced when two name one outcome, split
 when one names two. Stages that do not apply render `(–)` with the reason;
 the goals stage never does. It ends with the roadmap
-view and, when a goal is runnable, `Next step: hero-skills:wayfare next`.
+view and, when a goal is runnable, `Next step: wayfare:wayfare-hero next`.
 
-`hero-skills:wayfare improve` is the compliance stage on its own, plus the
+`wayfare:wayfare-hero improve` is the compliance stage on its own, plus the
 backport half sync never does: where this repo is the reference for a check
 the template fails, it drafts the message to the template's inbox. At a
 fleet root it runs the whole family, regenerates the register's
 CONSISTENCY.md (fleet-root form only; consistency.py refuses to run outside
 a fleet), and offers the per-repo fan-out.
 
-### Pipeline 5: wayfare do, a bot's PR to merged and deployed
+### Pipeline 5: wayfare-hero do, a bot's PR to merged and deployed
 
 ```
 current → test → review → ship → close-out
 ```
 
-Owner: `hero-skills:wayfare do ITEM_ID` on a `shape: dependency` task with `bot:`
+Owner: `wayfare:wayfare-hero do ITEM_ID` on a `shape: dependency` task with `bot:`
 (written and ready-marked by Pipeline 4), see *Carrying a bot's PR* in the
 skill. The bot already implemented the bump, so there is no `implement` and
-no PR of ours; `test` and `ship` delegate to `hero-skills:push-pr test` and
-`hero-skills:ship-pr`, and the item is `done` only once the deployment
+no PR of ours; `test` and `ship` delegate to `wayfare:wayfare-push-pr test` and
+`wayfare:wayfare-ship-pr`, and the item is `done` only once the deployment
 verifies. A goal turn runs the same steps for each bot item among its members, on the bot's
 branch. A bot item never joins the goal's own branch: its PR is the bot's and
 has to stay bot-authored.
 
-### Goals: `wayfare next` runs the turn; `/goal` only re-runs it
+### Goals: `wayfare-hero next` runs the turn; `/goal` only re-runs it
 
-`hero-skills:wayfare next` picks the next goal in bottom-up order, reads its
+`wayfare:wayfare-hero next` picks the next goal in bottom-up order, reads its
 `## Permissions` aloud (`mark-ready`, `respond`, `auto-approve`, `merge`,
 `deploy`, `absorb`), takes the user's in-session authorization, and runs
-one turn of the goal in that session; `hero-skills:wayfare do GOAL_ID` is
+one turn of the goal in that session; `wayfare:wayfare-hero do GOAL_ID` is
 that same turn on its own. A turn that ends on a stop line prints the
 `/goal` line that would re-run it unattended, for the person to paste;
 wayfare cannot set `/goal` itself.

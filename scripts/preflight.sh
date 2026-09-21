@@ -334,7 +334,7 @@ check_repo() {
   if [ -f "$HERO" ]; then
     emit OK "repo: HERO.md present"
   else
-    emit BLOCKER "repo: HERO.md missing — run hero-skills:wayfare init"
+    emit BLOCKER "repo: HERO.md missing — run wayfare:wayfare-hero init"
     return 0  # downstream checks read HERO.md; bail this bucket
   fi
 
@@ -356,7 +356,7 @@ check_repo() {
   if [ -z "$hero_time" ] && [ -z "$config_time" ]; then
     emit SKIP "repo: cannot read git history (empty repo?) — staleness unknown"
   elif [ "${config_time:-0}" -gt "${hero_time:-0}" ]; then
-    emit WARN "repo: HERO.md may be stale — run hero-skills:wayfare init recalibrate"
+    emit WARN "repo: HERO.md may be stale — run wayfare:wayfare-hero init recalibrate"
   else
     emit OK "repo: HERO.md fresh"
   fi
@@ -380,7 +380,7 @@ check_repo() {
     if [ -n "$AA_ON_DEFAULT" ]; then
       emit OK "repo: $AA_ON_DEFAULT present on $DEFAULT_BRANCH"
     else
-      emit BLOCKER "repo: no .github/workflows/auto-approve.yaml (or .yml) on $DEFAULT_BRANCH — Step 12 (ship) will be a no-op. Run hero-skills:wayfare init recalibrate, then merge the workflow file to $DEFAULT_BRANCH."
+      emit BLOCKER "repo: no .github/workflows/auto-approve.yaml (or .yml) on $DEFAULT_BRANCH — Step 12 (ship) will be a no-op. Run wayfare:wayfare-hero init recalibrate, then merge the workflow file to $DEFAULT_BRANCH."
     fi
   else
     emit SKIP "repo: gh unavailable — cannot check the auto-approve workflow remotely"
@@ -625,7 +625,7 @@ esac
 
 echo ""
 if [ "$BLOCKERS" -gt 0 ]; then
-  echo "preflight: $BLOCKERS blocker(s), $WARNINGS warning(s); pipeline will fail. Fix blockers above before running hero-skills:one-shot."
+  echo "preflight: $BLOCKERS blocker(s), $WARNINGS warning(s); pipeline will fail. Fix blockers above before running wayfare:wayfare-one-shot."
   exit 1
 elif [ "$WARNINGS" -gt 0 ]; then
   echo "preflight: 0 blockers, $WARNINGS warning(s): safe to proceed, warnings are advisory."

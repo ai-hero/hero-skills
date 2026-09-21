@@ -2139,7 +2139,7 @@ def _(r):
     # message is the authoritative remedy. Renaming satisfies both.
     if (r / "ARCHITECTURE.md").is_file():
         return FAIL, "still ARCHITECTURE.md — git mv to DESIGN.md (H1 too)"
-    return FAIL, "missing — run hero-skills:architecture sync"
+    return FAIL, "missing — run wayfare:wayfare-architecture sync"
 
 
 @check("ARCH-02")

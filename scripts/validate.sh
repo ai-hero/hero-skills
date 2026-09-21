@@ -237,12 +237,12 @@ else
     # The one-shot pipeline's skills are executable specs, not prose guides:
     # the procedure IS the content, and every guard sits inline with the step
     # it constrains. Splitting one across files is how a step comes to be
-    # executed without its STOP. The list is wayfare plus one-shot and the
-    # skills its DAG nodes delegate to. `wayfare init` writes the config
+    # executed without its STOP. The list is wayfare-hero plus one-shot and the
+    # skills its DAG nodes delegate to. `wayfare-hero init` writes the config
     # they all read. Everything else keeps the 500/5000 guideline, where a
     # breach really does mean reference material has leaked into the
     # instructions: an oversized reference warns today and should.
-    PIPELINE_SKILLS=" wayfare one-shot ship-pr push-pr review-pr respond-to-comments "
+    PIPELINE_SKILLS=" wayfare-hero wayfare-one-shot wayfare-ship-pr wayfare-push-pr wayfare-review-pr wayfare-respond-to-comments "
     LIMIT_LINES=500; LIMIT_WORDS=5000
     case "$PIPELINE_SKILLS" in
       *" $SKILL_NAME "*) LIMIT_LINES=3500; LIMIT_WORDS=35000 ;;
@@ -313,7 +313,7 @@ else
 fi
 
 # ── chained-skill invocability guard ───────────────────────────────
-# one-shot (skills/one-shot/SKILL.md) delegates its steps to child skills via
+# one-shot (skills/wayfare-one-shot/SKILL.md) delegates its steps to child skills via
 # the Skill tool, and a wayfare goal turn chains into think-it-through and
 # one-shot the same way. A chained skill carrying
 # `disable-model-invocation: true` cannot be invoked by the model, so the
@@ -321,7 +321,7 @@ fi
 # Keep this list in sync with one-shot's step→skill mapping AND
 # a goal turn's tiers. `one-shot` is here because re-adding its flag
 # would silently break every goal turn. `architecture` is chained three
-# ways: wayfare sync runs its review/sync in both modes, and
+# ways: wayfare-hero sync runs its review/sync in both modes, and
 # think-it-through's `arch` dispatch
 # delegates to it. `handoff` is deliberately NOT here: wayfare's
 # design-feedback delivery files its issue directly rather than routing
@@ -331,7 +331,7 @@ fi
 # break every sync at its harden stage.
 # `preflight` is intentionally absent, one-shot runs
 # it via scripts/preflight.sh, not the Skill tool, so it may stay user-only.
-CHAINED_SKILLS="think-it-through push-pr review-pr respond-to-comments ship-pr one-shot architecture harden"
+CHAINED_SKILLS="wayfare-think-it-through wayfare-push-pr wayfare-review-pr wayfare-respond-to-comments wayfare-ship-pr wayfare-one-shot wayfare-architecture wayfare-harden"
 for chained in $CHAINED_SKILLS; do
   chained_file="$SKILLS_DIR/$chained/SKILL.md"
   # A missing chained skill silently breaks the calling pipeline at that step, so error
@@ -404,22 +404,22 @@ echo ""
 echo "────────────────────────────"
 
 # ── skill-reference resolution guard ───────────────────────────────
-# `hero-skills:NAME` references fan out across skills, README, and
+# `wayfare:NAME` references fan out across skills, README, and
 # PIPELINES.md; a renamed or deleted skill rots every one of them silently.
 # ABSORBED_SKILLS above is the hand-curated tail of that class. This is the
 # generic half: every referenced name must resolve to skills/NAME/SKILL.md.
-# Lineage notes ("absorbed the former hero-skills:X") are exempt, same rule
+# Lineage notes ("absorbed the former X") are exempt, same rule
 # as the absorbed guard.
 # docs/ is globbed, not enumerated: enumerating leaves each new doc's
 # references unguarded.
-REF_NAMES=$(grep -rhoE 'hero-skills:[a-z][a-z0-9-]*' --include='*.md' \
+REF_NAMES=$(grep -rhoE 'wayfare:[a-z][a-z0-9-]*' --include='*.md' \
   "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT"/docs/*.md 2>/dev/null \
   | sort -u | cut -d: -f2)
 DANGLING_REFS=0
 for ref in $REF_NAMES; do
   [[ -f "$SKILLS_DIR/$ref/SKILL.md" ]] && continue
   # Trailing-boundary match so `one-shot` never swallows a hit on `one-shots`.
-  HITS=$(grep -rnE "hero-skills:$ref([^a-z0-9-]|\$)" --include='*.md' \
+  HITS=$(grep -rnE "wayfare:$ref([^a-z0-9-]|\$)" --include='*.md' \
     "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT/docs/PIPELINES.md" 2>/dev/null \
     | grep -viE 'absorb' || true)
   [[ -z "$HITS" ]] && continue # lineage-only references are fine
@@ -427,14 +427,14 @@ for ref in $REF_NAMES; do
   while IFS= read -r hit; do
     hit_file="${hit%%:*}"
     hit_line=$(printf '%s' "$hit" | cut -d: -f2)
-    error "'hero-skills:$ref' does not resolve to skills/$ref/SKILL.md" \
+    error "'wayfare:$ref' does not resolve to skills/$ref/SKILL.md" \
       "${hit_file#"$PLUGIN_ROOT"/}" \
       "$hit_line" \
       "Point the reference at the skill's current name, or add lineage framing ('absorbed the former $ref ...') if it is a history note"
   done <<< "$HITS"
 done
 if [[ "$DANGLING_REFS" = 0 ]]; then
-  pass "all hero-skills:NAME references resolve to existing skills"
+  pass "all wayfare:NAME references resolve to existing skills"
 fi
 
 echo ""
@@ -520,7 +520,7 @@ fi
 # NO_HERO_CONFIG instead; that is accepted.
 FLEET_GATE_ERRORS=0
 for f in "$SKILLS_DIR"/*/SKILL.md; do
-  case "$f" in */audit-plugin/SKILL.md) continue ;; esac
+  case "$f" in */wayfare-audit-plugin/SKILL.md) continue ;; esac
   FLEET_FM=$(awk '/^---[[:space:]]*$/{n++; next} n==1{print} n>=2{exit}' "$f")
   grep -qE '^[[:space:]]*user-invocable:[[:space:]]*false' <<< "$FLEET_FM" && continue
   grep -qE 'HERO\.md|hero_field|hero_md_field' "$f" || continue
@@ -540,15 +540,15 @@ done
 # is ever edited away, the store silently becomes write-only: items pile up,
 # nothing marks them done, and one-shot goes back to planning from scratch
 # while ignoring the plate. Nothing else in this repo would catch that.
-ONE_SHOT="$SKILLS_DIR/one-shot/SKILL.md"
+ONE_SHOT="$SKILLS_DIR/wayfare-one-shot/SKILL.md"
 if [[ ! -f "$ONE_SHOT" ]]; then
-  error "skills/one-shot/SKILL.md is missing" "skills/one-shot/SKILL.md" "" \
+  error "skills/wayfare-one-shot/SKILL.md is missing" "skills/wayfare-one-shot/SKILL.md" "" \
     "one-shot owns Pipeline 2; restore it or update this guard"
 else
   # Strip HTML comments and fenced blocks before matching, and require the
   # reference in an ACTIVE position (an Invoke instruction or a table row).
   # A bare substring check was satisfied by leaving the name in a comment,
-  # "this pipeline used to call hero-skills:think-it-through" passed while
+  # "this pipeline used to call wayfare:wayfare-think-it-through" passed while
   # every real delegation had been deleted, which is exactly the drift this
   # guard exists to catch.
   ONE_SHOT_ACTIVE=$(awk '
@@ -562,11 +562,11 @@ else
   # the match sits near the top of one-shot's Step->skill table, so grep -q
   # exited early and killed printf mid-write, and the guard reported drift that
   # had not happened.
-  if grep -qE '(Invoke|Skill tool|^\|).*hero-skills:think-it-through' <<< "$ONE_SHOT_ACTIVE"; then
+  if grep -qE '(Invoke|Skill tool|^\|).*wayfare:wayfare-think-it-through' <<< "$ONE_SHOT_ACTIVE"; then
     pass "one-shot's plan step delegates to think-it-through"
   else
     error "one-shot no longer references think-it-through — the plan step has drifted back to planning from scratch" \
-      "skills/one-shot/SKILL.md" \
+      "skills/wayfare-one-shot/SKILL.md" \
       "" \
       "think-it-through is the planning skill; one-shot's Step 1 must resolve against .plans/ and delegate to it. See PIPELINES.md Pipeline 2"
   fi
@@ -577,7 +577,7 @@ else
     pass "one-shot reads the .plans/ store ($STORE_HITS references)"
   else
     error "one-shot does not read .plans/ — the work-item store has no consumer" \
-      "skills/one-shot/SKILL.md" \
+      "skills/wayfare-one-shot/SKILL.md" \
       "" \
       "think-it-through, handoff, and harden all emit into .plans/; one-shot Step 1 must resolve against it and Step 9 must mark the merged item done"
   fi
