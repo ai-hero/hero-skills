@@ -423,9 +423,6 @@ OUT=$(crash 0 0 0 0 "" "the commit list came back truncated")
 check "crash-notice: lane_error.txt reaches the notice" "yes" \
   "$(ann "$(cat "$WORK/gh_post")" 'came back truncated')"
 
-echo ""
-echo "auto-approve-logic.test.sh: $PASS passed, $FAIL failed"
-[[ $FAIL -eq 0 ]]
 
 # --- prior-review -----------------------------------------------------------
 #
@@ -516,6 +513,15 @@ check "prior-review: passes with the heading rewritten" "1" \
 check "prior-review: legacy heading still counts" "1" \
   "$(self_review_of "$(cmts "$(cmt author "$FINDINGS_BODY")" "$(cmt author "$FIXES_LEGACY")")")"
 
+# A review OF this gate quotes the strings it matches on. Unanchored, the
+# legacy fallback read the findings comment as the fixes comment and the
+# gate refused a complete review.
+META_BODY="## Self-Review
+$MARK
+- the gate accepts a legacy Self-Review heading and the word improvements"
+check "prior-review: prose about the gate is not the fixes half" "0" \
+  "$(self_review_of "$(cmts "$(cmt author "$META_BODY")")")"
+
 # The other two paths are untouched by the tightening: a review from someone
 # who is not the author still passes on its own, with no self-review at all.
 # The new comment in the workflow claims this; nothing asserted it.
@@ -535,3 +541,7 @@ check "prior-review: the author's own review does not bootstrap it" "false" \
 
 check "prior-review: a past auto-approve run does not bootstrap it" "false" \
   "$(gate_passed_of '[]' '[{"user":{"login":"github-actions[bot]"},"state":"APPROVED"}]')"
+
+echo ""
+echo "auto-approve-logic.test.sh: $PASS passed, $FAIL failed"
+[[ $FAIL -eq 0 ]]

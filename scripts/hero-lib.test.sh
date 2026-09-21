@@ -1100,6 +1100,16 @@ check "one comment cannot be both halves" "0" "$(PATH="$TMP/ghbin:$PATH" hero_se
 check "workflow carries the fixes marker" "yes" "$(grep -q 'ai-hero:self-review-fixes' "$(dirname "$0")/../.github/workflows/auto-approve.yaml" && echo yes || echo no)"
 check "review-pr posts the fixes marker"  "yes" "$(grep -q 'ai-hero:self-review-fixes' "$(dirname "$0")/../skills/wayfare-review-pr/SKILL.md" && echo yes || echo no)"
 
+# A review OF this gate quotes the strings the gate matches on. The legacy
+# fallback was unanchored and read this PR's own findings comment as the
+# fixes comment, which collapsed findings to zero and refused a ship. The
+# fallback matches a HEADING now, and prose mentioning both words does not.
+cat > "$TMP/ghbin/comments.json" <<'JSON'
+[{"body":"## Self-Review\n<!-- ai-hero:self-review -->\n- the gate accepts a legacy Self-Review heading and the word improvements","user":{"login":"me"}}]
+JSON
+check "fixes count: prose discussing the gate is not the fixes comment" "0" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_fixes_count 7)"
+check "findings survives prose discussing the gate"                     "1" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_count 7)"
+
 # ---------- shape, suspension, the inbox, local skills ---------------------
 # `shape` decides what a task's Definition of Done asserts and NOTHING about
 # readiness, so a defect and a story list identically. Suspension is a FLAG

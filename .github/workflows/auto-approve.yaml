@@ -490,7 +490,10 @@ jobs:
           # comment's own suggestions and made one comment satisfy both halves.
           # The legacy heading match stays as a fallback for repos whose
           # plugin predates the marker; drop it once the fleet has upgraded.
-          FIXES_RE="ai-hero:self-review-fixes|self-review[^\\n]*improvements"
+          # A heading, not the words.
+          # A review OF this gate quotes the strings the gate matches on, so an unanchored pattern read this PR's own findings comment as the fixes comment and collapsed findings to zero.
+          # Prose is unreliable exactly where it discusses the mechanism.
+          FIXES_RE="ai-hero:self-review-fixes|(^|\\n)#+[ \t]*self-review[^\\n]*improvements"
           SELF_RE="ai-hero:self-review|Hero Self-Review"
 
           # Disjoint by construction: a comment that counts as fixes is

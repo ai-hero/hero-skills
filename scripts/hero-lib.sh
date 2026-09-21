@@ -552,7 +552,10 @@ HERO_SELF_REVIEW_MARKER='ai-hero:self-review'
 # satisfied by the findings comment's own suggestions, which made the two
 # halves one comment; the heading is rewritten by the humanizer. Only a
 # hidden marker is both exact and invisible to that pass.
-HERO_SELF_REVIEW_FIXES_MARKER='ai-hero:self-review-fixes|self-review[^\\n]*improvements'
+# A heading, not the words.
+# A review OF this gate quotes the strings the gate matches on, so an unanchored pattern read this PR's own findings comment as the fixes comment and collapsed findings to zero.
+# Prose is unreliable exactly where it discusses the mechanism.
+HERO_SELF_REVIEW_FIXES_MARKER='ai-hero:self-review-fixes|(^|\\n)#+[ \t]*self-review[^\\n]*improvements'
 
 # Count of self-review comments on a PR, posted by the authenticated account.
 # The author filter is the whole point: the marker is a plain string anyone
