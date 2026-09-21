@@ -242,7 +242,7 @@ hero_default_branch_verbose() {
 # that shape it. Prints one note and always returns 0. It never blocks.
 #
 # This is the deliberate *fast subset* of scripts/check-hero-staleness.sh that
-# the daily-flow skills (push-pr, one-shot) want at Step 0. The two are meant
+# the daily-flow skills (push-pr, wayfare-run-task) want at Step 0. The two are meant
 # to stay roughly aligned but not identical: the standalone script can carry a
 # longer pattern list without forcing this one to match. What it should NOT be
 # is two hand-maintained copies of the same subset, which is what it was.
@@ -260,7 +260,7 @@ hero_check_staleness() {
     .github/workflows .pre-commit-config.yaml \
     CLAUDE.md Makefile justfile Taskfile.yml 2>/dev/null | grep -E '^[0-9]+$' || echo 0)
   if [ "${config_time:-0}" -gt "${hero_time:-0}" ]; then
-    echo "note: HERO.md may be out of date; run hero-skills:wayfare init recalibrate to refresh." >&2
+    echo "note: HERO.md may be out of date; run wayfare:wayfare-init-repo recalibrate to refresh." >&2
   fi
   return 0
 }
@@ -545,9 +545,17 @@ hero_exclude_add() {
 
 # The literal lives in three places that cannot share a variable: review-pr
 # (which stamps it into the comment), auto-approve.yaml (the fleet's
-# prior-review gate, two sites), and here (ship-pr, one-shot, resume-state).
+# prior-review gate, two sites), and here (ship-pr, wayfare-run-task, resume-state).
 # Change all three together or the gate stops recognizing every self-review.
 HERO_SELF_REVIEW_MARKER='ai-hero:self-review'
+# The improvements comment's own marker. A word match on "improvements" was
+# satisfied by the findings comment's own suggestions, which made the two
+# halves one comment; the heading is rewritten by the humanizer. Only a
+# hidden marker is both exact and invisible to that pass.
+# A heading, not the words.
+# A review OF this gate quotes the strings the gate matches on, so an unanchored pattern read this PR's own findings comment as the fixes comment and collapsed findings to zero.
+# Prose is unreliable exactly where it discusses the mechanism.
+HERO_SELF_REVIEW_FIXES_MARKER='ai-hero:self-review-fixes|(^|\\n)#+[ \t]*self-review[^\\n]*improvements'
 
 # Count of self-review comments on a PR, posted by the authenticated account.
 # The author filter is the whole point: the marker is a plain string anyone
@@ -558,8 +566,23 @@ HERO_SELF_REVIEW_MARKER='ai-hero:self-review'
 hero_self_review_count() { # PR_NUMBER
   local me
   me=$(gh api user --jq .login) || return 1
-  gh api "/repos/{owner}/{repo}/issues/$1/comments" \
-    --jq "[.[] | select(.user.login == \"$me\") | select(.body | test(\"$HERO_SELF_REVIEW_MARKER\"))] | length"
+  gh api --paginate "/repos/{owner}/{repo}/issues/$1/comments?per_page=100" \
+    --jq "[.[] | select(.user.login == \"$me\") | select(.body | test(\"$HERO_SELF_REVIEW_MARKER\")) | select(.body | test(\"$HERO_SELF_REVIEW_FIXES_MARKER\"; \"i\") | not)] | length"
+}
+
+# The improvements half of the same review: the marker-carrying comment that
+# records what was done about the findings. review-pr posts it even when it
+# fixed nothing, so its absence means the review stopped half way rather than
+# that there was nothing to fix. The shared auto-approve workflow's
+# prior-review gate requires BOTH halves; a local check that asks only for
+# the findings comment passes here and is then rejected there, which spends a
+# workflow run to learn what this function can say for free. Matched on the
+# word, not the heading, because the body is humanized before it is posted.
+hero_self_review_fixes_count() { # PR_NUMBER
+  local me
+  me=$(gh api user --jq .login) || return 1
+  gh api --paginate "/repos/{owner}/{repo}/issues/$1/comments?per_page=100" \
+    --jq "[.[] | select(.user.login == \"$me\") | select(.body | test(\"$HERO_SELF_REVIEW_FIXES_MARKER\"; \"i\"))] | length"
 }
 
 # ---------- the .plans store ------------------------------------------------
@@ -733,7 +756,7 @@ hero_item_status() {
 # `Task` silently matching no arm of the listing table printed the item as
 # invalid, which reads as a malformed file rather than a capital letter.
 # Empty means the item was never migrated; the caller reports it, because
-# guessing a type here is how a `goal` gets handed to one-shot as a task.
+# guessing a type here is how a `goal` gets handed to wayfare-run-task as a task.
 hero_item_type() {
   hero_item_field "$1" type | tr '[:upper:]' '[:lower:]'
 }
@@ -805,7 +828,7 @@ hero_idea_count() { # [STORE]
 
 # Print the ids of a goal's members, ordered by `rank` then id, one per line.
 # `depends_on` is not consulted: it gates each member's readiness in the
-# listing, and a rank that contradicts it is a store defect `wayfare sync`
+# listing, and a rank that contradicts it is a store defect `wayfare-sync-plan`
 # reports. The second argument is the STORE, like every sibling here.
 #
 # Derived from each item's `parent`, never stored on the goal. The old schema
@@ -1031,7 +1054,7 @@ hero_msg_deposit() { # TARGET_STORE MSG_ID BODY_FILE
 # ---------- admission path scope -------------------------------------------
 
 # True when PATH is inside one of the SCOPE paths (a goal turn's admission
-# criterion 3, docs in skills/wayfare/SKILL.md *Admitting discovered work*).
+# criterion 3, docs in references/goals.md *Admitting discovered work*).
 #
 # Mechanical on purpose. The other admission criteria are judgments an agent
 # makes in the same context window as the content that suggested the work, and
@@ -1086,7 +1109,7 @@ hero_path_forbidden() { # PATH
 # ship-pr waits for the merge commit's runs, with a cap (Step 7e). What is
 # still in flight when the cap expires is recorded here and probed by the
 # next thing that runs in this repo, which pays no wait at all. Same shape
-# as one-shot's await-review: cap the wait, then hand the enforcement to
+# as wayfare-run-task's await-review: cap the wait, then hand the enforcement to
 # whatever runs next. The check is advisory and never un-merges anything,
 # so the cap is a real bound, not a retry budget.
 #
@@ -1197,7 +1220,7 @@ hero_deploy_pending_clear() { # STORE SHA
 # Repo-local skills that plug into wayfare: every .claude/skills/*/SKILL.md
 # whose frontmatter carries `wayfare: HOOK`, as `name<TAB>hook<TAB>path`, one
 # per line; HOOK filters to one hook. The three hooks are sync (a stage of
-# `wayfare sync`), verify (a Definition-of-Done verifier) and recipe (a way to
+# `wayfare-sync-plan`), verify (a Definition-of-Done verifier) and recipe (a way to
 # build that planning may name). Discovery, not configuration: a list of these
 # in HERO.md would be a copy of the directory and would go stale.
 hero_local_skills() { # ROOT [HOOK]
@@ -1247,7 +1270,7 @@ hero_norm_id() {
 #   blocked  not done, but a dependency is unmet or unresolvable
 #   backlog  a task at `accepted`: on the roadmap, not yet planned; annotated
 #            `[deps unmet]` when a dependency isn't done. Never READY: handing
-#            an unplanned task to one-shot would skip planning entirely
+#            an unplanned task to wayfare-run-task would skip planning entirely
 #   plan     status is planning: still being shaped; a HUMAN marks it ready
 #   active   status is active: someone is already on it
 #   review   a task at review: PR open, awaiting merge
@@ -1260,9 +1283,9 @@ hero_norm_id() {
 #            (docs/MESSAGES.md). Never READY and never a satisfied dependency
 #   feedback a signal at accepted or ready: a divergence written but not yet
 #            landed upstream. Never READY, because a signal is DELIVERED and
-#            never built, so handing one to one-shot is wrong
+#            never built, so handing one to wayfare-run-task is wrong
 #   goal     a goal at accepted: approved, waiting to run. Never READY: a goal
-#            is a container for tasks, and one-shot builds tasks. `wayfare
+#            is a container for tasks, and wayfare-run-task builds tasks. `wayfare
 #            next` selects goals by type instead
 #   idea     an idea at new or accepted: parked, never work until promoted
 #   new      status is new (or absent): created, not yet triaged. Never READY,
@@ -1277,18 +1300,18 @@ hero_norm_id() {
 # the type's business; the listing only refuses combinations that make no
 # sense (a goal at ready, a signal at committed) as invalid.
 #
-# `done` rows are PRINTED, not hidden. Callers need to see them: one-shot's
+# `done` rows are PRINTED, not hidden. Callers need to see them: wayfare-run-task's
 # Step 1c resolves an argument against this listing to answer "has this already
 # landed?", and handoff reads it to update an existing item rather than
 # duplicating it. Filtering them out silently defeated both.
 #
 # `active` is separated from READY so two sessions cannot both pick up the same
-# in-flight item: one-shot marks an item active before its first edit
+# in-flight item: wayfare-run-task marks an item active before its first edit
 # specifically to prevent that, and folding it into READY undid it.
 #
 # `planning` is never READY regardless of dependencies: the item is still being
 # shaped and awaits a human ready-mark. Without this state, freshly emitted
-# items were handed straight to one-shot. Wayfare writes tasks as `accepted`,
+# items were handed straight to wayfare-run-task. Wayfare writes tasks as `accepted`,
 # which is backlog, and still never READY.
 #
 # NOTE: readiness is a claim about DEPENDENCIES, not about the codebase. An item
@@ -1308,7 +1331,7 @@ hero_ready_items() (
   # would print an empty roadmap for a repo that has a full one — and an empty
   # roadmap reads as "nothing to do", not as "this did not work".
   if [ ! -f "$store/PLAN.md" ] || [ -z "$(hero_item_field "$store/PLAN.md" schema)" ]; then
-    echo "hero_ready_items: '$store' has no PLAN.md at schema 1; run 'bash scripts/migrate-plan.sh $store', or hero-skills:wayfare init on a repo with no plan yet" >&2
+    echo "hero_ready_items: '$store' has no PLAN.md at schema 1; run 'bash scripts/migrate-plan.sh $store', or wayfare:wayfare-init-repo on a repo with no plan yet" >&2
     return 1
   fi
 
@@ -1389,7 +1412,7 @@ hero_ready_items() (
     itype=$(hero_item_type "$f")
     # An item with no `type` in a store that IS migrated was written by hand or
     # by something that has not caught up. Never guessed: guessing `task` is
-    # how a goal gets handed to one-shot to build.
+    # how a goal gets handed to wayfare-run-task to build.
     if [ -z "$itype" ]; then
       echo "hero_ready_items: $f has no type; schema 1 requires task, signal, goal or idea (docs/PLAN.md)" >&2
       echo "invalid $f — $title"
@@ -1463,7 +1486,7 @@ hero_ready_items() (
       continue
     fi
 
-    # A planned task outside every open goal is invisible to `wayfare next`,
+    # A planned task outside every open goal is invisible to `wayfare-start-goal`,
     # which walks goals and never items, so it sits READY forever unless
     # someone runs `do N` by hand. A committed one is worse: it is the residue
     # of an abandoned goal branch, claiming work the repo does not have. Warn
@@ -1474,7 +1497,7 @@ hero_ready_items() (
         parent=$(hero_norm_id "$(hero_item_field "$f" parent)")
         case "$open_goals" in
           *" ${parent:-__none__} "*) ;;
-          *) echo "hero_ready_items: $f is $state and no open goal has it as a member; wayfare sync groups it into a goal" >&2 ;;
+          *) echo "hero_ready_items: $f is $state and no open goal has it as a member; wayfare-sync-plan groups it into a goal" >&2 ;;
         esac ;;
     esac
 
@@ -1508,7 +1531,7 @@ hero_ready_items() (
       task:committed) echo "committed $f — $title"; continue ;;
       task:review) echo "review  $f — $title"; continue ;;
       # A goal is a container, never a unit of work: READY means "hand this to
-      # one-shot", and one-shot builds tasks. `wayfare next` selects goals by
+      # wayfare-run-task", and wayfare-run-task builds tasks. `wayfare-start-goal` selects goals by
       # type and `do GOAL_ID` takes one by id, never off the READY tier.
       goal:accepted) echo "goal    $f — $title"; continue ;;
       # A signal is delivered, not built, so it never reaches READY either.
@@ -1524,7 +1547,7 @@ hero_ready_items() (
         # An UNRECOGNIZED status must never fall through to the READY path. The
         # display label is `plan` while the keyword is `planning`, so `status:
         # plan`, or any misspelling of a keyword, is an easy hand or model error that
-        # would otherwise be handed straight to one-shot with no human
+        # would otherwise be handed straight to wayfare-run-task with no human
         # ready-mark, silently defeating the gate the ready state exists to
         # enforce. Treat it like a rejected id: name it loudly, never READY.
         case "$itype" in
@@ -1610,7 +1633,7 @@ EOF
 # Deriving the name itself is a *model* task, not a shell one. It reads a diff
 # or a description and summarizes. What lives here is the policy the model
 # applies, in one place, because it was previously stated in both push-pr and
-# one-shot and the two had already drifted (one listed a `test/` prefix, the
+# wayfare-run-task and the two had already drifted (one listed a `test/` prefix, the
 # other did not; one asked for a 3-5 word slug, the other 2-3).
 #
 # Skills reference hero_branch_policy in their instructions instead of

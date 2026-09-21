@@ -1,10 +1,10 @@
 {
-  "name": "hero-skills",
+  "name": "wayfare",
   "owner": { "name": "ai-hero" },
-  "metadata": { "description": "AI Hero skills for agent development and consulting" },
+  "metadata": { "description": "Wayfare: the route from the product as it is to the product as it should be" },
   "plugins": [{
-    "name": "hero-skills",
+    "name": "wayfare",
     "source": "./",
-    "description": "AI Hero agent patterns and workflows"
+    "description": "Plan work and have agents execute it, in a repo and across a fleet of them"
   }]
 }

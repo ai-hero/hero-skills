@@ -234,15 +234,15 @@ else
 
     # 6/7. Size budget, per skill.
     #
-    # The one-shot pipeline's skills are executable specs, not prose guides:
+    # The wayfare-run-task pipeline's skills are executable specs, not prose guides:
     # the procedure IS the content, and every guard sits inline with the step
     # it constrains. Splitting one across files is how a step comes to be
-    # executed without its STOP. The list is wayfare plus one-shot and the
-    # skills its DAG nodes delegate to. `wayfare init` writes the config
+    # executed without its STOP. The list is the wayfare verbs plus run-task and the
+    # skills its DAG nodes delegate to. `wayfare-init-repo` writes the config
     # they all read. Everything else keeps the 500/5000 guideline, where a
     # breach really does mean reference material has leaked into the
     # instructions: an oversized reference warns today and should.
-    PIPELINE_SKILLS=" wayfare one-shot ship-pr push-pr review-pr respond-to-comments "
+    PIPELINE_SKILLS=" wayfare-sync-plan wayfare-start-goal wayfare-init-repo wayfare-run-task wayfare-ship-pr wayfare-push-pr wayfare-review-pr wayfare-respond-pr "
     LIMIT_LINES=500; LIMIT_WORDS=5000
     case "$PIPELINE_SKILLS" in
       *" $SKILL_NAME "*) LIMIT_LINES=3500; LIMIT_WORDS=35000 ;;
@@ -268,24 +268,27 @@ else
       pass "$SKILL_NAME: $WORD_COUNT words"
     fi
 
-    # 8. references/ paths the body names must exist. Scoped to skills that
-    # ship a references/ directory: create-skill names references/ paths as
-    # examples and ships none, and a check there would fail on the guide.
-    if [[ -d "$skill_dir/references" ]]; then
-      REF_PATHS=$(grep -oE 'references/[A-Za-z0-9._-]+' "$SKILL_FILE" | sort -u || true)
-      while IFS= read -r ref; do
-        [[ -n "$ref" ]] || continue
-        if [[ ! -f "$skill_dir/$ref" ]]; then
-          REF_LINE=$(grep -nF "$ref" "$SKILL_FILE" | head -1 | cut -d: -f1 || true)
-          error "'$ref' is named in the body but does not exist" \
-            "$SKILL_REL" \
-            "$REF_LINE" \
-            "Create skills/$SKILL_NAME/$ref or fix the path in the body"
-        else
-          pass "$SKILL_NAME: $ref exists"
-        fi
-      done <<< "$REF_PATHS"
-    fi
+    # 8. `../../references/NAME` paths the body names must exist. This
+    # matches the ../../ form deliberately: the earlier version keyed on a
+    # per-skill `references/` directory, and when the tree moved to the
+    # plugin root no skill had one any more, so the guard's `-d` test was
+    # false for every skill and it checked nothing. It went unnoticed
+    # because a dead guard and a passing guard print the same thing.
+    # create-skill names bare `references/` paths as examples and ships
+    # none; the ../../ prefix is what separates a real path from a sample.
+    REF_PATHS=$(grep -oE '\.\./\.\./references/[A-Za-z0-9._-]+\.md' "$SKILL_FILE" | sort -u || true)
+    while IFS= read -r ref; do
+      [[ -n "$ref" ]] || continue
+      if [[ ! -f "$PLUGIN_ROOT/${ref#../../}" ]]; then
+        REF_LINE=$(grep -nF "$ref" "$SKILL_FILE" | head -1 | cut -d: -f1 || true)
+        error "'$ref' is named in the body but does not exist" \
+          "$SKILL_REL" \
+          "$REF_LINE" \
+          "Create ${ref#../../} at the plugin root or fix the path in the body"
+      else
+        pass "$SKILL_NAME: $ref exists"
+      fi
+    done <<< "$REF_PATHS"
 
     # 9. Empty subdirectories
     for subdir in references scripts examples assets; do
@@ -313,25 +316,25 @@ else
 fi
 
 # ── chained-skill invocability guard ───────────────────────────────
-# one-shot (skills/one-shot/SKILL.md) delegates its steps to child skills via
-# the Skill tool, and a wayfare goal turn chains into think-it-through and
-# one-shot the same way. A chained skill carrying
+# wayfare-run-task (skills/wayfare-run-task/SKILL.md) delegates its steps to child skills via
+# the Skill tool, and a wayfare goal turn chains into wayfare-grill-idea and
+# wayfare-run-task the same way. A chained skill carrying
 # `disable-model-invocation: true` cannot be invoked by the model, so the
 # calling pipeline breaks at that step (there is no per-caller allowlist).
-# Keep this list in sync with one-shot's step→skill mapping AND
-# a goal turn's tiers. `one-shot` is here because re-adding its flag
+# Keep this list in sync with wayfare-run-task's step→skill mapping AND
+# a goal turn's tiers. `wayfare-run-task` is here because re-adding its flag
 # would silently break every goal turn. `architecture` is chained three
-# ways: wayfare sync runs its review/sync in both modes, and
-# think-it-through's `arch` dispatch
-# delegates to it. `handoff` is deliberately NOT here: wayfare's
+# ways: wayfare-sync-plan runs its review/sync in both modes, and
+# wayfare-grill-idea's `arch` dispatch
+# delegates to it. `wayfare-write-handoff` is deliberately NOT here: wayfare's
 # design-feedback delivery files its issue directly rather than routing
 # through handoff, because handoff distills the *current conversation* and
 # would carry this repo's session state into a third party's tracker.
-# `harden` is here because re-adding `disable-model-invocation: true` would
+# `wayfare-audit-security` is here because re-adding `disable-model-invocation: true` would
 # break every sync at its harden stage.
-# `preflight` is intentionally absent, one-shot runs
+# `wayfare-check-preflight` is intentionally absent, wayfare-run-task runs
 # it via scripts/preflight.sh, not the Skill tool, so it may stay user-only.
-CHAINED_SKILLS="think-it-through push-pr review-pr respond-to-comments ship-pr one-shot architecture harden"
+CHAINED_SKILLS="wayfare-grill-idea wayfare-push-pr wayfare-review-pr wayfare-respond-pr wayfare-ship-pr wayfare-run-task wayfare-review-architecture wayfare-sync-architecture wayfare-audit-security"
 for chained in $CHAINED_SKILLS; do
   chained_file="$SKILLS_DIR/$chained/SKILL.md"
   # A missing chained skill silently breaks the calling pipeline at that step, so error
@@ -369,7 +372,7 @@ echo "────────────────────────�
 
 # ── absorbed-skill dangling-reference guard ────────────────────────
 # scan-vulns, test-changes, and document-arch were deleted and folded into
-# harden, push-pr, and think-it-through respectively. A live reference to one
+# harden, push-pr, and wayfare-grill-idea respectively. A live reference to one
 # of these names is fine ONLY as a lineage note ("absorbed the former X",
 # "absorbed from X"), anything else is a leftover pointer to a skill that no
 # longer exists. Scoped to tracked, non-historical docs; a plans/ retrospective
@@ -404,37 +407,65 @@ echo ""
 echo "────────────────────────────"
 
 # ── skill-reference resolution guard ───────────────────────────────
-# `hero-skills:NAME` references fan out across skills, README, and
+# `wayfare:NAME` references fan out across skills, README, and
 # PIPELINES.md; a renamed or deleted skill rots every one of them silently.
 # ABSORBED_SKILLS above is the hand-curated tail of that class. This is the
 # generic half: every referenced name must resolve to skills/NAME/SKILL.md.
-# Lineage notes ("absorbed the former hero-skills:X") are exempt, same rule
+# Lineage notes ("absorbed the former X") are exempt, same rule
 # as the absorbed guard.
 # docs/ is globbed, not enumerated: enumerating leaves each new doc's
 # references unguarded.
-REF_NAMES=$(grep -rhoE 'hero-skills:[a-z][a-z0-9-]*' --include='*.md' \
-  "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT"/docs/*.md 2>/dev/null \
+# The prefix is the plugin's own name, read rather than spelled: hardcoding
+# it means the next rename leaves REF_NAMES empty, the loop below never runs,
+# and the guard prints success over a repo full of dangling references.
+# That is not hypothetical — this very rename changed the prefix, and during
+# it the guard could not see a surviving reference to the old one.
+PLUGIN_NS=$(jq -r '.name // empty' "$MANIFEST" 2>/dev/null)
+# assets/ is in the set because it is vendored INTO ~25 consumer repos
+# (AGENTS.md, *Layout*), so a name that rots here rots in every one of them,
+# where nothing runs this check. assets/compliance/ is the register the
+# engine reads in place, not a skill reference, so it stays out.
+REF_NAMES=$(grep -rhoE "$PLUGIN_NS:[a-z][a-z0-9-]*" --include='*.md' \
+  "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT/AGENTS.md" \
+  "$PLUGIN_ROOT"/docs/*.md "$PLUGIN_ROOT"/references/*.md \
+  "$PLUGIN_ROOT"/assets/auto-approve "$PLUGIN_ROOT"/assets/design-system \
+  "$PLUGIN_ROOT"/assets/fleet 2>/dev/null \
   | sort -u | cut -d: -f2)
+if [[ -z "$PLUGIN_NS" ]]; then
+  error "cannot read the plugin name, so the skill-reference guard cannot run" \
+    "$MANIFEST_REL" "" "Restore the \"name\" field; without it this guard silently checks nothing"
+elif [[ -z "$REF_NAMES" ]]; then
+  error "no '$PLUGIN_NS:NAME' reference found anywhere" \
+    "$MANIFEST_REL" "" "Either the prefix is wrong or every reference rotted; the guard cannot pass vacuously"
+fi
 DANGLING_REFS=0
 for ref in $REF_NAMES; do
   [[ -f "$SKILLS_DIR/$ref/SKILL.md" ]] && continue
-  # Trailing-boundary match so `one-shot` never swallows a hit on `one-shots`.
-  HITS=$(grep -rnE "hero-skills:$ref([^a-z0-9-]|\$)" --include='*.md' \
-    "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT/docs/PIPELINES.md" 2>/dev/null \
+  # Trailing-boundary match so `wayfare-run-task` never swallows a hit on `one-shots`.
+  # The SAME file set the names were extracted from. Narrowing it here (this
+  # line read docs/PIPELINES.md alone) makes the guard silently pass: a ref
+  # that lives only in another docs file is extracted, fails to resolve, then
+  # is searched somewhere it cannot appear, so HITS comes back empty and the
+  # `continue` below files it as a harmless lineage note.
+  HITS=$(grep -rnE "$PLUGIN_NS:$ref([^a-z0-9-]|\$)" --include='*.md' \
+    "$SKILLS_DIR" "$PLUGIN_ROOT/README.md" "$PLUGIN_ROOT/AGENTS.md" \
+    "$PLUGIN_ROOT"/docs/*.md "$PLUGIN_ROOT"/references/*.md \
+    "$PLUGIN_ROOT"/assets/auto-approve "$PLUGIN_ROOT"/assets/design-system \
+    "$PLUGIN_ROOT"/assets/fleet 2>/dev/null \
     | grep -viE 'absorb' || true)
   [[ -z "$HITS" ]] && continue # lineage-only references are fine
   DANGLING_REFS=1
   while IFS= read -r hit; do
     hit_file="${hit%%:*}"
     hit_line=$(printf '%s' "$hit" | cut -d: -f2)
-    error "'hero-skills:$ref' does not resolve to skills/$ref/SKILL.md" \
+    error "'$PLUGIN_NS:$ref' does not resolve to skills/$ref/SKILL.md" \
       "${hit_file#"$PLUGIN_ROOT"/}" \
       "$hit_line" \
       "Point the reference at the skill's current name, or add lineage framing ('absorbed the former $ref ...') if it is a history note"
   done <<< "$HITS"
 done
 if [[ "$DANGLING_REFS" = 0 ]]; then
-  pass "all hero-skills:NAME references resolve to existing skills"
+  pass "all $PLUGIN_NS:NAME references resolve to existing skills"
 fi
 
 echo ""
@@ -513,14 +544,14 @@ fi
 # audit-plugin reads HERO.md to audit this plugin's own field coverage, not
 # as a project's config, and never runs in another repo. A `user-invocable:
 # false` skill is reached only by a Skill-tool chain from a skill that already
-# ran the fleet test (wayfare Step 0, think-it-through Step 0), a second test
+# ran the fleet test (wayfare Step 0, wayfare-grill-idea Step 0), a second test
 # there would be dead code that reads as a promise, and dropping the exemption
 # would re-add fleet handling to skills that have no user path to a fleet
 # folder. A hand-typed run at a fleet root is unguarded and fails loudly on
 # NO_HERO_CONFIG instead; that is accepted.
 FLEET_GATE_ERRORS=0
 for f in "$SKILLS_DIR"/*/SKILL.md; do
-  case "$f" in */audit-plugin/SKILL.md) continue ;; esac
+  case "$f" in */wayfare-audit-plugin/SKILL.md) continue ;; esac
   FLEET_FM=$(awk '/^---[[:space:]]*$/{n++; next} n==1{print} n>=2{exit}' "$f")
   grep -qE '^[[:space:]]*user-invocable:[[:space:]]*false' <<< "$FLEET_FM" && continue
   grep -qE 'HERO\.md|hero_field|hero_md_field' "$f" || continue
@@ -533,22 +564,22 @@ done
 [[ $FLEET_GATE_ERRORS -eq 0 ]] && pass "every skill that reads HERO.md tests for the fleet root"
 
 # ── work-item store: producers must have a consumer ────────────────
-# think-it-through, handoff, and harden all WRITE work-items into .plans/
-# (and read the plate back to build on it). one-shot is the only skill that
+# wayfare-grill-idea, handoff, and harden all WRITE work-items into .plans/
+# (and read the plate back to build on it). wayfare-run-task is the only skill that
 # CONSUMES an item, resolving it to execute and marking it done. (It also
 # authors Step 2a carve-outs, but it never plans one from scratch.) If that delegation
 # is ever edited away, the store silently becomes write-only: items pile up,
-# nothing marks them done, and one-shot goes back to planning from scratch
+# nothing marks them done, and wayfare-run-task goes back to planning from scratch
 # while ignoring the plate. Nothing else in this repo would catch that.
-ONE_SHOT="$SKILLS_DIR/one-shot/SKILL.md"
+ONE_SHOT="$SKILLS_DIR/wayfare-run-task/SKILL.md"
 if [[ ! -f "$ONE_SHOT" ]]; then
-  error "skills/one-shot/SKILL.md is missing" "skills/one-shot/SKILL.md" "" \
-    "one-shot owns Pipeline 2; restore it or update this guard"
+  error "skills/wayfare-run-task/SKILL.md is missing" "skills/wayfare-run-task/SKILL.md" "" \
+    "wayfare-run-task owns Pipeline 2; restore it or update this guard"
 else
   # Strip HTML comments and fenced blocks before matching, and require the
   # reference in an ACTIVE position (an Invoke instruction or a table row).
   # A bare substring check was satisfied by leaving the name in a comment,
-  # "this pipeline used to call hero-skills:think-it-through" passed while
+  # "this pipeline used to call wayfare:wayfare-grill-idea" passed while
   # every real delegation had been deleted, which is exactly the drift this
   # guard exists to catch.
   ONE_SHOT_ACTIVE=$(awk '
@@ -559,27 +590,27 @@ else
   ' "$ONE_SHOT")
   # Here-string rather than `printf | grep -q`, see the pipefail/SIGPIPE note
   # on the chained-skill guard above. This site is the one that actually bit:
-  # the match sits near the top of one-shot's Step->skill table, so grep -q
+  # the match sits near the top of wayfare-run-task's Step->skill table, so grep -q
   # exited early and killed printf mid-write, and the guard reported drift that
   # had not happened.
-  if grep -qE '(Invoke|Skill tool|^\|).*hero-skills:think-it-through' <<< "$ONE_SHOT_ACTIVE"; then
-    pass "one-shot's plan step delegates to think-it-through"
+  if grep -qE '(Invoke|Skill tool|^\|).*wayfare:wayfare-grill-idea' <<< "$ONE_SHOT_ACTIVE"; then
+    pass "wayfare-run-task's plan step delegates to wayfare-grill-idea"
   else
-    error "one-shot no longer references think-it-through — the plan step has drifted back to planning from scratch" \
-      "skills/one-shot/SKILL.md" \
+    error "wayfare-run-task no longer references wayfare-grill-idea — the plan step has drifted back to planning from scratch" \
+      "skills/wayfare-run-task/SKILL.md" \
       "" \
-      "think-it-through is the planning skill; one-shot's Step 1 must resolve against .plans/ and delegate to it. See PIPELINES.md Pipeline 2"
+      "wayfare-grill-idea is the planning skill; wayfare-run-task's Step 1 must resolve against .plans/ and delegate to it. See PIPELINES.md Pipeline 2"
   fi
   # Require several real references, not one incidental mention. "plans" is
   # a word that appears in ordinary prose, so match the literal `.plans` token.
   STORE_HITS=$(printf '%s\n' "$ONE_SHOT_ACTIVE" | grep -cF '.plans' || true)
   if [[ "${STORE_HITS:-0}" -ge 3 ]]; then
-    pass "one-shot reads the .plans/ store ($STORE_HITS references)"
+    pass "wayfare-run-task reads the .plans/ store ($STORE_HITS references)"
   else
-    error "one-shot does not read .plans/ — the work-item store has no consumer" \
-      "skills/one-shot/SKILL.md" \
+    error "wayfare-run-task does not read .plans/ — the work-item store has no consumer" \
+      "skills/wayfare-run-task/SKILL.md" \
       "" \
-      "think-it-through, handoff, and harden all emit into .plans/; one-shot Step 1 must resolve against it and Step 9 must mark the merged item done"
+      "wayfare-grill-idea, handoff, and harden all emit into .plans/; wayfare-run-task Step 1 must resolve against it and Step 9 must mark the merged item done"
   fi
 fi
 

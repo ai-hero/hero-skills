@@ -51,7 +51,7 @@ run_block() { # NAME [env assignments...] -> runs in $WORK under bash -e
   ( cd "$WORK" && env "$@" bash -e "$WORK/$name.sh" )
 }
 
-for name in classify diff-filter go-pkgs claims ci-decision verdict-parse bot-lane submit-verdict crash-notice; do
+for name in classify diff-filter go-pkgs claims ci-decision verdict-parse bot-lane submit-verdict crash-notice prior-review; do
   extract "$name" > "$WORK/$name.sh"
   check "extract: $name non-empty" "yes" "$([[ -s "$WORK/$name.sh" ]] && echo yes || echo no)"
   check "extract: $name parses" "0" "$(bash -n "$WORK/$name.sh" 2>/dev/null; echo $?)"
@@ -422,6 +422,125 @@ check "crash-notice: a failed reaction still posts the notice" "1" "$(calls gh_p
 OUT=$(crash 0 0 0 0 "" "the commit list came back truncated")
 check "crash-notice: lane_error.txt reaches the notice" "yes" \
   "$(ann "$(cat "$WORK/gh_post")" 'came back truncated')"
+
+
+# --- prior-review -----------------------------------------------------------
+#
+# The gate that decides whether auto-approve is allowed to be the only review
+# on a PR. It had no coverage here at all, and two bugs shipped through that
+# gap: the two "halves" were satisfiable by one comment (fixes was a strict
+# subset of findings, so the `&&` did nothing), and neither half filtered by
+# author, so anyone who could comment could open it with a marker copied out
+# of the public review-pr SKILL.md. Both are exercised below. This file goes
+# to ~25 repos at @main on merge, which is why a grep for a variable name is
+# not coverage.
+#
+# The block reads pr.json and issue_comments.json from $WORK and sets
+# SELF_REVIEW. reviews.json / pr_review_comments.json are consumed by the two
+# untouched paths further down the same step, so the fixture supplies them
+# empty to keep this scoped to the self-review path.
+pr_fixture() { printf '{"user":{"login":"%s"}}' "$1" > "$WORK/pr.json"; }
+comments_fixture() {
+  printf '%s' "$1" > "$WORK/issue_comments.json"
+  # The same marked block also computes the two paths this change did not
+  # touch. Default them empty so a case is about the self-review path, and
+  # pass them explicitly in the case that is about them.
+  printf '%s' "${2:-[]}" > "$WORK/reviews.json"
+  printf '%s' "${3:-[]}" > "$WORK/pr_review_comments.json"
+}
+
+# jq builds the fixtures: hand-escaped JSON inside nested command
+# substitution silently produced invalid documents, and jq then returned
+# nothing rather than failing loudly.
+cmt() { # AUTHOR BODY -> one comment object
+  jq -nc --arg u "$1" --arg b "$2" '{body:$b, user:{login:$u}}'
+}
+cmts() { printf '%s\n' "$@" | jq -sc '.'; }
+
+MARK='<!-- ai-hero:self-review -->'
+FIXMARK='<!-- ai-hero:self-review-fixes -->'
+FINDINGS_BODY="## Self-Review
+$MARK
+- foo.ts:1 findings"
+SUGGEST_BODY="## Self-Review
+$MARK
+- foo.ts:1 small improvements to naming"
+FIXES_BODY="## Self-Review - Improvements
+$MARK
+$FIXMARK"
+FIXES_REHEADED="## Self-review: what I changed
+$MARK
+$FIXMARK"
+FIXES_LEGACY="## Self-Review - Improvements
+$MARK"
+BOTH_IN_ONE="## Self-Review
+$MARK
+$FIXMARK"
+
+self_review_of() { # COMMENTS_JSON -> the SELF_REVIEW the gate computes
+  pr_fixture author
+  comments_fixture "$1"
+  ( cd "$WORK" && bash -e -c '. ./prior-review.sh; echo "$SELF_REVIEW"' 2>/dev/null )
+}
+
+check "prior-review: no comments at all" "0" "$(self_review_of '[]')"
+
+check "prior-review: findings alone does not pass" "0" \
+  "$(self_review_of "$(cmts "$(cmt author "$FINDINGS_BODY")")")"
+
+# The exact false positive that made the first version of this gate a no-op:
+# a Suggestions bullet using the word the fixes half was matching on.
+check "prior-review: a suggestion saying improvements is not the fixes half" "0" \
+  "$(self_review_of "$(cmts "$(cmt author "$SUGGEST_BODY")")")"
+
+check "prior-review: both comments pass" "1" \
+  "$(self_review_of "$(cmts "$(cmt author "$FINDINGS_BODY")" "$(cmt author "$FIXES_BODY")")")"
+
+# One comment carrying both markers is still one comment.
+check "prior-review: one comment cannot be both halves" "0" \
+  "$(self_review_of "$(cmts "$(cmt author "$BOTH_IN_ONE")")")"
+
+# Anyone can comment on a PR. Only the author posts its self-review.
+check "prior-review: a stranger cannot open the gate" "0" \
+  "$(self_review_of "$(cmts "$(cmt drive-by "$FINDINGS_BODY")" "$(cmt drive-by "$FIXES_BODY")")")"
+
+# The humanizer rewrites headings, so a complete review must still pass with
+# the heading gone. This is the failure mode of matching prose.
+check "prior-review: passes with the heading rewritten" "1" \
+  "$(self_review_of "$(cmts "$(cmt author "$FINDINGS_BODY")" "$(cmt author "$FIXES_REHEADED")")")"
+
+# Repos whose vendored review-pr predates the marker still post the heading.
+check "prior-review: legacy heading still counts" "1" \
+  "$(self_review_of "$(cmts "$(cmt author "$FINDINGS_BODY")" "$(cmt author "$FIXES_LEGACY")")")"
+
+# A review OF this gate quotes the strings it matches on. Unanchored, the
+# legacy fallback read the findings comment as the fixes comment and the
+# gate refused a complete review.
+META_BODY="## Self-Review
+$MARK
+- the gate accepts a legacy Self-Review heading and the word improvements"
+check "prior-review: prose about the gate is not the fixes half" "0" \
+  "$(self_review_of "$(cmts "$(cmt author "$META_BODY")")")"
+
+# The other two paths are untouched by the tightening: a review from someone
+# who is not the author still passes on its own, with no self-review at all.
+# The new comment in the workflow claims this; nothing asserted it.
+gate_passed_of() { # COMMENTS REVIEWS -> passed=true|false
+  pr_fixture author
+  comments_fixture "$1" "$2"
+  ( cd "$WORK" && bash -e -c '. ./prior-review.sh
+    if [ "$SELF_REVIEW" -gt 0 ] || [ "$OTHER_REVIEWS" -gt 0 ] || [ "$BOT_INLINE" -gt 0 ]
+      then echo true; else echo false; fi' 2>/dev/null )
+}
+
+check "prior-review: a human review alone still passes" "true" \
+  "$(gate_passed_of '[]' '[{"user":{"login":"reviewer"},"state":"APPROVED"}]')"
+
+check "prior-review: the author's own review does not bootstrap it" "false" \
+  "$(gate_passed_of '[]' '[{"user":{"login":"author"},"state":"APPROVED"}]')"
+
+check "prior-review: a past auto-approve run does not bootstrap it" "false" \
+  "$(gate_passed_of '[]' '[{"user":{"login":"github-actions[bot]"},"state":"APPROVED"}]')"
 
 echo ""
 echo "auto-approve-logic.test.sh: $PASS passed, $FAIL failed"

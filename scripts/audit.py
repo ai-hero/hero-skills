@@ -1161,7 +1161,7 @@ def _(r):
                 bad.append(f"{name}: no deploy.restart_policy")
             continue
         pol = svc.get("restart", None)
-        # `restart: no` is YAML false, and is CORRECT for a one-shot setup job
+        # `restart: no` is YAML false, and is CORRECT for a wayfare-run-task setup job
         # — it must not be restarted. Treat an explicit false as a policy.
         if pol is None:
             # Setup/init jobs that simply omit it are still wrong: compose
@@ -2139,7 +2139,7 @@ def _(r):
     # message is the authoritative remedy. Renaming satisfies both.
     if (r / "ARCHITECTURE.md").is_file():
         return FAIL, "still ARCHITECTURE.md — git mv to DESIGN.md (H1 too)"
-    return FAIL, "missing — run hero-skills:architecture sync"
+    return FAIL, "missing — run wayfare:wayfare-sync-architecture"
 
 
 @check("ARCH-02")

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Hero_Skills-Claude_Code_Plugin-7C3AED?style=for-the-badge&logoColor=white" alt="Hero Skills" />
+  <img src="https://img.shields.io/badge/Wayfare-Agent_Skills-7C3AED?style=for-the-badge&logoColor=white" alt="Wayfare" />
 </p>
 
 <h3 align="center">Your dev workflow, automated end to end.</h3>
@@ -25,11 +25,11 @@
 
 ---
 
-## Why Hero Skills?
+## Why wayfare?
 
 Most dev work follows the same loop: grab a ticket, plan, implement, test, review, commit, push, monitor. But every team does it slightly differently, different PM tools, different CI, different deploy targets.
 
-Hero Skills gives you **slash commands for the entire dev lifecycle** that adapt to your stack. Configure once with `HERO.md`, then every skill knows your conventions, your tools, and your preferences.
+Wayfare gives you **one route from the product as it is to the product as it should be** that adapt to your stack. Configure once with `HERO.md`, then every skill knows your conventions, your tools, and your preferences.
 
 - **Plan and implement from tickets**: fetch from Linear/Jira/GitHub Issues, grill the work into dependency-aware work-items, create branches, then implement on approval
 - **Verify changes**: auto-detect project type (API, frontend, CLI, MCP) and run lint, typecheck, unit tests, and smoke tests
@@ -46,11 +46,11 @@ the world it read.
 flowchart TB
   SRC["<b>Source</b> · this repo<br/>code + DESIGN.md"]
   TGT["<b>Target</b> · claude.ai/design<br/>optional"]
-  PLAN["<b>wayfare sync</b><br/>reconcile · audit · propose"]
+  PLAN["<b>wayfare-sync-plan</b><br/>reconcile · audit · propose"]
   STORE[("<b>.plans/</b><br/>PLAN.md + items/")]
-  NEXT["<b>wayfare next</b><br/>authorize a goal"]
-  DO["<b>wayfare do ID</b><br/>advance one item"]
-  BUILD["one-shot → push-pr<br/>→ review-pr → ship-pr"]
+  NEXT["<b>wayfare-start-goal</b><br/>authorize a goal"]
+  DO["<b>wayfare-advance-item ID</b><br/>advance one item"]
+  BUILD["wayfare-run-task → push-pr<br/>→ review-pr → ship-pr"]
 
   SRC -- read --> PLAN
   TGT -- read --> PLAN
@@ -71,7 +71,7 @@ flowchart TB
 ```
 
 With no design project configured the target end is simply absent, and
-`wayfare sync` reconciles the repo against `DESIGN.md`, its own gaps and its
+`wayfare-sync-plan` reconciles the repo against `DESIGN.md`, its own gaps and its
 own hardening instead — a self-review.
 
 ### The plan store
@@ -90,7 +90,7 @@ Definition of Done has to assert.
 An **idea** is the parking lot: a thought worth keeping that nobody has
 committed to. It carries no plan, no paths and no Definition of Done — an
 idea that can state one is a task that was mis-filed. Nothing builds an idea
-and nothing may depend on one; `wayfare sync` reports the parked set as a
+and nothing may depend on one; `wayfare-sync-plan` reports the parked set as a
 count and promotes only what you pick, at which point whatever it becomes
 carries `discovered_from` pointing back at it.
 
@@ -101,14 +101,14 @@ it is the gate: nothing is built without it.
 stateDiagram-v2
   [*] --> new
   new --> accepted: plan accepts it
-  accepted --> planning: think-it-through
+  accepted --> planning: wayfare-grill-idea
   planning --> ready: your ready-mark
-  ready --> active: one-shot starts
+  ready --> active: wayfare-run-task starts
   active --> committed: on a goal branch
   active --> review: PR opens
   committed --> review: goal's PR opens
   review --> done: merged, deploy verified
-  active --> dropped: wayfare drop
+  active --> dropped: wayfare-drop-item
   done --> [*]
   dropped --> [*]
 ```
@@ -119,7 +119,7 @@ not, because the prerequisite was abandoned. The full specification is
 
 ### From tasks to goals
 
-Grouping is the **last stage of every `wayfare sync`**, not a separate step
+Grouping is the **last stage of every `wayfare-sync-plan`**, not a separate step
 you run. It works bottom-up from the dependency graph: the first goal is the
 smallest outcome whose tasks depend on nothing outside the group, the next is
 the smallest outcome whose remaining dependencies are already inside a formed
@@ -162,7 +162,7 @@ became two outcomes splits. An `active` goal is frozen, because its members
 and permissions were authorized as a set at `next`'s gate.
 
 `sync` writes the goal. It never authorizes it — that is typed by a person at
-`wayfare next`, in-session, and is never stored in the file.
+`wayfare-start-goal`, in-session, and is never stored in the file.
 
 ## Across repos
 
@@ -231,9 +231,9 @@ Skills are immediately available in any Claude Code session. No restart needed.
 
 ### Companion installs (for full pipeline coverage)
 
-Three pieces ride along with one-shot, install them so Steps 4 (`push`, tests included), 5 (`self-review`), 8 (`respond`), and 9 (`ship`) work out of the box:
+Three pieces ride along with wayfare-run-task, install them so Steps 4 (`push`, tests included), 5 (`self-review`), 8 (`respond`), and 9 (`ship`) work out of the box:
 
-**1. GitHub CLI (`gh`)**: required by `push-pr`, `review-pr`, `respond-to-comments`, and `ship-pr` for every PR / comment / workflow operation. Without it, every step from `push` onward fails immediately.
+**1. GitHub CLI (`gh`)**: required by `push-pr`, `review-pr`, `wayfare-respond-pr`, and `ship-pr` for every PR / comment / workflow operation. Without it, every step from `push` onward fails immediately.
 
 ```bash
 # macOS (Homebrew)
@@ -251,9 +251,9 @@ Then authenticate with the `repo` scope (required for PR creation, merge, and `g
 gh auth login -s repo
 ```
 
-`hero-skills:preflight` verifies both presence and the `repo` scope.
+`wayfare:wayfare-check-preflight` verifies both presence and the `repo` scope.
 
-**2. `pr-review-toolkit` plugin**: provides five of the six review agents that `hero-skills:review-pr` runs in parallel (code-reviewer, silent-failure-hunter, pr-test-analyzer, comment-analyzer, type-design-analyzer; the sixth, a security pass, needs no install). From inside Claude Code:
+**2. `pr-review-toolkit` plugin**: provides five of the six review agents that `wayfare:wayfare-review-pr` runs in parallel (code-reviewer, silent-failure-hunter, pr-test-analyzer, comment-analyzer, type-design-analyzer; the sixth, a security pass, needs no install). From inside Claude Code:
 
 ```
 /plugin install pr-review-toolkit
@@ -265,9 +265,9 @@ Or from the host shell:
 claude plugins add pr-review-toolkit@claude-plugins-official
 ```
 
-If you skip this, `hero-skills:review-pr` still runs but produces a much thinner review.
+If you skip this, `wayfare:wayfare-review-pr` still runs but produces a much thinner review.
 
-**3. Playwright MCP server**: drives the browser smoke test in `hero-skills:push-pr`'s test phase (frontend smoke). Requires Node.js 18+ (check with `node --version`):
+**3. Playwright MCP server**: drives the browser smoke test in `wayfare:wayfare-push-pr`'s test phase (frontend smoke). Requires Node.js 18+ (check with `node --version`):
 
 ```bash
 claude mcp add playwright npx @playwright/mcp@latest
@@ -281,7 +281,7 @@ Three commands. Everything else is run by them.
 
 ```
 # 1. Configure your project (run once per repo)
-hero-skills:wayfare init
+wayfare:wayfare-init-repo
 
 # 2. Converge the world into a plan. One round, eleven stages:
 #    config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals
@@ -293,7 +293,7 @@ hero-skills:wayfare init
 #    reconciles source against design, plans every feature with you, then
 #    proposes goals bottom-up over what was planned, and re-cuts the ones
 #    already there. Writes only what you confirm; your ready-mark is the gate.
-hero-skills:wayfare sync
+wayfare:wayfare-sync-plan
 
 # 3. Take the next goal. It reads the goal's permissions aloud (mark-ready,
 #    respond, auto-approve, merge, deploy, absorb), you authorize them
@@ -302,14 +302,16 @@ hero-skills:wayfare sync
 #    opened at the end. Work it finds along the way is absorbed into the same
 #    goal rather than spawning a new one. A run that stops hands back to you,
 #    with a /goal line to paste if you would rather have it loop unattended.
-hero-skills:wayfare next
+wayfare:wayfare-start-goal
 ```
 
-`hero-skills:wayfare do ID` advances one thing on its own, a feature through
-one-shot, a Dependabot PR to merged and deployed, or one goal turn. `improve`
-runs the compliance audit alone, in one repo, or across the whole fleet from
-its root, and drafts backports where this repo is ahead of the template.
-`recalibrate` tunes the config every stage reads.
+`wayfare:wayfare-advance-item ID` advances one thing on its own: a feature
+through the build pipeline, a Dependabot PR to merged and deployed, or one
+goal turn. `wayfare:wayfare-audit-compliance` runs the compliance audit
+alone, in one repo or across the whole fleet from its root, and drafts
+backports where this repo is ahead of the template.
+`wayfare:wayfare-recalibrate-config` tunes the config every stage reads, and
+`wayfare:wayfare-drop-item ID` abandons a branch and says so on the roadmap.
 
 ### Or: one piece at a time
 
@@ -317,26 +319,26 @@ The build pipeline is still there when you want a single step:
 
 ```
 /simplify                                   # tidy the dirty diff
-hero-skills:push-pr                         # test (lint/typecheck/unit + UI smoke), commit + push, DRAFT PR
-hero-skills:review-pr                       # parallel review agents + security pass, fixes, then mark-ready gate
-hero-skills:respond-to-comments             # address Copilot/CodeRabbit/Greptile inline comments
-hero-skills:ship-pr                         # @auto-approve, merge, reset to default branch
+wayfare:wayfare-push-pr                         # test (lint/typecheck/unit + UI smoke), commit + push, DRAFT PR
+wayfare:wayfare-review-pr                       # parallel review agents + security pass, fixes, then mark-ready gate
+wayfare:wayfare-respond-pr             # address Copilot/CodeRabbit/Greptile inline comments
+wayfare:wayfare-ship-pr                         # @auto-approve, merge, reset to default branch
 ```
 
 Each command reads your `HERO.md` config and adapts to your stack automatically.
 
-### Or: one-shot the whole thing
+### Or: wayfare-run-task the whole thing
 
 For genuinely small, low-risk PRs:
 
 ```
-hero-skills:one-shot PROJ-123   # start a new ticket (or a plain-text description)
-hero-skills:one-shot            # resume the current goal to merged + reset branch
+wayfare:wayfare-run-task PROJ-123   # start a new ticket (or a plain-text description)
+wayfare:wayfare-run-task            # resume the current goal to merged + reset branch
 ```
 
-This chains all nine steps end to end: `plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship`, with explicit user gates at plan-approval, mark-ready, and merge. `plan` resolves what you asked for against your `.plans/` store and this repo's tracker before it plans anything new, delegating to `hero-skills:think-it-through` only when nothing matches, and it re-checks a matched item against the codebase first, so already-finished work is reported rather than rebuilt. `simplify` runs the `/simplify` skill on the dirty diff so the commit lands clean. `push` tests first (lint/typecheck/unit tests plus a UI smoke check via Playwright MCP for routes affected by the diff, skipped automatically on backend-only PRs), then commits and opens the draft PR. `self-review` runs the review agents plus a security pass. `mark-ready` is the explicit draft → ready gate; `await-review` polls for your configured Code Review Agent (Copilot, CodeRabbit, Greptile, …) before `respond` addresses its feedback.
+This chains all nine steps end to end: `plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship`, with explicit user gates at plan-approval, mark-ready, and merge. `plan` resolves what you asked for against your `.plans/` store and this repo's tracker before it plans anything new, delegating to `wayfare:wayfare-grill-idea` only when nothing matches, and it re-checks a matched item against the codebase first, so already-finished work is reported rather than rebuilt. `simplify` runs the `/simplify` skill on the dirty diff so the commit lands clean. `push` tests first (lint/typecheck/unit tests plus a UI smoke check via Playwright MCP for routes affected by the diff, skipped automatically on backend-only PRs), then commits and opens the draft PR. `self-review` runs the review agents plus a security pass. `mark-ready` is the explicit draft → ready gate; `await-review` polls for your configured Code Review Agent (Copilot, CodeRabbit, Greptile, …) before `respond` addresses its feedback.
 
-At each step transition, one-shot prints a progress line so you always know where you are:
+At each step transition, wayfare-run-task prints a progress line so you always know where you are:
 
 ```
 [5/9] (✓) plan → (✓) implement → (✓) simplify → (✓) push → (▶) self-review → ( ) mark-ready → ( ) await-review → ( ) respond → ( ) ship
@@ -348,81 +350,100 @@ Each step maps to a skill you can run on its own when you don't want the whole p
 
 | # | Step | Skill to run standalone |
 | --- | --- | --- |
-| 1 | `plan` | `hero-skills:think-it-through` (only when nothing resolves from `.plans/` or the tracker) |
+| 1 | `plan` | `wayfare:wayfare-grill-idea` (only when nothing resolves from `.plans/` or the tracker) |
 | 2 | `implement` | inline (executes the resolved work-item) |
 | 3 | `simplify` | `/simplify` (external skill) |
-| 4 | `push` | `hero-skills:push-pr` (tests, verification + UI smoke, then commits + pushes a draft PR) |
-| 5 | `self-review` | `hero-skills:review-pr --no-mark-ready` |
-| 6 | `mark-ready` | `hero-skills:review-pr`'s own Step 9 gate, or `gh pr ready` |
+| 4 | `push` | `wayfare:wayfare-push-pr` (tests, verification + UI smoke, then commits + pushes a draft PR) |
+| 5 | `self-review` | `wayfare:wayfare-review-pr --no-mark-ready` |
+| 6 | `mark-ready` | `wayfare:wayfare-review-pr`'s own Step 9 gate, or `gh pr ready` |
 | 7 | `await-review` | inline poll (no separate skill) |
-| 8 | `respond` | `hero-skills:respond-to-comments` |
-| 9 | `ship` | `hero-skills:ship-pr` |
+| 8 | `respond` | `wayfare:wayfare-respond-pr` |
+| 9 | `ship` | `wayfare:wayfare-ship-pr` |
 
-Re-running `hero-skills:one-shot` mid-flow is safe: it inspects git + the open PR for that branch and resumes from the inferred step deterministically, no confirmation prompt. With no arguments, that resume behavior is the whole point. On the default branch with work to preserve, one-shot auto-branches off (no prompt) before resuming. It exits cleanly with a hand-off hint only when there's nothing left to do (e.g., after the PR has merged) or when state can't be inferred safely (e.g., a failed `git fetch`).
+Re-running `wayfare:wayfare-run-task` mid-flow is safe: it inspects git + the open PR for that branch and resumes from the inferred step deterministically, no confirmation prompt. With no arguments, that resume behavior is the whole point. On the default branch with work to preserve, wayfare-run-task auto-branches off (no prompt) before resuming. It exits cleanly with a hand-off hint only when there's nothing left to do (e.g., after the PR has merged) or when state can't be inferred safely (e.g., a failed `git fetch`).
 
-See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
+See [`PIPELINES.md`](./docs/PIPELINES.md) for the full DAG and stop conditions.
 
 ## Commands
+
+### The front door
+
+Source is the product as it is; Target is the product as it should be. Every
+task is one leg of the route between them, and each leg is its own skill, so
+its description is what an agent matches your request against. This table is
+the map; there is no skill whose job is to hold it.
+
+| Command | What it does |
+| --- | --- |
+| `wayfare:wayfare-init-repo` | Investigate the repo, write `HERO.md`, create the plan object `.plans/PLAN.md`, migrating an older store on sight. Scaffolds first in an empty directory |
+| `wayfare:wayfare-sync-plan` | One round of convergence (`config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals`), writing every `.plans/` item and proposing goals bottom-up over what was planned. Writes only what you confirm |
+| `wayfare:wayfare-start-goal` | Pick the next runnable goal, read its `## Permissions` aloud (mark-ready, respond, auto-approve, merge, deploy, absorb) for your in-session authorization, and run its first turn |
+| `wayfare:wayfare-advance-item` | Advance one item as far as its gates allow: a ready task, a Dependabot PR to merged, or one goal turn. Never plans |
+| `wayfare:wayfare-drop-item` | Abandon work on an unmerged branch and write `status: dropped`, so the roadmap stops claiming it |
+| `wayfare:wayfare-recalibrate-config` | Report and tune every field the stages read, then stop |
+| `wayfare:wayfare-audit-compliance` | Audit this repo, or the whole fleet from its root, against the compliance register, and draft the backports |
+
+Features are SLC vertical slices — user stories, never layers — carrying
+subtasks, a definition of done, a log, design feedback back to the design
+team, and staleness flags against both ends.
+
+Three skills are stages of `sync` and hidden from the slash menu (`user-invocable: false`). You never call them, but they still own their procedures:
+
+| Stage | Skill | What it does |
+| --- | --- | --- |
+| `architecture` | `wayfare:wayfare-review-architecture` | Report where a single root `DESIGN.md` and the code have drifted — tech stack, boundaries, dependency rules, invariants, users, flows, interaction standards, append-only decisions. Writes nothing |
+| `architecture` | `wayfare:wayfare-sync-architecture` | Bootstrap `DESIGN.md`, and apply the drift rows the review found. Never restates what the code says |
+| `wayfare-audit-security` | `wayfare:wayfare-audit-security` | Audit read-only for hardening, dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness, and emit execution-ready plans as `.plans/` security items |
 
 ### Setup
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:wayfare init` | Investigate your repo, auto-detect stack, create `HERO.md` config |
-| `hero-skills:preflight` | Catch missing tooling, stale `HERO.md`, env mismatches, and busy ports before a pipeline step does destructive work |
-| `hero-skills:setup-dev` | Set up a developer's local environment (tools, auth, dependencies) |
-| `hero-skills:wayfare init` | Scaffold a new project (Python, full-stack, Node.js) |
-| `hero-skills:create-skill` | Create a new Claude Code skill, subagent, rule, or hook |
+| `wayfare:wayfare-init-repo` | Investigate your repo, auto-detect stack, create `HERO.md` config |
+| `wayfare:wayfare-check-preflight` | Catch missing tooling, stale `HERO.md`, env mismatches, and busy ports before a pipeline step does destructive work |
+| `wayfare:wayfare-setup-dev` | Set up a developer's local environment (tools, auth, dependencies) |
+| `wayfare:wayfare-init-repo` | Scaffold a new project (Python, full-stack, Node.js) |
+| `wayfare:wayfare-create-skill` | Create a new Claude Code skill, subagent, rule, or hook |
 
 ### Development Cycle
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:push-pr` | Test (lint, typecheck, unit tests + smoke incl. UI via Playwright MCP), commit + push + draft PR + CI status, or `test` for a test-only run, or a target branch to merge into |
+| `wayfare:wayfare-push-pr` | Test (lint, typecheck, unit tests + smoke incl. UI via Playwright MCP), commit + push + draft PR + CI status, or `test` for a test-only run, or a target branch to merge into |
 
 ### Code Review
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:review-pr` | Review a PR with the review agents plus a security pass: your draft → applies fixes, asks before marking ready. Others' PR → inline comments only. |
-| `hero-skills:my-humanizer` | Strip AI-writing patterns from prose ([docs/HUMANIZING.md](./docs/HUMANIZING.md), from Wikipedia's "Signs of AI writing"). The pipeline steps that emit prose read the doc directly; this skill runs it on any text you hand it |
-| `hero-skills:respond-to-comments` | Fix PR review comments, resolve threads, optionally loop with external review agent |
-| `hero-skills:ship-pr` | Trigger gated `@auto-approve`, wait for the verdict, merge if it passes, reset to the default branch, and wait for the merge commit's runs to report post-merge CI and deployment health |
+| `wayfare:wayfare-review-pr` | Review a PR with the review agents plus a security pass: your draft → applies fixes, asks before marking ready. Others' PR → inline comments only. |
+| `wayfare:wayfare-humanize-prose` | Strip AI-writing patterns from prose ([docs/HUMANIZING.md](./docs/HUMANIZING.md), from Wikipedia's "Signs of AI writing"). The pipeline steps that emit prose read the doc directly; this skill runs it on any text you hand it |
+| `wayfare:wayfare-respond-pr` | Fix PR review comments, resolve threads, optionally loop with external review agent |
+| `wayfare:wayfare-ship-pr` | Trigger gated `@auto-approve`, wait for the verdict, merge if it passes, reset to the default branch, and wait for the merge commit's runs to report post-merge CI and deployment health |
 
 ### Pipelines (orchestrators)
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:one-shot` | Drives a small task end-to-end: plan → implement → simplify → push (tests included) → self-review → mark-ready → await-review → respond → ship. Detects a resume point on re-invocation; with no arguments, drives the current goal to merged + reset branch. Explicit user gates at each destructive step. |
-| `hero-skills:wayfare init` | Scaffolds a new project, then chains into setup-dev → config → first-commit. |
-
-### The front door
-
-| Command | What it does |
-| --- | --- |
-| `hero-skills:wayfare` | Five verbs. `sync` runs one round of convergence (`config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals`), writing every `.plans/` item (features, architecture, polish, security, bugs, feedback, goals) and proposing goals bottom-up while re-cutting the `todo` ones; `next` picks the next runnable goal, reads its `## Permissions` (mark-ready, respond, auto-approve, merge, deploy, absorb) for your in-session authorization, and runs the goal in this session; `do ID` builds one feature via one-shot, carries one Dependabot PR to merged and deployed, or runs one goal turn (features committed one at a time on the goal's single branch); `improve` audits this repo, or the whole fleet from its root, against the compliance register and proposes the fixes and backports; `recalibrate` tunes every field the stages read. Features are SLC vertical slices (user stories, never layers) carrying subtasks, a definition of done, comments, design feedback back to the design team, and staleness flags |
-
-Two skills are stages of `sync` and hidden from the slash menu (`user-invocable: false`). You never call them, but they still own their procedures:
-
-| Stage | Skill | What it does |
-| --- | --- | --- |
-| `architecture` | `hero-skills:architecture` | Create + converge a single root `DESIGN.md`, tech stack, boundaries, dependency rules, invariants, users, flows, interaction standards, append-only decisions; never restates what the code says. `review` reports drift read-only; `sync` converges |
-| `harden` | `hero-skills:harden` | Audit read-only for hardening, dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness, and emit execution-ready plans as `.plans/` security items |
+| `wayfare:wayfare-run-task` | Drives a small task end-to-end: plan → implement → simplify → push (tests included) → self-review → mark-ready → await-review → respond → ship. Detects a resume point on re-invocation; with no arguments, drives the current goal to merged + reset branch. Explicit user gates at each destructive step. |
+| `wayfare:wayfare-init-repo` | Scaffolds a new project, then chains into setup-dev → config → first-commit. |
 
 ### Operations
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:think-it-through` | Brainstorm + grill an idea one question at a time into shared understanding and dependency-aware work-items |
-| `hero-skills:fleet` | Create + converge `FLEET.md`, the local, unversioned map of the repos checked out beside each other (group, port). `sync` scans the folder and proposes rows, `review` reports drift read-only. Every repo skill run from the fleet root fans out to the repos you pick (see `docs/FLEET-MD.md`) |
-| `hero-skills:handoff` | Distill the current conversation into one self-contained work-item for a downstream agent (optionally filed to the tracker, or to **another repo** with `--repo OWNER/NAME`) |
+| `wayfare:wayfare-grill-idea` | Brainstorm + grill an idea one question at a time into shared understanding and dependency-aware work-items |
+| `wayfare:wayfare-sync-fleet` | Create + converge `FLEET.md`, the local, unversioned map of the repos checked out beside each other (group, port). Scans the folder and proposes rows, writing only what you confirm. Every repo skill run from the fleet root fans out to the repos you pick (see `docs/FLEET-MD.md`) |
+| `wayfare:wayfare-review-fleet` | Report drift between `FLEET.md` and the checkouts beside it — repos missing from the map, rows with no checkout, port collisions. Writes nothing |
+| `wayfare:wayfare-write-handoff` | Distill the current conversation into one self-contained work-item for a downstream agent (optionally filed to the tracker, or to **another repo** with `--repo OWNER/NAME`) |
 
 ### Utilities
 
 | Command | What it does |
 | --- | --- |
-| `hero-skills:wayfare drop` | Abandon or pause an unmerged branch, stash uncommitted work, switch to default, clear context |
-| `hero-skills:audit-plugin` | Audit the hero-skills plugin itself for quality and consistency |
+| `wayfare:wayfare-recomponentize-ui` | Refactor a project's UI into atomic components, sourcing primitives from a design-system registry and codemodding off-token styling |
+| `wayfare:wayfare-humanize-prose` | Strip the signs of AI-generated writing out of text |
+| `wayfare:wayfare-write-handoff` | Distil the session into one self-contained work-item for an agent with no context from it |
+| `wayfare:wayfare-audit-plugin` | Audit the wayfare plugin itself for quality and consistency |
 
 ## Updating vendored assets in a downstream repo
 
@@ -493,19 +514,19 @@ with what `auto-approve.yaml` declares.
 
 Every skill reads `HERO.md` from your repo root. It declares your stack so skills don't have to guess. **HERO.md is committed to the repo**. It's team-shared, so every developer and every skill works from the same config.
 
-When project config drifts (new deps, CI changes, switched task runner), skills detect the staleness and remind you to run `hero-skills:wayfare init recalibrate` to refresh. There is no auto-pre-commit hook for this. It was too slow. Run the refresh on demand.
+When project config drifts (new deps, CI changes, switched task runner), skills detect the staleness and remind you to run `wayfare:wayfare-init-repo recalibrate` to refresh. There is no auto-pre-commit hook for this. It was too slow. Run the refresh on demand.
 
-**`recalibrate` is on fourteen skills.** When a skill does the wrong thing
+**`recalibrate` is on ten skills, and is a skill of its own.** When a skill does the wrong thing
 because its config is wrong, you fix it where you noticed:
-`hero-skills:ship-pr recalibrate` asks about the eight fields `ship-pr` reads
+`wayfare:wayfare-ship-pr recalibrate` asks about the eight fields `ship-pr` reads
 across Repository, CI/CD and Deployment, writes what you confirm, commits, and
-stops. It does not then ship. `hero-skills:wayfare init recalibrate` is the
+stops. It does not then ship. `wayfare:wayfare-init-repo recalibrate` is the
 whole-file pass. `scripts/hero-fields.sh SKILL` prints the fields of any skill
 that carries the verb, with their current values. See
 [docs/RECALIBRATE.md](docs/RECALIBRATE.md).
 
-Note that `recalibrate` is not `sync`: `fleet sync` converges `FLEET.md`,
-and `wayfare sync` converges the plan (and, through its architecture stage,
+Note that `recalibrate` is not `sync`: `wayfare-sync-fleet` converges `FLEET.md`,
+and `wayfare-sync-plan` converges the plan (and, through its architecture stage,
 `DESIGN.md`). Those keep their own verbs, and none of them is configuration.
 
 Here's what a minimal config looks like:
@@ -533,7 +554,7 @@ Here's what a minimal config looks like:
 - Dev command: uvicorn main:app --reload
 ```
 
-No `HERO.md`? Skills fall back to auto-detection. Run `hero-skills:wayfare init` to generate one. It investigates your repo and asks smart questions to fill in what it can't detect.
+No `HERO.md`? Skills fall back to auto-detection. Run `wayfare:wayfare-init-repo` to generate one. It investigates your repo and asks smart questions to fill in what it can't detect.
 
 <details>
 <summary><strong>Full config reference</strong></summary>
@@ -551,7 +572,7 @@ No `HERO.md`? Skills fall back to auto-detection. Run `hero-skills:wayfare init`
 
 ## Extending
 
-Use `hero-skills:create-skill` to create new skills that plug into the same workflow and read the same `HERO.md` config.
+Use `wayfare:wayfare-create-skill` to create new skills that plug into the same workflow and read the same `HERO.md` config.
 
 Skills are markdown files in the `skills/` directory. Each is a structured prompt with instructions Claude follows when you invoke it. No code to compile, no APIs to wire up.
 
@@ -568,5 +589,5 @@ and your fleet's private **overlay**, reference repos, incident history,
 .fleet/`). Inside a fleet the family is FLEET.md's rows whose group is not
 `none`; anywhere else, the current repo alone against the baseline.
 `scripts/consistency.py` writes the fleet's human table into that checkout.
-`wayfare sync` runs the audit as its `compliance` stage; `wayfare improve`
+`wayfare-sync-plan` runs the audit as its `compliance` stage; `wayfare-audit-compliance`
 runs it alone. See `assets/compliance/README.md`.

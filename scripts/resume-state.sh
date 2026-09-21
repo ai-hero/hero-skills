@@ -2,10 +2,10 @@
 # Copyright (c) 2026 A.I. Hero, Inc.
 # All Rights Reserved.
 
-# resume-state.sh: gather the git/PR state one-shot needs to pick a resume point.
+# resume-state.sh: gather the git/PR state wayfare-run-task needs to pick a resume point.
 #
 # Prints shell-eval-able KEY=VALUE lines describing where the current branch
-# sits in the pipeline. one-shot's Step 0.5 maps these onto a resume step; this
+# sits in the pipeline. wayfare-run-task's Step 0.5 maps these onto a resume step; this
 # script makes no routing decision itself, so the decision table stays in
 # SKILL.md where a reader can see it.
 #
@@ -161,7 +161,7 @@ BOT_REPLIED=unknown
 if [ "$JQ_OK" = true ] && [ -n "$CURRENT_BRANCH" ]; then
   # --state all is required: the default is `open`, so a merged or closed PR
   # returns [] and reads as "no PR", which made every MERGED/CLOSED row in
-  # one-shot's decision table unreachable, including the one that stops a
+  # wayfare-run-task's decision table unreachable, including the one that stops a
   # merged branch from being pushed again as a duplicate.
   if PR_LIST=$(gh pr list --state all --head "$CURRENT_BRANCH" \
       --json number,url,isDraft,reviewDecision,state 2>/dev/null); then
@@ -190,18 +190,26 @@ if [ "$PR_EXISTS" = "false" ]; then
 elif [ "$PR_EXISTS" = "true" ]; then
   # The self-review count is author-filtered (see hero_self_review_count);
   # an unknown login must not silently count zero self-reviews.
+  #
+  # A COMPLETE review, not a started one: the findings comment and the
+  # improvements comment carry the same marker, so counting the marker made
+  # a review that stopped after findings read as done. The table below routes
+  # on `SELF_REVIEW_DONE == 0`, so that reading skipped Step 5 and handed the
+  # PR to ship-pr, whose prior-review gate then refused it for the missing
+  # half. Counting the improvements comment is counting the terminal
+  # artifact; review-pr posts it even when it fixed nothing.
   ME=$(gh api user --jq .login 2>/dev/null) || { ME=""; fail_source "gh-user"; }
-  if COMMENTS=$(gh api "/repos/{owner}/{repo}/issues/$PR_NUMBER/comments" 2>/dev/null); then
+  if COMMENTS=$(gh api --paginate "/repos/{owner}/{repo}/issues/$PR_NUMBER/comments?per_page=100" 2>/dev/null); then
     SELF_REVIEW_DONE=$(printf '%s' "$COMMENTS" \
-      | jq --arg m "$HERO_SELF_REVIEW_MARKER" --arg me "$ME" '[.[] | select(.user.login == $me) | select(.body | test($m))] | length' 2>/dev/null) \
+      | jq --arg fx "$HERO_SELF_REVIEW_FIXES_MARKER" --arg me "$ME" '[.[] | select(.user.login == $me) | select(.body | test($fx; "i"))] | length' 2>/dev/null) \
       || { SELF_REVIEW_DONE=unknown; fail_source "self-review-count"; }
 
     # BOT_REPLIED is only meaningful if we know who the bot is. Without
     # bot-username configured, a `false` here is indistinguishable from "no
     # reply yet" and await-review waits forever for a reply already posted.
-    # `agent: none` is a first-class supported setting (`wayfare init` writes it when
+    # `agent: none` is a first-class supported setting (`wayfare-init-repo` writes it when
     # no review bot is detected), and such a repo has no bot-username. Treating
-    # that as a failed source made STATE_OK=false on every resume, so one-shot
+    # that as a failed source made STATE_OK=false on every resume, so wayfare-run-task
     # stopped with a diagnostic on a perfectly valid configuration.
     REVIEW_AGENT=$(hero_field agent 2>/dev/null | tr '[:upper:]' '[:lower:]')
     if [ "$REVIEW_AGENT" = "none" ]; then
@@ -227,12 +235,12 @@ fi
 
 # ---------- work-item state ------------------------------------------------
 
-# The in-flight item's checklists are the only record of where one-shot's
+# The in-flight item's checklists are the only record of where wayfare-run-task's
 # Step 2 stopped: `.plans/` is git-ignored, so the diff says what changed but
 # not which subtask was mid-way. hero_store_path, not hero_work_store: this
 # script is read-only.
 #
-# Which active item is THIS branch's: the one whose `branch:` matches (one-shot
+# Which active item is THIS branch's: the one whose `branch:` matches (wayfare-run-task
 # Step 2 writes it at the first edit). "The single active item" is not a rule
 # that holds: a goal's features all sit in the shared store, so several can be
 # active at once. What keeps this unambiguous is that a goal's features share
@@ -265,11 +273,11 @@ invalid"*) fail_source "store-invalid-item" ;; esac
     MATCHED=""; LEGACY=""; LEGACY_N=0
     while read -r state f _; do
       [ "$state" = active ] || continue
-      # hero_ready_items owns the status enum; `active` is one-shot's mark
+      # hero_ready_items owns the status enum; `active` is wayfare-run-task's mark
       # before its first edit. Only a task can be the item on this branch: a
       # goal at active is a set of tasks, and a signal at active is being
       # delivered, not built. A `bot:` task is a dependency bot's PR that
-      # wayfare's bot-PR procedure carries, never one-shot's.
+      # wayfare's bot-PR procedure carries, never wayfare-run-task's.
       [ "$(hero_item_type "$ITEMS/$f")" = task ] || continue
       [ -n "$(hero_item_field "$ITEMS/$f" bot)" ] && continue
       ITEM_INFLIGHT=$((ITEM_INFLIGHT + 1))

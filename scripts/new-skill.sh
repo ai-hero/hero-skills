@@ -57,7 +57,7 @@ name: $SKILL_NAME
 description: $DESCRIPTION
 argument-hint: [args]
 # Omit the next line for skills meant to be model-invocable / chained by an
-# orchestrator like one-shot (a user-only skill cannot be called via the Skill tool).
+# orchestrator like wayfare-run-task (a user-only skill cannot be called via the Skill tool).
 disable-model-invocation: true
 ---
 
@@ -84,7 +84,7 @@ If \`FLEET_ROOT\` printed, this folder is a fleet, not a repo: stop and follow *
 Read \`HERO.md\` if it exists. This skill uses:
 - TODO: list which HERO.md sections this skill reads
 
-If \`HERO.md\` is missing, suggest \`hero-skills:wayfare init\` but proceed with auto-detection.
+If \`HERO.md\` is missing, suggest \`wayfare:wayfare-init-repo\` but proceed with auto-detection.
 
 ### Step 1: TODO
 

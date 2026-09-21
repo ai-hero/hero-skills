@@ -7,7 +7,7 @@
 # Compares the last-commit time of HERO.md against the last-commit time of
 # files that affect the HERO.md schema (deps, CI, deploy, code quality, agent
 # configs, task runners). If any of those is newer, prints a hint to stderr
-# suggesting `hero-skills:wayfare init recalibrate`.
+# suggesting `wayfare:wayfare-init-repo recalibrate`.
 #
 # Always exits 0. This is purely informational.
 #
@@ -17,7 +17,7 @@
 # every commit). Pre-commit was too slow; we let skills surface the hint
 # on demand instead.
 #
-# Note: the daily-flow skills (push-pr / one-shot) call hero_check_staleness
+# Note: the daily-flow skills (push-pr / wayfare-run-task) call hero_check_staleness
 # in scripts/hero-lib.sh, a deliberately *fast subset* of this check. The two
 # are meant to be roughly aligned but NOT byte-for-byte identical. This script
 # can carry a longer pattern list (Cargo, ruff, biome, agent configs, etc.)
@@ -78,7 +78,7 @@ NEWEST=${NEWEST:-0}
 if (( NEWEST > HERO_TIME )); then
   cat >&2 <<'EOF'
 note: HERO.md may be out of date — project config has changed since the last sync.
-      Run `hero-skills:wayfare init recalibrate` to refresh.
+      Run `wayfare:wayfare-init-repo recalibrate` to refresh.
 EOF
 fi
 

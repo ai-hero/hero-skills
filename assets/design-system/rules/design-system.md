@@ -136,7 +136,7 @@ In `components.json` write the plain `${REGISTRY_TOKEN}` form only — the CLI r
 is `/\$\{(\w+)\}/g`, so `${VAR:-default}` ships as a literal string and surfaces
 as a confusing 401.
 
-Full procedure: `hero-skills:recomponentize-ui`.
+Full procedure: `wayfare:wayfare-recomponentize-ui`.
 
 ## This repo's own exceptions
 

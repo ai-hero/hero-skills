@@ -69,7 +69,7 @@ cell() { # key column — output is TSV, so a field is addressed by its column
   awk -F'\t' -v k="$1" -v c="$2" '$2 == k { print $c }'
 }
 
-OUT=$("$FIELDS" push-pr "$R"); RC=$?
+OUT=$("$FIELDS" wayfare-push-pr "$R"); RC=$?
 check "a clean read exits 0" "0" "$RC"
 
 check "set field reports its value" \
@@ -91,7 +91,7 @@ check "section row with the heading present" \
   "(present)" "$(printf '%s\n' "$OUT" | awk -F'\t' '$1 == "Projects" { print $3 }')"
 
 check "section row with the heading absent" \
-  "(absent)" "$("$FIELDS" setup-dev "$R" | awk -F'\t' '$1 == "Developer Setup" { print $3 }')"
+  "(absent)" "$("$FIELDS" wayfare-setup-dev "$R" | awk -F'\t' '$1 == "Developer Setup" { print $3 }')"
 
 # A field under a heading that does not exist needs a different question than
 # a blank under a heading that does, because phase 3 has to create the section.
@@ -103,7 +103,7 @@ check "field under a missing section is no-section" \
 check "CI/CD platform is read from CI/CD" \
   "github-actions" "$(printf '%s\n' "$OUT" | awk -F'\t' '$1 == "CI/CD" && $2 == "platform" { print $3 }')"
 check "Deployment platform is read from Deployment" \
-  "fly" "$("$FIELDS" ship-pr "$R" | awk -F'\t' '$1 == "Deployment" && $2 == "platform" { print $3 }')"
+  "fly" "$("$FIELDS" wayfare-ship-pr "$R" | awk -F'\t' '$1 == "Deployment" && $2 == "platform" { print $3 }')"
 
 # hero_md_field skips fenced blocks; the heading probe must agree with it, or
 # a HERO.md quoting its own template reports sections it does not have.
@@ -120,12 +120,12 @@ Example of what this file can hold:
 ```
 EOM
 check "a heading inside a code fence is not present" \
-  "(absent)" "$("$FIELDS" setup-dev "$TMP/fenced" | awk -F'\t' '$1 == "Developer Setup" { print $3 }')"
+  "(absent)" "$("$FIELDS" wayfare-setup-dev "$TMP/fenced" | awk -F'\t' '$1 == "Developer Setup" { print $3 }')"
 
 # No HERO.md at all: every row says so, and the command still succeeds, so
-# recalibrate reads the rows and sends the user to `wayfare init`.
+# recalibrate reads the rows and sends the user to `wayfare-init-repo`.
 mkdir -p "$TMP/bare"
-BARE=$("$FIELDS" push-pr "$TMP/bare"); check "missing HERO.md exits 0" "0" "$?"
+BARE=$("$FIELDS" wayfare-push-pr "$TMP/bare"); check "missing HERO.md exits 0" "0" "$?"
 check "every row is no-file when there is no HERO.md" \
   "9" "$(printf '%s\n' "$BARE" | tail -n +2 | grep -c '(no-file)' | tr -d ' ')"
 
@@ -134,14 +134,14 @@ check "every row is no-file when there is no HERO.md" \
 mkdir -p "$TMP/shim"
 sed 's/^hero_md_field() {/hero_md_field() { return 127;/' "$PLUGIN_ROOT/scripts/hero-lib.sh" > "$TMP/shim/hero-lib.sh"
 cp "$FIELDS" "$TMP/shim/hero-fields.sh"
-SHIM_OUT=$(bash "$TMP/shim/hero-fields.sh" push-pr "$R" 2>/dev/null); SHIM_RC=$?
+SHIM_OUT=$(bash "$TMP/shim/hero-fields.sh" wayfare-push-pr "$R" 2>/dev/null); SHIM_RC=$?
 check "a broken reader is not reported as unset" \
   "0" "$(printf '%s\n' "$SHIM_OUT" | grep -c '(unset)' | tr -d ' ')"
 check "a broken reader fails the command" "1" "$SHIM_RC"
 
 # A ROOT that does not exist is a caller bug, not a repo without config.
 check "nonexistent ROOT exits 1" \
-  "1" "$("$FIELDS" push-pr "$TMP/nope" >/dev/null 2>&1; echo $?)"
+  "1" "$("$FIELDS" wayfare-push-pr "$TMP/nope" >/dev/null 2>&1; echo $?)"
 
 # `grep "^$SKILL|"` used to interpolate the argument as a regex, so `push.pr`
 # printed push-pr's table and exited 0.
@@ -186,11 +186,6 @@ for name in $("$FIELDS" --list); do
 done
 check "every mapped name is a skill directory" "" "$BAD_NAME"
 
-# Every mapped skill invokes this script. There is no exemption now that the
-# whole-file pass belongs to `wayfare init`, and wayfare's own recalibrate
-# does invoke it. An empty list is the claim; the loop below is the check.
-NO_INVOCATION=""
-
 # The map is the claim and the skills are the truth. Match the frontmatter
 # anchored to the first block: create-skill/SKILL.md carries a second
 # `argument-hint:` at column 0 inside a fenced template, so an unanchored grep
@@ -212,29 +207,63 @@ for d in "$PLUGIN_ROOT"/skills/*/; do
 done
 check "every skill offering recalibrate has map rows" "" "$MISSING"
 
-EXTRA=""
+# Exempt by name, not by circumstance. An earlier version skipped any skill
+# that happened not to invoke the script, which is the absence of the thing
+# being checked: deleting a skill's `hero-fields.sh" NAME` block then made
+# the check pass instead of fail, and a 26-directory rename sweep is exactly
+# what deletes one. wayfare-init-repo is the only real exemption: its
+# `recalibrate` re-investigates the repo and rewrites HERO.md whole rather
+# than reporting a field table, so it reads no map. Anything else appearing
+# here is a skill that lost its call.
+NO_INVOCATION="wayfare-init-repo"
+
+# A mapped skill no longer has to offer `recalibrate` itself. The wayfare
+# verbs were split out of one skill, and tuning went with them into
+# `wayfare-recalibrate-config`, so `wayfare-sync-plan` reads Wayfare fields
+# and offers no verb of its own. What still has to hold is that every field
+# is reachable by SOME recalibrate, which the `*|*` row below is.
 MAPPED=0
 WRONG_CALL=""
 for name in $("$FIELDS" --list); do
   MAPPED=$((MAPPED + 1))
-  declares_verb "$PLUGIN_ROOT/skills/$name" || EXTRA="$EXTRA $name"
   # The binding a 16-file copy-paste actually breaks: a block still reading
   # `hero-fields.sh" push-pr` inside another skill prints the wrong table and
-  # asks about fields that skill never reads.
-  case " $NO_INVOCATION " in
-    *" $name "*) ;;
-    *) grep -q "hero-fields.sh\" $name\$" "$PLUGIN_ROOT/skills/$name/SKILL.md" ||
-         WRONG_CALL="$WRONG_CALL $name" ;;
-  esac
+  # asks about fields that skill never reads. Checked only where a skill
+  # invokes the script at all; a mapped skill that never invokes it is fine.
+  # Keyed on declaring the verb, not on being mapped. A mapped skill that
+  # offers no `recalibrate` has nothing to invoke the script FOR: since the
+  # split, wayfare-recalibrate-config tunes those fields. A skill that DOES
+  # offer the verb and reads no map asks the user about nothing.
+  if declares_verb "$PLUGIN_ROOT/skills/$name"; then
+    case " $NO_INVOCATION " in
+      *" $name "*) ;;
+      *) grep -qE "hero-fields.sh\" ($name|--all)\$" "$PLUGIN_ROOT/skills/$name/SKILL.md" ||
+           WRONG_CALL="$WRONG_CALL $name" ;;
+    esac
+  fi
 done
-check "every mapped skill offers recalibrate" "" "$EXTRA"
-check "every mapped skill invokes hero-fields.sh with its own name" "" "$WRONG_CALL"
+check "a skill offering recalibrate reads its own rows" "" "$WRONG_CALL"
 
-# Both loops accumulate into a variable that starts empty, so each passes when
-# it examines nothing. These two are what make them mean something.
-check "the declared-skills loop examined every mapped skill" "$MAPPED" "$DECLARED"
-check "the mapped-skills loop examined something" \
-  "yes" "$([ "$MAPPED" -gt 0 ] && echo yes || echo no)"
+# Every field must be reachable by some recalibrate, or it is a field nobody
+# can fix. A `*|*` row does NOT deliver that: hero-fields.sh prints it as one
+# literal row rather than expanding it, so the earlier version of this check
+# asserted a coverage the script never had, by grepping source text instead of
+# running it. Run it: --all must reach every SECTION|KEY the map declares.
+ALL_PAIRS=$(awk -F'|' '/^wayfare-[a-z-]+\|/ && $2 != "*" { print $2 "|" $3 }' "$FIELDS" | sort -u)
+SEEN_PAIRS=$("$FIELDS" --all "$R" | awk -F'\t' 'NR > 1 { print $2 "|" $3 }' | sort -u)
+check "--all reaches every mapped field" "" "$(comm -23 <(echo "$ALL_PAIRS") <(echo "$SEEN_PAIRS") | tr '\n' ' ' | sed 's/ $//')"
+check "the recalibrate-config skill reads the whole map" "yes" \
+  "$(grep -q 'hero-fields.sh" --all$' \
+      "$PLUGIN_ROOT/skills/wayfare-recalibrate-config/SKILL.md" && echo yes || echo no)"
+
+# The loop accumulates into a variable that starts empty, so it passes when it
+# examines nothing. This is what makes it mean something.
+check "the mapped-skills loop examined something" "yes" "$([ "$MAPPED" -gt 0 ] && echo yes || echo no)"
+# The OTHER loop needs its own counterweight. declares_verb parses the first
+# frontmatter block; reflow it, or rename the key, and every skill `continue`s,
+# MISSING stays empty, and "every skill offering recalibrate has map rows"
+# reports PASS having checked nothing.
+check "the declared-skills loop examined something" "yes" "$([ "$DECLARED" -gt 0 ] && echo yes || echo no)"
 
 echo "hero-fields: $PASS passed${FAIL:+, $FAIL FAILED}" | sed 's/, 0 FAILED//'
 [ "$FAIL" -eq 0 ]

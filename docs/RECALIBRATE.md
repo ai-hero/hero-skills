@@ -1,6 +1,6 @@
 # The recalibrate verb
 
-Eleven skills accept `recalibrate`: ask me the questions that decide how this
+Ten skills accept `recalibrate`, and `wayfare-recalibrate-config` is the verb itself: ask me the questions that decide how this
 skill works, and write the answers. `scripts/hero-fields.sh` holds the map of
 which skill reads which fields, and `scripts/hero-fields.test.sh` ties the map
 and the skills to each other in both directions, a skill declaring the verb
@@ -14,13 +14,13 @@ fix, and the moment you notice is the moment you know which field is wrong.
 
 `recalibrate` puts the fix where the noticing happens. You do not re-run a
 repo-wide investigation because `ship-pr` merged with the wrong strategy; you
-run `hero-skills:ship-pr recalibrate`, which asks about the eight fields
+run `wayfare:wayfare-ship-pr recalibrate`, which asks about the eight fields
 `ship-pr` reads across Repository, CI/CD and Deployment, and nothing else.
 
 Three properties make it safe to reach for:
 
 1. **It is scoped.** A skill asks about the fields *it* reads and nothing
-   else. Whole-file convergence is `hero-skills:wayfare init recalibrate`, one
+   else. Whole-file convergence is `wayfare:wayfare-init-repo recalibrate`, one
    skill's job, not every skill's.
 2. **It never does the work.** `recalibrate` ends when the config is written.
    It does not then push, merge, refactor, or plan. The user decides whether
@@ -38,24 +38,28 @@ never touches the files those skills keep:
 | Verb | File | What it means |
 | --- | --- | --- |
 | `recalibrate` | `HERO.md` | how this skill should behave |
-| `fleet sync` | `FLEET.md` | converge the map with the folder beside it |
-| `wayfare sync` | `.plans/` and `DESIGN.md` | converge the plan with the world. Its architecture stage converges the design record on the way |
+| `wayfare-sync-fleet` | `FLEET.md` | converge the map with the folder beside it |
+| `wayfare-sync-plan` | `.plans/` and `DESIGN.md` | converge the plan with the world. Its architecture stage converges the design record on the way |
 
-`wayfare` has both: `sync` for the plan (and, through its architecture stage,
-`DESIGN.md`), `recalibrate` for the `HERO.md` fields that tell it and its
-stages (`architecture` and `harden`) how to run. Those two stages carry no
-`recalibrate` of their own.
+The route has both: `wayfare-sync-plan` for the plan (and, through its
+architecture stage, `DESIGN.md`), and `wayfare-recalibrate-config` for the
+`HERO.md` fields that tell every stage how to run. The three stages
+(`wayfare-review-architecture`, `wayfare-sync-architecture`,
+`wayfare-audit-security`) carry no `recalibrate` of their own.
 
-Five skills read `HERO.md` and deliberately have no `recalibrate`, the two stages above, and three more. `fleet`
-runs at the fleet root, where there is no `HERO.md` to recalibrate.
-`audit-plugin` reads the file as the *subject* of its audit rather than as its
-own config. `think-it-through` is a dialogue with the user, and stopping it to
+Several skills read `HERO.md` and deliberately have no `recalibrate`: the
+three stages above, and the verbs split out of the old front door
+(`wayfare-sync-plan`, `wayfare-start-goal`, `wayfare-advance-item`,
+`wayfare-drop-item`), whose fields `wayfare-recalibrate-config` now tunes.
+`wayfare-sync-fleet` and `wayfare-review-fleet` run at the fleet root, where
+there is no `HERO.md` to recalibrate. `wayfare-audit-plugin` reads the file
+as the *subject* of its audit rather than as its own config. `wayfare-grill-idea` is a dialogue with the user, and stopping it to
 ask about config fields is the interruption the verb exists to avoid,
 recalibrate the skill that acts on its output instead.
 
-`hero-skills:wayfare init recalibrate` is the whole-file pass, and the only one.
+`wayfare:wayfare-init-repo recalibrate` is the whole-file pass, and the only one.
 It replaced the old `--update` flag; every other skill's `recalibrate` is a
-scoped slice of the same motion. `wayfare init` is also the one mapped skill that
+scoped slice of the same motion. `wayfare-init-repo` is also the one mapped skill that
 does not call `hero-fields.sh`: it re-investigates the repo rather than
 reading a field table.
 
@@ -70,7 +74,7 @@ Four phases, in this order, in every skill.
    missing section. Then look at the repo for those rows, a field the tree
    can answer should reach the user as a proposal with its evidence, not as an
    open question. `(no-file)` on every row is not a recalibrate at all: send
-   the user to `hero-skills:wayfare init`.
+   the user to `wayfare:wayfare-init-repo`.
 2. **Ask.** One numbered list, every question at once. Each question carries
    the evidence behind the proposal and the value it would replace. Never
    ask in freeform prose, and never ask about a field that already holds the
@@ -90,7 +94,7 @@ now that the config is right, not the output of having run it.
   retry. Chaining into the real work hides which change fixed the behavior
   and spends a merge or a push on a config guess.
 - **Asking about fields the skill does not read.** The scope is the whole
-  point. Send the rest to `hero-skills:wayfare init recalibrate`.
+  point. Send the rest to `wayfare:wayfare-init-repo recalibrate`.
 - **Rewriting the file to normalize it.** Reformatting unrelated sections
   turns a four-line config change into a diff nobody reviews.
 - **Reaching for it when the answer is `sync`.** A stale `DESIGN.md`, a

@@ -5,8 +5,8 @@ What a plan is, what is in it, and what shape every item takes.
 Wayfare offers one thing: **a way to plan work and have agents execute it, in
 a repo.** The plan is the durable object that makes that possible. This
 document specifies it. `scripts/hero-lib.sh` reads and writes it,
-`hero-skills:wayfare` is the skill that creates items from a sync; handoff,
-think-it-through, one-shot and harden author items too and each stamps its
+`wayfare:wayfare-sync-plan` is the skill that creates items from a sync; handoff,
+wayfare-grill-idea, wayfare-run-task and harden author items too and each stamps its
 name in `origin`. Every skill that touches work touches it through here.
 
 The store is local and private (`.git/info/exclude`, via `hero_exclude_add`).
@@ -74,11 +74,11 @@ every planning run as the frame its proposals have to fit.
 
 ## Log
 
-- 2026-09-19 (wayfare init) note: plan created, target unset (self-review mode)
+- 2026-09-19 (wayfare-init-repo) note: plan created, target unset (self-review mode)
 ```
 
-`wayfare init` writes this file and is the only verb that creates it.
-`wayfare sync` updates `source.head`, `target.head` and `next_id`; nothing
+`wayfare-init-repo` writes this file and is the only verb that creates it.
+`wayfare-sync-plan` updates `source.head`, `target.head` and `next_id`; nothing
 else writes the frontmatter.
 
 **`next_id` is a hint, never the allocator.** Worktree subagents run
@@ -90,7 +90,7 @@ allocation moves behind a single writer. A local run that trusts it over the
 scan will collide.
 
 **Target is optional.** With no `target` key the plan is in **self-review
-mode**: `wayfare sync` reconciles the source against `DESIGN.md`, its own
+mode**: `wayfare-sync-plan` reconciles the source against `DESIGN.md`, its own
 gaps and its own hardening audit, and no item carries a target anchor. The
 absence is not a defect and nothing reports it as one.
 
@@ -109,7 +109,7 @@ and nothing else; that column is the test a fifth type would have to pass.
 nine kinds distinguished beyond that is now a field.
 
 **Tasks are built. Signals are delivered. Goals and ideas are neither** — a
-goal is never handed out as READY because one-shot builds tasks, and an idea
+goal is never handed out as READY because wayfare-run-task builds tasks, and an idea
 is not work at all yet.
 
 ### `idea`: the parking lot
@@ -159,7 +159,7 @@ Definition of Done has to assert, and how that assertion is verified.
 | `dependency` | exempt | the bump merged, the alert closed, the deploy healthy | the PR and the platform |
 | `docs` | exempt | prose that describes code now describes what the code does, or is gone | reading the prose against the code it describes |
 
-**The slice rule** (`hero-skills:wayfare`, *Slices, not layers*) is that a
+**The slice rule** (`references/shaping.md`, *Slices, not layers*) is that a
 `story` task is Simple, Lovable and Complete: a vertical cut through every
 layer it needs, shaped `AS_A user I_CAN do X SO_THAT Y`, never a layer of one.
 The five exemptions are narrow and all for the same reason: the surface
@@ -222,14 +222,14 @@ new → accepted → planning → ready → active → committed → review → 
 | Status | Meaning | Flipped by |
 | --- | --- | --- |
 | `new` | created, nobody has decided it should be worked on | the default when `status` is absent |
-| `accepted` | on the roadmap, not yet planned | `wayfare sync`, accepting a proposal |
-| `planning` | a plan is being written, or is written and not yet approved | `wayfare sync`'s planning postflight |
+| `accepted` | on the roadmap, not yet planned | `wayfare-sync-plan`, accepting a proposal |
+| `planning` | a plan is being written, or is written and not yet approved | `wayfare-sync-plan`'s planning postflight |
 | `ready` | plan approved, eligible to build | **the user, only ever explicitly** |
-| `active` | being built or being delivered | one-shot at its first edit |
-| `committed` | committed on a goal's branch, absent from the default branch | one-shot's commit-only mode |
-| `review` | PR open, awaiting review and merge | one-shot when the PR opens |
-| `done` | finished; dependents are unblocked | one-shot at merge, or the goal's final turn |
-| `dropped` | abandoned; dependents stay blocked | `wayfare drop` |
+| `active` | being built or being delivered | wayfare-run-task at its first edit |
+| `committed` | committed on a goal's branch, absent from the default branch | wayfare-run-task's commit-only mode |
+| `review` | PR open, awaiting review and merge | wayfare-run-task when the PR opens |
+| `done` | finished; dependents are unblocked | wayfare-run-task at merge, or the goal's final turn |
+| `dropped` | abandoned; dependents stay blocked | `wayfare-drop-item` |
 
 Not every item visits every state. A `signal` runs
 `new → accepted → ready → active → done` (no plan to write, no branch to
@@ -346,10 +346,10 @@ What must be observably true when this ships — every line verified before
 ## Log
 
 - 2026-07-24 (rahul) note: dated, append-only; never rewrite or delete a line
-- 2026-07-24 (one-shot) mistake: wired the callback against the session cookie,
+- 2026-07-24 (wayfare-run-task) mistake: wired the callback against the session cookie,
   then redid it against the token — the cookie is not set until after the
   redirect, which the approach assumed the other way round
-- 2026-07-25 (one-shot) signal: design/auth/sign-in.md orders consent before
+- 2026-07-25 (wayfare-run-task) signal: design/auth/sign-in.md orders consent before
   account linking; the code links first, because consent cannot be scoped
   until the account is known
 ```
@@ -400,16 +400,16 @@ rules, kept consistent by hand. They are one section with a tag.
 | `mistake` | a wrong turn the build took, written as it happens | the next planning round |
 | `turn` | one goal turn: what was spent, what stopped it | the next turn |
 | `decision` | a choice made and the reason, where the file cannot show it | reviewers |
-| `signal` | a divergence captured mid-build, before `wayfare sync` promotes it to a `signal` item | `wayfare sync` |
+| `signal` | a divergence captured mid-build, before `wayfare-sync-plan` promotes it to a `signal` item | `wayfare-sync-plan` |
 
 A `signal` line carries the capture id and a state marker after the tag, and
 the marker is the one part of a log line that changes after it is written:
 
 ```text
-- 2026-07-25 (one-shot) signal: DF-12-2026-07-25-1 [undelivered] design/auth/sign-in.md orders consent before account linking; the code links first, because consent cannot be scoped until the account is known
+- 2026-07-25 (wayfare-run-task) signal: DF-12-2026-07-25-1 [undelivered] design/auth/sign-in.md orders consent before account linking; the code links first, because consent cannot be scoped until the account is known
 ```
 
-`[undelivered]` becomes `[item: 61]` when `wayfare sync` promotes the entry,
+`[undelivered]` becomes `[item: 61]` when `wayfare-sync-plan` promotes the entry,
 and the signal item's `entry:` names the `DF-` id back. That is what lets the
 open-feedback count be a scan for one token, and what makes the promotion
 link checkable from both ends. `references/feedback-channels.md` owns the
@@ -440,7 +440,7 @@ A `goal` carries two more sections, and both are read every turn.
 ```markdown
 ## Permissions
 
-What the loop may do without asking again. Read aloud at `wayfare next`'s
+What the loop may do without asking again. Read aloud at `wayfare-start-goal`'s
 gate and granted there, in-session; never a grant by itself.
 
 - mark-ready: yes
@@ -472,10 +472,10 @@ made) and `branch`.
 `parent` is that goal's id, ordered by `rank` and then id
 (`hero_goal_members`). `depends_on` is not part of the order: it gates each
 member's readiness in the listing, and a `rank` that puts a member before
-one it depends on is a store defect `wayfare sync` reports.
+one it depends on is a store defect `wayfare-sync-plan` reports.
 
 The old schema stored the same edge twice — `covers` on the goal, ordered,
-plus `depends_on` re-encoding much of that order — and `wayfare sync` had to
+plus `depends_on` re-encoding much of that order — and `wayfare-sync-plan` had to
 reconcile them every round. Two goals naming the same task in `covers` was a
 store defect the sync had to detect. Under `parent` it is not representable.
 
@@ -504,7 +504,7 @@ internally consistent and becomes badly wrong about the world.
 A carve-out inherits its parent's anchors: it covers ground the parent was
 planned against, so it is stale from exactly the same head.
 
-Absent anchors mean legacy or unmigrated. `wayfare sync` backfills them and
+Absent anchors mean legacy or unmigrated. `wayfare-sync-plan` backfills them and
 never computes staleness from an absent value.
 
 ## The server-side mapping
@@ -581,4 +581,4 @@ hand-written `PLAN.md` with no `schema:`, and an `items/` that already holds
 items with no `PLAN.md` beside it, which is a run that stopped midway. A file
 at the store root with no frontmatter is not an item and is left in place.
 
-`wayfare init` on a repo with an old store runs the migrator and says so.
+`wayfare-init-repo` on a repo with an old store runs the migrator and says so.

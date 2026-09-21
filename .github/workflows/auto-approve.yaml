@@ -75,6 +75,7 @@ jobs:
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '@auto-approve') &&
       !contains(github.event.comment.body, 'ai-hero:self-review') &&
+      !contains(github.event.comment.body, 'Hero Self-Review') &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
 
     steps:
@@ -450,8 +451,9 @@ jobs:
         run: |
           # Auto-approve must NOT be the only review on a PR. Require at
           # least one of:
-          #   - a hero-skills self-review comment (carrying the hidden
-          #     <!-- ai-hero:self-review --> marker, posted by hero-skills:review-pr)
+          #   - a COMPLETE self-review: both marker-carrying comments that
+          #     wayfare:wayfare-review-pr posts, the findings comment and the
+          #     improvements comment recording what was done about them
           #   - a review (APPROVED / CHANGES_REQUESTED / COMMENTED) from an
           #     external code review bot (Copilot, CodeRabbit, Greptile, etc.)
           #     or a human reviewer
@@ -460,26 +462,71 @@ jobs:
           # comments so installations that only post inline comments
           # (e.g. CodeRabbit configurations) still pass.
 
-          gh api "/repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews" \
+          # --paginate: the default page is 30, and this gate depends on the
+          # SECOND self-review comment, which is the first thing to fall off a
+          # busy PR. Without it a finished review reads as unfinished and the
+          # author is told to redo work they already did. Same reason as the
+          # verdict read below.
+          gh api --paginate "/repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews?per_page=100" \
             > reviews.json
-          gh api "/repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+          gh api --paginate "/repos/${{ github.repository }}/issues/$PR_NUMBER/comments?per_page=100" \
             > issue_comments.json
-          gh api "/repos/${{ github.repository }}/pulls/$PR_NUMBER/comments" \
+          gh api --paginate "/repos/${{ github.repository }}/pulls/$PR_NUMBER/comments?per_page=100" \
             > pr_review_comments.json
 
-          # Self-review marker, the hidden <!-- ai-hero:self-review -->
-          # comment posted by hero-skills:review-pr. Match both the current
-          # marker and the older "Hero Self-Review" heading (case-insensitive)
-          # so comments posted under the previous convention still count.
-          SELF_REVIEW=$(jq -r '
-            [.[] | select(.body | test("ai-hero:self-review|Hero Self-Review"; "i"))] | length
+          # test: begin prior-review
+          # The PR author, read here rather than below: the self-review is
+          # posted BY the author, so both halves filter to them. Counting any
+          # commenter let anyone open this gate with a marker copied out of
+          # the public review-pr SKILL.md, and the summary then told the
+          # maintainer a review had happened.
+          PR_AUTHOR=$(jq -r '.user.login' pr.json)
+
+          # The fixes comment carries its own hidden marker. The heading it
+          # used to be recognised by is humanized before posting
+          # (docs/HUMANIZING.md forbids em dashes and rewrites heading case),
+          # so matching prose meant a finished review could fail the gate,
+          # while the bare word "improvements" appears freely in the FINDINGS
+          # comment's own suggestions and made one comment satisfy both halves.
+          # The legacy heading match stays as a fallback for repos whose
+          # plugin predates the marker; drop it once the fleet has upgraded.
+          # A heading, not the words.
+          # A review OF this gate quotes the strings the gate matches on, so an unanchored pattern read this PR's own findings comment as the fixes comment and collapsed findings to zero.
+          # Prose is unreliable exactly where it discusses the mechanism.
+          FIXES_RE="ai-hero:self-review-fixes|(^|\\n)#+[ \t]*self-review[^\\n]*improvements"
+          SELF_RE="ai-hero:self-review|Hero Self-Review"
+
+          # Disjoint by construction: a comment that counts as fixes is
+          # excluded from findings, so requiring both to be non-zero requires
+          # two different comments. An earlier version made fixes a strict
+          # SUBSET of findings, which left the `&&` below doing nothing.
+          SELF_REVIEW_FIXES=$(jq -r --arg author "$PR_AUTHOR" --arg fx "$FIXES_RE" '
+            [.[]
+              | select(.user.login == $author)
+              | select(.body | test($fx; "i"))
+            ] | length
           ' issue_comments.json)
+
+          SELF_REVIEW_FINDINGS=$(jq -r --arg author "$PR_AUTHOR" --arg fx "$FIXES_RE" --arg sr "$SELF_RE" '
+            [.[]
+              | select(.user.login == $author)
+              | select(.body | test($sr; "i"))
+              | select(.body | test($fx; "i") | not)
+            ] | length
+          ' issue_comments.json)
+
+          # Both halves, or the self-review path does not count. The other
+          # two paths below are untouched: a human or bot review still
+          # passes on its own.
+          SELF_REVIEW=0
+          if [ "$SELF_REVIEW_FINDINGS" -gt 0 ] && [ "$SELF_REVIEW_FIXES" -gt 0 ]; then
+            SELF_REVIEW=1
+          fi
 
           # Reviews from anyone other than the PR author. Filter out
           # PENDING reviews (drafts) and the auto-approve workflow's own
           # past approvals, so re-running on the same PR cannot
           # bootstrap itself.
-          PR_AUTHOR=$(jq -r '.user.login' pr.json)
           OTHER_REVIEWS=$(jq -r --arg author "$PR_AUTHOR" '
             [.[]
               | select(.user.login != $author)
@@ -501,7 +548,8 @@ jobs:
             ] | length
           ' pr_review_comments.json)
 
-          echo "self_review=$SELF_REVIEW"
+          # test: end prior-review
+          echo "self_review=$SELF_REVIEW (findings=$SELF_REVIEW_FINDINGS fixes=$SELF_REVIEW_FIXES)"
           echo "other_reviews=$OTHER_REVIEWS"
           echo "bot_inline=$BOT_INLINE"
 
@@ -509,13 +557,17 @@ jobs:
             echo "passed=true" >> "$GITHUB_OUTPUT"
             {
               echo "## Prior Review: ✅"
-              echo "Found prior review (self-review: $SELF_REVIEW, other reviews: $OTHER_REVIEWS, bot inline: $BOT_INLINE)."
+              echo "Found prior review (self-review: $SELF_REVIEW [findings $SELF_REVIEW_FINDINGS, fixes $SELF_REVIEW_FIXES], other reviews: $OTHER_REVIEWS, bot inline: $BOT_INLINE)."
             } > prior_review.md
           else
             echo "passed=false" >> "$GITHUB_OUTPUT"
             {
               echo "## Prior Review: ❌"
-              echo "No prior review found. Run \`hero-skills:review-pr\` or wait for a code review agent (Copilot/CodeRabbit/Greptile) before requesting auto-approve."
+              if [ "$SELF_REVIEW_FINDINGS" -gt 0 ]; then
+                echo "A self-review posted findings but no improvements comment, so the review did not run to the end. Finish it — \`review-pr\` posts that comment even when it fixed nothing."
+              else
+                echo "No prior review found. Run \`wayfare:wayfare-review-pr\` (\`hero-skills:review-pr\` on a plugin older than the wayfare rename) or wait for a code review agent (Copilot/CodeRabbit/Greptile) before requesting auto-approve."
+              fi
             } > prior_review.md
           fi
 

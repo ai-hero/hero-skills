@@ -5,8 +5,8 @@ person. Based on Wikipedia's "Signs of AI writing".
 
 **This file is the substance; it is read on demand and nothing else holds a
 copy.** The four pipeline steps that emit prose — `push-pr`, `review-pr`,
-`respond-to-comments`, and wayfare's review step — read it directly at the
-step that needs it. `hero-skills:my-humanizer` is a thin skill over it, for
+`wayfare-respond-pr`, and wayfare's review step — read it directly at the
+step that needs it. `wayfare:wayfare-humanize-prose` is a thin skill over it, for
 running the same filter over text by hand; it carries no rules of its own.
 
 It lives in `docs/` for two reasons. Those callers sit in three different

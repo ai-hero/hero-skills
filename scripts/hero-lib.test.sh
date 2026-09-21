@@ -494,7 +494,7 @@ check "ready: dangling discovered_from never blocks" "READY" "$(state_of 020-dis
 #
 # `type` is the discriminator schema 1 dispatches on, so an item without one,
 # in a store that IS migrated, must be loud rather than guessed. Guessing
-# `task` is how a goal gets handed to one-shot to build.
+# `task` is how a goal gets handed to wayfare-run-task to build.
 
 printf -- '---\nid: 26\ntitle: No type line\nstatus: ready\ndepends_on: []\n---\n' > "$W/items/026-notype.md"
 printf -- '---\nid: 27\ntype: widget\ntitle: Unknown type\nstatus: ready\ndepends_on: []\n---\n' > "$W/items/027-badtype.md"
@@ -547,7 +547,7 @@ check "planning: unknown status warns on stderr" "0" "$?"
 #
 # new|accepted|planning|ready|active|committed|review|done|dropped. Each case
 # pins a way the mapping could silently regress: an `accepted` task handed to
-# one-shot unplanned (backlog must never be READY), or a terminal state
+# wayfare-run-task unplanned (backlog must never be READY), or a terminal state
 # wrongly satisfying a dependency.
 
 item 030-backlog.md 30 "Unplanned task" "accepted" "[]"
@@ -625,7 +625,7 @@ check "task: backlog dangling dep warns on stderr" "0" "$?"
 # ---------- signals and goals ------------------------------------------------
 #
 # A signal is DELIVERED, never built, so it must never reach READY: handing
-# one to one-shot is always wrong. A goal is a container, so the same holds
+# one to wayfare-run-task is always wrong. A goal is a container, so the same holds
 # for the opposite reason. `resolution` is what lets both end at `done`
 # without the listing knowing either type's vocabulary.
 
@@ -828,7 +828,7 @@ check "idea: never warned about as an uncovered task" "1" "$?"
 
 # ---------- goal membership (parent, not covers) ------------------------------
 #
-# `wayfare next` walks goals, never items, so a planned task outside every
+# `wayfare-start-goal` walks goals, never items, so a planned task outside every
 # open goal is never handed out: it sits READY until someone runs `do N` by
 # hand. Membership is ONE edge in ONE direction now, so two goals claiming one
 # task is not representable and needs no defect check.
@@ -1046,6 +1046,69 @@ GH_FAIL=1 PATH="$TMP/ghbin:$PATH" hero_self_review_count 7 >/dev/null 2>&1
 check "self-review count: gh failure returns non-zero" "no" "$([ $? -eq 0 ] && echo yes || echo no)"
 # The workflow carries its own copy of the marker; the two must agree.
 check "self-review marker matches the workflow's" "yes" "$(grep -q "$HERO_SELF_REVIEW_MARKER" "$(dirname "$0")/../.github/workflows/auto-approve.yaml" && echo yes || echo no)"
+
+# ---------- hero_self_review_fixes_count -----------------------------------
+#
+# The findings comment and the improvements comment carry the SAME marker, so
+# the fixes count must separate them on the word "improvements". A fixture
+# with only the findings comment is the case the gate exists to reject.
+cat > "$TMP/ghbin/comments.json" <<'JSON'
+[{"body":"lgtm","user":{"login":"me"}},
+ {"body":"## Self-Review\n<!-- ai-hero:self-review -->\nfindings","user":{"login":"me"}}]
+JSON
+check "fixes count: findings alone is zero"       "0" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_fixes_count 7)"
+check "fixes count: findings still counted"       "1" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_count 7)"
+
+cat > "$TMP/ghbin/comments.json" <<'JSON'
+[{"body":"## Self-Review\n<!-- ai-hero:self-review -->\nfindings","user":{"login":"me"}},
+ {"body":"## Self-Review - Improvements\n<!-- ai-hero:self-review -->\nfixed","user":{"login":"me"}},
+ {"body":"## Self-Review - Improvements\n<!-- ai-hero:self-review -->","user":{"login":"stranger"}}]
+JSON
+check "fixes count: improvements comment counts"  "1" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_fixes_count 7)"
+check "fixes count: gh failure returns non-zero" "no" "$(GH_FAIL=1 PATH="$TMP/ghbin:$PATH" hero_self_review_fixes_count 7 >/dev/null 2>&1; [ $? -eq 0 ] && echo yes || echo no)"
+
+# The workflow evaluates the same two halves; a gate that stopped requiring
+# the second would leave this helper with no caller and no reason to exist.
+check "workflow requires the fixes half" "yes" "$(grep -q 'SELF_REVIEW_FIXES' "$(dirname "$0")/../.github/workflows/auto-approve.yaml" && echo yes || echo no)"
+
+# The bug this marker exists for: the findings comment lists suggestions, and
+# a suggestion saying "improvements" made the findings comment satisfy the
+# fixes half by itself. The word appears freely in model-written review prose,
+# so matching it was matching nothing.
+cat > "$TMP/ghbin/comments.json" <<'JSON'
+[{"body":"## Self-Review\n<!-- ai-hero:self-review -->\n### Suggestions (2)\n- small improvements to naming","user":{"login":"me"}}]
+JSON
+check "fixes count: a suggestion saying improvements is not a fixes comment" "0" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_fixes_count 7)"
+check "fixes count: that comment is still findings"                          "1" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_count 7)"
+
+# The marker is what survives the humanizer; the heading is not.
+cat > "$TMP/ghbin/comments.json" <<'JSON'
+[{"body":"## Self-Review\n<!-- ai-hero:self-review -->\nfindings","user":{"login":"me"}},
+ {"body":"## Self-review: what I changed\n<!-- ai-hero:self-review -->\n<!-- ai-hero:self-review-fixes -->","user":{"login":"me"}}]
+JSON
+check "fixes count: marker counts with the heading rewritten" "1" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_fixes_count 7)"
+check "findings excludes the fixes comment"                   "1" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_count 7)"
+
+# Both halves from one comment is what made the gate's `&&` vacuous.
+cat > "$TMP/ghbin/comments.json" <<'JSON'
+[{"body":"## Self-Review\n<!-- ai-hero:self-review -->\n<!-- ai-hero:self-review-fixes -->\nboth in one","user":{"login":"me"}}]
+JSON
+check "one comment cannot be both halves" "0" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_count 7)"
+
+# The gate and the helpers must agree on the marker, or ship-pr green means
+# auto-approve red.
+check "workflow carries the fixes marker" "yes" "$(grep -q 'ai-hero:self-review-fixes' "$(dirname "$0")/../.github/workflows/auto-approve.yaml" && echo yes || echo no)"
+check "review-pr posts the fixes marker"  "yes" "$(grep -q 'ai-hero:self-review-fixes' "$(dirname "$0")/../skills/wayfare-review-pr/SKILL.md" && echo yes || echo no)"
+
+# A review OF this gate quotes the strings the gate matches on. The legacy
+# fallback was unanchored and read this PR's own findings comment as the
+# fixes comment, which collapsed findings to zero and refused a ship. The
+# fallback matches a HEADING now, and prose mentioning both words does not.
+cat > "$TMP/ghbin/comments.json" <<'JSON'
+[{"body":"## Self-Review\n<!-- ai-hero:self-review -->\n- the gate accepts a legacy Self-Review heading and the word improvements","user":{"login":"me"}}]
+JSON
+check "fixes count: prose discussing the gate is not the fixes comment" "0" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_fixes_count 7)"
+check "findings survives prose discussing the gate"                     "1" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_count 7)"
 
 # ---------- shape, suspension, the inbox, local skills ---------------------
 # `shape` decides what a task's Definition of Done asserts and NOTHING about

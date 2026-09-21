@@ -56,79 +56,80 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # here-doc nested in a command substitution makes bash scan the body for shell
 # quotes, and the first apostrophe in a prose cell ("the bot's") becomes an
 # unterminated string that fails the whole script at parse time.
-# The wayfare rows for Repository/type, Deployment/platform+registry, Code
-# Quality/linters and Projects belong to its stage skills (architecture,
-# harden), which carry no recalibrate of their own. A row under either name
-# fails hero-fields.test.sh's "every mapped skill offers recalibrate", so they
-# sit under wayfare even though wayfare never reads registry or linters itself.
+# Rows for fields a skill reads but never tunes are legitimate: a skill does
+# not have to offer `recalibrate` to appear here. wayfare-recalibrate-config
+# is the one skill that reports and writes them all, and it does that with
+# --all, so a field is reachable if and only if it has a row. A field with no
+# row is a field no recalibrate can ask about.
 rows() {
   cat <<'ROWS'
-wayfare|*|*|every section — `init` writes the whole file, the only whole-file pass
-push-pr|Repository|default-branch|the branch to cut from and the PR base
-push-pr|Repository|branch-convention|the shape of the branch name it creates
-push-pr|Repository|commit-convention|the shape of the commit message it writes
-push-pr|Repository|task-runner|the tool (just, make, …) whose targets the test phase prefers over per-project raw commands, when set
-push-pr|Project Management|issue-prefix|the ticket ID in the branch name and the PR trailers
-push-pr|Code Quality|pre-commit|whether the commit step expects hooks to run and re-stage
-push-pr|Code Quality|linters|the static checks the verify phase runs
-push-pr|CI/CD|platform|where the post-push CI status report is read from
-push-pr|Projects|*|per project: language, framework, install/test/dev commands, port — the test phase falls back to auto-detection without them
-ship-pr|Repository|default-branch|what the branch resets to after the merge
-ship-pr|Repository|merge-method|squash, rebase, or merge — the button this skill presses
-ship-pr|Repository|auto-delete-branches|whether ship deletes the head branch itself after merging
-ship-pr|CI/CD|auto-approve-installed|whether `@auto-approve` will do anything at all
-ship-pr|CI/CD|auto-approve-gates|the gates the approval verdict is expected to enforce
-ship-pr|Deployment|platform|whether there is a deploy to verify after the merge
-ship-pr|Deployment|registry|where the built image is expected to land
-ship-pr|Deployment|argocd|whether the deploy is GitOps-synced rather than pushed
-one-shot|Repository|default-branch|the base for every step of the pipeline
-one-shot|Repository|branch-convention|the branch the goal's work lands on
-one-shot|Project Management|tool|where the ticket is fetched from
-one-shot|Project Management|issue-prefix|how a plain-text argument is recognized as a ticket ID
-one-shot|Project Management|issue-tracker|where the issue is closed out after the merge
-one-shot|Code Review Agent|agent|which bot's review the await-review step waits for
-one-shot|Code Review Agent|bot-username|whose comments count as the bot's, and whose do not
-one-shot|CI/CD|auto-approve-installed|whether the ship step can complete
-one-shot|Projects|*|per project: test and dev commands the build and verify steps use
-review-pr|Repository|default-branch|the base the diff under review is taken against
-review-pr|Code Quality|linters|the checks a finding must not simply restate
-review-pr|Coding Conventions|*|the conventions a review judges the code against, instead of inventing house style
-review-pr|Projects|*|per project: language and framework, which decide the review's focus
-respond-to-comments|Code Review Agent|agent|which reviewer's threads this skill answers
-respond-to-comments|Code Review Agent|bot-username|whose comments are the bot's, for the poll and the resolve
-respond-to-comments|Code Review Agent|trigger|how the bot's review is requested
-respond-to-comments|Code Review Agent|poll-method|how this skill knows the review has landed
-respond-to-comments|Repository|default-branch|the base for the diff a comment is read against
-respond-to-comments|Projects|*|per project: the test command run after a fix
-wayfare|Wayfare|source-repo|the codebase reconciled against the design
-wayfare|Wayfare|design-project|the target design substrate, or none
-wayfare|Wayfare|design-transport|how design files reach the local snapshot
-wayfare|Wayfare|feedback-repo|where design feedback is filed, or none for local packets
-wayfare|Wayfare|ux-flow|the authoritative journey the codebase is reconciled against
-wayfare|Wayfare|design-system-repo|the registry the UI work sources primitives from
-wayfare|Wayfare|reconciliation|how far a sync is allowed to go on its own
-wayfare|Repository|default-branch|the base for every PR the goal turns open
-wayfare|Repository|type|single or monorepo, which decides whether one DESIGN.md covers the repo (the architecture stage) and where `init` scaffolds a new project
-wayfare|Deployment|platform|the deploy shape DESIGN.md's invariants hold under, and whether the harden stage has images to scan
-wayfare|Deployment|registry|where the image the harden stage scans is pulled from
-wayfare|Code Quality|linters|the security checks already in the gate, which the harden stage must not re-propose
-wayfare|Projects|*|per project: language and dependency file (the CVE scanners), in a monorepo which project DESIGN.md describes, and the names a new project must not collide with
-recomponentize-ui|Design System|role|producer refuses the run; consumer is what the pass is for
-recomponentize-ui|Design System|namespace|the registry prefix components are sourced under
-recomponentize-ui|Design System|registry-url|where the registry is fetched from
-recomponentize-ui|Design System|token-env-var|the env var holding the registry token
-recomponentize-ui|Projects|*|per project: the framework, which decides whether there is a UI at all
-wayfare|Repository|branch-convention|which branches `drop` may discard, and the shape goal branches take
-preflight|Repository|default-branch|the branch every readiness check is made against
-preflight|CI/CD|auto-approve-installed|whether the ship step will be a no-op
-preflight|Code Quality|pre-commit|whether the gate is installed and current
-setup-dev|Developer Setup|*|required tools, recommended tools, and MCP servers — the checklist this skill walks
-setup-dev|Projects|*|per project: install and dev commands the setup verifies
-wayfare|Design System|namespace|the registry a scaffolded UI is wired to
-create-skill|Projects|*|per project: language and framework, which the new skill's examples follow
-handoff|Project Management|tool|where the distilled work-item is filed
-handoff|Project Management|issue-tracker|the tracker the item is created in
-handoff|Project Management|issue-prefix|the ID shape the item is named with
+wayfare-init-repo|*|*|every section — init writes the whole file, the only whole-file pass
+wayfare-push-pr|Repository|default-branch|the branch to cut from and the PR base
+wayfare-push-pr|Repository|branch-convention|the shape of the branch name it creates
+wayfare-push-pr|Repository|commit-convention|the shape of the commit message it writes
+wayfare-push-pr|Repository|task-runner|the tool (just, make, …) whose targets the test phase prefers over per-project raw commands, when set
+wayfare-push-pr|Project Management|issue-prefix|the ticket ID in the branch name and the PR trailers
+wayfare-push-pr|Code Quality|pre-commit|whether the commit step expects hooks to run and re-stage
+wayfare-push-pr|Code Quality|linters|the static checks the verify phase runs
+wayfare-push-pr|CI/CD|platform|where the post-push CI status report is read from
+wayfare-push-pr|Projects|*|per project: language, framework, install/test/dev commands, port — the test phase falls back to auto-detection without them
+wayfare-ship-pr|Repository|default-branch|what the branch resets to after the merge
+wayfare-ship-pr|Repository|merge-method|squash, rebase, or merge — the button this skill presses
+wayfare-ship-pr|Repository|auto-delete-branches|whether ship deletes the head branch itself after merging
+wayfare-ship-pr|CI/CD|auto-approve-installed|whether `@auto-approve` will do anything at all
+wayfare-ship-pr|CI/CD|auto-approve-gates|the gates the approval verdict is expected to enforce
+wayfare-ship-pr|Deployment|platform|whether there is a deploy to verify after the merge
+wayfare-ship-pr|Deployment|registry|where the built image is expected to land
+wayfare-ship-pr|Deployment|argocd|whether the deploy is GitOps-synced rather than pushed
+wayfare-run-task|Repository|default-branch|the base for every step of the pipeline
+wayfare-run-task|Repository|branch-convention|the branch the goal's work lands on
+wayfare-run-task|Project Management|tool|where the ticket is fetched from
+wayfare-run-task|Project Management|issue-prefix|how a plain-text argument is recognized as a ticket ID
+wayfare-run-task|Project Management|issue-tracker|where the issue is closed out after the merge
+wayfare-run-task|Code Review Agent|agent|which bot's review the await-review step waits for
+wayfare-run-task|Code Review Agent|bot-username|whose comments count as the bot's, and whose do not
+wayfare-run-task|CI/CD|auto-approve-installed|whether the ship step can complete
+wayfare-run-task|Projects|*|per project: test and dev commands the build and verify steps use
+wayfare-review-pr|Repository|default-branch|the base the diff under review is taken against
+wayfare-review-pr|Code Quality|linters|the checks a finding must not simply restate
+wayfare-review-pr|Coding Conventions|*|the conventions a review judges the code against, instead of inventing house style
+wayfare-review-pr|Projects|*|per project: language and framework, which decide the review's focus
+wayfare-respond-pr|Code Review Agent|agent|which reviewer's threads this skill answers
+wayfare-respond-pr|Code Review Agent|bot-username|whose comments are the bot's, for the poll and the resolve
+wayfare-respond-pr|Code Review Agent|trigger|how the bot's review is requested
+wayfare-respond-pr|Code Review Agent|poll-method|how this skill knows the review has landed
+wayfare-respond-pr|Repository|default-branch|the base for the diff a comment is read against
+wayfare-respond-pr|Projects|*|per project: the test command run after a fix
+wayfare-sync-plan|Wayfare|source-repo|the codebase reconciled against the design
+wayfare-sync-plan|Wayfare|design-project|the target design substrate, or none
+wayfare-sync-plan|Wayfare|design-transport|how design files reach the local snapshot
+wayfare-sync-plan|Wayfare|feedback-repo|where design feedback is filed, or none for local packets
+wayfare-sync-plan|Wayfare|ux-flow|the authoritative journey the codebase is reconciled against
+wayfare-sync-plan|Wayfare|design-system-repo|the registry the UI work sources primitives from
+wayfare-sync-plan|Wayfare|reconciliation|how far a sync is allowed to go on its own
+wayfare-start-goal|Repository|default-branch|the base for every PR the goal turns open
+wayfare-init-repo|Repository|type|single or monorepo, which decides whether one DESIGN.md covers the repo (the architecture stage) and where `init` scaffolds a new project
+wayfare-sync-plan|Deployment|platform|the deploy shape DESIGN.md's invariants hold under, and whether the harden stage has images to scan
+wayfare-sync-plan|Deployment|registry|where the image the harden stage scans is pulled from
+wayfare-sync-plan|Code Quality|linters|the security checks already in the gate, which the harden stage must not re-propose
+wayfare-sync-plan|Projects|*|per project: language and dependency file (the CVE scanners), in a monorepo which project DESIGN.md describes, and the names a new project must not collide with
+wayfare-recomponentize-ui|Design System|role|producer refuses the run; consumer is what the pass is for
+wayfare-recomponentize-ui|Design System|namespace|the registry prefix components are sourced under
+wayfare-recomponentize-ui|Design System|registry-url|where the registry is fetched from
+wayfare-recomponentize-ui|Design System|token-env-var|the env var holding the registry token
+wayfare-recomponentize-ui|Projects|*|per project: the framework, which decides whether there is a UI at all
+wayfare-drop-item|Repository|branch-convention|which branches this skill may discard
+wayfare-start-goal|Repository|branch-convention|the shape of the branch a goal's work lands on
+wayfare-check-preflight|Repository|default-branch|the branch every readiness check is made against
+wayfare-check-preflight|CI/CD|auto-approve-installed|whether the ship step will be a no-op
+wayfare-check-preflight|Code Quality|pre-commit|whether the gate is installed and current
+wayfare-setup-dev|Developer Setup|*|required tools, recommended tools, and MCP servers — the checklist this skill walks
+wayfare-setup-dev|Projects|*|per project: install and dev commands the setup verifies
+wayfare-init-repo|Design System|namespace|the registry a scaffolded UI is wired to
+wayfare-create-skill|Projects|*|per project: language and framework, which the new skill's examples follow
+wayfare-write-handoff|Project Management|tool|where the distilled work-item is filed
+wayfare-write-handoff|Project Management|issue-tracker|the tracker the item is created in
+wayfare-write-handoff|Project Management|issue-prefix|the ID shape the item is named with
 ROWS
 }
 
