@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Hero_Skills-Claude_Code_Plugin-7C3AED?style=for-the-badge&logoColor=white" alt="Hero Skills" />
+  <img src="https://img.shields.io/badge/Wayfare-Agent_Skills-7C3AED?style=for-the-badge&logoColor=white" alt="Wayfare" />
 </p>
 
 <h3 align="center">Your dev workflow, automated end to end.</h3>
@@ -25,11 +25,11 @@
 
 ---
 
-## Why Hero Skills?
+## Why wayfare?
 
 Most dev work follows the same loop: grab a ticket, plan, implement, test, review, commit, push, monitor. But every team does it slightly differently, different PM tools, different CI, different deploy targets.
 
-Hero Skills gives you **slash commands for the entire dev lifecycle** that adapt to your stack. Configure once with `HERO.md`, then every skill knows your conventions, your tools, and your preferences.
+Wayfare gives you **one route from the product as it is to the product as it should be** that adapt to your stack. Configure once with `HERO.md`, then every skill knows your conventions, your tools, and your preferences.
 
 - **Plan and implement from tickets**: fetch from Linear/Jira/GitHub Issues, grill the work into dependency-aware work-items, create branches, then implement on approval
 - **Verify changes**: auto-detect project type (API, frontend, CLI, MCP) and run lint, typecheck, unit tests, and smoke tests
@@ -305,11 +305,13 @@ wayfare:wayfare-sync-plan
 wayfare:wayfare-start-goal
 ```
 
-`wayfare:wayfare-advance-item ID` advances one thing on its own, a feature through
-one-shot, a Dependabot PR to merged and deployed, or one goal turn. `improve`
-runs the compliance audit alone, in one repo, or across the whole fleet from
-its root, and drafts backports where this repo is ahead of the template.
-`recalibrate` tunes the config every stage reads.
+`wayfare:wayfare-advance-item ID` advances one thing on its own: a feature
+through the build pipeline, a Dependabot PR to merged and deployed, or one
+goal turn. `wayfare:wayfare-audit-compliance` runs the compliance audit
+alone, in one repo or across the whole fleet from its root, and drafts
+backports where this repo is ahead of the template.
+`wayfare:wayfare-recalibrate-config` tunes the config every stage reads, and
+`wayfare:wayfare-drop-item ID` abandons a branch and says so on the roadmap.
 
 ### Or: one piece at a time
 
@@ -364,6 +366,36 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 
 ## Commands
 
+### The front door
+
+`wayfare:wayfare-hero` runs nothing. It is the signpost: the route, the
+shaping rule, the ideas and signals rules, and a table from what you want to
+the skill that does it. Each verb below is its own skill, so its description
+is what an agent matches your request against.
+
+| Command | What it does |
+| --- | --- |
+| `wayfare:wayfare-hero` | The route from source to target, and which of the skills below to run |
+| `wayfare:wayfare-init-repo` | Investigate the repo, write `HERO.md`, create the plan object `.plans/PLAN.md`, migrating an older store on sight. Scaffolds first in an empty directory |
+| `wayfare:wayfare-sync-plan` | One round of convergence (`config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals`), writing every `.plans/` item and proposing goals bottom-up over what was planned. Writes only what you confirm |
+| `wayfare:wayfare-start-goal` | Pick the next runnable goal, read its `## Permissions` aloud (mark-ready, respond, auto-approve, merge, deploy, absorb) for your in-session authorization, and run its first turn |
+| `wayfare:wayfare-advance-item` | Advance one item as far as its gates allow: a ready task, a Dependabot PR to merged, or one goal turn. Never plans |
+| `wayfare:wayfare-drop-item` | Abandon work on an unmerged branch and write `status: dropped`, so the roadmap stops claiming it |
+| `wayfare:wayfare-recalibrate-config` | Report and tune every field the stages read, then stop |
+| `wayfare:wayfare-audit-compliance` | Audit this repo, or the whole fleet from its root, against the compliance register, and draft the backports |
+
+Features are SLC vertical slices — user stories, never layers — carrying
+subtasks, a definition of done, a log, design feedback back to the design
+team, and staleness flags against both ends.
+
+Three skills are stages of `sync` and hidden from the slash menu (`user-invocable: false`). You never call them, but they still own their procedures:
+
+| Stage | Skill | What it does |
+| --- | --- | --- |
+| `architecture` | `wayfare:wayfare-review-architecture` | Report where a single root `DESIGN.md` and the code have drifted — tech stack, boundaries, dependency rules, invariants, users, flows, interaction standards, append-only decisions. Writes nothing |
+| `architecture` | `wayfare:wayfare-sync-architecture` | Bootstrap `DESIGN.md`, and apply the drift rows the review found. Never restates what the code says |
+| `harden` | `wayfare:wayfare-audit-security` | Audit read-only for hardening, dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness, and emit execution-ready plans as `.plans/` security items |
+
 ### Setup
 
 | Command | What it does |
@@ -396,20 +428,6 @@ See [`PIPELINES.md`](./PIPELINES.md) for the full DAG and stop conditions.
 | `wayfare:wayfare-run-task` | Drives a small task end-to-end: plan → implement → simplify → push (tests included) → self-review → mark-ready → await-review → respond → ship. Detects a resume point on re-invocation; with no arguments, drives the current goal to merged + reset branch. Explicit user gates at each destructive step. |
 | `wayfare:wayfare-init-repo` | Scaffolds a new project, then chains into setup-dev → config → first-commit. |
 
-### The front door
-
-| Command | What it does |
-| --- | --- |
-| `wayfare:wayfare-hero` | Five verbs. `sync` runs one round of convergence (`config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals`), writing every `.plans/` item (features, architecture, polish, security, bugs, feedback, goals) and proposing goals bottom-up while re-cutting the `todo` ones; `next` picks the next runnable goal, reads its `## Permissions` (mark-ready, respond, auto-approve, merge, deploy, absorb) for your in-session authorization, and runs the goal in this session; `do ID` builds one feature via one-shot, carries one Dependabot PR to merged and deployed, or runs one goal turn (features committed one at a time on the goal's single branch); `improve` audits this repo, or the whole fleet from its root, against the compliance register and proposes the fixes and backports; `recalibrate` tunes every field the stages read. Features are SLC vertical slices (user stories, never layers) carrying subtasks, a definition of done, comments, design feedback back to the design team, and staleness flags |
-
-Two skills are stages of `sync` and hidden from the slash menu (`user-invocable: false`). You never call them, but they still own their procedures:
-
-| Stage | Skill | What it does |
-| --- | --- | --- |
-| `architecture` | `wayfare:wayfare-review-architecture` | Report where a single root `DESIGN.md` and the code have drifted — tech stack, boundaries, dependency rules, invariants, users, flows, interaction standards, append-only decisions. Writes nothing |
-| `architecture` | `wayfare:wayfare-sync-architecture` | Bootstrap `DESIGN.md`, and apply the drift rows the review found. Never restates what the code says |
-| `harden` | `wayfare:wayfare-audit-security` | Audit read-only for hardening, dependency CVEs (Dependabot), container CVEs (Docker Scout, Trivy), code robustness, and emit execution-ready plans as `.plans/` security items |
-
 ### Operations
 
 | Command | What it does |
@@ -423,8 +441,10 @@ Two skills are stages of `sync` and hidden from the slash menu (`user-invocable:
 
 | Command | What it does |
 | --- | --- |
-| `wayfare:wayfare-drop-item` | Abandon or pause an unmerged branch, stash uncommitted work, switch to default, clear context |
-| `wayfare:wayfare-audit-plugin` | Audit the hero-skills plugin itself for quality and consistency |
+| `wayfare:wayfare-recomponentize-ui` | Refactor a project's UI into atomic components, sourcing primitives from a design-system registry and codemodding off-token styling |
+| `wayfare:wayfare-humanize-prose` | Strip the signs of AI-generated writing out of text |
+| `wayfare:wayfare-write-handoff` | Distil the session into one self-contained work-item for an agent with no context from it |
+| `wayfare:wayfare-audit-plugin` | Audit the wayfare plugin itself for quality and consistency |
 
 ## Updating vendored assets in a downstream repo
 
