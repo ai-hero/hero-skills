@@ -494,7 +494,7 @@ check "ready: dangling discovered_from never blocks" "READY" "$(state_of 020-dis
 #
 # `type` is the discriminator schema 1 dispatches on, so an item without one,
 # in a store that IS migrated, must be loud rather than guessed. Guessing
-# `task` is how a goal gets handed to one-shot to build.
+# `task` is how a goal gets handed to wayfare-run-task to build.
 
 printf -- '---\nid: 26\ntitle: No type line\nstatus: ready\ndepends_on: []\n---\n' > "$W/items/026-notype.md"
 printf -- '---\nid: 27\ntype: widget\ntitle: Unknown type\nstatus: ready\ndepends_on: []\n---\n' > "$W/items/027-badtype.md"
@@ -547,7 +547,7 @@ check "planning: unknown status warns on stderr" "0" "$?"
 #
 # new|accepted|planning|ready|active|committed|review|done|dropped. Each case
 # pins a way the mapping could silently regress: an `accepted` task handed to
-# one-shot unplanned (backlog must never be READY), or a terminal state
+# wayfare-run-task unplanned (backlog must never be READY), or a terminal state
 # wrongly satisfying a dependency.
 
 item 030-backlog.md 30 "Unplanned task" "accepted" "[]"
@@ -625,7 +625,7 @@ check "task: backlog dangling dep warns on stderr" "0" "$?"
 # ---------- signals and goals ------------------------------------------------
 #
 # A signal is DELIVERED, never built, so it must never reach READY: handing
-# one to one-shot is always wrong. A goal is a container, so the same holds
+# one to wayfare-run-task is always wrong. A goal is a container, so the same holds
 # for the opposite reason. `resolution` is what lets both end at `done`
 # without the listing knowing either type's vocabulary.
 
@@ -1070,6 +1070,35 @@ check "fixes count: gh failure returns non-zero" "no" "$(GH_FAIL=1 PATH="$TMP/gh
 # The workflow evaluates the same two halves; a gate that stopped requiring
 # the second would leave this helper with no caller and no reason to exist.
 check "workflow requires the fixes half" "yes" "$(grep -q 'SELF_REVIEW_FIXES' "$(dirname "$0")/../.github/workflows/auto-approve.yaml" && echo yes || echo no)"
+
+# The bug this marker exists for: the findings comment lists suggestions, and
+# a suggestion saying "improvements" made the findings comment satisfy the
+# fixes half by itself. The word appears freely in model-written review prose,
+# so matching it was matching nothing.
+cat > "$TMP/ghbin/comments.json" <<'JSON'
+[{"body":"## Self-Review\n<!-- ai-hero:self-review -->\n### Suggestions (2)\n- small improvements to naming","user":{"login":"me"}}]
+JSON
+check "fixes count: a suggestion saying improvements is not a fixes comment" "0" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_fixes_count 7)"
+check "fixes count: that comment is still findings"                          "1" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_count 7)"
+
+# The marker is what survives the humanizer; the heading is not.
+cat > "$TMP/ghbin/comments.json" <<'JSON'
+[{"body":"## Self-Review\n<!-- ai-hero:self-review -->\nfindings","user":{"login":"me"}},
+ {"body":"## Self-review: what I changed\n<!-- ai-hero:self-review -->\n<!-- ai-hero:self-review-fixes -->","user":{"login":"me"}}]
+JSON
+check "fixes count: marker counts with the heading rewritten" "1" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_fixes_count 7)"
+check "findings excludes the fixes comment"                   "1" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_count 7)"
+
+# Both halves from one comment is what made the gate's `&&` vacuous.
+cat > "$TMP/ghbin/comments.json" <<'JSON'
+[{"body":"## Self-Review\n<!-- ai-hero:self-review -->\n<!-- ai-hero:self-review-fixes -->\nboth in one","user":{"login":"me"}}]
+JSON
+check "one comment cannot be both halves" "0" "$(PATH="$TMP/ghbin:$PATH" hero_self_review_count 7)"
+
+# The gate and the helpers must agree on the marker, or ship-pr green means
+# auto-approve red.
+check "workflow carries the fixes marker" "yes" "$(grep -q 'ai-hero:self-review-fixes' "$(dirname "$0")/../.github/workflows/auto-approve.yaml" && echo yes || echo no)"
+check "review-pr posts the fixes marker"  "yes" "$(grep -q 'ai-hero:self-review-fixes' "$(dirname "$0")/../skills/wayfare-review-pr/SKILL.md" && echo yes || echo no)"
 
 # ---------- shape, suspension, the inbox, local skills ---------------------
 # `shape` decides what a task's Definition of Done asserts and NOTHING about

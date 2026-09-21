@@ -330,12 +330,21 @@ Commit logically distinct fixes separately if they touch unrelated areas.
 
 **Always post this, even when no fixes were applied.** This is the durable record that the review ran.
 
-Render the template with real values. Never post literal placeholders. Omit sections whose count is zero. Draft this and Step 8's description together, humanize both in one `inline` call, then post.
+Render the template with real values. Never post literal placeholders. Omit sections whose count is zero. Draft this and Step 8's description together, humanize both in one `inline` call keeping the headings and the markers, then post.
+
+**Keep the `<!-- ai-hero:self-review-fixes -->` marker and the heading**, the
+same way Step 3's comment keeps its own. The prior-review gate counts this
+marker to tell this comment apart from the findings one; the heading it used
+to be recognised by is rewritten by the humanizer (`docs/HUMANIZING.md`
+forbids em dashes and rewrites heading case), so the marker is the only part
+of this comment that survives the pass intact. Lose it and a finished review
+reads as half-finished, fleet-wide.
 
 ```bash
 gh pr comment $PR_NUMBER --body "$(cat <<'EOF'
 ## Self-Review — Improvements
 <!-- ai-hero:self-review -->
+<!-- ai-hero:self-review-fixes -->
 
 **Critical (A / X fixed):**
 - FILE:LINE — FINDING — FIX_DESCRIPTION
@@ -425,7 +434,7 @@ URL: {pr-url}
 Next step: (pick exactly one, based on what actually happened above)
 ```
 
-- **`$NO_MARK_READY` is `true`** (deferred to caller, e.g. `one-shot`): no next-step line. The caller owns what happens next (one-shot's own Step 7 mark-ready gate).
+- **`$NO_MARK_READY` is `true`** (deferred to caller, e.g. `wayfare-run-task`): no next-step line. The caller owns what happens next (wayfare-run-task's own Step 7 mark-ready gate).
 - **Marked ready, agent configured**: print `Waiting on {agent}'s first review, then run wayfare:wayfare-respond-pr.` (no prompt, nothing to invoke yet).
 - **Marked ready, `agent: none`**: `Next step: wayfare:wayfare-ship-pr, which posts @auto-approve, merges, and resets` (offer to auto-run: ask "Run it now? [y/N]", invoke via Skill tool on yes).
 - **Declined mark-ready**: `Next step: address the findings above, then re-run wayfare:wayfare-review-pr.` (print only, because re-invoking the same skill right after it finishes is not auto-chained).

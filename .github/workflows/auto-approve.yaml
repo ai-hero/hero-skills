@@ -75,6 +75,7 @@ jobs:
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '@auto-approve') &&
       !contains(github.event.comment.body, 'ai-hero:self-review') &&
+      !contains(github.event.comment.body, 'Hero Self-Review') &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
 
     steps:
@@ -461,34 +462,53 @@ jobs:
           # comments so installations that only post inline comments
           # (e.g. CodeRabbit configurations) still pass.
 
-          gh api "/repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews" \
+          # --paginate: the default page is 30, and this gate depends on the
+          # SECOND self-review comment, which is the first thing to fall off a
+          # busy PR. Without it a finished review reads as unfinished and the
+          # author is told to redo work they already did. Same reason as the
+          # verdict read below.
+          gh api --paginate "/repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews?per_page=100" \
             > reviews.json
-          gh api "/repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+          gh api --paginate "/repos/${{ github.repository }}/issues/$PR_NUMBER/comments?per_page=100" \
             > issue_comments.json
-          gh api "/repos/${{ github.repository }}/pulls/$PR_NUMBER/comments" \
+          gh api --paginate "/repos/${{ github.repository }}/pulls/$PR_NUMBER/comments?per_page=100" \
             > pr_review_comments.json
 
-          # Self-review marker, the hidden <!-- ai-hero:self-review -->
-          # comment posted by wayfare:wayfare-review-pr. Match both the
-          # current marker and the older "Hero Self-Review" heading
-          # (case-insensitive) so comments posted under the previous
-          # convention still count.
-          SELF_REVIEW_FINDINGS=$(jq -r '
-            [.[] | select(.body | test("ai-hero:self-review|Hero Self-Review"; "i"))] | length
+          # test: begin prior-review
+          # The PR author, read here rather than below: the self-review is
+          # posted BY the author, so both halves filter to them. Counting any
+          # commenter let anyone open this gate with a marker copied out of
+          # the public review-pr SKILL.md, and the summary then told the
+          # maintainer a review had happened.
+          PR_AUTHOR=$(jq -r '.user.login' pr.json)
+
+          # The fixes comment carries its own hidden marker. The heading it
+          # used to be recognised by is humanized before posting
+          # (docs/HUMANIZING.md forbids em dashes and rewrites heading case),
+          # so matching prose meant a finished review could fail the gate,
+          # while the bare word "improvements" appears freely in the FINDINGS
+          # comment's own suggestions and made one comment satisfy both halves.
+          # The legacy heading match stays as a fallback for repos whose
+          # plugin predates the marker; drop it once the fleet has upgraded.
+          FIXES_RE="ai-hero:self-review-fixes|self-review[^\\n]*improvements"
+          SELF_RE="ai-hero:self-review|Hero Self-Review"
+
+          # Disjoint by construction: a comment that counts as fixes is
+          # excluded from findings, so requiring both to be non-zero requires
+          # two different comments. An earlier version made fixes a strict
+          # SUBSET of findings, which left the `&&` below doing nothing.
+          SELF_REVIEW_FIXES=$(jq -r --arg author "$PR_AUTHOR" --arg fx "$FIXES_RE" '
+            [.[]
+              | select(.user.login == $author)
+              | select(.body | test($fx; "i"))
+            ] | length
           ' issue_comments.json)
 
-          # The review posts TWO marker-carrying comments: the findings, then
-          # "Self-Review - Improvements" recording what was done about them.
-          # Counting the marker alone opened this gate on the first, so a PR
-          # shipped on findings nobody acted on. The skill posts the second
-          # comment even when it fixed nothing ("the durable record that the
-          # review ran"), so its absence means the review stopped half way.
-          # Matched on the word, not the heading, because the body is
-          # humanized before posting and the dash may not survive verbatim.
-          SELF_REVIEW_FIXES=$(jq -r '
+          SELF_REVIEW_FINDINGS=$(jq -r --arg author "$PR_AUTHOR" --arg fx "$FIXES_RE" --arg sr "$SELF_RE" '
             [.[]
-              | select(.body | test("ai-hero:self-review|Hero Self-Review"; "i"))
-              | select(.body | test("improvements"; "i"))
+              | select(.user.login == $author)
+              | select(.body | test($sr; "i"))
+              | select(.body | test($fx; "i") | not)
             ] | length
           ' issue_comments.json)
 
@@ -504,7 +524,6 @@ jobs:
           # PENDING reviews (drafts) and the auto-approve workflow's own
           # past approvals, so re-running on the same PR cannot
           # bootstrap itself.
-          PR_AUTHOR=$(jq -r '.user.login' pr.json)
           OTHER_REVIEWS=$(jq -r --arg author "$PR_AUTHOR" '
             [.[]
               | select(.user.login != $author)
@@ -526,6 +545,7 @@ jobs:
             ] | length
           ' pr_review_comments.json)
 
+          # test: end prior-review
           echo "self_review=$SELF_REVIEW (findings=$SELF_REVIEW_FINDINGS fixes=$SELF_REVIEW_FIXES)"
           echo "other_reviews=$OTHER_REVIEWS"
           echo "bot_inline=$BOT_INLINE"
