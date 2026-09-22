@@ -661,7 +661,18 @@ class CI20Owner(unittest.TestCase):
             return audit.CHECKS["CI-20"](repo)[0]
 
     def setUp(self):
+        # Point the checker at THIS repo's assets. `_PLUGIN_ASSETS` defaults to
+        # ~/.claude/plugins/wayfare-skills, which exists on a machine with the
+        # plugin installed and not on a CI runner — so without this the
+        # comparison finds no reference, returns MANUAL, and all three
+        # asset-comparing cases pass locally and fail in CI. This repo IS the
+        # plugin, so its own assets/ is the right source either way.
+        self._saved_assets = audit._PLUGIN_ASSETS
+        audit._PLUGIN_ASSETS = HERE.parent / "assets"
         self.asset = (HERE.parent / "assets" / "auto-approve" / "caller.yaml").read_text()
+
+    def tearDown(self):
+        audit._PLUGIN_ASSETS = self._saved_assets
 
     def test_pristine_caller_passes(self):
         self.assertEqual(self._verdict(self.asset), audit.PASS)
