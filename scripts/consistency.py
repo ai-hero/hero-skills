@@ -205,7 +205,7 @@ def main():
         print(out)
     else:
         OUT.write_text(out)
-        print(f"wrote {OUT}  ({len(checks)} checks, {fixed} fixed, {total} failing)")
+        print(f"wrote {OUT}  ({len(checks)} checks, {total} failing)")
     return 0
 
 
