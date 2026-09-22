@@ -934,8 +934,13 @@ def _(r):
         t = w.read_text()
         if w.stem == "auto-approve":
             continue
-        # a workflow that runs tests AND triggers on pull_request
-        if re.search(r"\bpull_request\b", t) and re.search(r"\b(test|lint|verify|typecheck)\b", t):
+        # A workflow that gates a PR AND triggers on pull_request.
+        # `pre-commit` is in the alternation because the gate is what the
+        # workflow RUNS, not what it is called: a terraform repo whose only
+        # gate is `pre-commit run --all-files` on pull_request never uses the
+        # words test/lint/verify, and was reported as having no PR gate at all
+        # at high severity — while running one on every PR.
+        if re.search(r"\bpull_request\b", t) and re.search(r"\b(test|lint|verify|typecheck|pre-commit)\b", t):
             return PASS, w.name
     return FAIL, "no PR test gate"
 
