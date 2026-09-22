@@ -545,5 +545,81 @@ class Runner(unittest.TestCase):
         self.assertEqual(fails, [])
 
 
+class Consistency(unittest.TestCase):
+    """scripts/consistency.py, run as a SUBPROCESS.
+
+    It had no coverage at all, and it is the script that regressed: #110
+    deleted the `fixed` counter and left the name in the closing print, so a
+    run wrote a correct table and then died on a NameError. Importing main()
+    would not have caught that — the table is written first, so only the exit
+    path is wrong. Every assertion here is therefore about what a real
+    invocation leaves behind: the file, the exit status, and the summary.
+    """
+    def _fleet(self, root):
+        fleet_fixture(root, "## Fleet\n- name: fx\n- org: fx\n## Repos\n"
+                            "### a\n- group: apps\n\n### b\n- group: apps\n",
+                      overlay="checks:\n- id: CI-02\n  applies_to: [apps]\n")
+        write(root, ".fleet/CONTROLS.yaml",
+              "controls:\n- id: C-SUPPLY\n  title: s\n  severity: high\n  intent: s\n")
+        for name in ("a", "b"):
+            git_repo(root, name)
+        return root
+
+    def _run(self, root, *extra):
+        return subprocess.run(
+            [sys.executable, str(HERE / "consistency.py"), "--fleet", str(root),
+             "--no-snapshot", *extra],
+            capture_output=True, text=True, env=CLEAN_ENV)
+
+    def test_writes_the_table_and_exits_clean(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = self._fleet(pathlib.Path(d).resolve())
+            p = self._run(root)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            out = (root / ".fleet" / "CONSISTENCY.md")
+            self.assertTrue(out.is_file(), "no table written")
+            body = out.read_text()
+            # Both repos are columns, and neither is remembered from a field:
+            # the register names no repo, so these come from FLEET.md this run.
+            self.assertIn("| Check |", body)
+            for name in ("a", "b"):
+                self.assertRegex(body, r"\|\s*%s\s*\|" % name)
+            self.assertIn("checks under", body)
+            # The closing summary is the line that used to raise.
+            self.assertIn("wrote", p.stdout)
+            self.assertIn("failing", p.stdout)
+
+    def test_no_retired_columns(self):
+        """The register names no repo, so neither derived column may return."""
+        with tempfile.TemporaryDirectory() as d:
+            root = self._fleet(pathlib.Path(d).resolve())
+            self.assertEqual(self._run(root).returncode, 0)
+            body = (root / ".fleet" / "CONSISTENCY.md").read_text()
+            self.assertNotIn("Was broken in", body)
+            self.assertNotIn("Reference:", body)
+            self.assertNotIn("needs a decision", body)
+
+    def test_stdout_mode_writes_no_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = self._fleet(pathlib.Path(d).resolve())
+            p = self._run(root, "--stdout")
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertIn("| Check |", p.stdout)
+            self.assertFalse((root / ".fleet" / "CONSISTENCY.md").exists(),
+                             "--stdout must not write the file")
+
+    def test_outside_a_fleet_refuses(self):
+        """CONSISTENCY.md is the fleet's table. With no FLEET.md there is no
+        family to build columns from, and a one-repo table would read as one."""
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d).resolve()
+            git_repo(root, "lonely")
+            p = subprocess.run(
+                [sys.executable, str(HERE / "consistency.py"), "--fleet", str(root / "lonely"),
+                 "--no-snapshot"], capture_output=True, text=True, env=CLEAN_ENV)
+            self.assertNotEqual(p.returncode, 0)
+            self.assertIn("fleet", (p.stderr + p.stdout).lower())
+
+
 if __name__ == "__main__":
     unittest.main()
