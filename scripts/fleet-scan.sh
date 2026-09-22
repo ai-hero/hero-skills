@@ -16,18 +16,24 @@
 # --review: compare the listing with FLEET.md rows and print one finding per
 #   line as CODE<TAB>NAME<TAB>DETAIL (DETAIL is free text), sorted:
 #   BAD_ROW            a row hero_fleet_repos refused   (detail: the reason)
-#   UNLISTED           a checkout with no row           (detail: path, port)
 #   MISSING            a row whose path does not exist  (detail: path)
 #   NOT_GIT            a row whose path is not a git repo
 #   PORT_MISMATCH      row port differs from compose    (detail: row -> compose)
 #   PORT_UNIMPLEMENTED row claims a port, no compose file
 #   PORT_UNPARSED      row claims a port, compose file has no readable one
+#                      (these three are fleet-only: a `none` row claims a port
+#                      as a reservation, and the fleet does not audit how a
+#                      repo it does not govern binds it)
 #   PORT_COLLISION     two repos on one port, claimed or published, fleet or
 #                      not: a `none` repo's compose binds the host just the same
 #   NO_HERO            a fleet repo (group != none) without HERO.md
 #   NO_AGENTS          a fleet repo without AGENTS.md or CLAUDE.md
 #   NOT_FLEET_AWARE    a fleet repo whose instructions file has no `## Fleet`
 #                      section (assets/fleet/agents-md-fleet-section.md)
+#
+#   A checkout with no row is NOT reported. FLEET.md defines the fleet; a
+#   folder cloned beside it does not join by being there. Use --list to see
+#   what is on disk.
 #
 # Exit codes:
 #   0  --list ran; or --review found nothing
@@ -41,7 +47,10 @@ HERO_LIB="$(cd "$(dirname "$0")" && pwd)/hero-lib.sh"
 # shellcheck source=/dev/null
 . "$HERO_LIB" || { echo "fleet-scan: cannot source $HERO_LIB" >&2; exit 2; }
 
-usage() { sed -n '5,37p' "$0" | sed 's/^# \{0,1\}//'; }
+# The end line tracks the header block above. Add a line up there and this
+# range silently truncates `--help` mid-sentence — no error, and the Exit
+# codes section is what falls off first.
+usage() { sed -n '5,42p' "$0" | sed 's/^# \{0,1\}//'; }
 
 MODE=list
 ROOT=""
@@ -97,12 +106,22 @@ review() {
       *) actual=$(hero_compose_port "$repo_path" "$RANGE") ;;   # a row whose repo_path is not a direct child
     esac
     if [ -n "$rport" ]; then
-      case "$actual" in
-        -)   printf 'PORT_UNIMPLEMENTED\t%s\t%s (no compose file)\n' "$name" "$rport" ;;
-        '?') printf 'PORT_UNPARSED\t%s\t%s (compose file, no readable host port)\n' "$name" "$rport" ;;
-        "$rport") ;;
-        *)   printf 'PORT_MISMATCH\t%s\t%s -> %s\n' "$name" "$rport" "$actual" ;;
-      esac
+      # These three judge whether a repo implements the port its row claims,
+      # and that is only the fleet's business for a member. For a `none` row
+      # the claim is a RESERVATION, not a promise: the row exists so nothing
+      # else takes the number, and a repo the fleet does not govern is free to
+      # bind whatever it likes. Reporting it produced a finding whose only
+      # honest fix was to edit a non-member's compose file from the fleet root.
+      # The reservation below is still recorded, and the port it actually
+      # publishes is still collected, so PORT_COLLISION is unaffected.
+      if [ "$group" != none ]; then
+        case "$actual" in
+          -)   printf 'PORT_UNIMPLEMENTED\t%s\t%s (no compose file)\n' "$name" "$rport" ;;
+          '?') printf 'PORT_UNPARSED\t%s\t%s (compose file, no readable host port)\n' "$name" "$rport" ;;
+          "$rport") ;;
+          *)   printf 'PORT_MISMATCH\t%s\t%s -> %s\n' "$name" "$rport" "$actual" ;;
+        esac
+      fi
       ports="$ports$rport $name$NL"
     fi
     case "$actual" in -|'?'|"$rport") ;; *) ports="$ports$actual $name$NL" ;; esac
@@ -116,10 +135,17 @@ review() {
     fi
   done <<< "$ROWS"
 
+  # A checkout with no row is NOT a finding. FLEET.md defines the fleet; the
+  # folder is just where things happen to be cloned, and a repo that belongs to
+  # nobody here needs no row to say so. Reporting it made every parked clone a
+  # standing item that `sync` then offered to "fix" by adding a row, which is
+  # how a non-member acquires a row and starts reading as one.
+  # Its port is still collected: a non-fleet repo's compose binds the host port
+  # just the same, so it can still collide with a claimed one. `--list` remains
+  # the way to discover what is on disk.
   while IFS="$TAB" read -r name repo_path actual; do
     [ -n "$name" ] || continue
     case "$ROWS" in *"$TAB$repo_path$TAB"*) continue ;; esac
-    printf 'UNLISTED\t%s\t%s, port %s\n' "$name" "$repo_path" "$actual"
     case "$actual" in -|'?') ;; *) ports="$ports$actual $name$NL" ;; esac
   done <<< "$LISTING"
 

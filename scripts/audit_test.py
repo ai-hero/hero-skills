@@ -407,12 +407,22 @@ class Register(unittest.TestCase):
 
     def test_overlay_fields_win_and_records_add(self):
         ctrl, checks = self.load(
-            "checks:\n- id: A-1\n  reference: alpha\n  known_violations: [alpha]\n"
+            "checks:\n- id: A-1\n  severity: low\n"
             "- id: A-2\n  control: C-A\n  scope: ci\n  title: two\n  detect: {method: manual}\n")
         by = {k["id"]: k for k in checks}
-        self.assertEqual(by["A-1"]["reference"], "alpha")
+        self.assertEqual(by["A-1"]["severity"], "low")
         self.assertEqual(by["A-1"]["title"], "one", "baseline field survives an overlay that did not set it")
         self.assertEqual(by["A-2"]["control"], "C-A")
+
+    def test_a_check_may_not_name_a_repo(self):
+        """Rejected, not ignored: dropping the field silently would leave an
+        overlay author believing an exemption is in force while every repo in
+        it is audited."""
+        for field in ("reference: alpha", "known_violations: [alpha]"):
+            with self.subTest(field=field):
+                with self.assertRaises(SystemExit) as cm:
+                    self.load(f"checks:\n- id: A-1\n  {field}\n")
+                self.assertIn("retired", str(cm.exception))
 
     def test_no_overlay_files_is_baseline(self):
         ctrl, checks = self.load()
@@ -460,10 +470,10 @@ class JsonOutput(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d).resolve()
             fleet_fixture(root, "## Fleet\n- name: fx\n## Repos\n### a\n- group: apps\n",
-                          overlay="checks:\n- id: CI-02\n  applies_to: [apps]\n  reference: a\n",
+                          overlay="checks:\n- id: CI-02\n  applies_to: [apps]\n",
                           checkers="from audit import check, FAIL\n@check('ZZ-1')\ndef _(r):\n    raise RuntimeError('boom')\n")
             write(root, ".fleet/CONTROLS.yaml", "controls:\n- id: C-ZZ\n  title: z\n  severity: low\n  intent: z\n")
-            write(root, ".fleet/CHECKS.yaml", "checks:\n- id: CI-02\n  applies_to: [apps]\n  reference: a\n- id: ZZ-1\n  control: C-ZZ\n  scope: repo\n  title: boom\n")
+            write(root, ".fleet/CHECKS.yaml", "checks:\n- id: CI-02\n  applies_to: [apps]\n  example: |\n    version: 2\n- id: ZZ-1\n  control: C-ZZ\n  scope: repo\n  title: boom\n")
             git_repo(root, "a")
             p = subprocess.run([sys.executable, str(HERE / "audit.py"), "--fleet", str(root), "--no-snapshot", "--json", "--repo", "a"],
                                capture_output=True, text=True, env=CLEAN_ENV)
@@ -471,7 +481,8 @@ class JsonOutput(unittest.TestCase):
             self.assertTrue(lines, p.stderr)
             by = {(o["check"], o["status"]): o for o in lines}
             self.assertIn(("CI-02", "FAIL"), by, "no dependabot.yml in the fixture")
-            self.assertEqual(by[("CI-02", "FAIL")]["reference"], "a")
+            self.assertEqual(by[("CI-02", "FAIL")]["example"], "version: 2\n",
+                             "the correct shape travels with the finding, not a repo name")
             self.assertEqual(by[("CI-02", "FAIL")]["repo"], "a")
             self.assertIn(("ZZ-1", "ERROR"), by, "a raised checker is on stdout, flagged")
             self.assertIn("failing (check x repo)", p.stderr, "summary went to stderr")

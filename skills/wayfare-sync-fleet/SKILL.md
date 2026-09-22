@@ -82,7 +82,6 @@ the skill that owns it.
    | Finding | Proposal |
    | --- | --- |
    | `BAD_ROW` | the row could not be trusted (the detail says why: a bad name, a dashed or non-numeric value, a duplicate, a path outside the fleet). Fix or drop it, and never guess a replacement |
-   | `UNLISTED` | add a row; ask the group (default `none`); port from the compose file |
    | `MISSING` | drop the row, or fix `path` if the folder moved. Ask first |
    | `NOT_GIT` | same as `MISSING`; a folder that stopped being a checkout is not a repo |
    | `PORT_MISMATCH` | the row is the assignment, the compose default is the implementation. Ask which is right. If the repo must change, hand it to `wayfare:wayfare-run-task` in that repo. The standard's last anti-pattern names every place the port appears. Never edit the repo from here |
@@ -93,12 +92,16 @@ the skill that owns it.
    | `NO_AGENTS` | same, via `wayfare-init-repo`'s Step 1 |
    | `NOT_FLEET_AWARE` | *Make the repos fleet-aware*, below |
 
-2. If `org` is set, list what exists there and is not on disk.
+2. Checkouts with no row: `"$SCAN" "$FLEET_ROOT" --list`, minus the paths
+   FLEET.md names. `--review` does not report these, deliberately — **FLEET.md
+   defines the fleet, and a folder does not join it by being cloned there.**
+   Print them as *on disk, not listed* and add no rows unless the user asks
+   for one by name. Offering a row per parked clone is how a repo nobody
+   claimed acquires one and starts reading as a member.
+3. If `org` is set, list what exists there and is not on disk.
    `gh repo list ORG --limit 200 --json name,isArchived --jq '.[] | select(.isArchived|not) | .name'`
-   minus the folder's checkouts. Print it as *not cloned*; add no rows. A
-   repo joins the fleet by being cloned beside the others, not by appearing
-   in a listing.
-3. Show the proposed rows, confirm, write. Re-run `--review` and show the
+   minus the folder's checkouts. Print it as *not cloned*; add no rows.
+4. Show the proposed rows, confirm, write. Re-run `--review` and show the
    remainder. The repo-side findings that were routed elsewhere stay until
    those PRs merge, and that is the correct state.
 

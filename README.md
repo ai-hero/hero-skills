@@ -626,9 +626,10 @@ MIT, built by [AI Hero](https://aihero.studio).
 
 `scripts/audit.py` computes (check × repo) results live, from a register in
 two halves: the generic **baseline** in `assets/compliance/`, shipped here,
-and your fleet's private **overlay**, reference repos, incident history,
-`known_violations`, in the register checkout FLEET.md names (`register:
-.fleet/`). Inside a fleet the family is FLEET.md's rows whose group is not
+and your fleet's private **overlay** — incident history and checks of its
+own — in the register checkout FLEET.md names (`register: .fleet/`). No
+check names a repo: which repos pass is the audit's output, computed per
+run, never a field in the rule. Inside a fleet the family is FLEET.md's rows whose group is not
 `none`; anywhere else, the current repo alone against the baseline.
 `scripts/consistency.py` writes the fleet's human table into that checkout.
 `wayfare-sync-plan` runs the audit as its `compliance` stage; `wayfare-audit-compliance`
