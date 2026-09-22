@@ -556,14 +556,32 @@ class Consistency(unittest.TestCase):
     invocation leaves behind: the file, the exit status, and the summary.
     """
     def _fleet(self, root):
+        # Two DIFFERENT groups, and an overlay check narrowed to one of them.
+        # An overlay that restates the baseline is inert: it reads as though it
+        # pins applies_to scoping and the overlay merge, and pins neither,
+        # so a later change to either could not fail this suite.
         fleet_fixture(root, "## Fleet\n- name: fx\n- org: fx\n## Repos\n"
-                            "### a\n- group: apps\n\n### b\n- group: apps\n",
+                            "### a\n- group: apps\n\n### b\n- group: infra\n",
                       overlay="checks:\n- id: CI-02\n  applies_to: [apps]\n")
         write(root, ".fleet/CONTROLS.yaml",
               "controls:\n- id: C-SUPPLY\n  title: s\n  severity: high\n  intent: s\n")
         for name in ("a", "b"):
             git_repo(root, name)
         return root
+
+    def test_applies_to_narrows_the_row_to_its_group(self):
+        """The overlay's `applies_to: [apps]` must actually scope CI-02: repo
+        `a` (apps) gets a real verdict, repo `b` (infra) gets the not-applicable
+        mark. This is what makes the fixture's overlay load-bearing."""
+        with tempfile.TemporaryDirectory() as d:
+            root = self._fleet(pathlib.Path(d).resolve())
+            self.assertEqual(self._run(root).returncode, 0)
+            body = (root / ".fleet" / "CONSISTENCY.md").read_text()
+            row = [l for l in body.splitlines() if l.startswith("| **CI-02**")]
+            self.assertTrue(row, "no CI-02 row in the table")
+            cells = [c.strip() for c in row[0].split("|")]
+            self.assertIn(audit.MARK[audit.NA], cells,
+                          "CI-02 is scoped to apps, so the infra repo's cell must be n/a")
 
     def _run(self, root, *extra):
         return subprocess.run(
@@ -610,15 +628,22 @@ class Consistency(unittest.TestCase):
 
     def test_outside_a_fleet_refuses(self):
         """CONSISTENCY.md is the fleet's table. With no FLEET.md there is no
-        family to build columns from, and a one-repo table would read as one."""
+        family to build columns from, and a one-repo table would read as one.
+
+        Run from INSIDE the lonely repo with no --fleet, so fleet_root() walks
+        up and finds nothing. Passing `--fleet <that repo>` instead dies in
+        audit.configure's own argument validation ("no FLEET.md there"), which
+        is a different refusal: delete consistency.py's guard entirely and that
+        version still goes green, because the assertion matched the word
+        "FLEET.md" in an unrelated message."""
         with tempfile.TemporaryDirectory() as d:
             root = pathlib.Path(d).resolve()
             git_repo(root, "lonely")
             p = subprocess.run(
-                [sys.executable, str(HERE / "consistency.py"), "--fleet", str(root / "lonely"),
-                 "--no-snapshot"], capture_output=True, text=True, env=CLEAN_ENV)
+                [sys.executable, str(HERE / "consistency.py"), "--no-snapshot"],
+                cwd=str(root / "lonely"), capture_output=True, text=True, env=CLEAN_ENV)
             self.assertNotEqual(p.returncode, 0)
-            self.assertIn("fleet", (p.stderr + p.stdout).lower())
+            self.assertIn("not inside a fleet", p.stderr, p.stdout)
 
 
 if __name__ == "__main__":
