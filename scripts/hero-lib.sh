@@ -2,7 +2,7 @@
 # Copyright (c) 2026 A.I. Hero, Inc.
 # All Rights Reserved.
 
-# hero-lib.sh: shared helpers for hero-skills.
+# hero-lib.sh: shared helpers for wayfare.
 #
 # Sourced by skills, not executed. Every function here exists because the same
 # logic was previously inlined in two or more SKILL.md files and had already
@@ -11,8 +11,12 @@
 #
 # Usage from a skill:
 #
-#   HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
-#   [ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel)/scripts/hero-lib.sh"
+#   HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+#   # The toplevel fallback is accepted ONLY when this repo IS the plugin:
+#   # unqualified, it sources scripts/hero-lib.sh out of whatever repo the agent
+#   # is in, which during a review is the branch under review.
+#   [ -r "$HERO_LIB" ] || { HL_TOP=$(git rev-parse --show-toplevel 2>/dev/null); \
+#     [ -n "$HL_TOP" ] && [ -f "$HL_TOP/.claude-plugin/plugin.json" ] && HERO_LIB="$HL_TOP/scripts/hero-lib.sh"; }
 #   # shellcheck source=/dev/null
 #   . "$HERO_LIB"
 #

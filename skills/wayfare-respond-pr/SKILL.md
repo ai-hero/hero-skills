@@ -35,7 +35,7 @@ follow the four phases in
 using the table below as the report, and stop.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" wayfare-respond-pr
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-fields.sh" wayfare-respond-pr
 ```
 
 Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
@@ -132,8 +132,15 @@ behind the base, and a review of a stale head reviews code that is not what
 will merge.
 
 ```bash
-HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
-[ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel)/scripts/hero-lib.sh"
+HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+# Fall back to this repo's own copy ONLY when this repo IS the plugin.
+# Unqualified, the fallback sources scripts/hero-lib.sh out of whatever
+# repo the agent happens to be in — which, during a review, is the branch
+# under review. It was near-dead while the default path matched every
+# install; renaming the folder to wayfare-skills made it live for everyone
+# who had not renamed their checkout.
+[ -r "$HERO_LIB" ] || { HL_TOP=$(git rev-parse --show-toplevel 2>/dev/null); \
+  [ -n "$HL_TOP" ] && [ -f "$HL_TOP/.claude-plugin/plugin.json" ] && HERO_LIB="$HL_TOP/scripts/hero-lib.sh"; }
 # shellcheck source=/dev/null
 . "$HERO_LIB"
 BASE_BRANCH=${BASE_BRANCH:-$(hero_default_branch)}
@@ -366,7 +373,7 @@ Commits: SHA1, SHA2
 Remaining unresolved threads: N (LIST_OR_NONE)
 
 ---
-_Generated using hero-skills._
+_Generated using wayfare._
 EOF
 )
 
@@ -401,7 +408,7 @@ When an update is warranted:
 gh pr view $PR_NUMBER --json title,body --jq '{title, body}'
 ```
 
-Draft the full new body (preserving the existing structure of Summary, Changesets and Test Plan, and appending entries for this iteration's work), ending with `_Generated using hero-skills._` as the final line. **Do not paste the heredoc literally.** `gh pr edit --body` fully replaces the body, so the heredoc must contain the entire drafted Markdown:
+Draft the full new body (preserving the existing structure of Summary, Changesets and Test Plan, and appending entries for this iteration's work), ending with `_Generated using wayfare._` as the final line. **Do not paste the heredoc literally.** `gh pr edit --body` fully replaces the body, so the heredoc must contain the entire drafted Markdown:
 
 ```bash
 gh pr edit $PR_NUMBER --title "NEW_TITLE_UNDER_70_CHARS" --body "$(cat <<'EOF'
@@ -410,7 +417,7 @@ EOF
 )"
 ```
 
-Substitute `DRAFTED_FULL_BODY_HERE` with the actual drafted Markdown before running. The drafted body must end with `_Generated using hero-skills._`. Never run the snippet with the placeholder still in place, or it will overwrite the PR description with the literal string `DRAFTED_FULL_BODY_HERE`.
+Substitute `DRAFTED_FULL_BODY_HERE` with the actual drafted Markdown before running. The drafted body must end with `_Generated using wayfare._`. Never run the snippet with the placeholder still in place, or it will overwrite the PR description with the literal string `DRAFTED_FULL_BODY_HERE`.
 
 Rules:
 

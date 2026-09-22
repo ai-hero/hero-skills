@@ -1,7 +1,7 @@
 ---
 name: wayfare-check-preflight
 # prettier-ignore
-description: Run pre-flight checks for the hero-skills pipeline. Catches missing tooling, stale HERO.md, .env mismatches and busy ports before any step does destructive work. Use before push-pr, ship-pr or wayfare-run-task, or when a pipeline step fails on setup.
+description: Run pre-flight checks for the wayfare pipeline. Catches missing tooling, stale HERO.md, .env mismatches and busy ports before any step does destructive work. Use before push-pr, ship-pr or wayfare-run-task, or when a pipeline step fails on setup.
 argument-hint: "[--bucket tooling|repo|runtime|pipeline|all] [--projects p1,p2] | recalibrate"
 disable-model-invocation: true
 ---
@@ -51,7 +51,7 @@ that parsing. When the first token of
 using the table below as the report, and stop.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" wayfare-check-preflight
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-fields.sh" wayfare-check-preflight
 ```
 
 Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
@@ -79,8 +79,8 @@ Prefer the harness-provided `$CLAUDE_PLUGIN_ROOT` when set (covers worktrees and
 ```bash
 PREFLIGHT=""
 [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && PREFLIGHT="$CLAUDE_PLUGIN_ROOT/scripts/preflight.sh"
-[ -x "$PREFLIGHT" ] || PREFLIGHT="$ROOT/.claude/plugins/hero-skills/scripts/preflight.sh"
-[ -x "$PREFLIGHT" ] || PREFLIGHT="$HOME/.claude/plugins/hero-skills/scripts/preflight.sh"
+[ -x "$PREFLIGHT" ] || PREFLIGHT="$ROOT/.claude/plugins/wayfare-skills/scripts/preflight.sh"
+[ -x "$PREFLIGHT" ] || PREFLIGHT="$HOME/.claude/plugins/wayfare-skills/scripts/preflight.sh"
 "$PREFLIGHT" $ARGUMENTS
 ```
 
@@ -92,7 +92,7 @@ Capture the script's exit code. Then:
 
 - **Exit 0, 0 warnings** → "All preflight checks passed. Safe to run wayfare:wayfare-run-task or any individual hero skill."
 - **Exit 0, N warnings** → "Preflight passed with N warning(s). Safe to proceed; warnings are advisory and may bite later."
-- **Exit 1** → "Preflight found one or more blockers. The hero-skills pipeline will fail if you continue. Fix the blockers above, then re-run wayfare:wayfare-check-preflight."
+- **Exit 1** → "Preflight found one or more blockers. The wayfare pipeline will fail if you continue. Fix the blockers above, then re-run wayfare:wayfare-check-preflight."
 
 For each `[BLOCKER]` line, the script already prints the recommended fix inline. Do not re-explain it. Point the user at the line.
 

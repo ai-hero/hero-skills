@@ -1250,7 +1250,7 @@ check "store: shadowed plan-work warned loudly" "0" "$?"
 
 # A worktree shares the primary checkout's store.
 # pre-commit exports GIT_DIR for the outer repo; `git worktree add` must not
-# see it or the worktree is created against hero-skills itself.
+# see it or the worktree is created against this repo itself.
 R5="$TMP/wt-main"; git init -q "$R5"; git -C "$R5" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
 (unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE; git -C "$R5" worktree add -q "$TMP/wt-side" -b side 2>/dev/null)
 # hero_store_path is the read-only half: it must answer without creating the

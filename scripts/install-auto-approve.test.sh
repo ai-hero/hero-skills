@@ -49,7 +49,7 @@ check "fresh: matches source" "same" "$(cmp -s "$SOURCE" "$d/.github/workflows/a
 # `runs-on:`, so that pair distinguishes caller from logic no matter how the
 # file is spelled.
 check "fresh: is the caller" "yes" \
-  "$(grep -q 'uses: ai-hero/hero-skills/.github/workflows/auto-approve.yaml@' "$d/.github/workflows/auto-approve.yaml" && echo yes || echo no)"
+  "$(grep -q 'uses: ai-hero/wayfare-skills/.github/workflows/auto-approve.yaml@' "$d/.github/workflows/auto-approve.yaml" && echo yes || echo no)"
 check "fresh: is NOT the logic" "yes" \
   "$(grep -q 'runs-on:' "$d/.github/workflows/auto-approve.yaml" && echo no || echo yes)"
 

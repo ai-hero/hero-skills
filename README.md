@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/github/license/ai-hero/hero-skills?style=flat-square" alt="License" />
+  <img src="https://img.shields.io/github/license/ai-hero/wayfare-skills?style=flat-square" alt="License" />
   <img src="https://img.shields.io/badge/claude_code-plugin-blue?style=flat-square" alt="Claude Code Plugin" />
 </p>
 
@@ -225,10 +225,24 @@ no effect.
 ## Install
 
 ```bash
-git clone https://github.com/ai-hero/hero-skills.git ~/.claude/plugins/hero-skills
+git clone https://github.com/ai-hero/wayfare-skills.git ~/.claude/plugins/wayfare-skills
 ```
 
 Skills are immediately available in any Claude Code session. No restart needed.
+
+The plugin is **wayfare**, so its skills are invoked as `wayfare:wayfare-sync-plan`
+and the like. The clone target is `wayfare-skills`, which is what the
+`CLAUDE_PLUGIN_ROOT` fallback in every skill looks for when the environment
+does not set it.
+
+The repo was called `hero-skills` until 2026-09-21. Around 25 repos pin its
+reusable auto-approve workflow at
+`ai-hero/hero-skills/.github/workflows/auto-approve.yaml@main`, and those keep
+working **only because GitHub redirects the old name**. Re-vendor
+`assets/auto-approve/caller.yaml` into each consumer to stop depending on that
+redirect, and do not create a new repo called `hero-skills`: the moment one
+exists the redirect stops, and every consumer that has not been re-vendored
+calls it instead.
 
 ### Companion installs (for full pipeline coverage)
 
@@ -485,7 +499,7 @@ is `issue_comment` nothing surfaces that until someone tries to ship.
 
 ## `main` is the distribution mechanism
 
-Consumers call `ai-hero/hero-skills/.github/workflows/auto-approve.yaml@main`, so
+Consumers call `ai-hero/wayfare-skills/.github/workflows/auto-approve.yaml@main`, so
 **merging a change to `auto-approve.yaml` publishes it to every consuming repo
 the moment it lands.** There is no release step, no tag to move, and no per-repo
 PR to open.

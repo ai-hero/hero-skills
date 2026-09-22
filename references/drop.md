@@ -92,7 +92,7 @@ Note: this does NOT auto-pop the stash since the purpose is to switch away from 
 
 ```bash
 # shellcheck source=/dev/null
-. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
+. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
 # _verbose, not the silent variant: this value gates a force-delete. On a repo
 # whose real default is `master`, a silent fallback to `main` makes
 # `gh pr list --base main` return 0, the branch reads as never-merged, and

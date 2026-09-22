@@ -62,7 +62,7 @@ wayfare: sync
 
 Only `name` and `description` are required by the spec. `argument-hint`
 and `disable-model-invocation` are Claude Code fields, and `wayfare` is
-hero-skills' own; a skill meant to be portable carries neither.
+this plugin's own; a skill meant to be portable carries neither.
 
 - `name`: 1-64 chars, lowercase letters, digits and hyphens; no leading,
   trailing or doubled hyphen; must equal the folder name. Use verb-object.
@@ -122,7 +122,7 @@ that parsing. When the first token of
 using the table below as the report, and stop.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-fields.sh" wayfare-create-skill
+"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-fields.sh" wayfare-create-skill
 ```
 
 Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,

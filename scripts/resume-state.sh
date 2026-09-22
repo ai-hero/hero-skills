@@ -57,8 +57,12 @@ fail_source() { STATE_ERRORS="${STATE_ERRORS:+$STATE_ERRORS,}$1"; }
 
 emit() { printf '%s=%s\n' "$1" "$(printf '%q' "$2")"; }
 
-HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/hero-lib.sh"
-[ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel 2>/dev/null)/scripts/hero-lib.sh"
+HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+# Accept the toplevel copy ONLY when this repo IS the plugin: unqualified,
+# the fallback sources scripts/hero-lib.sh out of whatever repo the agent is
+# in, which during a review is the branch under review.
+[ -r "$HERO_LIB" ] || { HL_TOP=$(git rev-parse --show-toplevel 2>/dev/null); \
+  [ -n "$HL_TOP" ] && [ -f "$HL_TOP/.claude-plugin/plugin.json" ] && HERO_LIB="$HL_TOP/scripts/hero-lib.sh"; }
 # shellcheck source=/dev/null
 if ! . "$HERO_LIB" 2>/dev/null; then
   # Emit a well-formed unhealthy state rather than nothing. Emitting nothing

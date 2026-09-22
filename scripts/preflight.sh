@@ -2,7 +2,7 @@
 # Copyright (c) 2026 A.I. Hero, Inc.
 # All Rights Reserved.
 
-# Pre-flight checks for the hero-skills pipeline.
+# Pre-flight checks for the wayfare pipeline.
 #
 # Runs the union of every downstream skill's blocking check so a `wayfare-run-task`
 # (or any individual skill) can fail fast, before code is edited, before a

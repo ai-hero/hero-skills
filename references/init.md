@@ -323,7 +323,7 @@ grep -l "test\|lint\|build\|deploy\|release" .github/workflows/*.yml 2>/dev/null
 - Whether `.github/workflows/auto-approve.yaml` (or `.yml`) already exists, which `wayfare:wayfare-ship-pr` needs
 
 ```bash
-# Check whether the hero-skills auto-approve workflow is installed
+# Check whether the shared auto-approve workflow is installed
 # Either spelling counts — GitHub honours both, and repos in this family
 # carry a mix. Checking only one reinstalls a workflow that already exists.
 AA=$(ls .github/workflows/auto-approve.yaml .github/workflows/auto-approve.yml 2>/dev/null | head -1)
@@ -332,9 +332,29 @@ AA=$(ls .github/workflows/auto-approve.yaml .github/workflows/auto-approve.yml 2
 # depend on a COMMENT in the caller — the trigger itself moved into the shared
 # workflow — so trimming that comment would have reported every migrated repo
 # as missing and re-prompted to install what it already has.
-[ -n "$AA" ] && grep -qE 'hero-skills/\.github/workflows/auto-approve\.yml@|@auto-approve' "$AA" 2>/dev/null && \
-  echo "AUTO_APPROVE_INSTALLED" || echo "AUTO_APPROVE_MISSING"
+#
+# INSTALLED and STALE are different answers. A caller vendored before the
+# 2026-09-21 rename still says `ai-hero/hero-skills/...`, which resolves only
+# through GitHub's rename redirect. Reporting it INSTALLED is what would leave
+# the whole fleet on that redirect indefinitely: nothing else looks.
+if [ -z "$AA" ]; then
+  echo "AUTO_APPROVE_MISSING"
+elif grep -qE 'hero-skills/\.github/workflows/auto-approve\.ya?ml@' "$AA" 2>/dev/null; then
+  echo "AUTO_APPROVE_STALE"
+elif grep -qE 'wayfare-skills/\.github/workflows/auto-approve\.ya?ml@|@auto-approve' "$AA" 2>/dev/null; then
+  echo "AUTO_APPROVE_INSTALLED"
+else
+  echo "AUTO_APPROVE_MISSING"
+fi
+```
 
+**`AUTO_APPROVE_STALE` is re-vendored, not left alone.** Run the installer;
+it writes a `.new` beside the existing file and exits 2 rather than
+overwriting, so say that the swap is the user's to make and show the diff. A
+stale caller works today and stops working the moment anyone claims the old
+repo name, so it is a migration with a deadline, not a preference.
+
+```bash
 # And whether it has been merged to the default branch — issue_comment
 # workflows only trigger from the default branch, so a PR-branch-only
 # install does nothing.
@@ -681,8 +701,8 @@ Do NOT offer to install a pre-commit hook for `wayfare:wayfare-init-repo recalib
 - Container registry
 - ArgoCD / GitOps
 - Namespaces / environments
-- Whether to install `.github/workflows/auto-approve.yml` for `wayfare:wayfare-ship-pr`. If it is absent, ask:
-  *"`wayfare:wayfare-ship-pr` lets you comment `@auto-approve` on a PR to get a Claude-verified approval (gated by self-review, no unresolved threads, and PR-metadata checks). Install `.github/workflows/auto-approve.yml`? It also requires an `ANTHROPIC_API_KEY` repo secret."*
+- Whether to install `.github/workflows/auto-approve.yaml` for `wayfare:wayfare-ship-pr`. If it is absent, ask:
+  *"`wayfare:wayfare-ship-pr` lets you comment `@auto-approve` on a PR to get a Claude-verified approval (gated by self-review, no unresolved threads, and PR-metadata checks). Install `.github/workflows/auto-approve.yaml`? It also requires an `ANTHROPIC_API_KEY` repo secret."*
   - If the user says yes, run the install in Step 6a below.
   - If the workflow exists locally but is not on the default branch yet, remind the user that `@auto-approve` will be a no-op until that file lands on the default branch.
 
@@ -1131,15 +1151,15 @@ Run wayfare:wayfare-setup-dev to configure your local dev environment
 
 ## Step 6a: Optionally Install Auto-Approve Workflow
 
-If the user agreed to install `.github/workflows/auto-approve.yml` (Group 4 confirmation), copy it into their repo using the bundled installer. The installer's exit code is the contract, so capture it and branch on it explicitly so an existing customized workflow is never silently overwritten or treated as "installed":
+If the user agreed to install `.github/workflows/auto-approve.yaml` (Group 4 confirmation), copy it into their repo using the bundled installer. The installer's exit code is the contract, so capture it and branch on it explicitly so an existing customized workflow is never silently overwritten or treated as "installed":
 
 ```bash
 # Locate this plugin's installed root. Tries the two standard locations;
 # bails out if neither matches.
 PLUGIN_ROOT=""
 for candidate in \
-  "$HOME/.claude/plugins/hero-skills" \
-  "$HOME/.config/claude/plugins/hero-skills"; do
+  "$HOME/.claude/plugins/wayfare-skills" \
+  "$HOME/.config/claude/plugins/wayfare-skills"; do
   if [ -x "$candidate/scripts/install-auto-approve.sh" ]; then
     PLUGIN_ROOT="$candidate"
     break
@@ -1163,9 +1183,9 @@ for ext in yaml yml; do
 done
 
 if [ -z "$PLUGIN_ROOT" ]; then
-  echo "Could not locate hero-skills plugin root in standard locations."
-  echo "Install /hero-skills under ~/.claude/plugins/hero-skills, or copy"
-  echo ".github/workflows/auto-approve.yml from the plugin into this repo manually."
+  echo "Could not locate the wayfare plugin root in standard locations."
+  echo "Install the plugin under ~/.claude/plugins/wayfare-skills, or copy"
+  echo ".github/workflows/auto-approve.yaml from the plugin into this repo manually."
 else
   set +e
   "$PLUGIN_ROOT/scripts/install-auto-approve.sh" "$ROOT"
@@ -1192,7 +1212,7 @@ case "$INSTALL_RC" in
     echo "instructions above, then re-run."
     ;;
   3)
-    echo "The hero-skills plugin is missing assets/auto-approve/caller.yml."
+    echo "The wayfare plugin is missing assets/auto-approve/caller.yaml."
     echo "Reinstall the plugin; this is not a problem with your repo."
     ;;
   255)
@@ -1210,10 +1230,10 @@ Reminders shown only when the workflow was newly created this run (`INSTALL_FRES
 2. **Add an `ANTHROPIC_API_KEY` repo secret.** The workflow uses it for Claude verification.
 
 ```
-Auto-approve installed at .github/workflows/auto-approve.yml.
+Auto-approve installed at .github/workflows/auto-approve.yaml.
 
 Next steps before wayfare:wayfare-ship-pr will work:
-  1. git add .github/workflows/auto-approve.yml
+  1. git add .github/workflows/auto-approve.yaml
   2. Commit, open a PR, and merge to DEFAULT_BRANCH
   3. Add ANTHROPIC_API_KEY in repo settings -> Secrets and variables -> Actions
 ```
@@ -1330,7 +1350,7 @@ Three cases, decided by what is already on disk:
    unmigrated store from the nine-kind schema. Run the migrator and say so:
 
    ```bash
-   bash "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/hero-skills}/scripts/migrate-plan.sh" "$(hero_store_path)"
+   bash "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/migrate-plan.sh" "$(hero_store_path)"
    ```
 
    Report its warnings rather than swallowing them; an unrecognized `kind`
