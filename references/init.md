@@ -334,9 +334,10 @@ AA=$(ls .github/workflows/auto-approve.yaml .github/workflows/auto-approve.yml 2
 # as missing and re-prompted to install what it already has.
 #
 # INSTALLED and STALE are different answers. A caller vendored before the
-# 2026-09-21 rename still says `ai-hero/hero-skills/...`, which resolves only
-# through GitHub's rename redirect. Reporting it INSTALLED is what would leave
-# the whole fleet on that redirect indefinitely: nothing else looks.
+# 2026-09-21 rename still says `ai-hero/hero-skills/...`, and a workflow
+# `uses:` does NOT follow a repo-rename redirect — that run fails at startup,
+# zero jobs, no failing step. STALE means auto-approve is BROKEN in this repo,
+# and reporting it INSTALLED says the opposite of the truth.
 if [ -z "$AA" ]; then
   echo "AUTO_APPROVE_MISSING"
 elif grep -qE 'hero-skills/\.github/workflows/auto-approve\.ya?ml@' "$AA" 2>/dev/null; then
@@ -348,11 +349,14 @@ else
 fi
 ```
 
-**`AUTO_APPROVE_STALE` is re-vendored, not left alone.** Run the installer;
-it writes a `.new` beside the existing file and exits 2 rather than
-overwriting, so say that the swap is the user's to make and show the diff. A
-stale caller works today and stops working the moment anyone claims the old
-repo name, so it is a migration with a deadline, not a preference.
+**`AUTO_APPROVE_STALE` means auto-approve is broken here, right now.** Say
+that plainly rather than filing it as a migration to get to: the `uses:`
+names a repo that no longer answers, so every `@auto-approve` on this repo
+fails at startup. Run the installer; it writes a `.new` beside the existing
+file and exits 2 rather than overwriting, so the swap is the user's to make
+and the diff is worth showing. Separately, and for a different reason, nobody
+should ever create a repo at the old name: a consumer still pointed there
+would hand it `ANTHROPIC_API_KEY` and an approve-capable token.
 
 ```bash
 # And whether it has been merged to the default branch — issue_comment

@@ -841,16 +841,17 @@ def _approve_workflows(r):
 # Delegation to the shared workflow. A v-tag OR a full SHA both count: several
 # repos pin the SHA, which is stricter than the tag, and demanding the tag
 # would fail them for being MORE careful. A branch ref counts as neither.
-# Both slugs: the repo was renamed hero-skills -> wayfare-skills on
-# 2026-09-21 and ~25 consumers still vendor the old one. Matching only the new
-# one flips every un-re-vendored caller to FAIL on CI-02 the moment it is
-# re-vendored — and matching only the old one does the same to every caller
-# that HAS been. Drop the alternation when no consumer references the old path.
+# `wayfare-skills` only, deliberately. The repo was renamed from hero-skills on
+# 2026-09-21, and a workflow `uses:` does NOT follow a rename redirect, so a
+# caller still naming the old slug is a workflow that cannot start. Matching it
+# here would certify a repo as "delegates to the shared workflow, gated" when
+# its auto-approve does not run at all. A stale consumer SHOULD fail this
+# check: that failure is the signal driving the re-vendor.
 # `ya?ml` because the CALLEE's filename is the plugin repo's business and PLACE-06
 # is moving the fleet off .yml — hardcoding it would flip every caller to FAIL
 # the day the plugin repo renames its own file.
 _DELEGATES = re.compile(
-    r"ai-hero/(?:hero|wayfare)-skills/\.github/workflows/auto-approve\.ya?ml@"
+    r"ai-hero/wayfare-skills/\.github/workflows/auto-approve\.ya?ml@"
     r"(main|v[0-9][^\s]*|[0-9a-f]{40})"
 )
 
