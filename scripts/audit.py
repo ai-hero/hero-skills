@@ -934,8 +934,13 @@ def _(r):
         t = w.read_text()
         if w.stem == "auto-approve":
             continue
-        # a workflow that runs tests AND triggers on pull_request
-        if re.search(r"\bpull_request\b", t) and re.search(r"\b(test|lint|verify|typecheck)\b", t):
+        # A workflow that gates a PR AND triggers on pull_request.
+        # `pre-commit` is in the alternation because the gate is what the
+        # workflow RUNS, not what it is called: a terraform repo whose only
+        # gate is `pre-commit run --all-files` on pull_request never uses the
+        # words test/lint/verify, and was reported as having no PR gate at all
+        # at high severity — while running one on every PR.
+        if re.search(r"\bpull_request\b", t) and re.search(r"\b(test|lint|verify|typecheck|pre-commit)\b", t):
             return PASS, w.name
     return FAIL, "no PR test gate"
 
@@ -2518,11 +2523,34 @@ def _(r):
     # meant the check went MANUAL for anyone whose fleet named no template.
     # assets/auto-approve/caller.yaml is the same bytes install-auto-approve.sh
     # writes, so this compares a vendored artifact with its source.
-    if r.name == _SHARED_WORKFLOW_OWNER:
-        return NA, "shared workflow owner"
     mine = r / ".github" / "workflows" / "auto-approve.yaml"
     if not mine.is_file():
         return NA, "no auto-approve caller"
+    # The owner is recognised by what its file IS, not by what its folder is
+    # called. `r.name` is the directory on disk, and a checkout of the plugin
+    # under any other name — `hero-skills` after the rename, or a second clone
+    # — read as an ordinary consumer, so its shared LOGIC was compared against
+    # the CALLER template and failed on every line that differs between the
+    # two, which is most of them.
+    if r.name == _SHARED_WORKFLOW_OWNER:
+        return NA, "shared workflow owner"
+    try:
+        doc = _wf_doc(mine)
+    except Unreadable as e:
+        return MANUAL, str(e)
+    # `workflow_call` ALONE is not the test, and must not become it. This file
+    # belongs to the repo being audited, GitHub accepts extra triggers, and NA
+    # is not printed by --json — so a repo whose caller had drifted could add
+    # one line, keep the drift, and erase the finding rather than fix it.
+    # A caller still delegates: it has a job whose `uses:` is the shared
+    # workflow. The callee cannot, because that would be itself. Requiring
+    # both means the only way out of this check is to stop being a consumer.
+    delegates = any(
+        _SHARED_WORKFLOW_OWNER in str((job or {}).get("uses") or "")
+        for job in (doc.get("jobs") or {}).values()
+    )
+    if "workflow_call" in _wf_on(doc) and not delegates:
+        return NA, "shared workflow owner (declares workflow_call, delegates to nobody)"
     return _matches_reference(mine, _PLUGIN_ASSETS / "auto-approve" / "caller.yaml")
 
 

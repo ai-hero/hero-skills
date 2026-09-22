@@ -644,6 +644,51 @@ class Consistency(unittest.TestCase):
                 cwd=str(root / "lonely"), capture_output=True, text=True, env=CLEAN_ENV)
             self.assertNotEqual(p.returncode, 0)
             self.assertIn("not inside a fleet", p.stderr, p.stdout)
+class CI20Owner(unittest.TestCase):
+    """CI-20 must not be silenceable by the repo it is auditing.
+
+    The owner exemption is a content test on `<repo>/.github/workflows/
+    auto-approve.yaml`, which the audited repo controls. `workflow_call` alone
+    was enough to claim it, GitHub accepts extra triggers at no cost, and NA is
+    not emitted by --json — so a repo whose caller had drifted could add one
+    line, keep the drift, and erase the finding instead of fixing it.
+    """
+    def _verdict(self, body):
+        with tempfile.TemporaryDirectory() as d:
+            repo = pathlib.Path(d) / "consumer"
+            (repo / ".github" / "workflows").mkdir(parents=True)
+            (repo / ".github" / "workflows" / "auto-approve.yaml").write_text(body)
+            return audit.CHECKS["CI-20"](repo)[0]
+
+    def setUp(self):
+        # Point the checker at THIS repo's assets. `_PLUGIN_ASSETS` defaults to
+        # ~/.claude/plugins/wayfare-skills, which exists on a machine with the
+        # plugin installed and not on a CI runner — so without this the
+        # comparison finds no reference, returns MANUAL, and all three
+        # asset-comparing cases pass locally and fail in CI. This repo IS the
+        # plugin, so its own assets/ is the right source either way.
+        self._saved_assets = audit._PLUGIN_ASSETS
+        audit._PLUGIN_ASSETS = HERE.parent / "assets"
+        self.asset = (HERE.parent / "assets" / "auto-approve" / "caller.yaml").read_text()
+
+    def tearDown(self):
+        audit._PLUGIN_ASSETS = self._saved_assets
+
+    def test_pristine_caller_passes(self):
+        self.assertEqual(self._verdict(self.asset), audit.PASS)
+
+    def test_drifted_caller_fails(self):
+        self.assertEqual(self._verdict(self.asset.replace("@main", "@some-branch")), audit.FAIL)
+
+    def test_workflow_call_does_not_excuse_a_caller_that_still_delegates(self):
+        drifted = self.asset.replace("@main", "@some-branch")
+        spoof = drifted.replace("on:\n", "on:\n  workflow_call:\n", 1)
+        self.assertEqual(self._verdict(spoof), audit.FAIL,
+                         "adding workflow_call must not turn a drifted caller into NA")
+
+    def test_the_real_shared_workflow_is_exempt(self):
+        owner = (HERE.parent / ".github" / "workflows" / "auto-approve.yaml").read_text()
+        self.assertEqual(self._verdict(owner), audit.NA)
 
 
 if __name__ == "__main__":
