@@ -200,20 +200,20 @@ EOF
 )"
 ```
 
-## Step 7: Chain to setup-dev → config → first-commit
+## Step 7: Chain to wayfare-setup-dev → config → first-commit
 
 The init-project pipeline does not stop at scaffolding. After Step 6, render the DAG:
 
 ```
-[2/4] (✓) scaffold → (▶) setup-dev → ( ) config → ( ) first-commit
+[2/4] (✓) scaffold → (▶) wayfare-setup-dev → ( ) config → ( ) first-commit
 
-Now running: setup-dev
+Now running: wayfare-setup-dev
 ```
 
 Then run `wayfare:wayfare-setup-dev` to install required CLIs and authenticate. After that completes, render:
 
 ```
-[3/4] (✓) scaffold → (✓) setup-dev → (▶) config → ( ) first-commit
+[3/4] (✓) scaffold → (✓) wayfare-setup-dev → (▶) config → ( ) first-commit
 
 Now running: the config pass (references/init.md)
 ```
@@ -223,7 +223,7 @@ Run `wayfare:wayfare-init-repo` to investigate the freshly scaffolded project an
 Finally render:
 
 ```
-[4/4] (✓) scaffold → (✓) setup-dev → (✓) config → (▶) first-commit
+[4/4] (✓) scaffold → (✓) wayfare-setup-dev → (✓) config → (▶) first-commit
 
 Now running: first-commit
 ```
@@ -252,7 +252,7 @@ Type: [Python Backend | Full-stack | ...]
 Location: PATH
 
 Pipeline:
-  (✓) scaffold → (✓) setup-dev → (✓) config → (✓) first-commit
+  (✓) scaffold → (✓) wayfare-setup-dev → (✓) config → (✓) first-commit
 
 Created:
   - Project structure

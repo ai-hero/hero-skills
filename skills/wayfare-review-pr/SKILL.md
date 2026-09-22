@@ -46,7 +46,7 @@ wrong, not spend a whole run finding out.
 
 Dispatch on it before parsing any other argument, in whichever step does
 that parsing. When the first token of
-`$ARGUMENTS` is exactly `recalibrate`, print `review-pr: running recalibrate`,
+`$ARGUMENTS` is exactly `recalibrate`, print `wayfare-review-pr: running recalibrate`,
 follow the four phases in
 [docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) (report, ask, write, commit)
 using the table below as the report, and stop.
@@ -184,7 +184,7 @@ CHANGED_FILES=$(git diff --name-only "origin/$BASE_BRANCH...HEAD" | wc -l | tr -
 # string that every numeric compare below would choke on.
 CHANGED_LINES=$(git diff --numstat "origin/$BASE_BRANCH...HEAD" \
   | awk '{ n += $1 + $2 } END { print n + 0 }' || echo 0)
-echo "review-pr: $CHANGED_FILES files, $CHANGED_LINES lines changed"
+echo "wayfare-review-pr: $CHANGED_FILES files, $CHANGED_LINES lines changed"
 ```
 
 Pick the tier from `CHANGED_LINES` and `CHANGED_FILES`. They are the input,

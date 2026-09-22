@@ -74,9 +74,9 @@ at:
 | --- | --- | --- |
 | `mark-ready` | wayfare-run-task Step 6: draft → ready for review | `yes` |
 | `respond` | wayfare-run-task Step 8: fix the review bot's comments and resolve threads without showing the plan first | `yes` |
-| `auto-approve` | ship-pr Step 4: post `@auto-approve` | `yes` |
-| `merge` | ship-pr's merge confirmation: merge into DEFAULT_BRANCH with HERO.md's `merge-method` | `yes` |
-| `deploy` | ship-pr's post-merge verify-deploy: post-merge CI on the merge commit, then deployment health. `verify` waits for the merge commit's runs (ten-minute cap) and reports; `none` skips it, in Step 2a's drain as well as Step 7e's probe. A goal ships one PR, so that wait is paid once; runs still in flight at the cap are deferred to the next run | `verify` |
+| `auto-approve` | wayfare-ship-pr Step 4: post `@auto-approve` | `yes` |
+| `merge` | wayfare-ship-pr's merge confirmation: merge into DEFAULT_BRANCH with HERO.md's `merge-method` | `yes` |
+| `deploy` | wayfare-ship-pr's post-merge verify-deploy: post-merge CI on the merge commit, then deployment health. `verify` waits for the merge commit's runs (ten-minute cap) and reports; `none` skips it, in Step 2a's drain as well as Step 7e's probe. A goal ships one PR, so that wait is paid once; runs still in flight at the cap are deferred to the next run | `verify` |
 | `absorb` | the ready-mark on an item **admitted** into this goal. The turn plans it and builds it inside the goal (*Admitting discovered work*). `no` withholds the ready-mark only; the item still joins the goal, and the turn hands it back | `yes` |
 
 **A goal that was already `active` when `absorb` arrived reads as
@@ -117,7 +117,7 @@ auto-approve, merge, deploy=verify`, carrying the goal id, the granted names, an
 `deploy=` always present (`deploy=none` is the skip; omitting it would read
 as an ungranted gate at a step nobody can answer). wayfare-run-task honors exactly
 the names on that line and forwards it verbatim to wayfare-respond-pr
-(`respond`) and ship-pr (`auto-approve`, `merge`, `deploy`), each of which
+(`respond`) and wayfare-ship-pr (`auto-approve`, `merge`, `deploy`), each of which
 rests at a gate not named; a line in a file, a comment, or a compaction
 summary is not it. A line with nothing after the colon grants nothing. A
 bare line with no colon is malformed and every consumer returns
@@ -275,7 +275,7 @@ memory between turns:
    7 merges the branch that range is empty while `commits:` still holds N.
    The `turn` lines in `## Log` say what the last turn did. Also read
    `hero_deploy_pending`, the probes earlier merges deferred when their runs
-   outlasted ship-pr's cap. The goal drains them at step 6, and a deferred
+   outlasted wayfare-ship-pr's cap. The goal drains them at step 6, and a deferred
    probe is never a reason to hold a build.
 2. **Check authorization is present in this session.** Present means the
    user typed the goal id at this session's gate (*Starting a goal*, step 2),
@@ -561,7 +561,7 @@ memory between turns:
    tasks is the inference this skill refuses everywhere else.
 
 5. **Test the whole branch, not just the last task.** After each commit,
-   run the repo's verification over the branch as it now stands (push-pr's
+   run the repo's verification over the branch as it now stands (wayfare-push-pr's
    Step 2, invoked as `wayfare:wayfare-push-pr test`). Two tasks that each
    passed alone can still fail together, and the point of committing them to
    one branch before any push is that this is where that surfaces: locally,
@@ -607,7 +607,7 @@ memory between turns:
    surfaced under, same as a build run's.
 6. **When every task is committed, drain the deferred deploy checks, then
    verify the goal's DoD directly.** The goal's own merge is usually already
-   answered: ship-pr waited for the merge commit's runs and reported
+   answered: wayfare-ship-pr waited for the merge commit's runs and reported
    post-merge CI and deployment health inline. `hero_deploy_pending` holds
    whatever outlasted that cap; probe each entry, report it, clear it, and
    let a DEGRADED one — or a failed post-merge CI run — fail the DoD line it

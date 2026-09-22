@@ -33,7 +33,7 @@ wrong, not spend a whole run finding out.
 
 Dispatch on it before parsing any other argument, in whichever step does
 that parsing. When the first token of
-`$ARGUMENTS` is exactly `recalibrate`, print `setup-dev: running recalibrate`,
+`$ARGUMENTS` is exactly `recalibrate`, print `wayfare-setup-dev: running recalibrate`,
 follow the four phases in
 [docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) (report, ask, write, commit)
 using the table below as the report, and stop.

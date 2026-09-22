@@ -34,7 +34,7 @@ the answer), mark it `(⏸)` and name what will pick it up. `(–)` would claim
 the step did not apply, and `(✓)` would claim an answer nobody has. A
 deferred step is owed by whatever runs next in that repo. A bounded wait is
 fine where the answer is worth it and paid once; an unbounded one is not.
-ship-pr's `verify-deploy` is the worked example: it waits ten minutes for the
+wayfare-ship-pr's `verify-deploy` is the worked example: it waits ten minutes for the
 merge commit's runs, then defers the rest.
 
 When the pipeline **stops early** (user declined, hard gate, error), print a
@@ -46,7 +46,7 @@ followed by `Stopped: REASON`.
 ### Pipeline 1: init-project, scaffold a new project end-to-end
 
 ```
-scaffold → setup-dev → config → first-commit
+scaffold → wayfare-setup-dev → config → first-commit
 ```
 
 Owner: `wayfare:wayfare-init-repo`. The skill scaffolds the project, then
@@ -89,7 +89,7 @@ internally for standalone use; running wayfare-run-task just makes that step vis
 in the DAG and pays a no-op cost on the second invocation.
 
 **A fan-out subagent is never a fork.** Every parallel launch in this
-plugin (simplify's review angles, review-pr's toolkit agents, harden's audit
+plugin (simplify's review angles, wayfare-review-pr's toolkit agents, harden's audit
 angles, wayfare's builders) uses the default agent type or a named one, and
 hands the agent only what its one task needs, such as the diff and an angle
 for a review; `subagent_type: "fork"` is never passed. A fork inherits the

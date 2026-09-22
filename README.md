@@ -50,7 +50,7 @@ flowchart TB
   STORE[("<b>.plans/</b><br/>PLAN.md + items/")]
   NEXT["<b>wayfare-start-goal</b><br/>authorize a goal"]
   DO["<b>wayfare-advance-item ID</b><br/>advance one item"]
-  BUILD["wayfare-run-task → push-pr<br/>→ review-pr → ship-pr"]
+  BUILD["wayfare-run-task → wayfare-push-pr<br/>→ wayfare-review-pr → wayfare-ship-pr"]
 
   SRC -- read --> PLAN
   TGT -- read --> PLAN
@@ -440,7 +440,7 @@ Three skills are stages of `sync` and hidden from the slash menu (`user-invocabl
 | Command | What it does |
 | --- | --- |
 | `wayfare:wayfare-run-task` | Drives a small task end-to-end: plan → implement → simplify → push (tests included) → self-review → mark-ready → await-review → respond → ship. Detects a resume point on re-invocation; with no arguments, drives the current goal to merged + reset branch. Explicit user gates at each destructive step. |
-| `wayfare:wayfare-init-repo` | Scaffolds a new project, then chains into setup-dev → config → first-commit. |
+| `wayfare:wayfare-init-repo` | Scaffolds a new project, then chains into wayfare-setup-dev → config → first-commit. |
 
 ### Operations
 
@@ -604,6 +604,7 @@ No `HERO.md`? Skills fall back to auto-detection. Run `wayfare:wayfare-init-repo
 - **Coding Conventions**: the house style a review judges against
 - **Projects**: per-subproject language, framework, test/dev commands, ports
 - **Wayfare**: `source-repo`, and nothing else — every other wayfare input is a connection
+- **Coding Agent**: written by `wayfare:wayfare-init-repo`, read by no skill today
 
 Keys are **lowercase and exact**. The readers match `- key:` literally, so
 `- Platform:` is not read as `platform`, and a field spelled that way is

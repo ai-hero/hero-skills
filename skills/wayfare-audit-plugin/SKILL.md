@@ -154,7 +154,7 @@ DESCRIPTION QUALITY
 ───────────────────
 [OK] commit: "Create a smart git commit..." (85 chars, clear trigger)
 [!!] audit: description is 410 chars — consider trimming
-[??] create-skill: no trigger phrase — add "Use when..." or "Use for..."
+[??] wayfare-create-skill: no trigger phrase — add "Use when..." or "Use for..."
 ```
 
 #### 2f: Alphabetical & Organizational Checks

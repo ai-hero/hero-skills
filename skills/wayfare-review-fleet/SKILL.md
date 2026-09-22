@@ -23,7 +23,7 @@ is what writes. The standard is [docs/FLEET-MD.md](../../docs/FLEET-MD.md).
 # failed source would print a plausible NO_FLEET.
 HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
 # shellcheck source=/dev/null
-. "$HERO_LIB" || { echo "review-fleet: cannot load $HERO_LIB — STOP (reinstall the plugin)"; exit 1; }
+. "$HERO_LIB" || { echo "wayfare-review-fleet: cannot load $HERO_LIB — STOP (reinstall the plugin)"; exit 1; }
 SCAN="$(dirname "$HERO_LIB")/fleet-scan.sh"
 
 if FLEET_ROOT=$(hero_fleet_root); then
