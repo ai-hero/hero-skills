@@ -1,4 +1,4 @@
-# hero-skills gates. CI calls these recipes rather than restating the commands
+# wayfare gates. CI calls these recipes rather than restating the commands
 # in YAML (CI-09): a gate that exists in two places drifts, and the copy that
 # drifts is the one nobody runs locally.
 

@@ -30,7 +30,7 @@ import importlib.util
 import pathlib
 import sys
 
-HERE = pathlib.Path(__file__).resolve().parent.parent   # the hero-skills plugin
+HERE = pathlib.Path(__file__).resolve().parent.parent   # the wayfare plugin
 
 
 # Columns, ordering and results all come from audit.py at run time — never a

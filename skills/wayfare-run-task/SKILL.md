@@ -127,7 +127,14 @@ Source the shared helper library once, at the top of the run. Every later step a
 
 ```bash
 HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
-[ -r "$HERO_LIB" ] || HERO_LIB="$(git rev-parse --show-toplevel)/scripts/hero-lib.sh"
+# Fall back to this repo's own copy ONLY when this repo IS the plugin.
+# Unqualified, the fallback sources scripts/hero-lib.sh out of whatever
+# repo the agent happens to be in — which, during a review, is the branch
+# under review. It was near-dead while the default path matched every
+# install; renaming the folder to wayfare-skills made it live for everyone
+# who had not renamed their checkout.
+[ -r "$HERO_LIB" ] || { HL_TOP=$(git rev-parse --show-toplevel 2>/dev/null); \
+  [ -n "$HL_TOP" ] && [ -f "$HL_TOP/.claude-plugin/plugin.json" ] && HERO_LIB="$HL_TOP/scripts/hero-lib.sh"; }
 # shellcheck source=/dev/null
 . "$HERO_LIB" || { echo "ERROR: cannot source hero-lib.sh — reinstall the plugin."; exit 1; }
 

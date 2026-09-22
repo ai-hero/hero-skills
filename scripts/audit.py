@@ -27,7 +27,7 @@ Usage:
     scripts/audit.py --fail-on high         # non-zero exit for CI
 
 Where things live: the ENGINE and a generic BASELINE register ship with
-hero-skills (this file, assets/compliance/); the fleet's own OVERLAY — its
+the wayfare plugin (this file, assets/compliance/); the fleet's own OVERLAY — its
 reference repos, its incident history, its known_violations — lives in the
 fleet folder's register checkout, named by FLEET.md's `register:` key
 (default .fleet/). The two are merged by id, overlay winning. Run inside a
@@ -59,7 +59,7 @@ try:
 except ImportError:
     sys.exit("pyyaml required: pip install pyyaml")
 
-HERE = pathlib.Path(__file__).resolve().parent.parent   # the hero-skills plugin
+HERE = pathlib.Path(__file__).resolve().parent.parent   # the wayfare plugin
 BASELINE = HERE / "assets" / "compliance"               # generic register, public
 # Set by configure(): the fleet root (or the lone repo's parent), the fleet's
 # register overlay directory (None outside a fleet), the template repo's row
@@ -397,7 +397,7 @@ def has_ui(repo):
 
     Every family repo used to be a product app, so ui/backend checks could
     assume the subsystem existed and report FAIL when they could not find it.
-    hero-skills is a Claude Code plugin — no ui/, no package.json, no Go
+    The wayfare plugin is a Claude Code plugin — no ui/, no package.json, no Go
     module — and under that assumption it failed AUTH-01, AUTH-02, UI-01 and
     STRUCT-03 for not having a version gate, OAuth vars and an .nvmrc it has
     no use for. That is the "check that cannot be satisfied" this register's
@@ -594,7 +594,7 @@ def _(r):
             #   - only a reusable workflow, not a plain ai-hero action, which
             #     is no kind of fleet-wide distribution mechanism;
             #   - only `main`, the callee's PROTECTED default branch, never an
-            #     arbitrary branch. @main is acceptable BECAUSE hero-skills
+            #     arbitrary branch. @main is acceptable BECAUSE the plugin repo
             #     gates main on review — approval required, stale approvals
             #     dismissed, last-push approval required. A feature branch is
             #     gated on nothing, and this caller hands the callee
@@ -841,11 +841,16 @@ def _approve_workflows(r):
 # Delegation to the shared workflow. A v-tag OR a full SHA both count: several
 # repos pin the SHA, which is stricter than the tag, and demanding the tag
 # would fail them for being MORE careful. A branch ref counts as neither.
-# `ya?ml` because the CALLEE's filename is hero-skills' business and PLACE-06
+# Both slugs: the repo was renamed hero-skills -> wayfare-skills on
+# 2026-09-21 and ~25 consumers still vendor the old one. Matching only the new
+# one flips every un-re-vendored caller to FAIL on CI-02 the moment it is
+# re-vendored — and matching only the old one does the same to every caller
+# that HAS been. Drop the alternation when no consumer references the old path.
+# `ya?ml` because the CALLEE's filename is the plugin repo's business and PLACE-06
 # is moving the fleet off .yml — hardcoding it would flip every caller to FAIL
-# the day hero-skills renames its own file.
+# the day the plugin repo renames its own file.
 _DELEGATES = re.compile(
-    r"ai-hero/hero-skills/\.github/workflows/auto-approve\.ya?ml@"
+    r"ai-hero/(?:hero|wayfare)-skills/\.github/workflows/auto-approve\.ya?ml@"
     r"(main|v[0-9][^\s]*|[0-9a-f]{40})"
 )
 
@@ -915,7 +920,7 @@ def _(r):
         for j in jobs.values()
         if isinstance(j, dict)
     ):
-        return MANUAL, "delegated to hero-skills"
+        return MANUAL, "delegated to the plugin repo"
     return PASS, ""
 
 
@@ -2223,12 +2228,13 @@ def _(r):
     return (FAIL, detail) if detail else (PASS, "")
 
 
-# The register has two homes — the engine in the hero-skills plugin, the
+# The register has two homes — the engine in the wayfare plugin, the
 # overlay in the fleet's register checkout (FLEET.md `register:`) — and any
 # other repo carrying one of these is carrying a copy. The template still
 # carries the pre-move copy until its removal PR lands: that is a real FAIL,
 # not a reason to exempt it.
-_PLUGIN_REPO = "hero-skills"
+# The checkout directory name, not the GitHub slug: r.name is a directory.
+_PLUGIN_REPO = "wayfare-skills"
 # Presence list — deliberately NOT REGISTER_FILES, which is the content-grep
 # exclusion set. The two overlap but answer different questions, and merging
 # them would put a file in one job because it belonged in the other.
@@ -2367,9 +2373,14 @@ def _(r):
     return FAIL, "TS generated outside the UI tree: " + ", ".join(o for o in outs if "gen" in o)
 
 
-_SHARED_WORKFLOW_OWNER = "hero-skills"
+_SHARED_WORKFLOW_OWNER = "wayfare-skills"
+# The env var name is a contract with whoever sets it, so it keeps its
+# spelling; the default path is not, and it moved with the folder. A wrong
+# default here does NOT fail loudly: _matches_reference returns MANUAL for an
+# absent reference, and MANUAL cells are not printed in --json, so VNDR-02
+# would simply stop reporting drift.
 _PLUGIN_ASSETS = pathlib.Path(os.environ.get("HERO_SKILLS_PLUGIN")
-                              or os.path.expanduser("~/.claude/plugins/hero-skills")) / "assets"
+                              or os.path.expanduser("~/.claude/plugins/wayfare-skills")) / "assets"
 
 
 class Unreadable(Exception):
