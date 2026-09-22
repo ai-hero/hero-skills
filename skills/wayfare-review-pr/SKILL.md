@@ -270,7 +270,7 @@ Two things about this comment matter, so do not "tidy" them:
 
 - **The hidden `<!-- ai-hero:self-review -->` marker is what unblocks shipping.**
   The shared auto-approve workflow's prior-review gate accepts it as proof that
-  auto-approve is not the only review on the PR. Drop the marker and `ship-pr`
+  auto-approve is not the only review on the PR. Drop the marker and `wayfare-ship-pr`
   gets REQUEST_CHANGES with no obvious cause.
 - **The body must not START with `@auto-approve`.** That is the workflow's
   trigger, and this comment carries the very marker the prior-review gate

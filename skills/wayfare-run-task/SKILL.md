@@ -180,7 +180,7 @@ If `PREFLIGHT_RC` is zero but the script printed `[WARN]` lines, surface them to
 
 wayfare-run-task never works on the default branch. If we're on it with any uncommitted files or unpushed local commits, branch off automatically, with **no prompt**, so the rest of the pipeline has a feature branch to commit and push to. This runs before resume detection so Step 0.5 sees a feature-branch state whenever there is work to preserve.
 
-**Why wayfare-run-task branches at all, when `push-pr` also does:** push-pr branches at *push* time, which is Step 4. That is too late, because Step 2 starts editing files. The timing is wayfare-run-task's own concern. The **naming policy is not.** That lives in `hero_branch_policy` and is shared with push-pr, so the two can't drift.
+**Why wayfare-run-task branches at all, when `wayfare-push-pr` also does:** push-pr branches at *push* time, which is Step 4. That is too late, because Step 2 starts editing files. The timing is wayfare-run-task's own concern. The **naming policy is not.** That lives in `hero_branch_policy` and is shared with push-pr, so the two can't drift.
 
 First, **derive `SUGGESTED_BRANCH` as a reasoning step.** This is a model task, not a shell function. Run `hero_branch_policy` to print the rules, apply them to `$ARGUMENTS` (or the diff if `$ARGUMENTS` is empty), and produce a concrete, non-empty branch name. Then run the snippet below with that value exported in the environment. The snippet asserts the variable is set; it will not invent one.
 
@@ -339,7 +339,7 @@ Set `RESUME_STEP` to the inferred value and run that step immediately. The Cross
 
 When `RESUME_STEP > 1`, render the DAG with steps before `RESUME_STEP` marked `(✓)` so the visual model stays accurate.
 
-> **Resume rule for Steps 1 to 9:** execute steps starting from `RESUME_STEP`. Earlier steps render as `(✓)` in the DAG **but are NOT re-executed.** Do not re-run `push-pr`, `review-pr`, and so on for those steps. The first DAG render of the run shows `RESUME_STEP` as `(▶)`. Examples:
+> **Resume rule for Steps 1 to 9:** execute steps starting from `RESUME_STEP`. Earlier steps render as `(✓)` in the DAG **but are NOT re-executed.** Do not re-run `wayfare-push-pr`, `wayfare-review-pr`, and so on for those steps. The first DAG render of the run shows `RESUME_STEP` as `(▶)`. Examples:
 >
 > - `RESUME_STEP=1` (fresh start) → run every step in order.
 > - `RESUME_STEP=2` (in-flight item with unchecked subtasks, no PR) → render `[2/9] (✓) plan → (▶) implement → …`; skip Step 1's resolution, because the item is `ITEM_FILE`, and pick up at its first unchecked `## Subtasks` line.
@@ -580,7 +580,7 @@ If the code is *not* the better answer, this is not feedback; it is a bug. Fix t
 
 #### 2c: Self-review the diff
 
-After implementation, **always run a quick self-review of the diff before moving on**, but do NOT run the full `review-pr` agent suite yet (that happens in Step 5 against the open PR). At minimum:
+After implementation, **always run a quick self-review of the diff before moving on**, but do NOT run the full `wayfare-review-pr` agent suite yet (that happens in Step 5 against the open PR). At minimum:
 
 - `git status` - confirm only intended files changed
 - `git diff` - read every line; reject sloppy edits
@@ -644,7 +644,7 @@ Render DAG with `self-review` active. Run `wayfare:wayfare-review-pr --no-mark-r
 
 **Artifact (contract item 5):** `hero_self_review_count "$PR_NUMBER"` ≥ 1 AND `hero_self_review_fixes_count "$PR_NUMBER"` ≥ 1 before Step 6 (source `hero-lib.sh` first; each bash block is a fresh shell). It is the same author-filtered signal ship-pr's Step 3a reads, so a stranger's comment carrying the marker does not count.
 
-This step covers `review-pr`'s functional work in Steps 1 to 8 only: post the review comment, ask permission to apply fixes, apply them, push the commit, post the improvements summary, and update the PR description. Mark-ready is deliberately deferred to wayfare-run-task's Step 6 so the DAG renders it as a visible, separately-tracked node. `review-pr`'s own Step 9 (mark-ready prompt) is skipped per `--no-mark-ready`; its Step 10 (summary print) still runs but is purely informational, and wayfare-run-task's own DAG and summary are what is authoritative here, not review-pr's next-step suggestion.
+This step covers `wayfare-review-pr`'s functional work in Steps 1 to 8 only: post the review comment, ask permission to apply fixes, apply them, push the commit, post the improvements summary, and update the PR description. Mark-ready is deliberately deferred to wayfare-run-task's Step 6 so the DAG renders it as a visible, separately-tracked node. `wayfare-review-pr`'s own Step 9 (mark-ready prompt) is skipped per `--no-mark-ready`; its Step 10 (summary print) still runs but is purely informational, and wayfare-run-task's own DAG and summary are what is authoritative here, not review-pr's next-step suggestion.
 
 ### Step 6: mark-ready
 
@@ -781,7 +781,7 @@ If the pipeline stopped early, render the DAG with `(✗)` on the failed step, t
 - **wayfare-run-task consumes work-items; it authors only Step 2a items.** `wayfare-grill-idea`, `wayfare-write-handoff`, `wayfare-audit-security`, and `wayfare` are the producers into `.plans/`. The one thing wayfare-run-task writes is Step 2a's output: work it *discovered* while building, or work it *carved* back out of the current item. It never grills or plans one from scratch. Step 1 resolves against that store (and the tracker) before it will grill anything new, and Step 9 is what marks an item `done` automatically. Wayfare `sync`'s covered finding can also propose `done`, but only user-confirmed, so a skipped close-out here still leaves a stale store until the next sync.
 - **Trust the criteria, not the status field.** `status: ready` means a human marked it ready but says nothing about whether the work has since landed. Work lands out-of-band all the time. Step 1c re-verifies against the codebase before implementing.
 - This skill **does not retry** on judgment-call failures (test design, large bot feedback). Retrying without human input is how small PRs become broken merges.
-- Step 0.4's `git checkout -b` is unconfirmed by design, because wayfare-run-task never works on the default branch and assumes the auto-derived name is acceptable. To rename later, use `git branch -m`. The sibling skill `push-pr` prompts for the name because it's invoked deliberately on an existing branch; wayfare-run-task's auto-mode contract precludes that prompt.
+- Step 0.4's `git checkout -b` is unconfirmed by design, because wayfare-run-task never works on the default branch and assumes the auto-derived name is acceptable. To rename later, use `git branch -m`. The sibling skill `wayfare-push-pr` prompts for the name because it's invoked deliberately on an existing branch; wayfare-run-task's auto-mode contract precludes that prompt.
 - For larger work, run the same skills individually so you can pause between them.
 - **Committing and pushing belong to push-pr (Step 4), never to this skill directly.** Doing it by hand skips the test phase, `/simplify`, the commit convention, and the draft PR, with no error to show for it. Branch creation at Step 0.4 and read-only git commands are the only exceptions.
 - Run `wayfare:wayfare-drop-item` separately if you abandon mid-pipeline, because ship-pr's reset only fires after a successful merge.

@@ -206,4 +206,4 @@ wiring. Print this line only; audit-plugin is user-only and cannot be
 started automatically.
 ```
 
-Don't also print `wayfare:wayfare-push-pr`; `audit-plugin`'s own next-steps already lead there.
+Don't also print `wayfare:wayfare-push-pr`; `wayfare-audit-plugin`'s own next-steps already lead there.

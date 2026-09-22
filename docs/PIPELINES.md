@@ -84,7 +84,7 @@ Owner: `wayfare:wayfare-run-task`. Invoked with an issue ID or description it st
 UI smoke runs inside `push`'s test phase (absorbed from the former `test-changes` skill; `wayfare:wayfare-push-pr test` runs it standalone); backend-only PRs skip it.
 
 `simplify` sits between `implement` and `push` so the dirty diff is tidied
-before it lands in git history. `push-pr` also invokes `/simplify`
+before it lands in git history. `wayfare-push-pr` also invokes `/simplify`
 internally for standalone use; running wayfare-run-task just makes that step visible
 in the DAG and pays a no-op cost on the second invocation.
 
