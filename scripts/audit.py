@@ -2531,15 +2531,26 @@ def _(r):
     # under any other name — `hero-skills` after the rename, or a second clone
     # — read as an ordinary consumer, so its shared LOGIC was compared against
     # the CALLER template and failed on every line that differs between the
-    # two, which is most of them. A workflow that declares `workflow_call` is
-    # the callee by definition; nothing else in the fleet does.
+    # two, which is most of them.
     if r.name == _SHARED_WORKFLOW_OWNER:
         return NA, "shared workflow owner"
     try:
-        if "workflow_call" in _wf_on(_wf_doc(mine)):
-            return NA, "shared workflow owner (declares workflow_call)"
+        doc = _wf_doc(mine)
     except Unreadable as e:
         return MANUAL, str(e)
+    # `workflow_call` ALONE is not the test, and must not become it. This file
+    # belongs to the repo being audited, GitHub accepts extra triggers, and NA
+    # is not printed by --json — so a repo whose caller had drifted could add
+    # one line, keep the drift, and erase the finding rather than fix it.
+    # A caller still delegates: it has a job whose `uses:` is the shared
+    # workflow. The callee cannot, because that would be itself. Requiring
+    # both means the only way out of this check is to stop being a consumer.
+    delegates = any(
+        _SHARED_WORKFLOW_OWNER in str((job or {}).get("uses") or "")
+        for job in (doc.get("jobs") or {}).values()
+    )
+    if "workflow_call" in _wf_on(doc) and not delegates:
+        return NA, "shared workflow owner (declares workflow_call, delegates to nobody)"
     return _matches_reference(mine, _PLUGIN_ASSETS / "auto-approve" / "caller.yaml")
 
 
