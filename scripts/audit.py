@@ -2518,11 +2518,23 @@ def _(r):
     # meant the check went MANUAL for anyone whose fleet named no template.
     # assets/auto-approve/caller.yaml is the same bytes install-auto-approve.sh
     # writes, so this compares a vendored artifact with its source.
-    if r.name == _SHARED_WORKFLOW_OWNER:
-        return NA, "shared workflow owner"
     mine = r / ".github" / "workflows" / "auto-approve.yaml"
     if not mine.is_file():
         return NA, "no auto-approve caller"
+    # The owner is recognised by what its file IS, not by what its folder is
+    # called. `r.name` is the directory on disk, and a checkout of the plugin
+    # under any other name — `hero-skills` after the rename, or a second clone
+    # — read as an ordinary consumer, so its shared LOGIC was compared against
+    # the CALLER template and failed on every line that differs between the
+    # two, which is most of them. A workflow that declares `workflow_call` is
+    # the callee by definition; nothing else in the fleet does.
+    if r.name == _SHARED_WORKFLOW_OWNER:
+        return NA, "shared workflow owner"
+    try:
+        if "workflow_call" in _wf_on(_wf_doc(mine)):
+            return NA, "shared workflow owner (declares workflow_call)"
+    except Unreadable as e:
+        return MANUAL, str(e)
     return _matches_reference(mine, _PLUGIN_ASSETS / "auto-approve" / "caller.yaml")
 
 
