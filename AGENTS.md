@@ -6,18 +6,18 @@ executes. It ships no product and has no build. The checkout is
 `~/.claude/plugins/wayfare-skills`, which is what the `CLAUDE_PLUGIN_ROOT`
 fallback in every skill points at.
 
-**Renamed from `hero-skills` on 2026-09-21; ~25 consumers still pin the old
-path** and resolve only through GitHub's rename redirect. Finish the migration
-in this order: re-vendor the caller into every consumer (`wayfare-init-repo`
-reports a pre-rename one as `AUTO_APPROVE_STALE`, the only thing that makes it
-visible), confirm nothing references the old path, and **then** claim
-`ai-hero/hero-skills` as an empty archived repo so the name cannot be taken.
-Claiming it earlier breaks the redirect for every consumer still on it, and
-fails closed as `workflow not found` — a run with no failing step, which reads
-exactly like the public-repo skip. Until then the only control is
-`members_can_create_repositories`, `true` here: any member claiming that name,
-by creation or by renaming a repo they own, would be handed
-`ANTHROPIC_API_KEY` and an approve-capable token by every stale consumer.
+**Renamed from `hero-skills` on 2026-09-21, and a `uses:` does NOT follow a
+rename redirect.** The content API and the web UI do redirect, which is what
+made this look safe; Actions does not, so every consumer's auto-approve failed
+at startup — zero jobs, no failing step — from the rename until its caller was
+re-vendored. Measured, not guessed: four consumers went green the minute their
+`uses:` was updated. A consumer still on the old path is **broken now**, not
+running on borrowed time, and `wayfare-init-repo` reports it as
+`AUTO_APPROVE_STALE`. Once nothing references the old path, claim
+`ai-hero/hero-skills` as an empty archived repo so the name cannot be taken:
+`members_can_create_repositories` is `true` here, and any member claiming it
+would be handed `ANTHROPIC_API_KEY` and an approve-capable token by any
+consumer still pointed there.
 
 Instructions for coding agents working here. Follow these strictly; ask before
 deviating.

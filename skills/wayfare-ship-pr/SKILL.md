@@ -615,12 +615,24 @@ if [ -z "$COMMENT_BODY" ] && [ -z "$REVIEW_STATE" ]; then
   if [ "$CONCLUSION" = "skipped" ]; then
     echo ""
     echo "The run was SKIPPED — no step failed, the job's \`if:\` did not match."
-    echo "Most likely this repo is public: auto-approve is gated on the repo"
-    echo "being private, because the shared workflow uploads changed-file"
-    echo "contents to a model and public repos take PRs from untrusted forks."
-    echo "Check: gh repo view --json visibility"
+    echo "Two gates can do that. Most likely this repo is public: auto-approve"
+    echo "is gated on the repo being private, because the shared workflow"
+    echo "uploads changed-file contents to a model and public repos take PRs"
+    echo "from untrusted forks. Check: gh repo view --json visibility"
+    echo "The other is the actor gate: a comment posted BY Dependabot is"
+    echo "skipped, because a Dependabot-triggered event gets no repository"
+    echo "secrets and the run could only fail at startup. A human commenting"
+    echo "on a Dependabot PR is unaffected."
   else
-    echo "Treating as WORKFLOW_FAILED — see logs for the failing step."
+    # A startup failure has no failing step either, so "see logs" is a dead
+    # end for it. Name the cause that produces one, since the run is real and
+    # found (it is not `skipped`) and Step 5's list is never reached.
+    echo "Treating as WORKFLOW_FAILED."
+    echo "If the run has ZERO jobs and no failing step, the workflow never"
+    echo "started. The usual cause is a caller still pointing at the"
+    echo "pre-rename ai-hero/hero-skills: a \`uses:\` does NOT follow a repo"
+    echo "rename redirect. Check the caller's \`uses:\` and re-vendor"
+    echo "assets/auto-approve/caller.yaml. Otherwise see the logs."
   fi
   VERDICT="WORKFLOW_FAILED"
 elif [ "$REVIEW_STATE" = "APPROVED" ]; then
