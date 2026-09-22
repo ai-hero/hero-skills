@@ -199,7 +199,7 @@ partial, not clean), never "clean".
 **The `comments` stage: prose that has gone false about the code.** Runs
 after `wayfare-audit-security`, before `compliance`, in both modes.
 
-`review-pr` already runs `pr-review-toolkit:comment-analyzer` over a PR's
+`wayfare-review-pr` already runs `pr-review-toolkit:comment-analyzer` over a PR's
 diff, which catches a comment that was wrong *when written*. It cannot catch
 the case this stage exists for: a comment that was **correct when written**,
 and is false now because the code moved underneath it. Nothing touched the

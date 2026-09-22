@@ -50,7 +50,7 @@ flowchart TB
   STORE[("<b>.plans/</b><br/>PLAN.md + items/")]
   NEXT["<b>wayfare-start-goal</b><br/>authorize a goal"]
   DO["<b>wayfare-advance-item ID</b><br/>advance one item"]
-  BUILD["wayfare-run-task → push-pr<br/>→ review-pr → ship-pr"]
+  BUILD["wayfare-run-task → wayfare-push-pr<br/>→ wayfare-review-pr → wayfare-ship-pr"]
 
   SRC -- read --> PLAN
   TGT -- read --> PLAN
@@ -248,7 +248,7 @@ calls it instead.
 
 Three pieces ride along with wayfare-run-task, install them so Steps 4 (`push`, tests included), 5 (`self-review`), 8 (`respond`), and 9 (`ship`) work out of the box:
 
-**1. GitHub CLI (`gh`)**: required by `push-pr`, `review-pr`, `wayfare-respond-pr`, and `ship-pr` for every PR / comment / workflow operation. Without it, every step from `push` onward fails immediately.
+**1. GitHub CLI (`gh`)**: required by `wayfare-push-pr`, `wayfare-review-pr`, `wayfare-respond-pr` and `wayfare-ship-pr` for every PR / comment / workflow operation. Without it, every step from `push` onward fails immediately.
 
 ```bash
 # macOS (Homebrew)
@@ -440,7 +440,7 @@ Three skills are stages of `sync` and hidden from the slash menu (`user-invocabl
 | Command | What it does |
 | --- | --- |
 | `wayfare:wayfare-run-task` | Drives a small task end-to-end: plan → implement → simplify → push (tests included) → self-review → mark-ready → await-review → respond → ship. Detects a resume point on re-invocation; with no arguments, drives the current goal to merged + reset branch. Explicit user gates at each destructive step. |
-| `wayfare:wayfare-init-repo` | Scaffolds a new project, then chains into setup-dev → config → first-commit. |
+| `wayfare:wayfare-init-repo` | Scaffolds a new project, then chains into wayfare-setup-dev → config → first-commit. |
 
 ### Operations
 
@@ -533,7 +533,7 @@ When project config drifts (new deps, CI changes, switched task runner), skills 
 
 **`recalibrate` is on ten skills, and is a skill of its own.** When a skill does the wrong thing
 because its config is wrong, you fix it where you noticed:
-`wayfare:wayfare-ship-pr recalibrate` asks about the eight fields `ship-pr` reads
+`wayfare:wayfare-ship-pr recalibrate` asks about the eight fields `wayfare-ship-pr` reads
 across Repository, CI/CD and Deployment, writes what you confirm, commits, and
 stops. It does not then ship. `wayfare:wayfare-init-repo recalibrate` is the
 whole-file pass. `scripts/hero-fields.sh SKILL` prints the fields of any skill
@@ -567,19 +567,20 @@ Here's what a minimal config looks like:
 - reach: linear
 
 ## CI/CD
-- Platform: GitHub Actions
+- platform: github-actions
 
 ## Code Quality
-- Pre-commit: true
-- Formatter: ruff format
-- Linter: ruff check
+- pre-commit: true
+- linters: [ruff]
+- formatters: ruff format
 
 ## Projects
+
 ### api
-- Language: Python
-- Framework: FastAPI
-- Test command: pytest
-- Dev command: uvicorn main:app --reload
+- language: python
+- framework: fastapi
+- test-command: pytest
+- dev-command: uvicorn main:app --reload
 ```
 
 No `HERO.md`? Skills fall back to auto-detection. Run `wayfare:wayfare-init-repo` to generate one. It investigates your repo and asks smart questions to fill in what it can't detect.
@@ -589,12 +590,25 @@ No `HERO.md`? Skills fall back to auto-detection. Run `wayfare:wayfare-init-repo
 
 `HERO.md` supports these sections:
 
-- **Project Management**: Linear, Jira, Asana, GitHub Issues
+- **Connections**: one `### kind` block per outward attachment — `design`,
+  `design-system`, `reference`, `architecture`, `infrastructure`, `issues`
+  (this is where the tracker lives, and where the old **Project Management**
+  and **Design System** sections went). See
+  [docs/CONNECTIONS.md](docs/CONNECTIONS.md)
+- **Repository**: default branch, branch and commit conventions, merge method, task runner
 - **Code Review Agent**: Greptile, CodeRabbit, Copilot (trigger, poll method, bot username)
 - **CI/CD**: GitHub Actions, GitLab CI, Jenkins, CircleCI
 - **Deployment**: Kubernetes, Vercel, ECS, Fly.io, container registries
 - **Code Quality**: pre-commit, linters, formatters, type checkers
+- **Developer Setup**: the tools a contributor needs, required and recommended
+- **Coding Conventions**: the house style a review judges against
 - **Projects**: per-subproject language, framework, test/dev commands, ports
+- **Wayfare**: `source-repo`, and nothing else — every other wayfare input is a connection
+- **Coding Agent**: written by `wayfare:wayfare-init-repo`, read by no skill today
+
+Keys are **lowercase and exact**. The readers match `- key:` literally, so
+`- Platform:` is not read as `platform`, and a field spelled that way is
+silently unset rather than wrong-looking.
 
 </details>
 

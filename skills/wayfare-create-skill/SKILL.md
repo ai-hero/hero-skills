@@ -117,7 +117,7 @@ wrong, not spend a whole run finding out.
 
 Dispatch on it before parsing any other argument, in whichever step does
 that parsing. When the first token of
-`$ARGUMENTS` is exactly `recalibrate`, print `create-skill: running recalibrate`, follow the four phases in
+`$ARGUMENTS` is exactly `recalibrate`, print `wayfare-create-skill: running recalibrate`, follow the four phases in
 [docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) (report, ask, write, commit)
 using the table below as the report, and stop.
 
@@ -202,8 +202,8 @@ Created:
 Test: Invoke with wayfare:SKILL_NAME in a new conversation
 
 Next step: wayfare:wayfare-audit-plugin, to check the new skill's quality and
-wiring. Print this line only; audit-plugin is user-only and cannot be
+wiring. Print this line only; wayfare-audit-plugin is user-only and cannot be
 started automatically.
 ```
 
-Don't also print `wayfare:wayfare-push-pr`; `audit-plugin`'s own next-steps already lead there.
+Don't also print `wayfare:wayfare-push-pr`; `wayfare-audit-plugin`'s own next-steps already lead there.

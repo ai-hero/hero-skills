@@ -50,7 +50,7 @@ wrong, not spend a whole run finding out.
 
 Dispatch on it before parsing any other argument, in whichever step does
 that parsing. When the first token of
-`$ARGUMENTS` is exactly `recalibrate`, print `ship-pr: running recalibrate`,
+`$ARGUMENTS` is exactly `recalibrate`, print `wayfare-ship-pr: running recalibrate`,
 follow the four phases in
 [docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) (report, ask, write, commit)
 using the table below as the report, and stop.
@@ -233,19 +233,19 @@ REPO=$(echo "$OWNER_REPO" | awk '{print $2}')
 # a STOP whose stated reason is other people's unanswered questions, on a PR
 # that may have none.
 PR_AUTHOR_JSON=$(gh api "/repos/$OWNER/$REPO/pulls/$PR_NUMBER" --jq '"\(.user.login) \(.user.type)"') \
-  || { echo "ship-pr: cannot read the PR author — the gates below cannot be evaluated"; exit 1; }
+  || { echo "wayfare-ship-pr: cannot read the PR author — the gates below cannot be evaluated"; exit 1; }
 PR_AUTHOR=${PR_AUTHOR_JSON%% *}
 PR_AUTHOR_TYPE=${PR_AUTHOR_JSON##* }
-[ -n "$PR_AUTHOR" ] || { echo "ship-pr: the PR author came back empty — refusing to evaluate the gates"; exit 1; }
+[ -n "$PR_AUTHOR" ] || { echo "wayfare-ship-pr: the PR author came back empty — refusing to evaluate the gates"; exit 1; }
 
 # 3a — Prior review present (self-review OR reviewer review OR bot inline)
 # Branch on the rc: an empty count summed below reads as 0, "no review".
 # Both halves, matching the workflow gate: the findings comment alone is a
 # review that stopped half way, and triggering on it spends a run to be told so.
 SELF_REVIEW_FINDINGS=$(hero_self_review_count "$PR_NUMBER") \
-  || { echo "ship-pr: cannot read PR comments — the prior-review gate cannot be evaluated"; exit 1; }
+  || { echo "wayfare-ship-pr: cannot read PR comments — the prior-review gate cannot be evaluated"; exit 1; }
 SELF_REVIEW_FIXES=$(hero_self_review_fixes_count "$PR_NUMBER") \
-  || { echo "ship-pr: cannot read PR comments — the prior-review gate cannot be evaluated"; exit 1; }
+  || { echo "wayfare-ship-pr: cannot read PR comments — the prior-review gate cannot be evaluated"; exit 1; }
 SELF_REVIEW=0
 [ "${SELF_REVIEW_FINDINGS:-0}" -gt 0 ] && [ "${SELF_REVIEW_FIXES:-0}" -gt 0 ] && SELF_REVIEW=1
 
@@ -487,7 +487,7 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
   # Exclude conclusion == "skipped". EVERY comment on the PR creates an
   # issue_comment run, and the shared workflow's trigger is anchored — it
   # fires only when the body STARTS with the command — so an ordinary comment
-  # produces a run that is immediately `skipped`. review-pr posts its
+  # produces a run that is immediately `skipped`. wayfare-review-pr posts its
   # self-review comment moments before this step runs, and any bot or human
   # comment lands in the same window. Taking .[0] unfiltered latches onto that
   # skipped run, polls it to "completed", finds no verdict comment, and
@@ -532,7 +532,7 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
       # X's, so a `-XXXXXX.json` template creates that name LITERALLY and the
       # second call dies with "File exists" — on the retry path, where the
       # whole point is to survive.
-      RAW_KEPT=$(mktemp "${TMPDIR:-/tmp}/ship-pr-runs.XXXXXX") \
+      RAW_KEPT=$(mktemp "${TMPDIR:-/tmp}/wayfare-ship-pr-runs.XXXXXX") \
         && printf '%s' "$RAW" > "$RAW_KEPT" \
         || RAW_KEPT=""
       echo "WARN: could not parse the runs payload (attempt $i/10) — retrying."
@@ -895,7 +895,7 @@ if [ "$RESET_OK" = "true" ] && [ "$MERGED" = "true" ]; then
     echo "Skipping remote branch cleanup (HERO.md auto-delete-branches=$HERO_AUTO_DELETE)."
   else
     # Backstop for the stacked-PR gate in Step 7a. That gate only runs on the
-    # merge path; a ship-pr resumed against an ALREADY-merged PR reaches this
+    # merge path; a wayfare-ship-pr resumed against an ALREADY-merged PR reaches this
     # line having never checked, and deleting the ref here auto-closes every
     # dependent just as surely. Retarget first, then delete.
     # A check that cannot run must NOT default to "zero stacked" — deleting on

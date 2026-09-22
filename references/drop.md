@@ -105,7 +105,7 @@ fi
 
 If already on the default branch, skip to Step 3.
 
-Otherwise, check whether the current branch has secretly already been merged (this catches squash-and-merge). If it has, this is not a drop at all: point the user at `ship-pr`'s cleanup rather than duplicating it here. Check remotely first, but fall back to a local check when the API call fails. A network hiccup must not read as "unmerged" when a real merge-status query would have said otherwise, and that matters more now that it gates the destructive Delete option below:
+Otherwise, check whether the current branch has secretly already been merged (this catches squash-and-merge). If it has, this is not a drop at all: point the user at `wayfare-ship-pr`'s cleanup rather than duplicating it here. Check remotely first, but fall back to a local check when the API call fails. A network hiccup must not read as "unmerged" when a real merge-status query would have said otherwise, and that matters more now that it gates the destructive Delete option below:
 
 ```bash
 MERGED_COUNT=$(gh pr list --head "$CURRENT" --base "$DEFAULT_BRANCH" --state merged --json number --jq 'length' 2>/dev/null)

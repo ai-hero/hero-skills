@@ -180,7 +180,7 @@ own branch for that reason and closes the bots' PRs after its own merge.
    major whose call sites are clean, CI is green, and step 2 was green;
    otherwise `--request-changes` naming what fails (the local test failure
    included), and STOP. The fix is a person's change, not this
-   procedure's. Either state satisfies the "prior review" gate that ship-pr
+   procedure's. Either state satisfies the "prior review" gate that wayfare-ship-pr
    and `auto-approve.yaml` both check (a non-author review that is not
    `PENDING`); a `--comment` review would too, but says nothing.
 4. **Ship.** Flip the item to `review`, append the PR URL as a
@@ -188,7 +188,7 @@ own branch for that reason and closes the bots' PRs after its own merge.
    verdict, the merge confirmation, merge, reset, verify-deploy. Under a
    goal the permissions line travels in the invocation and waives
    `auto-approve`, `merge` and `deploy` exactly as it does for wayfare-run-task;
-   standalone `do` asks at each, as ship-pr always has. Its Step 3a rebase
+   standalone `do` asks at each, as wayfare-ship-pr always has. Its Step 3a rebase
    is a no-op when step 1 held (if the base moved in between and it pushed a
    rebase, say so; see the rule above). Read back the verdict, the merge
    SHA, and the `Deployment:` line.
@@ -205,7 +205,7 @@ own branch for that reason and closes the bots' PRs after its own merge.
    then the roadmap view.
 
 The stops, all of them hand-backs: the bot never rebased; CI red; local
-tests red; a major whose call sites hit a changed API; ship-pr's
+tests red; a major whose call sites hit a changed API; wayfare-ship-pr's
 `REQUEST_CHANGES`, `WORKFLOW_FAILED`, or a declined (or ungranted) merge;
 deployment `DEGRADED` or `UNKNOWN`. In a goal turn each is `stop: failure`
 (or `awaiting-human` for the ungranted gate) on the turn report, and the

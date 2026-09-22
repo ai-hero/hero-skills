@@ -155,7 +155,7 @@ running a repo skill against it either fails late or, worse, half-works.
    ```
 
    A subagent cannot ask the user, so a skill with a user gate (wayfare-run-task's
-   mark-ready and merge, push-pr's confirm) stops at the gate and reports it.
+   mark-ready and merge, wayfare-push-pr's confirm) stops at the gate and reports it.
    That is correct: answer the gate from inside that repo, not fleet-wide.
 5. **Relay every report, per repo.** The user sees one summary block per
    repo, what happened, what stopped, what needs them.

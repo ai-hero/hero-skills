@@ -1,7 +1,7 @@
 ---
 name: wayfare-check-preflight
 # prettier-ignore
-description: Run pre-flight checks for the wayfare pipeline. Catches missing tooling, stale HERO.md, .env mismatches and busy ports before any step does destructive work. Use before push-pr, ship-pr or wayfare-run-task, or when a pipeline step fails on setup.
+description: Run pre-flight checks for the wayfare pipeline. Catches missing tooling, stale HERO.md, .env mismatches and busy ports before any step does destructive work. Use before wayfare-push-pr, wayfare-ship-pr or wayfare-run-task, or when a pipeline step fails on setup.
 argument-hint: "[--bucket tooling|repo|runtime|pipeline|all] [--projects p1,p2] | recalibrate"
 disable-model-invocation: true
 ---

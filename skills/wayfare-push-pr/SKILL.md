@@ -29,7 +29,7 @@ wrong, not spend a whole run finding out.
 
 Dispatch on it before parsing any other argument, in whichever step does
 that parsing. When the first token of
-`$ARGUMENTS` is exactly `recalibrate`, print `push-pr: running recalibrate`,
+`$ARGUMENTS` is exactly `recalibrate`, print `wayfare-push-pr: running recalibrate`,
 follow the four phases in
 [docs/RECALIBRATE.md](../../docs/RECALIBRATE.md) (report, ask, write, commit)
 using the table below as the report, and stop.
@@ -129,12 +129,12 @@ Generate `BRANCH_NAME` by applying `hero_branch_policy`, the shared naming rules
 hero_branch_policy   # apply these rules to the diff to derive BRANCH_NAME
 ```
 
-Deriving the name is a model task, not a shell one: read the diff, then apply the policy. Unlike wayfare-run-task (which derives and proceeds), push-pr proposes and waits for confirmation.
+Deriving the name is a model task, not a shell one: read the diff, then apply the policy. Unlike wayfare-run-task (which derives and proceeds), wayfare-push-pr proposes and waits for confirmation.
 
 Present the proposed name and let the user confirm or modify:
 
 ```
-You are on '$BRANCH', which is the default branch. push-pr never commits or pushes directly to the default branch.
+You are on '$BRANCH', which is the default branch. wayfare-push-pr never commits or pushes directly to the default branch.
 
 Proposed branch: BRANCH_NAME
 
@@ -200,7 +200,7 @@ Use commands from `HERO.md` **Code Quality** and **Projects** sections when avai
 - **Typecheck:** `uv run mypy "${CHANGED_FILES[@]}"` (Python), `npx tsc --noEmit` (TS)
 - **Unit tests:** the `test-command` from HERO.md per project; else `uv run pytest` / `npm test`. If a test file maps directly to a changed source file, prefer running just those tests for speed.
 
-Then run a scoped pre-commit dry-run. This is the only place a `push-pr test` run (which stops before Step 3) ever exercises pre-commit, so skipping it here would mean commit-hook regressions surface only in a real commit:
+Then run a scoped pre-commit dry-run. This is the only place a `wayfare-push-pr test` run (which stops before Step 3) ever exercises pre-commit, so skipping it here would mean commit-hook regressions surface only in a real commit:
 
 ```bash
 if command -v pre-commit > /dev/null 2>&1; then

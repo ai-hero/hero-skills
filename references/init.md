@@ -968,7 +968,7 @@ After the user responds, merge confirmed findings + user answers and write `HERO
      triggers; a skill alone depends on model discretion. -->
 
 <!-- For a project with a frontend but no design system, record the source so
-     recomponentize-ui knows what to pull primitives from (indented — a `- key:`
+     wayfare-recomponentize-ui knows what to pull primitives from (indented — a `- key:`
      at column 1 inside a comment is still read as live config by hero_field):
        - role: consumer
        - source: shadcn        # or mui, chakra, mantine, antd, none
