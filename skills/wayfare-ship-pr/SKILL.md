@@ -565,6 +565,15 @@ Common causes:
   - GitHub Actions is disabled for this repo
   - This repo is PUBLIC — the caller is gated on the repo being private,
     so the job is skipped and never posts anything
+  - The caller still points at ai-hero/hero-skills (renamed to
+    wayfare-skills on 2026-09-21). A `uses:` does NOT follow a rename
+    redirect, so the run fails at startup with zero jobs. Re-vendor
+    assets/auto-approve/caller.yaml
+  - Dependabot triggered the comment. A Dependabot-triggered event gets no
+    access to repository secrets, so ANTHROPIC_API_KEY is empty and the
+    reusable-workflow call fails before any job starts. Current callers gate
+    this off with `github.actor != 'dependabot[bot]'`; an older vendored
+    caller does not
 
 Visit PR_URL/checks to investigate.
 ```

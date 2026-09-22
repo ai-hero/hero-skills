@@ -20,7 +20,22 @@ jobs:
     # repo takes PRs from untrusted forks. On a public repo this produces a
     # SKIPPED run, which ship-pr reports as a workflow failure with no failing
     # step — if that is what you are staring at, check visibility first.
-    if: github.event.repository.private
+    # Two actors this can never work for, and both fail in the same
+    # confusing way if you let them through: a startup error, zero jobs, no
+    # failing step. ship-pr reports that as a workflow failure with nothing
+    # to look at.
+    #
+    # `github.event.repository.private`: the shared workflow ships changed-file
+    # contents to a model, and a public repo takes PRs from untrusted forks.
+    #
+    # `github.actor != 'dependabot[bot]'`: a Dependabot-triggered event gets no
+    # access to repository secrets, so `ANTHROPIC_API_KEY` below resolves to
+    # empty and passing an undefined secret to a reusable workflow fails the
+    # run before any job starts. Verified by controlled comparison on
+    # hero-template: same caller, same callee, same day — the human-triggered
+    # run passed and all three Dependabot-triggered ones failed with zero jobs.
+    # Dependabot PRs are approved by the deps flow, not by commenting here.
+    if: github.event.repository.private && github.actor != 'dependabot[bot]'
     # This block is the ceiling on the callee's token; the callee cannot
     # exceed it. A scope the shared workflow declares but this block lacks
     # is a startup validation error in this repo's run ("The workflow is

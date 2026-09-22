@@ -235,14 +235,14 @@ and the like. The clone target is `wayfare-skills`, which is what the
 `CLAUDE_PLUGIN_ROOT` fallback in every skill looks for when the environment
 does not set it.
 
-The repo was called `hero-skills` until 2026-09-21. Around 25 repos pin its
-reusable auto-approve workflow at
-`ai-hero/hero-skills/.github/workflows/auto-approve.yaml@main`, and those keep
-working **only because GitHub redirects the old name**. Re-vendor
-`assets/auto-approve/caller.yaml` into each consumer to stop depending on that
-redirect, and do not create a new repo called `hero-skills`: the moment one
-exists the redirect stops, and every consumer that has not been re-vendored
-calls it instead.
+The repo was called `hero-skills` until 2026-09-21. If you vendored the
+auto-approve caller before then, it says
+`ai-hero/hero-skills/.github/workflows/auto-approve.yaml@main` and **it is
+broken**: GitHub redirects the old name for the API and the web UI, but a
+workflow `uses:` does not follow that redirect, so the run fails at startup
+with zero jobs and no failing step. Re-vendor
+`assets/auto-approve/caller.yaml`; that is the whole fix, and it takes effect
+as soon as it lands on your default branch.
 
 ### Companion installs (for full pipeline coverage)
 
