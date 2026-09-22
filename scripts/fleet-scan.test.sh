@@ -81,8 +81,11 @@ check "list: literal mapping read from .yml" \
   "web	$F/web	3000" "$(printf '%s\n' "$LIST" | grep '^web')"
 check "list: no compose file reports -" \
   "extra	$F/extra	-" "$(printf '%s\n' "$LIST" | grep '^extra')"
+# awk with a real field separator, not grep '^odd\t': GNU grep does not read
+# \t as a tab in a basic regex, so that matched nothing on Linux while passing
+# on macOS. An exact field compare also keeps `oddfleet` out of this row.
 check "list: compose file without a readable host port reports ?" \
-  "odd	$F/odd	?" "$(printf '%s\n' "$LIST" | grep "^odd\t")"
+  "odd	$F/odd	?" "$(printf '%s\n' "$LIST" | awk -F'\t' '$1=="odd"')"
 check "list: without a port-range the first literal wins, comments skipped, bind prefix stripped" \
   "multi	$F/multi	5432" "$(printf '%s\n' "$LIST" | grep '^multi')"
 check "list: a plain folder is not a checkout" \
