@@ -50,6 +50,14 @@ mkdir -p "$F/plain-folder"
 mkrepo lone
 mkrepo odd   docker-compose.dev.yaml 'ports:
       - "${HOST_PORT}:3000"'
+# lone/odd twins carrying a real group: the port claim is only audited for a
+# fleet member, so these are what keep PORT_UNIMPLEMENTED and PORT_UNPARSED
+# covered while lone/odd prove a `none` row is left alone.
+mkrepo lonefleet
+touch "$F/lonefleet/HERO.md"; printf '# L\n\n## Fleet\n' > "$F/lonefleet/AGENTS.md"
+mkrepo oddfleet docker-compose.dev.yaml 'ports:
+      - "${HOST_PORT}:3000"'
+touch "$F/oddfleet/HERO.md"; printf '# O\n\n## Fleet\n' > "$F/oddfleet/AGENTS.md"
 mkdir -p "$F/sites"; mkrepo sites/web docker-compose.dev.yml 'ports:
       - "3000:3000"'
 touch "$F/sites/web/HERO.md"; printf '# W\n\n## Fleet\n' > "$F/sites/web/AGENTS.md"
@@ -74,7 +82,7 @@ check "list: literal mapping read from .yml" \
 check "list: no compose file reports -" \
   "extra	$F/extra	-" "$(printf '%s\n' "$LIST" | grep '^extra')"
 check "list: compose file without a readable host port reports ?" \
-  "odd	$F/odd	?" "$(printf '%s\n' "$LIST" | grep '^odd')"
+  "odd	$F/odd	?" "$(printf '%s\n' "$LIST" | grep "^odd\t")"
 check "list: without a port-range the first literal wins, comments skipped, bind prefix stripped" \
   "multi	$F/multi	5432" "$(printf '%s\n' "$LIST" | grep '^multi')"
 check "list: a plain folder is not a checkout" \
@@ -134,6 +142,16 @@ cat > "$F/FLEET.md" <<'EOM'
 - group: none
 - port: 33003
 
+### lonefleet
+
+- group: apps
+- port: 33030
+
+### oddfleet
+
+- group: apps
+- port: 33031
+
 ### web2
 
 - path: ./sites/web/
@@ -158,14 +176,19 @@ EOM
 OUT=$("$SCAN" "$F" --review); RC=$?
 check "review: findings exit 1" "1" "$RC"
 check "review: every finding, sorted" \
-"$(printf 'BAD_ROW\t../escape\ta repo name is [A-Za-z0-9._-] only, not %s../escape%s\nBAD_ROW\tevil\ta value starts with %s-%s or holds a control character\nMISSING\tgone\t%s/gone\nNOT_GIT\tfolder\t%s/plain-folder\nNO_HERO\tclash\t%s/clash\nNOT_FLEET_AWARE\tclash\t%s/clash\nNOT_FLEET_AWARE\tweb\t%s/web\nPORT_COLLISION\tclash\t33000, also auth\nPORT_COLLISION\tweb2\t3000, also web\nPORT_COLLISION\tweb2\t33001, also web\nPORT_MISMATCH\tweb\t33001 -> 3000\nPORT_MISMATCH\tweb2\t33001 -> 3000\nPORT_UNIMPLEMENTED\tlone\t33002 (no compose file)\nPORT_UNPARSED\todd\t33003 (compose file, no readable host port)\nUNLISTED\textra\t%s/extra, port -' "'" "'" "'" "'" "$F" "$F" "$F" "$F" "$F" "$F" | sort)" \
+"$(printf 'BAD_ROW\t../escape\ta repo name is [A-Za-z0-9._-] only, not %s../escape%s\nBAD_ROW\tevil\ta value starts with %s-%s or holds a control character\nMISSING\tgone\t%s/gone\nNOT_GIT\tfolder\t%s/plain-folder\nNO_HERO\tclash\t%s/clash\nNOT_FLEET_AWARE\tclash\t%s/clash\nNOT_FLEET_AWARE\tweb\t%s/web\nPORT_COLLISION\tclash\t33000, also auth\nPORT_COLLISION\tweb2\t3000, also web\nPORT_COLLISION\tweb2\t33001, also web\nPORT_MISMATCH\tweb\t33001 -> 3000\nPORT_MISMATCH\tweb2\t33001 -> 3000\nPORT_UNIMPLEMENTED\tlonefleet\t33030 (no compose file)\nPORT_UNPARSED\toddfleet\t33031 (compose file, no readable host port)' "'" "'" "'" "'" "$F" "$F" "$F" "$F" "$F" | sort)" \
 "$OUT"
 
 # A `none` row is exempt from NO_HERO/NO_AGENTS: it lives here, it is not fleet.
 check "review: group none is not asked for HERO.md" \
   "" "$(printf '%s\n' "$OUT" | grep 'notes')"
 check "review: port-range picks the app port over the database's, and a trailing-slash non-child path is matched" \
-  "" "$(printf '%s\n' "$OUT" | grep -E '^(PORT_MISMATCH|UNLISTED)	multi')"
+  "" "$(printf '%s\n' "$OUT" | grep -E '^PORT_MISMATCH	multi')"
+
+# FLEET.md defines the fleet. A checkout that no row names is not a member and
+# is not a finding — `extra` is on disk throughout this fixture.
+check "review: a checkout with no row is not reported" \
+  "" "$(printf '%s\n' "$OUT" | grep -E 'extra')"
 
 # A repo that committed its own FLEET.md is not a fleet.
 touch "$F/HERO.md"
@@ -173,11 +196,16 @@ touch "$F/HERO.md"
 check "review: HERO.md beside FLEET.md exits 2" "2" "$?"
 rm "$F/HERO.md"
 
-# The first sync: a FLEET.md with no rows yet must report every checkout.
+# The first sync: a FLEET.md with no rows yet claims nothing, so review has
+# nothing to say about the checkouts. `--list` is what shows them, and it still
+# sees every one. Before, this reported the whole folder as findings, which
+# made an empty map look like a fleet-wide problem instead of an empty map.
 printf '# Fleet\n\n## Fleet\n\n- name: t\n' > "$F/FLEET.md"
-OUT=$("$SCAN" "$F" --review); RC=$?
-check "review: zero rows lists every checkout as UNLISTED, exit 1" \
-  "1|$("$SCAN" "$F" --list | wc -l | tr -d ' ')" "$RC|$(printf '%s\n' "$OUT" | grep -c '^UNLISTED')"
+OUT=$("$SCAN" "$F" --review)
+check "review: zero rows reports no checkout as a finding" \
+  "0" "$(printf '%s\n' "$OUT" | grep -c 'extra')"
+check "review: --list still sees every checkout when no row exists" \
+  "1" "$("$SCAN" "$F" --list | grep -c '^extra')"
 
 # Clean fleet: only the true rows, every fleet repo carries the section, and
 # no `none` repo publishes a port a row claims (the host does not care about

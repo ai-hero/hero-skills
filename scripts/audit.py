@@ -28,7 +28,7 @@ Usage:
 
 Where things live: the ENGINE and a generic BASELINE register ship with
 the wayfare plugin (this file, assets/compliance/); the fleet's own OVERLAY — its
-reference repos, its incident history, its known_violations — lives in the
+incident history and any checks of its own — lives in the
 fleet folder's register checkout, named by FLEET.md's `register:` key
 (default .fleet/). The two are merged by id, overlay winning. Run inside a
 fleet (any checkout below a FLEET.md) and the family is FLEET.md's rows
@@ -203,8 +203,8 @@ def configure(root=None):
         sys.exit(f"FLEET.md register: {reg} resolves outside the fleet ({REGISTER})")
     # A mapped-but-missing register is the one state that must not run: the
     # audit would proceed baseline-only and report a fleet that got greener
-    # because its overlay — every reference, every known_violations — was
-    # simply not there.
+    # because its overlay — every check the fleet added on top of the five in
+    # the baseline — was simply not there.
     if not REGISTER.is_dir():
         sys.exit(f"register checkout missing: FLEET.md names `register: {reg}` but {REGISTER} does not exist — clone it or fix the key")
     TEMPLATE = fields.get("template") or None
@@ -2509,14 +2509,20 @@ def _(r):
 
 @check("CI-20")
 def _(r):
-    if TEMPLATE is None:
-        return NA, "no fleet template to compare against"
-    if r.name in (TEMPLATE, _SHARED_WORKFLOW_OWNER):
-        return NA, "reference / shared workflow owner"
+    # Compared against the vendored caller the installer actually ships, not
+    # against whatever the template repo happens to hold today. Reading it from
+    # a repo made one member the silent definition of correct: when its copy
+    # drifted, every other repo was judged against the drift and the template
+    # itself could never fail, because a file always equals itself. It also
+    # meant the check went MANUAL for anyone whose fleet named no template.
+    # assets/auto-approve/caller.yaml is the same bytes install-auto-approve.sh
+    # writes, so this compares a vendored artifact with its source.
+    if r.name == _SHARED_WORKFLOW_OWNER:
+        return NA, "shared workflow owner"
     mine = r / ".github" / "workflows" / "auto-approve.yaml"
     if not mine.is_file():
         return NA, "no auto-approve caller"
-    return _matches_reference(mine, repo_path(TEMPLATE) / ".github" / "workflows" / "auto-approve.yaml")
+    return _matches_reference(mine, _PLUGIN_ASSETS / "auto-approve" / "caller.yaml")
 
 
 @check("CI-21")
@@ -2853,21 +2859,45 @@ def load_register():
     # gate that silently does not run — the register's own definition of high.
     sev_ok = {"high", "medium", "low"}
     unimplemented = []
+    exampleless = []
+    # A rule may not name a repo. `reference:` and `known_violations` are
+    # rejected rather than ignored: silently dropping them would leave an
+    # overlay author believing an exemption is in force while every repo in it
+    # is being audited. Both encoded one fleet on one day inside a rule meant
+    # to outlive it, and went stale invisibly when a named repo left the fleet.
+    def _no_repo_names(kind, d):
+        for f in ("reference", "known_violations"):
+            if d.get(f) not in (None, "none", [], ""):
+                sys.exit(
+                    f"{kind} {d.get('id', '?')}: `{f}` is retired — a check states what "
+                    f"consistent means, not who currently passes. Delete the field; who "
+                    f"passes is this run's output, derived from the repos FLEET.md lists."
+                )
     for c in ctrl.values():
         for f in ("id", "title", "severity", "intent"):
             if not c.get(f):
                 sys.exit(f"control {c.get('id', '?')} lacks `{f}`")
         if c["severity"] not in sev_ok:
             sys.exit(f"control {c['id']}: severity {c['severity']!r} is not one of high|medium|low")
+        _no_repo_names("control", c)
     for k in checks:
         for f in ("id", "control", "title", "scope"):
             if not k.get(f):
                 sys.exit(f"check {k.get('id', '?')} lacks `{f}`")
         if k.get("severity") is not None and k["severity"] not in sev_ok:
             sys.exit(f"check {k['id']}: severity {k['severity']!r} is not one of high|medium|low")
+        _no_repo_names("check", k)
         manual = ((k.get("detect") or {}).get("method") == "manual")
         if k["id"] not in CHECKS and not manual:
             unimplemented.append(k["id"])
+        # A manual check is verified by a person reading it. With no checker
+        # and no exemplar repo to diff against, an `example:` is the only thing
+        # left that says what the correct shape IS — prose alone leaves two
+        # readers to infer two different rules. Named, not fatal: an overlay
+        # written before examples existed still audits, it just says what it
+        # is missing every load.
+        if manual and not k.get("example"):
+            exampleless.append(k["id"])
         want = k.get("applies_to") or "all"
         for n in ([want] if isinstance(want, str) else list(want)):
             n = str(n).lower()
@@ -2879,6 +2909,9 @@ def load_register():
     if unimplemented:
         print(f"load_register: {len(unimplemented)} check(s) have no checker and are not declared "
               f"`detect: method: manual` — reported MANUAL: {', '.join(unimplemented)}", file=sys.stderr)
+    if exampleless:
+        print(f"load_register: {len(exampleless)} manual check(s) carry no `example:`, so nothing "
+              f"states the correct shape: {', '.join(exampleless)}", file=sys.stderr)
     if not ctrl or not checks:
         sys.exit(f"no register: baseline {BASELINE} holds no controls or checks"
                  + (f" and overlay {REGISTER} adds none" if REGISTER else ""))
@@ -3061,10 +3094,12 @@ def main():
         # read a broken checker as a passing one.
         for status, cells in ((FAIL, fails), (ERROR, errors)):
             for c, rn, detail in cells:
-                ref = c.get("reference") or ctrl[c["control"]].get("reference")
+                # `example` replaces the old `reference` key: a consumer fixing
+                # a finding needed the correct shape, and used to get a repo
+                # name to go and read. The shape now travels with the finding.
                 print(json.dumps({"status": status, "check": c["id"], "control": c["control"], "repo": rn,
                                   "severity": sev_of(c, ctrl), "title": c["title"],
-                                  "reference": ref if ref and ref != "none" else None,
+                                  "example": c.get("example") or None,
                                   "detail": detail, "rule": " ".join((c.get("rule") or "").split())}))
     elif a.md:
         print("| Control | Check | Sev | " + " | ".join(repos) + " |")

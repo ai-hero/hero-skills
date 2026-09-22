@@ -13,14 +13,14 @@ out.
 
 Every column comes from data that already exists:
 
-    "Was broken in"  <- the overlay CHECKS.yaml's known_violations, the
-                        state when the check was written. This is the BEFORE.
     per-repo mark    <- scripts/audit.py, computed live against origin/main
                         of each repo (--ref; --no-snapshot for the checkouts).
-                        This is the AFTER.
-    "How it's made   <- the merged register's rule + reference. The rule IS the
-     consistent"        standard; the reference is the repo that already
-                        got it right.
+    "How it's made   <- the merged register's rule, which IS the standard.
+     consistent"
+
+    There is no "Was broken in" column and no "Reference" note: the register
+    names no repos, so a check no longer carries a before-state or an
+    exemplar. Everything about WHO is computed this run.
 
 So the table cannot drift from the register: regenerate it and it re-derives.
 """
@@ -134,19 +134,13 @@ def main():
     L.append("| – | doesn't apply (no Go, no UI, no image — or `applies_to` names a group this repo is not in) |")
     L.append("| ? | no automated checker — needs a human, not a guess |")
     L.append("")
-    L.append("**Was broken in** is the state when the check was written — the")
-    L.append("*before*. The repo columns are computed live — the *after*. A repo")
-    L.append("listed as broken and now ✅ was fixed in this sweep.")
+    L.append("The repo columns are computed live, this run. No check names a")
+    L.append("repo, so nothing here is remembered from a previous sweep — a")
+    L.append("cell is what the checker found just now.")
     L.append("")
 
     total = sum(1 for _c, cells in rows for x in cells if x == "FAIL")
-    fixed = 0
-    for c, cells in rows:
-        kv = set(c.get("known_violations") or [])
-        for rn, st in zip(repos, cells):
-            if rn in kv and st == "PASS":
-                fixed += 1
-    L.append(f"**{fixed} (check × repo) results fixed. {total} still failing.** "
+    L.append(f"**{total} (check × repo) results failing.** "
              f"{len(checks)} checks under {len(controls)} controls.")
     L.append("")
 
@@ -160,27 +154,20 @@ def main():
             L.append("")
             L.append(f"> {condense(ctl.get('intent'), 260)}")
             L.append("")
-            L.append("| Check | Was broken in | " + " | ".join(short(r) for r in repos) + " | How it's made consistent |")
-            L.append("| --- | --- | " + " | ".join("---" for _ in repos) + " | --- |")
+            L.append("| Check | " + " | ".join(short(r) for r in repos) + " | How it's made consistent |")
+            L.append("| --- | " + " | ".join("---" for _ in repos) + " | --- |")
             last = cid
 
-        kv = c.get("known_violations")
-        if kv is None:
-            was = "*(not recorded)*"
-        elif not kv:
-            was = "*(none)*"
-        else:
-            was = ", ".join(short(x) for x in kv)
-
+        # No "Was broken in" column and no "Reference:" suffix: the register
+        # names no repos, so both had exactly one source and it is gone. Left
+        # in, they printed "*(none)*" and "No reference yet — needs a decision"
+        # on every row — a column of nothing, and 128 rows each demanding a
+        # decision nobody owes. The per-repo cells below already say who fails
+        # today, computed this run rather than remembered from the last one.
         how = condense(c.get("rule"), 180)
-        ref = c.get("reference")
-        if ref and ref != "none":
-            how += f" **Reference: {short(ref)}.**"
-        elif ref == "none":
-            how += " **No reference yet — needs a decision.**"
 
         L.append(
-            f"| **{c['id']}** {c['title']} *({c['scope']})* | {was} | "
+            f"| **{c['id']}** {c['title']} *({c['scope']})* | "
             + " | ".join(MARK[x] for x in cells)
             + f" | {how} |"
         )
@@ -193,9 +180,11 @@ def main():
     L.append("A `?` is not a pass. It means no checker exists, so the answer is")
     L.append("unknown — reported as unknown rather than guessed.")
     L.append("")
-    L.append("**The reference is not always the template.** Where a consumer got")
-    L.append("it right first, the row names it, and the fix is a backport INTO")
-    L.append("the template — never a change to the repo that is already right.")
+    L.append("**No check names a repo.** A check states what consistent means;")
+    L.append("who passes it is this table, computed per run from the repos")
+    L.append("FLEET.md lists. Where a consumer got it right first, the fix is")
+    L.append("still a backport INTO the template — never a change to the repo")
+    L.append("that is already right.")
     L.append("")
 
     # Emit what this repo's own hooks accept: no run of blank lines

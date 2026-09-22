@@ -266,8 +266,8 @@ task: its drift belongs in that task's Definition of Done.
 **The `compliance` stage: this repo against the register.** The register
 has two halves: the generic baseline shipped with the plugin
 (`assets/compliance/`) and the fleet's overlay in the checkout FLEET.md
-names (`register:`, default `.fleet/`), holding reference repos, incident history,
-`known_violations`. Outside a fleet only the baseline applies. Run the
+names (`register:`, default `.fleet/`), holding incident history and any
+checks of its own. No check names a repo. Outside a fleet only the baseline applies. Run the
 engine for this repo alone, as it sits:
 
 ```bash

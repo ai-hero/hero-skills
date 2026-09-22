@@ -6,7 +6,7 @@ halves:
 | Half | Where | Holds |
 | --- | --- | --- |
 | baseline | this directory, shipped with the plugin | controls and checks any repo on this workflow is held to; generic rationale only |
-| overlay | the fleet's register checkout — FLEET.md `register:`, default `.fleet/` | `reference:` per control and check, `known_violations`, the fleet's incident history, `applies_to: [GROUP, …]` narrowings, any controls or checks of its own, and a `checkers.py` holding the checkers that know its repos by name |
+| overlay | the fleet's register checkout — FLEET.md `register:`, default `.fleet/` | the fleet's incident history, `applies_to: [GROUP, …]` narrowings, any controls or checks of its own, and a `checkers.py` holding the checkers that know its repos by name. It may NOT name a repo in a check: `reference:` and `known_violations` are retired and rejected at load |
 
 Merged by id, overlay fields winning. A check's `applies_to` may name
 FLEET.md groups (`template`, `apps`, `infra`, …) — a repo outside them reads

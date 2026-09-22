@@ -106,6 +106,7 @@ repo's normal feedback loop would surface them.
 
 ### Compliance
 
-Controls are defined in `hero-template` (`CONTROLS.yaml` / `CHECKS.yaml`), not
-here. This repo is audited as a family member, and open gaps are recorded as
-`known_violations` there rather than silently tolerated.
+Controls are defined in the fleet's register checkout (`CONTROLS.yaml` /
+`CHECKS.yaml`), not here. This repo is audited as a family member. A check
+names no repo — not an exemplar and not an exemption — so an open gap shows
+up as a failing cell every run rather than as a carve-out nobody re-reads.

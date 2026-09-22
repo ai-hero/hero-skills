@@ -6,12 +6,21 @@
 # other id without a checker fails to load, so a typo cannot report MANUAL
 # forever.
 #
-# What is deliberately NOT here: `reference:` (which repo in a fleet is
-# correct today), `known_violations` (a fleet's snapshot of who was broken
-# when the check was written), and the incident `why:` history. Those are
-# one fleet's facts and live in its register overlay, merged over this file
-# by id. A fleet may also add checks, and may narrow a check with
-# `applies_to: [GROUP, ...]` naming its FLEET.md groups.
+# NO CHECK NAMES A REPO, here or in a fleet's overlay. `reference:` (the repo
+# that was correct today) and `known_violations` (the repos excused when the
+# check was written) are both retired: each stapled a snapshot of one fleet on
+# one day to a rule meant to outlive it, and the snapshot is the half that
+# rots — a named repo leaves the fleet and the rule goes on citing something
+# the map no longer lists. Which repos pass is the AUDIT's output, derived per
+# run from the repos FLEET.md lists; it is never input. A fleet's overlay still
+# holds its incident `why:` history, checks of its own, and may narrow a check
+# with `applies_to: [GROUP, ...]` naming its FLEET.md groups.
+#
+# `example:` carries what a reference repo used to demonstrate — the correct
+# shape, inline. It is REQUIRED on a `method: manual` check: with no checker
+# and no exemplar repo, prose alone leaves the reader to infer the shape, and
+# two readers infer differently. Write the smallest snippet that would pass,
+# and where the failure is subtle, the near-miss that does not.
 #
 # LAYERS are a taxonomy — the engine runs checks in control order:
 #   structure — does the file exist? (no reading)
@@ -43,6 +52,18 @@ checks:
     auto-approve workflow being shared at all — pinning its SHA turns every
     fix into one follow-up PR per consumer — and it is safe only because the
     callee gates its default branch on review.
+  example: |
+    # correct - third-party action pinned to a full SHA, version in a comment
+    - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+    # correct - the ONE carve-out: a first-party reusable WORKFLOW at @main
+    uses: ai-hero/wayfare-skills/.github/workflows/auto-approve.yaml@main
+
+    # WRONG - mutable tag on a third-party action
+    - uses: actions/checkout@v5
+    # WRONG - the carve-out is for a reusable workflow, not a plain
+    # first-party action, and never for a branch other than the default
+    - uses: ai-hero/some-action@some-branch
   detect:
     method: script
     description: every `uses:` in .github/workflows/ carries a 40-hex SHA, except a first-party reusable workflow under the plugin's org (`ai-hero/`, the owner of the shared auto-approve workflow) at `@main` or a v-tag
@@ -60,6 +81,20 @@ checks:
   why: >
     SHA pinning without dependabot is how a repo silently stops receiving
     security updates.
+  example: |
+    # .github/dependabot.yml - one entry per ecosystem actually present
+    version: 2
+    updates:
+      - package-ecosystem: github-actions   # required in every repo
+        directory: /
+        schedule: {interval: weekly}
+      - package-ecosystem: gomod            # only if the repo has go.mod
+        directory: /
+        schedule: {interval: weekly}
+      - package-ecosystem: npm              # only if the repo has package.json
+        directory: /ui
+        schedule: {interval: weekly}
+    # WRONG - covering github-actions only while the repo also ships Go or npm
   detect:
     method: file_exists
     path: .github/dependabot.yml
@@ -81,6 +116,19 @@ checks:
     silently approves the PR. A thin caller into a shared workflow reports
     MANUAL here, not PASS: it holds no API call, so the property cannot be
     read from it.
+  example: |
+    # correct - status checked before parsing, verdict read from an anchor
+    STATUS=$(curl -sS -o body.json -w '%{http_code}' "$API")
+    [ "$STATUS" = 200 ] || { echo "api $STATUS"; exit 1; }   # no verdict, no approval
+    VERDICT=$(grep -m1 '^VERDICT: ' body.json | cut -d' ' -f2)
+    case "$VERDICT" in
+      APPROVE) ;;                      # the ONLY path that approves
+      *) exit 1 ;;
+    esac
+
+    # WRONG - fails OPEN. A 5xx, an empty body or a missing key leaves
+    # VERDICT empty, the grep does not match, and the else branch approves.
+    if curl -sS "$API" | grep -q REQUEST_CHANGES; then exit 1; else approve; fi
   detect:
     method: script
     description: the checker reads the workflow for the fail-open string; a thin caller returns MANUAL
@@ -97,6 +145,16 @@ checks:
   why: >
     Without a baseline every finding must be silenced with an exclude
     pattern, which is indistinguishable from never having looked.
+  example: |
+    # correct - the hook is wired AND a baseline is committed beside it
+    # .pre-commit-config.yaml
+    - repo: https://github.com/Yelp/detect-secrets
+      hooks: [{id: detect-secrets, args: ['--baseline', '.secrets.baseline']}]
+    # and `.secrets.baseline` exists in the repo root, committed.
+
+    # WRONG - hook configured, no baseline. Every finding then has to be
+    # silenced with an exclude pattern, which cannot be told apart from
+    # never having looked.
   detect:
     method: file_exists
     path: .secrets.baseline
@@ -117,5 +175,17 @@ checks:
     hand-copied. The gap is that nothing verifies the flow it feeds still
     works end to end; a config that no longer drives its tool is a gate
     that reads as present and does nothing.
+  example: |
+    # correct - HERO.md is GENERATED and still drives the flow it feeds.
+    # 1. the file exists and carries the generator's marker:
+    #    <!-- Generated by wayfare:wayfare-init-repo. Re-run with
+    #         wayfare:wayfare-init-repo recalibrate to refresh. -->
+    # 2. and the flow it configures actually runs end to end:
+    #    wayfare:wayfare-run-task on a throwaway task reaches a pushed PR.
+    #
+    # Checking 1 alone is what makes this check worth doing manually: a
+    # HERO.md naming a deleted skill, a stale image or a branch pattern the
+    # repo no longer uses reads as present and drives nothing. Config that
+    # no longer reaches its tool is a gate that reports green and does not run.
   detect:
     method: manual
