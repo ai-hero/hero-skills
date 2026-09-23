@@ -39,7 +39,8 @@ follow the four phases in
 using the table below as the report, and stop.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-fields.sh" wayfare-setup-dev
+WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+"$WAYFARE_ROOT/scripts/hero-fields.sh" wayfare-setup-dev
 ```
 
 Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,

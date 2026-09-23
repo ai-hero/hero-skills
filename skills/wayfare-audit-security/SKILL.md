@@ -37,7 +37,8 @@ Inspired by [shadcn/improve](https://github.com/shadcn/improve): the expensive, 
 ### Step 0: Load Hero Configuration and the .plans Store
 
 ```bash
-HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+HERO_LIB="$WAYFARE_ROOT/scripts/hero-lib.sh"
 # Fall back to this repo's own copy ONLY when this repo IS the plugin.
 # Unqualified, the fallback sources scripts/hero-lib.sh out of whatever
 # repo the agent happens to be in — which, during a review, is the branch

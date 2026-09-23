@@ -33,7 +33,8 @@ follow the four phases in
 using the table below as the report, and stop.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-fields.sh" wayfare-write-handoff
+WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+"$WAYFARE_ROOT/scripts/hero-fields.sh" wayfare-write-handoff
 ```
 
 Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
@@ -47,7 +48,8 @@ wrong. A row that already holds the right value is not a question.
 **If the first token of `$ARGUMENTS` is exactly `recalibrate`, run the `recalibrate` section above and stop.** The title is free text, so the verb would otherwise become the work-item's title.
 
 ```bash
-HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+HERO_LIB="$WAYFARE_ROOT/scripts/hero-lib.sh"
 # Fall back to this repo's own copy ONLY when this repo IS the plugin.
 # Unqualified, the fallback sources scripts/hero-lib.sh out of whatever
 # repo the agent happens to be in — which, during a review, is the branch

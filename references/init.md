@@ -1354,7 +1354,8 @@ Three cases, decided by what is already on disk:
    unmigrated store from the nine-kind schema. Run the migrator and say so:
 
    ```bash
-   bash "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/migrate-plan.sh" "$(hero_store_path)"
+   WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+   bash "$WAYFARE_ROOT/scripts/migrate-plan.sh" "$(hero_store_path)"
    ```
 
    Report its warnings rather than swallowing them; an unrecognized `kind`

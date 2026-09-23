@@ -113,7 +113,8 @@ it against the HERO.md template in `wayfare-init-repo`'s reference and against w
 actually read, and report both directions of drift.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-fields.sh" --all
+WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+"$WAYFARE_ROOT/scripts/hero-fields.sh" --all
 ```
 
 A field the map omits is a field no `recalibrate` will ever ask about, which

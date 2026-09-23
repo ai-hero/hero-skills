@@ -51,7 +51,8 @@ that parsing. When the first token of
 using the table below as the report, and stop.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-fields.sh" wayfare-check-preflight
+WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+"$WAYFARE_ROOT/scripts/hero-fields.sh" wayfare-check-preflight
 ```
 
 Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
@@ -74,13 +75,11 @@ If `HERO.md` is missing, mention it but still run `scripts/preflight.sh`. The sc
 
 ### Step 1: Run the Script
 
-Prefer the harness-provided `$CLAUDE_PLUGIN_ROOT` when set (covers worktrees and non-default `~/.claude` layouts), otherwise fall back to the in-repo path, then the user-dir path. Only prepend `CLAUDE_PLUGIN_ROOT` when it is non-empty. Otherwise the first candidate expands to a bare absolute path (`/scripts/preflight.sh`) and silently points at the wrong file:
+Resolve the plugin root through `WAYFARE_ROOT` (`references/loading.md`'s rule): the harness-provided `CLAUDE_PLUGIN_ROOT` when set, else the default install path. An agent with neither must already have `WAYFARE_ROOT` exported per that rule.
 
 ```bash
-PREFLIGHT=""
-[ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && PREFLIGHT="$CLAUDE_PLUGIN_ROOT/scripts/preflight.sh"
-[ -x "$PREFLIGHT" ] || PREFLIGHT="$ROOT/.claude/plugins/wayfare-skills/scripts/preflight.sh"
-[ -x "$PREFLIGHT" ] || PREFLIGHT="$HOME/.claude/plugins/wayfare-skills/scripts/preflight.sh"
+WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+PREFLIGHT="$WAYFARE_ROOT/scripts/preflight.sh"
 "$PREFLIGHT" $ARGUMENTS
 ```
 

@@ -35,7 +35,8 @@ follow the four phases in
 using the table below as the report, and stop.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-fields.sh" wayfare-respond-pr
+WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+"$WAYFARE_ROOT/scripts/hero-fields.sh" wayfare-respond-pr
 ```
 
 Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
@@ -132,7 +133,8 @@ behind the base, and a review of a stale head reviews code that is not what
 will merge.
 
 ```bash
-HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+HERO_LIB="$WAYFARE_ROOT/scripts/hero-lib.sh"
 # Fall back to this repo's own copy ONLY when this repo IS the plugin.
 # Unqualified, the fallback sources scripts/hero-lib.sh out of whatever
 # repo the agent happens to be in — which, during a review, is the branch

@@ -128,7 +128,8 @@ The signal is explicit, not recalled: wayfare states `launched by wayfare` when 
 ### Step 0: Load context and the .plans store
 
 ```bash
-HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+HERO_LIB="$WAYFARE_ROOT/scripts/hero-lib.sh"
 # Fall back to this repo's own copy ONLY when this repo IS the plugin.
 # Unqualified, the fallback sources scripts/hero-lib.sh out of whatever
 # repo the agent happens to be in — which, during a review, is the branch
@@ -371,7 +372,8 @@ primitive without a database: a plain read over the folder, implemented as
 
 ```bash
 # shellcheck source=/dev/null
-. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+. "$WAYFARE_ROOT/scripts/hero-lib.sh"
 hero_ready_items
 ```
 

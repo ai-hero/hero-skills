@@ -3,8 +3,18 @@
 What every wayfare verb does before it does anything else: the fleet check,
 the config gate, the store read, the snapshot, visual verification.
 
+**`WAYFARE_ROOT` is how a skill finds its own scripts.** `CLAUDE_PLUGIN_ROOT`
+is a Claude Code harness variable; it does not exist on Codex or any other
+agent. Every skill resolves its plugin root with the one line below, so an
+agent with no `CLAUDE_PLUGIN_ROOT` needs `WAYFARE_ROOT` exported before Step 0
+runs: as the directory two levels above the `SKILL.md` it loaded (the plugin
+root, since a skill lives at `PLUGIN_ROOT/skills/NAME/SKILL.md`). Claude Code
+never needs this — `CLAUDE_PLUGIN_ROOT` is already set — so the export is the
+other agent's own bootstrap, not something this repo runs.
+
 ```bash
-HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+HERO_LIB="$WAYFARE_ROOT/scripts/hero-lib.sh"
 # Fall back to this repo's own copy ONLY when this repo IS the plugin.
 # Unqualified, the fallback sources scripts/hero-lib.sh out of whatever
 # repo the agent happens to be in — which, during a review, is the branch

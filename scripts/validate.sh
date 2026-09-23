@@ -391,6 +391,61 @@ else
   echo "  Skills: $SKILL_PASS/$SKILL_COUNT passed"
 fi
 
+# ── WAYFARE_ROOT: script resolution has exactly one sanctioned line ────────
+# CLAUDE_PLUGIN_ROOT does not exist outside Claude Code (item 8,
+# .plans/items/008-skills-resolve-their-scripts-outside-claude-code.md).
+# Every site that resolves the plugin root must use the identical
+# WAYFARE_ROOT line, so an agent that exports WAYFARE_ROOT itself
+# (references/loading.md's rule) reaches every script, not just the ones a
+# past edit remembered to route through it. A stray CLAUDE_PLUGIN_ROOT
+# default is invisible to that export.
+SANCTIONED_WAYFARE_ROOT_LINE='WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"'
+WAYFARE_ROOT_ERRORS=0
+while IFS= read -r f; do
+  # Scoped to fenced code, not prose: loading.md and check-preflight's own
+  # Step 1 text NAME CLAUDE_PLUGIN_ROOT to explain WAYFARE_ROOT, and that
+  # explanation is the point, not a stray resolver to flag.
+  hits=$(awk '/^```/{infence=!infence; next} infence{print NR":"$0}' "$f" \
+    | grep 'CLAUDE_PLUGIN_ROOT' || true)
+  [ -z "$hits" ] && continue
+  while IFS= read -r hit; do
+    hit_line="${hit%%:*}"
+    hit_text="${hit#*:}"
+    if [[ "$hit_text" != *"$SANCTIONED_WAYFARE_ROOT_LINE"* ]]; then
+      WAYFARE_ROOT_ERRORS=1
+      error "CLAUDE_PLUGIN_ROOT outside the one sanctioned WAYFARE_ROOT line" \
+        "${f#"$PLUGIN_ROOT/"}" \
+        "$hit_line" \
+        "Resolve the plugin root with: $SANCTIONED_WAYFARE_ROOT_LINE"
+    fi
+  done <<< "$hits"
+done < <(find "$SKILLS_DIR" "$PLUGIN_ROOT/references" -type f -name '*.md' 2>/dev/null)
+[[ $WAYFARE_ROOT_ERRORS -eq 0 ]] && pass "every CLAUDE_PLUGIN_ROOT site uses the sanctioned WAYFARE_ROOT line"
+
+# ── '../../' escapes only reach references/ or docs/ ───────────────────────
+# The spec's model is a self-contained skill; references/ and docs/ are the
+# one sanctioned exception, shared roots every manifest installs alongside
+# skills/ (item 8's Approach). A '../../' escape anywhere else reaches
+# outside the skill into a path with no install-layout guarantee.
+DOTDOT_ERRORS=0
+while IFS= read -r f; do
+  hits=$(grep -noE '\.\./\.\./[A-Za-z0-9._/-]*' "$f" 2>/dev/null || true)
+  [ -z "$hits" ] && continue
+  while IFS= read -r hit; do
+    hit_line="${hit%%:*}"
+    hit_path="${hit#*:}"
+    case "$hit_path" in
+      ../../references/*|../../docs/*) continue ;;
+    esac
+    DOTDOT_ERRORS=1
+    error "'../../' escape does not point into references/ or docs/" \
+      "${f#"$PLUGIN_ROOT/"}" \
+      "$hit_line" \
+      "Point it at ../../references/NAME or ../../docs/NAME, or bring the content inside the skill"
+  done <<< "$hits"
+done < <(find "$SKILLS_DIR" -type f -name '*.md' 2>/dev/null)
+[[ $DOTDOT_ERRORS -eq 0 ]] && pass "every '../../' escape in skills/ points into references/ or docs/"
+
 # ── chained-skill invocability guard ───────────────────────────────
 # wayfare-run-task (skills/wayfare-run-task/SKILL.md) delegates its steps to child skills via
 # the Skill tool, and a wayfare goal turn chains into wayfare-grill-idea and
