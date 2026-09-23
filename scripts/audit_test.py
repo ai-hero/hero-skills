@@ -116,9 +116,8 @@ class ImageRefs(unittest.TestCase):
 
 
 class VersionPins(unittest.TestCase):
-    """CTR-01/CTR-02 key every pin by file:line, so a later match in one
-    file cannot overwrite an earlier one (a job hidden mid-file used to
-    vanish from the detail and the disagreement it caused)."""
+    """CTR-01/CTR-02 key every pin by file:line, so two pins in one file
+    both survive instead of one overwriting the other."""
 
     def test_ctr02_two_job_workflow_fails_and_names_both(self):
         with tempfile.TemporaryDirectory() as d:
@@ -168,6 +167,44 @@ class VersionPins(unittest.TestCase):
             self.assertEqual(detail.count("ci.yaml:"), 2, detail)
             self.assertIn("=20", detail)
             self.assertIn("=18", detail)
+
+    def test_ctr01_double_quoted_node_version_disagrees_with_nvmrc(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            write(r, ".nvmrc", "20\n")
+            write(
+                r,
+                ".github/workflows/ci.yaml",
+                "jobs:\n"
+                "  a:\n"
+                "    steps:\n"
+                "      - uses: actions/setup-node@v4\n"
+                '        with:\n'
+                '          node-version: "22"\n',
+            )
+            st, detail = audit.CHECKS["CTR-01"](r)
+            self.assertEqual(st, audit.FAIL, detail)
+            self.assertIn("=20", detail)
+            self.assertIn("=22", detail)
+
+    def test_ctr02_double_quoted_go_version_disagrees_with_go_mod(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            write(r, "lib/go.mod", "go 1.21\n")
+            write(
+                r,
+                ".github/workflows/ci.yaml",
+                "jobs:\n"
+                "  a:\n"
+                "    steps:\n"
+                "      - uses: actions/setup-go@v5\n"
+                '        with:\n'
+                '          go-version: "1.26"\n',
+            )
+            st, detail = audit.CHECKS["CTR-02"](r)
+            self.assertEqual(st, audit.FAIL, detail)
+            self.assertIn("1.21", detail)
+            self.assertIn("1.26", detail)
 
     def test_ctr02_two_from_golang_fails_and_names_both(self):
         with tempfile.TemporaryDirectory() as d:

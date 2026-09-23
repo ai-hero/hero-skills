@@ -1265,7 +1265,6 @@ def _(r):
 
 
 def _line_at(text, offset):
-    """1-based line number of a re.finditer match's start offset."""
     return text.count("\n", 0, offset) + 1
 
 
@@ -1285,7 +1284,7 @@ def _node_majors(r):
             out[f"{df.name}:{_line_at(text, m.start())}:runtime"] = m.group(1)
     for w in workflows(r):
         text = w.read_text()
-        for m in re.finditer(r"node-version:\s*'?(\d+)'?", text):
+        for m in re.finditer(r"node-version:\s*[\"']?(\d+)[\"']?", text):
             out[f"{w.name}:{_line_at(text, m.start())}"] = m.group(1)
     return out
 
@@ -1322,7 +1321,7 @@ def _(r):
             out[f"{df.name}:{_line_at(text, m.start())}"] = m.group(1)
     for w in workflows(r):
         text = w.read_text()
-        for m in re.finditer(r"go-version:\s*'?(\d+\.\d+)'?", text):
+        for m in re.finditer(r"go-version:\s*[\"']?(\d+\.\d+)[\"']?", text):
             out[f"{w.name}:{_line_at(text, m.start())}"] = m.group(1)
     if not out:
         return NA, "no go pins"
