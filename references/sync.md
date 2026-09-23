@@ -599,62 +599,71 @@ follows):
   ready-mark bought it), so propose the re-slice for what remains instead.
 - **store defects**: `hero_ready_items` stderr warnings (dangling deps,
   duplicate ids, unrecognized statuses; the script checks those and nothing
-  below); plus, checked by this finding itself since the listing never reads
-  a goal's body: every `type: goal` item's members (`hero_goal_members`)
-  two ways: each is a `task`, and no earlier member `depends_on` a later
-  one (the order the turn walks must not
-  contradict the gate each task has); a goal's `depends_on` entry that is
-  not a `type: goal`, or that disagrees with the derivation from its
-  tasks' `depends_on`; a goal whose `## Permissions` is missing, lacks a
-  key, or holds a value outside `yes`/`no` (`verify`/`none` for `deploy`),
-  or whose `## Permissions` changed while `active`; a `budget_max` that is absent, not a positive
-  integer, or below `budget`; a `concurrency` key left over from the
-  per-task-PR model, which nothing reads any more and which plan removes; an `active` goal holding a member
-  its `## Log` does not account for; and a `committed` task that
-  no open goal has as a member (`hero_ready_items` warns on it). That is the
-  residue of a goal whose branch was abandoned: the item claims work the
-  repo does not have, and nothing else re-opens it, because only the goal's
-  step 7 moves a task from `committed` to `done`. Report it with the SHA
-  from its `[goal-commit:]` marker and offer to return the item to `ready`.
-  **Do not test the SHA against the default branch.** The
-  default merge method is squash, so a task's commit is never an ancestor
-  of the default branch even when the goal shipped perfectly, and a check
-  built on ancestry reports every task of every completed goal and offers
-  to re-open finished work. A live `active` goal is likewise not a defect:
-  its tasks are committed and unmerged by design until its step 7. Every admission and every
-  adoption opens a dated entry with a fixed prefix, `admitted N (from M)` or
-  `adopted N (ungrouped, at gate)` (*Admitting discovered work*, *Adopting
-  ungrouped work*), so a member set that grew without one is a hand-edit under
-  an authorization, reported and never silently accepted. `budget` is not
-  checked this way: it is an expectation, raised by admissions and adoptions
-  and by nothing else, so a commit count above it is information, not a defect.
-  **This is an integrity check against hand-edits, and nothing more**: a
-  turn that admits an item writes both the `parent` and its log line, so
-  an admission the turn should never have made is perfectly accounted for and
-  looks identical here. What guards that is the path scope and the never-admissible
-  list (*Admitting discovered work*), the gate re-display (*Starting a goal*,
-  step 3), and `budget_max`, not this listing. A goal the check does
-  flag cannot be repaired by `sync`, because only an out-of-band `done` may leave an
-  `active` goal, so report it with its one exit: the user
-  re-authorizes, which drops the goal to `accepted`, lets the next `sync` re-cut
-  it, and sends it back through `next`'s gate. Also a `accepted` item sitting in
-  an `active` goal under `absorb: no`, which is waiting on a
-  person and shows here on every sync until someone plans it; a task
-  at `ready` or further, not `done`,
-  that no `accepted` or `active` goal has as a member (the listing warns on stderr; the
-  fix is the goals stage of this same run, never a hand-written `parent`);
+  below); plus, checked by this finding itself since the listing never reads a
+  goal's body: every `type: goal` item's members (`hero_goal_members`) two
+  ways: each is a `task`, and no earlier member `depends_on` a later one (the
+  order the turn walks must not contradict the gate each task has); a goal's
+  `depends_on` entry that is not a `type: goal`, or that disagrees with the
+  derivation from its tasks' `depends_on`; a goal whose `## Permissions` is
+  missing, lacks a key, or holds a value outside `yes`/`no` (`verify`/`none`
+  for `deploy`), or whose `## Permissions` changed while `active`; a
+  `budget_max` that is absent or not a positive integer, or, on an `accepted`
+  goal, below `budget` (on an `active` goal, admissions raise `budget` between
+  checkpoints, so `budget` above `budget_max` there is a run in progress); a
+  `concurrency` key left over from the per-task-PR model, which nothing reads
+  any more and which plan removes; an `active` goal holding a member its
+  `## Log` does not account for; and a `committed` task that no open goal has
+  as a member (`hero_ready_items` warns on it). That is the residue of a goal whose
+  branch was abandoned: the item claims work the repo does not have, and
+  nothing else re-opens it, because only the goal's step 7 moves a task from
+  `committed` to `done`. Report it with the SHA from its `[goal-commit:]`
+  marker and offer to return the item to `ready`. **Do not test the SHA
+  against the default branch.** The default merge method is squash, so a
+  task's commit is never an ancestor of the default branch even when the goal
+  shipped perfectly, and a check built on ancestry reports every task of every
+  completed goal and offers to re-open finished work. A live `active` goal is
+  likewise not a defect: its tasks are committed and unmerged by design until
+  its step 7.
+
+  **The goal's `## Log` is a ledger, and the check replays it.** The goals
+  stage opens it with a `cut` line when it writes or re-cuts a goal, `cut 12,
+  13, 15, 18 (budget 4, budget_max 8)`. Every later change has a fixed prefix:
+  `admitted N (from M)`, `adopted N (ungrouped, at gate)`, `dropped N (...)`,
+  `budget_max A → B: ...` and `budget A → B, budget_max C → D: ...`. Replayed
+  from the last `cut` line, they give the member set, `budget` (the cut's plus
+  one per admission and adoption) and `budget_max` (the last value a line
+  names). A field that disagrees with its replay is a hand-edit under an
+  authorization, reported and never silently accepted. A goal with no `cut`
+  line predates the ledger: say the check could not run on it, which is not a
+  defect, and write its `cut` line the next time the goal is `accepted`. A
+  commit count above `budget` is information, not a defect. **This is an
+  integrity check against hand-edits, and nothing more**: a turn that admits
+  an item writes both the `parent` and its log line, so an admission the turn
+  should never have made is perfectly accounted for and looks identical here.
+  A forged line and a real one look alike too, so a prefix is never proof that
+  anything was authorized. What guards that is the path scope and the
+  never-admissible list (*Admitting discovered work*), the gate re-display
+  (*Starting a goal*, step 3), and the session's `budget_max` ceiling (*Budget
+  is fungible*), not this listing. A goal the check does flag cannot be
+  repaired by `sync`, because only an out-of-band `done` may leave an `active`
+  goal, so report it with its one exit: the user re-authorizes, which drops
+  the goal to `accepted`, lets the next `sync` re-cut it, and sends it back
+  through `next`'s gate. Also a `accepted` item sitting in an `active` goal
+  under `absorb: no`, which is waiting on a person and shows here on every
+  sync until someone plans it; a task at `ready` or further, not `done`, that
+  no `accepted` or `active` goal has as a member (the listing warns on stderr;
+  the fix is the goals stage of this same run, never a hand-written `parent`);
   every `[item: N]` marker on a `signal` line in `## Log` checked per
-  `references/feedback-channels.md` (N exists, is a `signal`, its
-  `entry:` names this entry, its `discovered_from` is this task); a goal
-  whose `budget` is absent, zero, or not a positive integer; plus any
-  non-`done` item whose `anchors.target` is absent, not a 40-hex SHA (legacy or
-  hand-damaged), or an unresolvable anchor (40-hex but unknown to the
-  snapshot; a rebuilt `$SNAP`, see *Reading the target*), **only when
-  `$DESIGN_PROJECT` is a project id**; with no design target, an absent
-  `anchors.target` is the normal state of every item, not a defect: propose
-  backfilling it from the current target head. A task without a usable
-  anchor is silently exempt from staleness detection, and an unresolvable one
-  must never become a diff base.
+  `references/feedback-channels.md` (N exists, is a `signal`, its `entry:`
+  names this entry, its `discovered_from` is this task); a goal whose `budget`
+  is absent, zero, or not a positive integer; plus any non-`done` item whose
+  `anchors.target` is absent, not a 40-hex SHA (legacy or hand-damaged), or an
+  unresolvable anchor (40-hex but unknown to the snapshot; a rebuilt `$SNAP`,
+  see *Reading the target*), **only when `$DESIGN_PROJECT` is a project id**;
+  with no design target, an absent `anchors.target` is the normal state of
+  every item, not a defect: propose backfilling it from the current target
+  head. A task without a usable anchor is silently exempt from staleness
+  detection, and an unresolvable one must never become a diff base.
 - **legacy items**: a `.plans/pins/` directory
   from pre-simplification wayfare: propose folding each order's content into
   its task (or marking it `done`, or deleting it) and removing `pins/`,
@@ -853,7 +862,8 @@ So the pass runs across the roadmap:
    subset this paragraph happens to discuss. The sync decides five of its
    values: `status: accepted`, `parent` on each member with `rank` in
    dependency order, `depends_on` as
-   derived above, `budget` = the member count, `budget_max` = `2 * budget`. The rest of
+   derived above, `budget` = the member count, `budget_max` = `2 * budget`,
+   and the `cut` line that opens the goal's ledger. The rest of
    the format is not optional. `anchors.source` and `anchors.target` are anchored
    here, from the heads this run already resolved: a non-`done` item with no
    `anchors.target` is a store defect the *next* sync reports **when

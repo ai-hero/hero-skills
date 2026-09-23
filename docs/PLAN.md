@@ -456,16 +456,18 @@ Re-read every turn. The defaults are always on; add to them per goal.
 
 - any build, test, or auto-approve failure
 - a human comment on an open PR
-- `budget_max` reached and the rest would need a second PR (within one PR,
-  the turn raises it and logs the raise instead)
+- `budget_max` reached, unless what is left is all members shipping in
+  this PR and the raise stays under the session's ceiling; then the turn
+  raises it and logs the raise
 - a premise of the next task no longer holds
 - a gate this goal was not granted
 ```
 
 A goal also carries `budget` (commits expected — an expectation, not a gate),
 `budget_max` (the checkpoint: a turn that reaches it raises it and logs the
-raise when the rest ships in the same PR, and stops otherwise), `commits` (SHA and the task id it served, appended as each is
-made) and `branch`.
+raise when the rest ships in the same PR, up to a ceiling of twice the value
+at the gate, and stops otherwise), `commits` (SHA and the task id it served,
+appended as each is made) and `branch`.
 
 ### Membership is one edge, in one direction
 
