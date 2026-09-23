@@ -232,12 +232,26 @@ jobs:
           # file is reported deleted.
           gh api --paginate "/repos/${{ github.repository }}/pulls/$PR_NUMBER/files?per_page=100" \
             --jq '.[]' > files.jsonl
+
+          # test: begin files-list
+          # `/pulls/N/files` caps at 3000 entries regardless of pagination and
+          # returns the truncated list with no error, so a PR past the cutoff
+          # would silently look like a smaller one to fleet_workflow, classify,
+          # and the model's view of "changed files" alike.
+          FILES_SEEN=$(jq -s 'length' files.jsonl)
+          FILES_EXPECTED=$(jq -r '.changed_files' pr.json)
+          if [ "$FILES_SEEN" != "$FILES_EXPECTED" ]; then
+            printf '%s\n' "saw $FILES_SEEN of $FILES_EXPECTED changed files, so the files list is incomplete." > lane_error.txt
+            echo "::error::$(cat lane_error.txt) Re-run \`@auto-approve\`."
+            exit 1
+          fi
           jq -r '"\(.filename)\t\(.status)\t\(.additions)\t\(.deletions)"' files.jsonl > files.tsv
           cut -f1 files.tsv > changed_files.txt
           # A rename reports the OLD path only here, never in .filename (the
           # NEW path, already in changed_files.txt above) — read from the
           # same files.jsonl so this costs no extra API call.
           jq -r '.previous_filename // empty' files.jsonl > previous_files.txt
+          # test: end files-list
 
           # This file ships to every consumer the moment it merges here, with
           # no per-repo PR and no staging step (AGENTS.md, "The one thing to
@@ -832,7 +846,7 @@ jobs:
           steps.prior_review.outputs.passed != 'true' ||
           steps.threads.outputs.passed != 'true' ||
           steps.ci.outputs.passed != 'true' ||
-          steps.pr.outputs.fleet_workflow == 'true'
+          steps.pr.outputs.fleet_workflow != 'false'
         run: |
           {
             cat prior_review.md
@@ -848,6 +862,14 @@ jobs:
               echo "## Verdict"
               echo "REQUEST_CHANGES"
               echo "fleet-wide workflow: human approval required"
+              echo "Once a human approves this PR, dismiss this bot review before merging — branch protection counts it as changes requested."
+            elif [ "${{ steps.pr.outputs.fleet_workflow }}" != "false" ]; then
+              echo "## Fleet Workflow: ❌"
+              echo "Could not determine whether this PR touches .github/workflows/auto-approve.yaml — failing closed rather than risk shipping an unreviewed fleet-wide change."
+              echo ""
+              echo "## Verdict"
+              echo "REQUEST_CHANGES"
+              echo "fleet workflow check inconclusive: human approval required. Re-run \`@auto-approve\`."
             else
               echo "## Verdict"
               echo "REQUEST_CHANGES"
@@ -862,7 +884,7 @@ jobs:
           steps.threads.outputs.passed == 'true' &&
           steps.ci.outputs.passed == 'true' &&
           steps.pr.outputs.deps_bot == 'true' &&
-          steps.pr.outputs.fleet_workflow != 'true'
+          steps.pr.outputs.fleet_workflow == 'false'
         run: |
           {
             cat prior_review.md
@@ -885,7 +907,7 @@ jobs:
           steps.threads.outputs.passed == 'true' &&
           steps.ci.outputs.passed == 'true' &&
           steps.pr.outputs.deps_bot != 'true' &&
-          steps.pr.outputs.fleet_workflow != 'true'
+          steps.pr.outputs.fleet_workflow == 'false'
         id: verify
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -942,6 +964,12 @@ jobs:
           # its block early and start writing what looks like the next
           # section. The strip is whitespace- and case-tolerant
           # (`</ DIFF >`) for the same reason: the author chooses this text.
+          # test: begin untag
+          # A single gsub strips only the innermost pair: `a</di</diff>ff>b`
+          # becomes `a</diff>b`, one layer of nesting still live to close a
+          # block early. `until` repeats the strip to a fixed point instead.
+          UNTAG_JQ='def untag1: gsub("</\\s*(pr_title|pr_description|ci_status|changed_files|omitted_files|unverified_claims|go_pkgs_without_tests|repo_tree|full_files|diff)\\s*>"; ""; "i"); def untag: until(untag1 == .; untag1);'
+
           jq -n \
             --arg model "$CLAUDE_MODEL" \
             --arg pr_title "$PR_TITLE" \
@@ -954,7 +982,7 @@ jobs:
             --rawfile diff pr_truncated.diff \
             --rawfile repo_tree repo_tree.txt \
             --rawfile full_files full_files.txt \
-            'def untag: gsub("</\\s*(pr_title|pr_description|ci_status|changed_files|omitted_files|unverified_claims|go_pkgs_without_tests|repo_tree|full_files|diff)\\s*>"; ""; "i");
+            "$UNTAG_JQ"'
             ($pr_title | untag) as $pr_title |
             ($pr_body | untag) as $pr_body |
             ($ci_status | untag) as $ci_status |
@@ -1014,6 +1042,7 @@ jobs:
                 )
               }]
             }' > payload.json
+          # test: end untag
 
           echo "payload_bytes=$(wc -c < payload.json)"
 
@@ -1061,11 +1090,11 @@ jobs:
             exit 0
           fi
 
-          # The model's own text, untouched by the gate sections prepended
-          # below. "Resolve final verdict" parses this file rather than
-          # review.md so a quoted "## Verdict" inside a gate's own report
-          # (an unresolved-thread comment, say) is never in the same file as
-          # the count it validates.
+          # test: begin model-write
+          # "Resolve final verdict" parses this file, not review.md, so a
+          # quoted "## Verdict" inside a gate's own report (an
+          # unresolved-thread comment, say) is never in the same file as the
+          # count it validates.
           printf '%s' "$REVIEW" > model.md
 
           # Prepend the gate results so the comment shows the full pass list,
@@ -1079,6 +1108,7 @@ jobs:
             echo ""
             echo "$REVIEW"
           } > review.md
+          # test: end model-write
 
       - name: Resolve final verdict
         id: final
@@ -1116,6 +1146,22 @@ jobs:
               }' "$1"
           }
 
+          # A model that puts the ❌ on the line under the header rather than
+          # beside it ("## Tests:\n❌ no test for the new handler") is still a
+          # failing check; matching only the header line missed that shape.
+          header_has_x() {
+            awk '
+              /^## (PR Description|Tests|Completeness)[[:space:]]*:?/ {
+                if ($0 ~ /❌/) { print "yes"; exit }
+                while ((getline line) > 0) {
+                  if (line ~ /[^[:space:]]/) {
+                    if (line ~ /❌/) { print "yes"; exit }
+                    break
+                  }
+                }
+              }' "$1"
+          }
+
           if [ -s model.md ]; then
             VERDICT_COUNT=$(grep -c '^## Verdict[[:space:]]*:\?[[:space:]]*$' model.md || true)
             DESC_COUNT=$(grep -c '^## PR Description[[:space:]]*:\?' model.md || true)
@@ -1129,7 +1175,8 @@ jobs:
             [ "$TESTS_COUNT" -eq 1 ] || MALFORMED=true
             [ "$COMPLETE_COUNT" -eq 1 ] || MALFORMED=true
             if [ "$VERDICT_TOKEN" = "APPROVE" ] \
-               && grep -qE '^## (PR Description|Tests|Completeness)[[:space:]]*:?[[:space:]]*.*❌' model.md; then
+               && { grep -qE '^## (PR Description|Tests|Completeness)[[:space:]]*:?[[:space:]]*.*❌' model.md \
+                    || [ "$(header_has_x model.md)" = "yes" ]; }; then
               MALFORMED=true
             fi
 
