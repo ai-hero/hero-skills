@@ -1225,6 +1225,11 @@ def _(r):
     return (FAIL, "; ".join(probs)) if probs else (PASS, "propagates the code")
 
 
+def _line_at(text, offset):
+    """1-based line number of a re.finditer match's start offset."""
+    return text.count("\n", 0, offset) + 1
+
+
 def _node_majors(r):
     """Every Node major this repo pins, and where."""
     out = {}
@@ -1234,13 +1239,15 @@ def _node_majors(r):
         if m:
             out[".nvmrc"] = m.group(0)
     for df in sorted(r.glob("Dockerfile*")):
-        for m in re.finditer(r"FROM node:(\d+)", df.read_text()):
-            out[f"{df.name}:node"] = m.group(1)
-        for m in re.finditer(r"distroless/nodejs(\d+)", df.read_text()):
-            out[f"{df.name}:runtime"] = m.group(1)
+        text = df.read_text()
+        for m in re.finditer(r"FROM node:(\d+)", text):
+            out[f"{df.name}:{_line_at(text, m.start())}:node"] = m.group(1)
+        for m in re.finditer(r"distroless/nodejs(\d+)", text):
+            out[f"{df.name}:{_line_at(text, m.start())}:runtime"] = m.group(1)
     for w in workflows(r):
-        for m in re.finditer(r"node-version:\s*'?(\d+)'?", w.read_text()):
-            out[f"{w.name}"] = m.group(1)
+        text = w.read_text()
+        for m in re.finditer(r"node-version:\s*'?(\d+)'?", text):
+            out[f"{w.name}:{_line_at(text, m.start())}"] = m.group(1)
     return out
 
 
@@ -1271,11 +1278,13 @@ def _(r):
         if m:
             out[f"{gm.parent.name}/go.mod"] = m.group(1)
     for df in sorted(r.glob("Dockerfile*")):
-        for m in re.finditer(r"FROM golang:(\d+\.\d+)", df.read_text()):
-            out[df.name] = m.group(1)
+        text = df.read_text()
+        for m in re.finditer(r"FROM golang:(\d+\.\d+)", text):
+            out[f"{df.name}:{_line_at(text, m.start())}"] = m.group(1)
     for w in workflows(r):
-        for m in re.finditer(r"go-version:\s*'?(\d+\.\d+)'?", w.read_text()):
-            out[w.name] = m.group(1)
+        text = w.read_text()
+        for m in re.finditer(r"go-version:\s*'?(\d+\.\d+)'?", text):
+            out[f"{w.name}:{_line_at(text, m.start())}"] = m.group(1)
     if not out:
         return NA, "no go pins"
     vals = set(out.values())

@@ -115,6 +115,103 @@ class ImageRefs(unittest.TestCase):
             self.assertEqual(audit.CHECKS["CTR-11"](r)[0], audit.PASS, "8 and 8.0 are one major")
 
 
+class VersionPins(unittest.TestCase):
+    """CTR-01/CTR-02 key every pin by file:line, so a later match in one
+    file cannot overwrite an earlier one (a job hidden mid-file used to
+    vanish from the detail and the disagreement it caused)."""
+
+    def test_ctr02_two_job_workflow_fails_and_names_both(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            write(r, "lib/go.mod", "go 1.21\n")
+            write(
+                r,
+                ".github/workflows/ci.yaml",
+                "jobs:\n"
+                "  a:\n"
+                "    steps:\n"
+                "      - uses: actions/setup-go@v5\n"
+                "        with:\n"
+                "          go-version: '1.26'\n"
+                "  b:\n"
+                "    steps:\n"
+                "      - uses: actions/setup-go@v5\n"
+                "        with:\n"
+                "          go-version: '1.21'\n",
+            )
+            st, detail = audit.CHECKS["CTR-02"](r)
+            self.assertEqual(st, audit.FAIL)
+            self.assertEqual(detail.count("ci.yaml:"), 2, detail)
+            self.assertIn("1.26", detail)
+            self.assertIn("lib/go.mod=1.21", detail)
+
+    def test_ctr01_two_job_workflow_fails_and_names_both(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            write(
+                r,
+                ".github/workflows/ci.yaml",
+                "jobs:\n"
+                "  a:\n"
+                "    steps:\n"
+                "      - uses: actions/setup-node@v4\n"
+                "        with:\n"
+                "          node-version: '20'\n"
+                "  b:\n"
+                "    steps:\n"
+                "      - uses: actions/setup-node@v4\n"
+                "        with:\n"
+                "          node-version: '18'\n",
+            )
+            st, detail = audit.CHECKS["CTR-01"](r)
+            self.assertEqual(st, audit.FAIL)
+            self.assertEqual(detail.count("ci.yaml:"), 2, detail)
+            self.assertIn("=20", detail)
+            self.assertIn("=18", detail)
+
+    def test_ctr02_two_from_golang_fails_and_names_both(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            write(r, "lib/go.mod", "go 1.21\n")
+            write(r, "Dockerfile", "FROM golang:1.26 AS build\nFROM golang:1.21 AS test\n")
+            st, detail = audit.CHECKS["CTR-02"](r)
+            self.assertEqual(st, audit.FAIL)
+            self.assertIn("Dockerfile:1=1.26", detail)
+            self.assertIn("Dockerfile:2=1.21", detail)
+
+    def test_ctr01_two_from_node_fails_and_names_both(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            write(r, "Dockerfile", "FROM node:20-alpine AS build\nFROM node:18-alpine AS test\n")
+            st, detail = audit.CHECKS["CTR-01"](r)
+            self.assertEqual(st, audit.FAIL)
+            self.assertIn("Dockerfile:1:node=20", detail)
+            self.assertIn("Dockerfile:2:node=18", detail)
+
+    def test_agreeing_two_job_workflow_still_passes(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            write(r, "lib/go.mod", "go 1.21\n")
+            write(
+                r,
+                ".github/workflows/ci.yaml",
+                "jobs:\n"
+                "  a:\n"
+                "    steps:\n"
+                "      - uses: actions/setup-go@v5\n"
+                "        with:\n"
+                "          go-version: '1.21'\n"
+                "  b:\n"
+                "    steps:\n"
+                "      - uses: actions/setup-go@v5\n"
+                "        with:\n"
+                "          go-version: '1.21'\n",
+            )
+            st, detail = audit.CHECKS["CTR-02"](r)
+            self.assertEqual(st, audit.PASS)
+            self.assertEqual(detail, "go 1.21 everywhere")
+
+
 class HookSegments(unittest.TestCase):
     PC = "repos:\n- repo: a\n  hooks:\n  - id: markdownlint\n    args: [--fix]\n  - id: codespell\n    args: [--disable=x]\n- repo: b\n  hooks:\n  - id: semgrep\n    # a comment\n    args:\n    - --config=auto\n    - --error\n"
 
