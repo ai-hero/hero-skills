@@ -198,10 +198,10 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
                   these tasks that serves a line of the DoD above is
                   absorbed into this goal; anything else is left for you
                   to authorize as its own goal later
-     Ships as:    one branch, one PR. Tasks are built one after another
-                  and committed separately, one commit per task, tested
-                  locally after each. Nothing is pushed until they are all
-                  in and the branch passes
+     Ships as:    one branch, one PR. Tasks are built one after another,
+                  one commit per task, each checked by its own tests. After
+                  the last one the whole branch is simplified and fully
+                  tested once. Nothing is pushed until the branch passes
      Stops on:    the goal item's ## Stop conditions
 
    Type the goal id to authorize these permissions and run the goal now,
@@ -440,7 +440,8 @@ memory between turns:
    **Check `budget_max` before each launch, not just at turn start.** A
    turn now builds the whole goal, so a start-of-turn check is a check that
    happens once for a run that may land a dozen commits. Before each task,
-   and before each fix commit at step 5, re-count the branch. At
+   and before the simplify commit and each fix commit at step 5, re-count
+   the branch. At
    `budget_max`, run the checkpoint (*Budget is fungible*): raise and log it,
    or stop with `stop: budget`, reporting which tasks are done and which are
    not. Without this the checkpoint the item advertises is one nothing runs.
@@ -567,7 +568,7 @@ memory between turns:
 
    | Item | Status | Commit | What was done | Verified by | Diff |
    | ---- | ------ | ------ | ------------- | ----------- | ---- |
-   | 149 | committed | 7179f53 | Deleted all 11 `-chromium-darwin` baselines + both `toHaveScreenshot` sites; removed `--grep-invert` from `ci.yaml:467`. Un-hid 3 component-page tests that had never run on CI | Full suite 197 passed; axe/structural assertions all kept | 13 files, +8/-55 |
+   | 149 | committed | 7179f53 | Deleted all 11 `-chromium-darwin` baselines + both `toHaveScreenshot` sites; removed `--grep-invert` from `ci.yaml:467`. Un-hid 3 component-page tests that had never run on CI | `visual/` 11 removed, 3 un-hidden now run and pass (task-scoped) | 13 files, +8/-55 |
    | 143 | committed | 1bacaa3, fix 9c02a1e | Hover assertion now polls for the expected colour with `expect.poll` instead of waiting for stability, which a rest colour satisfies. Fixed the "grep-inverted out of CI" comment 149 falsified | Mutation → timeout-fail, not instant pass; 440/440 at `--repeat-each=20` | 4 files, +46/-26 |
    | 201 | committed | 67560e7 | Split the one `evaluate` that read `fill` before the click into two | Mutated `ink-note` → failed in 405ms | 2 files, +14/-3 |
    | 15 | next | – | – | – | – |
@@ -612,31 +613,74 @@ memory between turns:
    branch once.** Not after each task: the per-task runs checked only what
    each task changed, and this is the run that checks them together.
 
-   First **simplify**, once, over the branch's whole diff
-   (`origin/$BASE..$GOAL_BRANCH`): invoke `simplify` scoped to that range.
-   What it changes lands as one commit, `refactor: simplify goal G`, which
-   spends budget like any other; no change, no commit. Simplify runs before
-   the test so the test covers the code that will ship.
+   First **simplify**, once, over the branch's whole diff, **delegated
+   like every other edit**. The parent does not write code at this step
+   either. One subagent (Agent tool, `general-purpose`, `model: sonnet`):
 
-   Then **test**: the repo's full verification over the branch
-   (wayfare-push-pr's Step 2, invoked as `wayfare:wayfare-push-pr test`). Two
-   tasks that each passed their own tests can still fail together, and the
-   point of committing them to one branch before any push is that this is
-   where that surfaces: locally, for free, with no PR open and no CI minutes
-   spent.
+   ```
+   cd REPO_PATH, on branch GOAL_BRANCH, clean tree. Run the `simplify`
+   skill over the goal's changes: the diff is `git diff origin/BASE...HEAD`
+   (it is committed, so review that range, not the working tree). Apply
+   only reuse, quality and efficiency fixes to what that diff added or
+   changed. Do not change behavior, and do not reach into code the diff
+   did not touch. The never-admissible paths are a hard stop, whatever a
+   cleanup suggests: anything under `.github/` or `.claude/` (nested
+   copies included), `HERO.md`, `FLEET.md`, and any file governing
+   authentication, authorization or secrets. A reuse that would need one
+   is reported, never made. If nothing needs changing, change nothing.
+   Otherwise commit through `wayfare:wayfare-push-pr commit` with the
+   subject `refactor: simplify goal G`. Report the SHA (or `no change`),
+   the files touched, the task-scoped tests you ran, and every wrong turn.
+   ```
+
+   Before recording it, check each path the commit touched with
+   `hero_path_forbidden`, and on a hit revert the commit and stop with
+   `stop: failure`: the prompt is the fence, and this is what holds when
+   the prompt was not followed. The commit spends budget (it is counted in
+   the pre-launch `budget_max` check like a task), goes in `commits:` as
+   `SHA (simplify)`, and gets its own `simplify` row in the goal table. No
+   change, no commit and no row. Simplify runs before the test so the test
+   covers the code that will ship.
+
+   Then **test**: the repo's full verification over the whole branch,
+   `wayfare:wayfare-push-pr test branch BASE`. The `branch` modifier is not
+   optional: without it the test phase scopes itself to the last commit,
+   and every earlier task goes unchecked. It runs the full test target,
+   `pre-commit run --all-files`, the pre-push hook stage (where security
+   scans such as semgrep run), and smoke over the routes the whole branch
+   touched. Two tasks that each passed their own tests can still fail
+   together, and the point of committing them to one branch before any push
+   is that this is where that surfaces: locally, for free, with no PR open
+   and no CI minutes spent.
+
+   **A tree the test run left dirty is committed before anything else.**
+   The test phase applies mechanical fixes itself (lint, import order), and
+   `test` mode never commits them. Commit them through
+   `wayfare:wayfare-push-pr commit` as a fix commit, attributed as below,
+   then re-run the branch test. Bisect and the base check both need a clean
+   tree.
 
    **Attribute a failure before fixing it.** The branch run names what
    failed, not which task broke it. Narrow it to the smallest command that
-   reproduces it (one test file, not the suite), and run that at
-   `origin/$BASE` first (`git checkout --detach origin/$BASE`, then back to
-   `GOAL_BRANCH`): `git bisect run` assumes the base is good, so a failure
-   already there would be pinned on the first task. A failure at the base is
-   not this goal's: `stop: failure` naming it, no fix agent. Otherwise
-   `git bisect start GOAL_BRANCH origin/$BASE`, `git bisect run` the
-   command, `git bisect reset`. The first bad commit is the task the fix is
-   attributed to, and its row carries the fix commit. When the command
-   cannot be narrowed, or bisect cannot finish, attribute to the last task
-   and say `attributed by default`.
+   reproduces it (one test file, not the suite).
+
+   - **A test file the goal added** (`git cat-file -e origin/$BASE:PATH`
+     fails) is attributed to the commit that added it (`git log
+     --diff-filter=A --format=%H origin/$BASE..GOAL_BRANCH -- PATH`), or to
+     a later task by bisecting from that commit. Never from the base: every
+     commit before the file existed would fail it and read as bad.
+   - **A test that exists at the base** is run there first (`git checkout
+     --detach origin/$BASE`, then back to `GOAL_BRANCH`). A failure there is
+     not this goal's: `stop: failure` naming it, no fix agent. Otherwise
+     `git bisect start GOAL_BRANCH origin/$BASE`, `git bisect run` the
+     command, `git bisect reset`.
+
+   The first bad commit is the one the fix is attributed to, and its row
+   carries the fix commit. A first bad commit that is the simplify commit
+   is fixed there (the fix agent is told the simplify commit caused it,
+   and a revert is an acceptable fix). When the command cannot be
+   narrowed, or bisect cannot finish, attribute to the last task and say
+   `attributed by default`.
 
    **A failure here gets its own subagent, scoped to the defect.** Do not
    fix it in the parent. Launch one fix agent (Agent tool,
@@ -777,7 +821,7 @@ memory between turns:
                 task 13 → committed d4e5f6a
                 task 15 → building
      verified:  12: auth/ tests 14/14 (task-scoped)
-                13: session/ tests 9/9; UI smoke 3/3 routes (task-scoped)
+                13: session/ tests 9/9 (task-scoped)
                 branch: not run, tasks remain
      commits:   2 of about 5 expected (4 + 1 admitted), checkpoint at 8
      mistakes:  12 → 2 recorded; 13 → 1 recorded
