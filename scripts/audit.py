@@ -624,22 +624,30 @@ def _(r):
     updates = doc.get("updates", []) or []
     if not updates:
         return FAIL, "no update entries"
-    # Every ecosystem needs a catch-all group (patterns ["*"]) scoped to
-    # minor+patch, so routine bumps land as one PR. Majors stay ungrouped on
-    # purpose, so a group WITHOUT the update-types restriction does not count.
-    ungrouped = []
+    # Dependabot assigns a dependency to the FIRST group whose patterns match
+    # it, so only the first ["*"] group per entry is live — a later ["*"]
+    # group is decorative and receives nothing. Judging "any group passes"
+    # instead of the first lets that decorative group turn the check green
+    # while the real (unfiltered, or major-batching) catch-all stays in
+    # force. Digest-pinned docker is the one case where an unfiltered
+    # catch-all is still safe: a digest bump has no semver delta, so it can
+    # never batch a major.
+    bad = []
     for u in updates:
-        groups = (u.get("groups") or {}).values()
-        ok = any(
-            "*" in (g.get("patterns") or [])
-            and {"minor", "patch"} <= set(g.get("update-types") or [])
-            for g in groups
-        )
-        if not ok:
-            ungrouped.append(u.get("package-ecosystem", "?"))
-    if ungrouped:
-        return FAIL, "no minor/patch catch-all group: " + ",".join(sorted(set(ungrouped)))
-    return PASS, "each ecosystem groups minor+patch"
+        eco = u.get("package-ecosystem", "?")
+        groups = list((u.get("groups") or {}).values())
+        first = next((g for g in groups if "*" in (g.get("patterns") or [])), None)
+        if first is None:
+            bad.append(f"{eco}: no catch-all group")
+            continue
+        if {"minor", "patch"} <= set(first.get("update-types") or []):
+            continue
+        if eco == "docker" and _docker_entry_digest_pinned(r, u):
+            continue
+        bad.append(f"{eco}: catch-all batches majors")
+    if bad:
+        return FAIL, "; ".join(bad)
+    return PASS, "each ecosystem's first catch-all group is minor+patch, or docker digest-pinned"
 
 
 @check("CI-15")
@@ -2474,6 +2482,38 @@ def _image_refs(path):
         name, _, tag = ref.rsplit("/", 1)[-1].partition(":")
         out.append((name, tag))
     return out
+
+
+def _docker_entry_digest_pinned(r, entry):
+    """True when every `Dockerfile*` in a dependabot docker entry's
+    directory/directories is pinned to a digest: at least one external FROM
+    carries @sha256:, none is tag-only, and none names a $ARG. _image_refs
+    silently drops $ refs (they're not a tag to flag as stale), which would
+    make a ${BASE} FROM read as digest-pinned by omission here — so the $
+    check is explicit and fails closed instead of inheriting that skip."""
+    dirs = entry.get("directories") or [entry.get("directory") or "/"]
+    dockerfiles = []
+    for d in dirs:
+        base = (r / str(d).lstrip("/")).resolve()
+        dockerfiles += list(base.glob("Dockerfile*"))
+    if not dockerfiles:
+        return False
+    has_digest = False
+    for df in dockerfiles:
+        if _image_refs(df):
+            return False
+        text = df.read_text()
+        from_lines = list(_FROM_RE.finditer(text))
+        stages = {m.group(2) for m in from_lines if m.group(2)}
+        for m in from_lines:
+            ref = m.group(1)
+            if ref in stages or ref == "scratch":
+                continue
+            if "$" in ref:
+                return False
+            if "@sha256:" in ref:
+                has_digest = True
+    return has_digest
 
 
 def _image_files(r):
