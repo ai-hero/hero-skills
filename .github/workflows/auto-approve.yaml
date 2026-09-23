@@ -231,8 +231,13 @@ jobs:
           # to `\\` and `read -r` keeps it, so the contents fetch 404s and the
           # file is reported deleted.
           gh api --paginate "/repos/${{ github.repository }}/pulls/$PR_NUMBER/files?per_page=100" \
-            --jq '.[] | "\(.filename)\t\(.status)\t\(.additions)\t\(.deletions)"' > files.tsv
+            --jq '.[]' > files.jsonl
+          jq -r '"\(.filename)\t\(.status)\t\(.additions)\t\(.deletions)"' files.jsonl > files.tsv
           cut -f1 files.tsv > changed_files.txt
+          # A rename reports the OLD path only here, never in .filename (the
+          # NEW path, already in changed_files.txt above) — read from the
+          # same files.jsonl so this costs no extra API call.
+          jq -r '.previous_filename // empty' files.jsonl > previous_files.txt
 
           # This file ships to every consumer the moment it merges here, with
           # no per-repo PR and no staging step (AGENTS.md, "The one thing to
@@ -245,7 +250,7 @@ jobs:
           # unaffected, and so the test suite can exercise this block with
           # `env REPO=... bash`, same as the bot-lane block above.
           # test: begin fleet-workflow
-          if [ "$REPO" = "ai-hero/wayfare-skills" ] && grep -qxF ".github/workflows/auto-approve.yaml" changed_files.txt; then
+          if [ "$REPO" = "ai-hero/wayfare-skills" ] && { grep -qxF ".github/workflows/auto-approve.yaml" changed_files.txt || grep -qxF ".github/workflows/auto-approve.yaml" previous_files.txt; }; then
             echo "fleet_workflow=true" >> "$GITHUB_OUTPUT"
           else
             echo "fleet_workflow=false" >> "$GITHUB_OUTPUT"
@@ -925,15 +930,18 @@ jobs:
           # full file bundle can be larger than argv would normally allow.
           #
           # The gatekeeper instructions live in `system`; everything the PR
-          # author controls (title, description, diff, full file contents,
-          # repo tree — the tree lists filenames the author chose) is
-          # wrapped in its own <tag>...</tag> block in `messages[0].content`
-          # and never mixed into the instruction text. Each of those raw
-          # values has its own closing tags stripped inside jq (never via a
-          # bash argv — --rawfile exists precisely because the diff and full
-          # file bundle can run past what argv holds), so a title or file
-          # body containing a literal `</diff>` cannot close its block early
-          # and start writing what looks like the next section.
+          # author controls — not just the diff and file contents, but also
+          # filenames (changed_files, omitted_files) and identifiers lifted
+          # from the description (unverified_claims) — is wrapped in its own
+          # <tag>...</tag> block in `messages[0].content` and never mixed
+          # into the instruction text. Every one of those ten values has its
+          # own closing tag stripped inside jq (never via a bash argv —
+          # --rawfile exists precisely because the diff and full file bundle
+          # can run past what argv holds), so a filename or file body
+          # containing a literal `</changed_files>` or `</diff>` cannot close
+          # its block early and start writing what looks like the next
+          # section. The strip is whitespace- and case-tolerant
+          # (`</ DIFF >`) for the same reason: the author chooses this text.
           jq -n \
             --arg model "$CLAUDE_MODEL" \
             --arg pr_title "$PR_TITLE" \
@@ -946,9 +954,14 @@ jobs:
             --rawfile diff pr_truncated.diff \
             --rawfile repo_tree repo_tree.txt \
             --rawfile full_files full_files.txt \
-            'def untag: gsub("</(pr_title|pr_description|diff|full_files|repo_tree)>"; "");
+            'def untag: gsub("</\\s*(pr_title|pr_description|ci_status|changed_files|omitted_files|unverified_claims|go_pkgs_without_tests|repo_tree|full_files|diff)\\s*>"; ""; "i");
             ($pr_title | untag) as $pr_title |
             ($pr_body | untag) as $pr_body |
+            ($ci_status | untag) as $ci_status |
+            ($changed_files | untag) as $changed_files |
+            ($omitted_files | untag) as $omitted_files |
+            ($unverified_claims | untag) as $unverified_claims |
+            ($go_pkgs_without_tests | untag) as $go_pkgs_without_tests |
             ($diff | untag) as $diff |
             ($full_files | untag) as $full_files |
             ($repo_tree | untag) as $repo_tree |

@@ -278,9 +278,10 @@ check "bot-lane: fetch argv carries no --jq/--arg" \
   "$(lane "$BOT_PR" "$(signed aaa 'dependabot[bot]')" >/dev/null; cat "$WORK/gh_argv")"
 
 # --- fleet-workflow ----------------------------------------------------------
-# REPO CHANGED_FILES -> the fleet_workflow output value
+# REPO CHANGED_FILES [PREVIOUS_FILES] -> the fleet_workflow output value
 fw() {
   printf '%b' "$2" > "$WORK/changed_files.txt"
+  printf '%b' "${3:-}" > "$WORK/previous_files.txt"
   : > "$WORK/out"
   ( cd "$WORK" && REPO="$1" GITHUB_OUTPUT="$WORK/out" bash -e "$WORK/fleet-workflow.sh" ) >/dev/null 2>&1
   sed -n 's/^fleet_workflow=//p' "$WORK/out"
@@ -298,6 +299,12 @@ check "fleet-workflow: consumer repo, file changed -> false" "false" \
 # different file, not the one that ships fleet-wide from this repo's root.
 check "fleet-workflow: nested path is not the fleet file -> false" "false" \
   "$(fw "ai-hero/wayfare-skills" 'apps/foo/.github/workflows/auto-approve.yaml\n')"
+# A rename reports the OLD path only in previous_filename; .filename is the
+# NEW path, which never mentions auto-approve.yaml at all.
+check "fleet-workflow: this repo, renamed away -> true" "true" \
+  "$(fw "ai-hero/wayfare-skills" 'assets/renamed.yaml\nfoo.go\n' '.github/workflows/auto-approve.yaml\n')"
+check "fleet-workflow: consumer repo, same rename -> false" "false" \
+  "$(fw "some-org/consumer" 'assets/renamed.yaml\n' '.github/workflows/auto-approve.yaml\n')"
 
 # --- ci-decision ------------------------------------------------------------
 ci() { # CHECKS_TSV HAS_WORKFLOWS -> "passed|first line of ci_status"
