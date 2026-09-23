@@ -1788,7 +1788,7 @@ hero_ready_items() (
         parent=$(hero_norm_id "$(hero_item_field "$f" parent)")
         case "$open_goals" in
           *" ${parent:-__none__} "*) ;;
-          *) echo "hero_ready_items: $f is $state and no open goal has it as a member; wayfare-sync-plan groups it into a goal" >&2 ;;
+          *) echo "hero_ready_items: $f is $state and no open goal has it as a member; the next goal gate it fits adopts it, else wayfare-sync-plan groups it" >&2 ;;
         esac ;;
     esac
 
@@ -1917,6 +1917,81 @@ EOF
       echo "blocked $f — $title${missing:+ [missing dep:$missing]}${committed:+ [committed dep:$committed]}"
     fi
   done
+)
+
+# Tasks no open goal holds that `wayfare-start-goal`'s gate may adopt into
+# GOAL_ID (references/goals.md, *Adopting ungrouped work*): `ready` ones, and
+# `accepted` ones the goal would plan itself. Lines are `ID STATUS` in id order;
+# each task skipped goes to stderr with why. Whether a candidate fits the goal's
+# outcome is the gate's judgment; everything checkable is checked here.
+#
+# A task with no `source` paths is skipped, not offered: the forbidden-path
+# guard cannot run on it, and reading that as "touches nothing" lets exactly
+# the undeclared tasks through. A dep must be done, a member of GOAL_ID, or
+# itself a candidate; if the gate declines that candidate, it must decline
+# this one too. A bot's dependency PR is carried by advancing.md, never built
+# on a goal branch.
+hero_goal_candidates() ( # GOAL_ID [STORE]
+  local goal store f id state parent open_goals paths p bad dep dstate pool members out
+  [ -n "$1" ] || { echo "hero_goal_candidates: empty GOAL_ID" >&2; return 2; }
+  goal=$(hero_norm_id "$1")
+  store="${2:-$(hero_work_store)}" || return 1
+  cd "$store/items" 2>/dev/null || { echo "hero_goal_candidates: no item directory at $store/items" >&2; return 1; }
+  setopt localoptions nullglob 2>/dev/null || true
+  open_goals=" "
+  for f in *.md; do
+    [ "$(hero_item_type "$f")" = goal ] || continue
+    case "$(hero_item_status "$f")" in
+      accepted|active) open_goals="$open_goals$(hero_norm_id "$(hero_item_field "$f" id)") " ;;
+    esac
+  done
+  members=" $(hero_goal_members "$goal" "$store" | tr '\n' ' ')"
+
+  # First pass: every ungrouped, unguarded task at accepted or ready. The dep
+  # check needs the whole pool, so it runs second.
+  pool=" "; out=
+  for f in *.md; do
+    [ "$(hero_item_type "$f")" = task ] || continue
+    state=$(hero_item_status "$f")
+    case "$state" in accepted|ready) ;; *) continue ;; esac
+    [ -z "$(hero_item_list_field "$f" awaiting)" ] || continue
+    parent=$(hero_norm_id "$(hero_item_field "$f" parent)")
+    case "$open_goals" in *" ${parent:-__none__} "*) continue ;; esac
+    if [ -n "$(hero_item_field "$f" bot)" ]; then
+      echo "hero_goal_candidates: $f skipped: a bot's PR, carried on its own" >&2; continue
+    fi
+    paths=$(hero_item_list_field "$f" source)
+    if [ -z "$paths" ]; then
+      echo "hero_goal_candidates: $f skipped: no source paths to check" >&2; continue
+    fi
+    bad=
+    for p in $paths; do hero_path_forbidden "$p" && bad="$bad $p"; done
+    if [ -n "$bad" ]; then
+      echo "hero_goal_candidates: $f skipped: touches$bad, which needs its own goal" >&2; continue
+    fi
+    id=$(hero_norm_id "$(hero_item_field "$f" id)")
+    pool="$pool$id "
+    out="$out$id $state $f
+"
+  done
+
+  printf '%s' "$out" | while read -r id state f; do
+    [ -n "$id" ] || continue
+    bad=
+    for dep in $(hero_item_deps "$f"); do
+      dep=$(hero_norm_id "$dep")
+      case "$members$pool" in *" $dep "*) continue ;; esac
+      dstate=
+      for p in *.md; do
+        [ "$(hero_norm_id "$(hero_item_field "$p" id)")" = "$dep" ] && { dstate=$(hero_item_status "$p"); break; }
+      done
+      [ "$dstate" = "done" ] || bad="$bad $dep"
+    done
+    if [ -n "$bad" ]; then
+      echo "hero_goal_candidates: $f skipped: depends on$bad, not done and not in this goal" >&2; continue
+    fi
+    printf '%s %s\n' "$id" "$state"
+  done | sort -n -k1,1
 )
 
 # ---------- branch naming ---------------------------------------------------

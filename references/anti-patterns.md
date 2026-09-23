@@ -61,7 +61,8 @@ The failures this skill exists to prevent, each one observed.
 | Reading an undeclared `source` as an unlimited one | The path check would vanish on exactly the items whose scope nobody wrote down. Absent paths are not admissible. |
 | Reading `budget` as one PR per task | It is a PR allowance. An honest split, an admitted item, or a fix commit each spend one, and going over the expectation is ordinary. |
 | Treating `budget` as a gate | It is an estimate. Padding it to avoid stopping is how the number stops meaning anything. Go over, and say so. |
-| Raising `budget_max` from inside a turn | That is the number a person authorized at the gate. Only `next` and a person may move it. |
+| Raising `budget_max` without a `## Log` line | The checkpoint is soft only because every raise is written down. An unlogged raise looks like a hand-edit, and a goal can run past its plan with nothing showing it. |
+| Raising `budget_max` to open a second PR | A raise carries on in the PR already being built. A remainder that needs a second PR is `stop: budget`: the person saw no plan for that merge. |
 | Opening a PR per task under a goal | One goal is one branch and one PR. Per-task PRs pay for N reviews, N auto-approves and N merges to ship one outcome. |
 | Pushing before the branch passes locally | The local run is what catches two tasks that pass alone and fail together. A push before it spends CI to learn what a test run already knew. |
 | Squashing the tasks into one commit | The commits are how a reviewer sees each story land. One PR, but not one blob. |

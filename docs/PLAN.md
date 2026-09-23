@@ -456,14 +456,15 @@ Re-read every turn. The defaults are always on; add to them per goal.
 
 - any build, test, or auto-approve failure
 - a human comment on an open PR
-- `budget_max` reached
+- `budget_max` reached and the rest would need a second PR (within one PR,
+  the turn raises it and logs the raise instead)
 - a premise of the next task no longer holds
 - a gate this goal was not granted
 ```
 
 A goal also carries `budget` (commits expected — an expectation, not a gate),
-`budget_max` (the one hard line; the number a person authorized, which a turn
-never moves), `commits` (SHA and the task id it served, appended as each is
+`budget_max` (the checkpoint: a turn that reaches it raises it and logs the
+raise when the rest ships in the same PR, and stops otherwise), `commits` (SHA and the task id it served, appended as each is
 made) and `branch`.
 
 ### Membership is one edge, in one direction
@@ -485,7 +486,9 @@ it. A task carved out of task 9 is a sibling of 9, not a member.
 
 Freezing an active goal's set is therefore a rule about writing `parent`, not
 a field to guard: once a goal is `active`, nothing sets `parent` to it except
-an admission the goal's own turn makes.
+an admission the goal's own turn makes, or an adoption at its own gate, where
+a person re-authorizes the grown set (`references/goals.md`, *Adopting
+ungrouped work*).
 
 ## Anchors and staleness
 

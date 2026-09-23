@@ -247,8 +247,9 @@ A gate the goal was not granted rests the goal at its PR and ends the loop with
 become a new goal: if it serves a line of this goal's Definition of Done it is
 **admitted** into the goal (its `parent` is set), planned and built in the same run under
 `absorb`. `budget` is what the goal is expected to take in commits, not a gate:
-going over is ordinary and the report says so, and `budget_max` is the hard
-line a person authorized. A goal ships a second PR only when what is left is a
+going over is ordinary and the report says so, and `budget_max` is a
+checkpoint: the turn raises it with a `## Log` line and builds on in the same
+PR, or stops when the rest would need another. A goal ships a second PR only when what is left is a
 different changeset from what is already on the branch, never to get a diff
 under some line count: a PR is as big as its work, and the commits are what
 make it reviewable.

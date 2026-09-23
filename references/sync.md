@@ -621,17 +621,19 @@ follows):
   of the default branch even when the goal shipped perfectly, and a check
   built on ancestry reports every task of every completed goal and offers
   to re-open finished work. A live `active` goal is likewise not a defect:
-  its tasks are committed and unmerged by design until its step 7. Every admission opens a dated
-  entry with a fixed prefix (*Admitting discovered work*), so a member set that
-  grew without one is a hand-edit under an authorization, reported and never
-  silently adopted. `budget` is not checked this way: it is an expectation
-  nothing raises, so a commit count above it is information, not a defect.
+  its tasks are committed and unmerged by design until its step 7. Every admission and every
+  adoption opens a dated entry with a fixed prefix, `admitted N (from M)` or
+  `adopted N (ungrouped, at gate)` (*Admitting discovered work*, *Adopting
+  ungrouped work*), so a member set that grew without one is a hand-edit under
+  an authorization, reported and never silently accepted. `budget` is not
+  checked this way: it is an expectation, raised by admissions and adoptions
+  and by nothing else, so a commit count above it is information, not a defect.
   **This is an integrity check against hand-edits, and nothing more**: a
   turn that admits an item writes both the `parent` and its log line, so
   an admission the turn should never have made is perfectly accounted for and
   looks identical here. What guards that is the path scope and the never-admissible
   list (*Admitting discovered work*), the gate re-display (*Starting a goal*,
-  step 2), and `budget_max`, not this listing. A goal the check does
+  step 3), and `budget_max`, not this listing. A goal the check does
   flag cannot be repaired by `sync`, because only an out-of-band `done` may leave an
   `active` goal, so report it with its one exit: the user
   re-authorizes, which drops the goal to `accepted`, lets the next `sync` re-cut
@@ -833,11 +835,13 @@ So the pass runs across the roadmap:
    - **`active` goals are frozen, and `sync` never re-cuts one.** Their
      member set and `## Permissions` were shown at `next`'s gate and
      authorized as a set; changing either from outside changes what was
-     authorized. Two edits an active goal takes, neither of them sync's: a
+     authorized. Three edits an active goal takes, none of them sync's: a
      dropped task that went `done` out-of-band (that shrinks what was
-     authorized, never grows it), and an **admission** written by the goal's
-     own turn (*Admitting discovered work*). The sync treats an admitted item as
-     covered, because its `parent` is set, and never proposes a goal for it.
+     authorized, never grows it), an **admission** written by the goal's
+     own turn (*Admitting discovered work*), and an **adoption** written at
+     its gate when a person re-authorizes (*Adopting ungrouped work*). The
+     sync treats an admitted or adopted item as covered, because its `parent`
+     is set, and never proposes a goal for it.
      Everything else that belongs to an active goal's outcome is a
      **follow-up goal** with `depends_on` the active one, and a comment on
      the active goal points at it. Before writing one, check it is not
