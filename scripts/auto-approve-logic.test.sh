@@ -51,7 +51,7 @@ run_block() { # NAME [env assignments...] -> runs in $WORK under bash -e
   ( cd "$WORK" && env "$@" bash -e "$WORK/$name.sh" )
 }
 
-for name in classify diff-filter go-pkgs claims ci-decision verdict-parse bot-lane submit-verdict crash-notice prior-review; do
+for name in classify diff-filter go-pkgs claims ci-decision verdict-parse bot-lane submit-verdict crash-notice prior-review tree-guard contents-fetch threads-paginate; do
   extract "$name" > "$WORK/$name.sh"
   check "extract: $name non-empty" "yes" "$([[ -s "$WORK/$name.sh" ]] && echo yes || echo no)"
   check "extract: $name parses" "0" "$(bash -n "$WORK/$name.sh" 2>/dev/null; echo $?)"
@@ -286,17 +286,17 @@ ci() { # CHECKS_TSV HAS_WORKFLOWS -> "passed|first line of ci_status"
   # in the status text is three of them.
   printf '%s|%s' "$(sed -n 's/^passed=//p' "$WORK/out")" "$(head -1 "$WORK/ci_status.txt")"
 }
-check "ci: all success" "true|All 2 check(s) on abc123 passed." "$(ci 'Build\tcompleted\tsuccess\nlint\tcompleted\tsuccess\n' 1)"
-check "ci: skipped and neutral pass" "true|All 2 check(s) on abc123 passed." "$(ci 'Build\tcompleted\tskipped\nlint\tcompleted\tneutral\n' 1)"
-check "ci: one failure" "false|Failing checks on abc123 — fix them before requesting auto-approve." "$(ci 'Build\tcompleted\tsuccess\nTrivy\tcompleted\tfailure\n' 1)"
-check "ci: failure wins over pending" "false|Failing checks on abc123 — fix them before requesting auto-approve." "$(ci 'Deploy\tqueued\t\nTrivy\tcompleted\tfailure\n' 1)"
-check "ci: pending" "false|Checks still running on abc123 — wait for them to finish, then re-run \`@auto-approve\`." "$(ci 'Build\tin_progress\t\n' 1)"
-check "ci: stale is pending, not a pass" "false|Checks still running on abc123 — wait for them to finish, then re-run \`@auto-approve\`." "$(ci 'Build\tcompleted\tstale\n' 1)"
-check "ci: legacy status error fails" "false|Failing checks on abc123 — fix them before requesting auto-approve." "$(ci 'scout\tcompleted\terror\n' 1)"
-check "ci: legacy status pending" "false|Checks still running on abc123 — wait for them to finish, then re-run \`@auto-approve\`." "$(ci 'scout\tin_progress\tpending\n' 1)"
-check "ci: no checks but repo has workflows -> pending" "false|No checks registered on abc123 yet, but the repo has workflows — wait for CI to start, then re-run \`@auto-approve\`." "$(ci '' 1)"
-check "ci: no checks and no workflows -> skip" "true|No CI in this repo (no workflows, no checks on abc123)." "$(ci '' 0)"
-check "ci: check name with spaces round-trips" "false|Failing checks on abc123 — fix them before requesting auto-approve." "$(ci 'Auto Approve / build image\tcompleted\ttimed_out\n' 1)"
+check "ci: all success" "true|All 2 check(s) on abc123 passed." "$(ci 'Build\tcompleted\tsuccess\nlint\tcompleted\tsuccess\n' true)"
+check "ci: skipped and neutral pass" "true|All 2 check(s) on abc123 passed." "$(ci 'Build\tcompleted\tskipped\nlint\tcompleted\tneutral\n' true)"
+check "ci: one failure" "false|Failing checks on abc123 — fix them before requesting auto-approve." "$(ci 'Build\tcompleted\tsuccess\nTrivy\tcompleted\tfailure\n' true)"
+check "ci: failure wins over pending" "false|Failing checks on abc123 — fix them before requesting auto-approve." "$(ci 'Deploy\tqueued\t\nTrivy\tcompleted\tfailure\n' true)"
+check "ci: pending" "false|Checks still running on abc123 — wait for them to finish, then re-run \`@auto-approve\`." "$(ci 'Build\tin_progress\t\n' true)"
+check "ci: stale is pending, not a pass" "false|Checks still running on abc123 — wait for them to finish, then re-run \`@auto-approve\`." "$(ci 'Build\tcompleted\tstale\n' true)"
+check "ci: legacy status error fails" "false|Failing checks on abc123 — fix them before requesting auto-approve." "$(ci 'scout\tcompleted\terror\n' true)"
+check "ci: legacy status pending" "false|Checks still running on abc123 — wait for them to finish, then re-run \`@auto-approve\`." "$(ci 'scout\tin_progress\tpending\n' true)"
+check "ci: no checks but repo has workflows -> pending" "false|No checks registered on abc123 yet, but the repo has workflows — wait for CI to start, then re-run \`@auto-approve\`." "$(ci '' true)"
+check "ci: no checks and no workflows -> skip" "true|No CI in this repo (no workflows, no checks on abc123)." "$(ci '' false)"
+check "ci: check name with spaces round-trips" "false|Failing checks on abc123 — fix them before requesting auto-approve." "$(ci 'Auto Approve / build image\tcompleted\ttimed_out\n' true)"
 
 # --- verdict-parse ----------------------------------------------------------
 # The block assigns VERDICT_TOKEN; source it in a subshell to read it.
@@ -541,6 +541,127 @@ check "prior-review: the author's own review does not bootstrap it" "false" \
 
 check "prior-review: a past auto-approve run does not bootstrap it" "false" \
   "$(gate_passed_of '[]' '[{"user":{"login":"github-actions[bot]"},"state":"APPROVED"}]')"
+
+# --- tree-guard ---------------------------------------------------------
+# The tree fetch used to pipe straight into `head -c`, so a `gh api`
+# failure under `bash -e` (no pipefail) left an empty repo_tree.txt and the
+# step kept going; the CI gate then saw has_workflows=0 and, absent a
+# registered check-run yet, passed with "No CI in this repo". `gh` is
+# stubbed so both the fetch failure and a truncated response are under
+# test, not just the happy path.
+tree_guard() { # TREE_JSON [GH_RC] -> "rc|has_workflows|lane_error_present"
+  printf '%s' "$1" > "$WORK/tree_stub.json"
+  mkdir -p "$WORK/bin"
+  { echo '#!/usr/bin/env bash'
+    echo "cat $WORK/tree_stub.json"
+    echo "exit ${2:-0}"
+  } > "$WORK/bin/gh"
+  chmod +x "$WORK/bin/gh"
+  : > "$WORK/out"; rm -f "$WORK/lane_error.txt"
+  ( cd "$WORK" && PATH="$WORK/bin:$PATH" REPO=o/r HEAD_SHA=abc123 \
+    GITHUB_OUTPUT="$WORK/out" bash -e "$WORK/tree-guard.sh" ) >/dev/null 2>&1
+  local rc=$?
+  printf '%s|%s|%s' "$rc" "$(sed -n 's/^has_workflows=//p' "$WORK/out")" \
+    "$([[ -s "$WORK/lane_error.txt" ]] && echo yes || echo no)"
+}
+TREE_WITH_WF='{"tree":[{"path":".github","type":"tree"},{"path":".github/workflows","type":"tree"},{"path":"README.md","type":"blob"}],"truncated":false}'
+TREE_NO_WF='{"tree":[{"path":"README.md","type":"blob"}],"truncated":false}'
+TREE_TRUNCATED='{"tree":[{"path":"README.md","type":"blob"}],"truncated":true}'
+
+check "tree-guard: a failed fetch fails closed with a crash notice, not a pass" "1||yes" \
+  "$(tree_guard '' 1)"
+check "tree-guard: workflows dir present -> has_workflows=true" "0|true|no" \
+  "$(tree_guard "$TREE_WITH_WF")"
+check "tree-guard: no workflows dir -> has_workflows=false" "0|false|no" \
+  "$(tree_guard "$TREE_NO_WF")"
+check "tree-guard: a truncated tree fails closed rather than trusting an absence" "1||yes" \
+  "$(tree_guard "$TREE_TRUNCATED")"
+
+# --- contents-fetch -------------------------------------------------------
+# Percent-encoding of the changed-file path, and the 404-vs-unreadable
+# classification, exercised through the real fetch loop with `gh` stubbed:
+# the stub answers the status probe (`-i`) and the raw-content fetch from
+# env vars, and records every argv it was called with so the exact URL
+# gh received is under test, not just the resulting file content.
+contents_case() { # F STATUS HTTP_STATUS [BODY] -> "unreadable|last-line-of-full_files.txt"
+  printf '%s\t%s\t1\t0\n' "$1" "$2" > "$WORK/files.tsv"
+  mkdir -p "$WORK/bin"
+  { echo '#!/usr/bin/env bash'
+    echo "printf '%s\\n' \"\$*\" >> $WORK/gh_argv"
+    echo 'for a in "$@"; do if [ "$a" = "-i" ]; then printf "HTTP/2 %s\n\n" "$STUB_HTTP_STATUS"; exit 0; fi; done'
+    echo 'printf "%s" "$STUB_BODY"'
+  } > "$WORK/bin/gh"
+  chmod +x "$WORK/bin/gh"
+  : > "$WORK/gh_argv"
+  ( cd "$WORK" && PATH="$WORK/bin:$PATH" HEAD_SHA=abc123 REPO=o/r \
+    STUB_HTTP_STATUS="$3" STUB_BODY="${4:-}" \
+    bash -e -c '. ./classify.sh; . ./contents-fetch.sh; printf "%s|%s" "$UNREADABLE" "$(tail -1 full_files.txt)"' )
+}
+
+check "contents-fetch: a space/#/? path is percent-encoded per segment" \
+  "yes" \
+  "$(contents_case 'a b/c#d?.sh' modified 200 'x' >/dev/null; \
+     grep -qF '/repos/o/r/contents/a%20b/c%23d%3F.sh?ref=abc123' "$WORK/gh_argv" && echo yes || echo no)"
+check "contents-fetch: 200 status probe fetches and stores the content" "0|x" \
+  "$(contents_case src/app.go modified 200 x)"
+check "contents-fetch: 404 on a modified file counts as unreadable, not deleted" \
+  "1|(file unreadable — HTTP 404 on a modified file)" \
+  "$(contents_case src/app.go modified 404)"
+# A `removed` file never reaches the contents fetch at all (the loop
+# `continue`s on it before the URL is built), so "404" here never applies;
+# this guards that short-circuit stays in place now the fetch around it changed.
+check "contents-fetch: a removed file is reported deleted with no fetch at all" \
+  "0|(file deleted in this PR)" \
+  "$(contents_case src/app.go removed 404)"
+check "contents-fetch: a non-200/404 status is unreadable" "1|(file unreadable — HTTP 500)" \
+  "$(contents_case src/app.go modified 500)"
+
+# --- threads-paginate -------------------------------------------------------
+# The reviewThreads read was the one GraphQL call left on a single first(100)
+# page while every REST read in the file already paginates; a PR with an
+# unresolved thread past page 1 read as "all resolved". The fix hands
+# pagination to `gh api graphql --paginate --jq '....nodes[]'` instead of a
+# hand-rolled cursor loop, so `gh` is stubbed to print exactly what that
+# invocation prints: every node from every page, already jq-filtered, one
+# JSON object per line, in one call. A two-page fixture (the unresolved
+# thread only on the second) proves the merge under test picks it up.
+threads_stub() { # PAGE1_NODES_JSON PAGE2_NODES_JSON_OR_EMPTY [GH_RC]
+  mkdir -p "$WORK/bin"
+  { printf '%s' "$1" | jq -c '.[]'
+    [ -n "${2:-}" ] && printf '%s' "$2" | jq -c '.[]'
+  } > "$WORK/threads_stub_out.jsonl"
+  : > "$WORK/threads_gh_argv"
+  { echo '#!/usr/bin/env bash'
+    echo "printf '%s\\n' \"\$*\" >> '$WORK/threads_gh_argv'"
+    echo "cat '$WORK/threads_stub_out.jsonl'"
+    echo "exit ${3:-0}"
+  } > "$WORK/bin/gh"
+  chmod +x "$WORK/bin/gh"
+}
+threads_gate() { # -> "passed|first-line-of-threads.md"
+  : > "$WORK/out"
+  ( cd "$WORK" && PATH="$WORK/bin:$PATH" OWNER=o REPO=r PR_NUMBER=1 \
+    GITHUB_OUTPUT="$WORK/out" bash -e "$WORK/threads-paginate.sh" ) >/dev/null 2>&1
+  printf '%s|%s' "$(sed -n 's/^passed=//p' "$WORK/out" | tail -1)" "$(head -1 "$WORK/threads.md")"
+}
+RESOLVED='[{"isResolved":true,"isOutdated":false,"comments":{"nodes":[{"path":"a.go","author":{"login":"r"},"body":"ok"}]}}]'
+UNRESOLVED_P2='[{"isResolved":false,"isOutdated":false,"comments":{"nodes":[{"path":"b.go","author":{"login":"r"},"body":"fix this"}]}}]'
+
+check "threads-paginate: single page, all resolved -> passes" "true|## Unresolved Comments: ✅" \
+  "$(threads_stub "$RESOLVED" '' && threads_gate)"
+check "threads-paginate: unresolved thread from page 2 fails the gate" "false|## Unresolved Comments: ❌" \
+  "$(threads_stub "$RESOLVED" "$UNRESOLVED_P2" && threads_gate)"
+check "threads-paginate: a failed fetch fails closed, not open" "false|## Unresolved Comments: ❌" \
+  "$(threads_stub "$RESOLVED" "$UNRESOLVED_P2" 1 && threads_gate)"
+# The stub cannot itself prove gh really walks every page — that's gh's
+# documented behavior, not this script's — so pin the argv the same way
+# bot-lane pins its fetch: `--paginate` and the jq filter must both still be
+# there, or the merge above is silently testing single-page output again.
+check "threads-paginate: fetch argv still carries --paginate and the node filter" "yes" \
+  "$(threads_stub "$RESOLVED" '' >/dev/null; threads_gate >/dev/null; \
+     grep -q -- '--paginate' "$WORK/threads_gh_argv" \
+       && grep -qF '.data.repository.pullRequest.reviewThreads.nodes[]' "$WORK/threads_gh_argv" \
+       && echo yes || echo no)"
 
 echo ""
 echo "auto-approve-logic.test.sh: $PASS passed, $FAIL failed"

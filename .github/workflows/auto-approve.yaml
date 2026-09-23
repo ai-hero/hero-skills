@@ -236,13 +236,40 @@ jobs:
 
           # Recursive repo file tree at HEAD. It lets the verifier confirm
           # claims about files that exist outside the diff (tests,
-          # migrations, indexes, etc.) without re-fetching them all.
-          # Capped like the diff and the bundle: a monorepo tree with no cap
-          # pushes the request over the context limit and every run fails
-          # closed with "no usable response".
-          gh api "/repos/${{ github.repository }}/git/trees/$HEAD_SHA?recursive=1" \
-            --jq '.tree[] | select(.type == "blob") | .path' \
+          # migrations, indexes, etc.) without re-fetching them all, and the
+          # CI gate below reads has_workflows from it rather than grepping
+          # the capped text.
+          #
+          # Fails CLOSED, unlike the fetch this replaced: that one piped
+          # straight into `head -c`, so a `gh api` failure under `bash -e`
+          # with no pipefail left an EMPTY repo_tree.txt and the step kept
+          # going. The CI gate then saw HAS_WORKFLOWS=0 and, if no check-run
+          # had registered yet, took the "no CI in this repo" branch and
+          # passed — the exact fail-open the zero-checks-but-workflows-exist
+          # branch exists to prevent.
+          # test: begin tree-guard
+          if ! gh api "/repos/$REPO/git/trees/$HEAD_SHA?recursive=1" > tree.json; then
+            printf '%s\n' "could not read the repo tree at $HEAD_SHA, so the CI and missing-file checks cannot run." > lane_error.txt
+            echo "::error::$(cat lane_error.txt) Re-run \`@auto-approve\`."
+            exit 1
+          fi
+          # A truncated tree (GitHub caps the recursive listing at 100000
+          # entries) is silently incomplete rather than failed; the model's
+          # missing-file check would then trust an absence that is really a
+          # cutoff, so fail closed on it the same as a fetch error.
+          if [ "$(jq -r '.truncated // false' tree.json)" = true ]; then
+            printf '%s\n' "the repo tree at $HEAD_SHA was truncated by the API, so the missing-file check cannot trust an absence." > lane_error.txt
+            echo "::error::$(cat lane_error.txt) Re-run \`@auto-approve\`."
+            exit 1
+          fi
+          jq -r '.tree[] | select(.type == "blob") | .path' tree.json \
             | head -c 300000 > repo_tree.txt
+          if jq -e '.tree[] | select(.path == ".github/workflows")' tree.json > /dev/null; then
+            echo "has_workflows=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_workflows=false" >> "$GITHUB_OUTPUT"
+          fi
+          # test: end tree-guard
 
           # Which changed files the model actually reads. Lockfiles, generated
           # code and binaries were the bulk of the bytes sent and never moved a
@@ -301,6 +328,7 @@ jobs:
           # omitted.tsv columns: path, class, status, +A/-D. One record per
           # line, read by the diff filter (column 1), the prompt, and the
           # Go-package heuristic.
+          # test: begin contents-fetch
           : > full_files.txt
           : > omitted.tsv
           UNREADABLE=0
@@ -317,11 +345,19 @@ jobs:
               printf '(file deleted in this PR)\n' >> full_files.txt
               continue
             fi
+            # Percent-encode each path segment before it goes into the URL.
+            # An unencoded `#` truncates the query string as a fragment and
+            # silently fetches the default branch instead of $HEAD_SHA; an
+            # unencoded `?` duplicates the `ref` parameter; a raw space or
+            # `%` breaks the URL outright. Segment-wise (not the whole path
+            # joined) so the `/` separators stay literal and are never
+            # themselves encoded.
+            ENC=$(jq -rn --arg p "$f" '$p | split("/") | map(@uri) | join("/")')
             # Capture status separately so 404 (deleted) is reported as
             # such, while other failures (rate limit, auth, 5xx) are
             # surfaced rather than masquerading as "deleted".
             STATUS=$(gh api -H "Accept: application/vnd.github.raw" \
-              "/repos/${{ github.repository }}/contents/$f?ref=$HEAD_SHA" \
+              "/repos/$REPO/contents/$ENC?ref=$HEAD_SHA" \
               -i 2>>full_files_err.log \
               | awk 'NR==1 {print $2; exit}')
             case "$STATUS" in
@@ -331,12 +367,24 @@ jobs:
                 # back to an "unreadable" note so one flaky file can't kill the
                 # whole run before a verdict.
                 gh api -H "Accept: application/vnd.github.raw" \
-                  "/repos/${{ github.repository }}/contents/$f?ref=$HEAD_SHA" \
+                  "/repos/$REPO/contents/$ENC?ref=$HEAD_SHA" \
                   >> full_files.txt 2>>full_files_err.log \
                   || { printf '(file unreadable — content fetch failed after a 200 status probe)\n' >> full_files.txt; UNREADABLE=$((UNREADABLE + 1)); }
                 ;;
               404)
-                printf '(file deleted in this PR — 404)\n' >> full_files.txt
+                # `status` here is files.tsv's changed-file status
+                # (added/modified/removed), not the HTTP status just
+                # matched. A 404 on anything but `removed` is a file the
+                # diff says still exists — most often the unencoded-path
+                # misfetch this replaced — so it counts as unreadable
+                # instead of being reported as deleted, and the model is
+                # never asked to approve a file it never saw.
+                if [ "$status" = "removed" ]; then
+                  printf '(file deleted in this PR — 404)\n' >> full_files.txt
+                else
+                  printf '(file unreadable — HTTP 404 on a %s file)\n' "$status" >> full_files.txt
+                  UNREADABLE=$((UNREADABLE + 1))
+                fi
                 ;;
               *)
                 printf '(file unreadable — HTTP %s)\n' "${STATUS:-error}" >> full_files.txt
@@ -347,6 +395,7 @@ jobs:
             # secondary rate limits on PRs that touch many files.
             sleep 0.5
           done < files.tsv
+          # test: end contents-fetch
 
           # Unreadable is fail-CLOSED downstream. A secondary rate limit on a
           # many-file PR made every file "unreadable" while the diff was still
@@ -585,69 +634,98 @@ jobs:
           OWNER=$(echo "${{ github.repository }}" | cut -d/ -f1)
           REPO=$(echo "${{ github.repository }}" | cut -d/ -f2)
 
-          gh api graphql \
-            -f query='
-              query($owner: String!, $repo: String!, $pr: Int!) {
-                repository(owner: $owner, name: $repo) {
-                  pullRequest(number: $pr) {
-                    reviewThreads(first: 100) {
-                      nodes {
-                        isResolved
-                        isOutdated
-                        comments(first: 1) {
-                          nodes { path author { login } body }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            ' \
-            -f owner="$OWNER" -f repo="$REPO" -F pr=$PR_NUMBER \
-            > threads.json
-
-          UNRESOLVED=$(jq -r '
-            [.data.repository.pullRequest.reviewThreads.nodes[]
-              | select(.isResolved == false)
-              | select(.isOutdated == false)
-            ] | length
-          ' threads.json)
-
-          echo "unresolved=$UNRESOLVED"
-
-          if [ "$UNRESOLVED" -eq 0 ]; then
-            echo "passed=true" >> "$GITHUB_OUTPUT"
-            {
-              echo "## Unresolved Comments: ✅"
-              echo "All review threads resolved."
-            } > threads.md
+          # test: begin threads-paginate
+          # GraphQL's reviewThreads connection pages at 100 per request, same
+          # as every REST read above; this was the one read left on a single
+          # first(100) page, so an unresolved thread past page 1 was invisible.
+          # `--paginate` already walks every REST read in this file; it does
+          # the same for GraphQL as long as the query accepts `$endCursor`
+          # and selects `pageInfo { hasNextPage endCursor }` (gh's own
+          # pagination convention, not this file's), which it now does. No
+          # page cap: none of the other `--paginate` calls in this file needs
+          # one either, because a stuck `hasNextPage` is gh's failure to
+          # detect, not this script's cursor bookkeeping to get wrong.
+          THREADS_ERROR=
+          if ! gh api graphql --paginate \
+               -f query='
+                 query($owner: String!, $repo: String!, $pr: Int!, $endCursor: String) {
+                   repository(owner: $owner, name: $repo) {
+                     pullRequest(number: $pr) {
+                       reviewThreads(first: 100, after: $endCursor) {
+                         nodes {
+                           isResolved
+                           isOutdated
+                           comments(first: 1) {
+                             nodes { path author { login } body }
+                           }
+                         }
+                         pageInfo { hasNextPage endCursor }
+                       }
+                     }
+                   }
+                 }
+               ' \
+               -f owner="$OWNER" -f repo="$REPO" -F pr=$PR_NUMBER \
+               --jq '.data.repository.pullRequest.reviewThreads.nodes[]' \
+               > threads_nodes.jsonl; then
+            THREADS_ERROR="could not read review threads."
           else
+            jq -s '{data:{repository:{pullRequest:{reviewThreads:{nodes: .}}}}}' threads_nodes.jsonl > threads.json
+          fi
+
+          if [ -n "$THREADS_ERROR" ]; then
             echo "passed=false" >> "$GITHUB_OUTPUT"
-            # The gsub is load-bearing, not cosmetic: a quoted reviewer comment
-            # must never contribute a line of its own, or a comment body
-            # containing "## Verdict" would be found by the verdict parser.
-            UNRESOLVED_LIST=$(jq -r '
+            {
+              echo "## Unresolved Comments: ❌"
+              echo "$THREADS_ERROR Re-run \`@auto-approve\`."
+            } > threads.md
+          fi
+          if [ -z "$THREADS_ERROR" ]; then
+            UNRESOLVED=$(jq -r '
               [.data.repository.pullRequest.reviewThreads.nodes[]
                 | select(.isResolved == false)
                 | select(.isOutdated == false)
-                | (.comments.nodes[0].path // "?") + " — @" +
-                  (.comments.nodes[0].author.login // "?") + ": " +
-                  ((.comments.nodes[0].body // "") | gsub("\n"; " ") | .[0:120])
-              ] | .[] | "- " + .
+              ] | length
             ' threads.json)
-            {
-              echo "## Unresolved Comments: ❌"
-              echo "$UNRESOLVED unresolved review thread(s). Address them and mark them resolved before requesting auto-approve."
-              echo ""
-              echo "$UNRESOLVED_LIST"
-            } > threads.md
+
+            echo "unresolved=$UNRESOLVED"
+
+            if [ "$UNRESOLVED" -eq 0 ]; then
+              echo "passed=true" >> "$GITHUB_OUTPUT"
+              {
+                echo "## Unresolved Comments: ✅"
+                echo "All review threads resolved."
+              } > threads.md
+            else
+              echo "passed=false" >> "$GITHUB_OUTPUT"
+              # The gsub is load-bearing, not cosmetic: a quoted reviewer comment
+              # must never contribute a line of its own, or a comment body
+              # containing "## Verdict" would be found by the verdict parser.
+              UNRESOLVED_LIST=$(jq -r '
+                [.data.repository.pullRequest.reviewThreads.nodes[]
+                  | select(.isResolved == false)
+                  | select(.isOutdated == false)
+                  | (.comments.nodes[0].path // "?") + " — @" +
+                    (.comments.nodes[0].author.login // "?") + ": " +
+                    ((.comments.nodes[0].body // "") | gsub("\n"; " ") | .[0:120])
+                ] | .[] | "- " + .
+              ' threads.json)
+              {
+                echo "## Unresolved Comments: ❌"
+                echo "$UNRESOLVED unresolved review thread(s). Address them and mark them resolved before requesting auto-approve."
+                echo ""
+                echo "$UNRESOLVED_LIST"
+              } > threads.md
+            fi
           fi
+          # test: end threads-paginate
 
       - name: Gate — CI green
         id: ci
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          HAS_WORKFLOWS: ${{ steps.pr.outputs.has_workflows }}
         run: |
           # CI already answers "do the tests pass"; the model was being asked
           # to guess it from the diff and never once said no. Read the
@@ -669,7 +747,12 @@ jobs:
           gh api "/repos/${{ github.repository }}/commits/$HEAD_SHA/status" \
             --jq '.statuses[] | [.context, (if .state == "pending" then "in_progress" else "completed" end), .state] | @tsv' \
             >> checks.tsv
-          HAS_WORKFLOWS=$(grep -c '^\.github/workflows/' repo_tree.txt || true)
+          # has_workflows comes from the "Get PR details" step's tree read
+          # (steps.pr.outputs.has_workflows, a boolean), not from grepping
+          # repo_tree.txt here: that text is capped at 300KB and a large
+          # monorepo can push `.github/workflows/` past the cut, which read
+          # as "no workflows" and skipped the zero-checks-but-workflows-exist
+          # branch below.
 
           # test: begin ci-decision
           # Deny-list on conclusion: `success`, `neutral` and `skipped` pass.
@@ -704,7 +787,7 @@ jobs:
               echo ""
               printf '%s\n' "$PENDING" | awk -F'\t' '{print "- " $1 " (" ($3 == "" ? $2 : $3) ")"}'
             } > ci.md
-          elif [ "$TOTAL" -eq 0 ] && [ "${HAS_WORKFLOWS:-0}" -gt 0 ]; then
+          elif [ "$TOTAL" -eq 0 ] && [ "${HAS_WORKFLOWS:-false}" = true ]; then
             echo "passed=false" >> "$GITHUB_OUTPUT"
             echo "No checks registered on $HEAD_SHA yet, but the repo has workflows — wait for CI to start, then re-run \`@auto-approve\`." > ci_status.txt
             { echo "## CI: ❌"; cat ci_status.txt; } > ci.md
@@ -718,7 +801,7 @@ jobs:
             { echo "## CI: ✅"; cat ci_status.txt; } > ci.md
           fi
           # test: end ci-decision
-          echo "checks=$TOTAL has_workflows=${HAS_WORKFLOWS:-0}"; cat ci_status.txt
+          echo "checks=$TOTAL has_workflows=${HAS_WORKFLOWS:-false}"; cat ci_status.txt
 
       - name: Short-circuit on gate failure
         id: gates
