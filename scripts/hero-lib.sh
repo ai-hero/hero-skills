@@ -11,14 +11,10 @@
 #
 # Usage from a skill:
 #
-#   HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
-#   # The toplevel fallback is accepted ONLY when this repo IS the plugin:
-#   # unqualified, it sources scripts/hero-lib.sh out of whatever repo the agent
-#   # is in, which during a review is the branch under review.
-#   [ -r "$HERO_LIB" ] || { HL_TOP=$(git rev-parse --show-toplevel 2>/dev/null); \
-#     [ -n "$HL_TOP" ] && [ -f "$HL_TOP/.claude-plugin/plugin.json" ] && HERO_LIB="$HL_TOP/scripts/hero-lib.sh"; }
+#   WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+#   HERO_LIB="$WAYFARE_ROOT/scripts/hero-lib.sh"
 #   # shellcheck source=/dev/null
-#   . "$HERO_LIB"
+#   . "$HERO_LIB" || { echo "wayfare: cannot load hero-lib.sh from $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 1; }
 #
 # Contract:
 #   - Values go to stdout. Human-readable notes go to stderr. A function that

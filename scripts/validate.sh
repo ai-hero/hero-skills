@@ -60,8 +60,9 @@ bold "1. Plugin Manifest"
 
 MANIFEST="$PLUGIN_ROOT/.claude-plugin/plugin.json"
 MANIFEST_REL=".claude-plugin/plugin.json"
-# Defaulted so section 2b can read them under `set -u` even when this
-# manifest is missing or invalid (section 1 already reports why).
+# Defaulted so section 2b can read them under `set -u`. Empty here means one
+# of three things: the manifest is missing, its JSON is invalid, or it parsed
+# fine but has no "version" key — section 1 above already reported which.
 NAME=""
 VERSION=""
 
@@ -147,11 +148,9 @@ CODEX_MANIFEST_REL=".codex-plugin/plugin.json"
 AGENTS_MANIFEST="$PLUGIN_ROOT/.agents/plugins/marketplace.json"
 AGENTS_MANIFEST_REL=".agents/plugins/marketplace.json"
 
-# CODEX_VERSION/AGENTS_VERSION are captured here, in the same branch that
-# already proved the file valid JSON, rather than re-running `jq empty`
-# below — a second validation pass is a second place to keep in sync with
-# the first.
 CODEX_VERSION=""
+CODEX_NAME=""
+CODEX_SKILLS=""
 if [[ ! -f "$CODEX_MANIFEST" ]]; then
   error "Missing Codex manifest" \
     "$CODEX_MANIFEST_REL" \
@@ -165,48 +164,73 @@ elif ! jq empty "$CODEX_MANIFEST" 2>/dev/null; then
 else
   pass "$CODEX_MANIFEST_REL is valid JSON"
   CODEX_VERSION=$(jq -r '.version // empty' "$CODEX_MANIFEST")
+  CODEX_NAME=$(jq -r '.name // empty' "$CODEX_MANIFEST")
+  CODEX_SKILLS=$(jq -r '.skills // empty' "$CODEX_MANIFEST")
 fi
 
-# .plugins[] is selected by name, not by position ([0]): a second plugin
-# entry added later, or a reorder, must not silently compare against the
-# wrong one.
-AGENTS_VERSION=""
-if [[ ! -f "$AGENTS_MANIFEST" ]]; then
-  error "Missing .agents manifest" \
-    "$AGENTS_MANIFEST_REL" \
-    "" \
-    "Create .agents/plugins/marketplace.json mirroring .claude-plugin/marketplace.json, plus \"skills\": \"./skills/\" on its plugin entry"
-elif ! jq empty "$AGENTS_MANIFEST" 2>/dev/null; then
-  error "Invalid JSON syntax" \
-    "$AGENTS_MANIFEST_REL" \
-    "" \
-    "Run: jq . $AGENTS_MANIFEST_REL to see the parse error, then fix the JSON"
-else
-  pass "$AGENTS_MANIFEST_REL is valid JSON"
-  AGENTS_VERSION=$(jq -r --arg name "$NAME" \
-    '.plugins[] | select(.name == $name) | .version // empty' "$AGENTS_MANIFEST")
+# name: all four manifests (this file, Codex's, and the .plugins[] entry each
+# marketplace-shaped manifest carries) must name the SAME plugin. version:
+# only .claude-plugin/plugin.json and .codex-plugin/plugin.json carry one —
+# neither marketplace file does, by design (the plugin's own manifests carry
+# version, marketplace entries just point at the plugin). skills path: both
+# plugin.json files must point at "./skills/".
+if [[ -n "$NAME" && -n "$CODEX_NAME" && "$NAME" != "$CODEX_NAME" ]]; then
+  error "Codex manifest name '$CODEX_NAME' disagrees with $MANIFEST_REL's '$NAME'" \
+    "$CODEX_MANIFEST_REL" "" "Set \"name\": \"$NAME\" in $CODEX_MANIFEST_REL"
+elif [[ -n "$CODEX_NAME" ]]; then
+  pass "$CODEX_MANIFEST_REL name agrees: $CODEX_NAME"
 fi
 
-# Every manifest is a separate install surface an agent reads independently;
-# nothing re-derives one from another. A version bump landed in only one of
-# them is invisible until two agents installing the same repo report two
-# different plugin versions, which is the failure this guard exists to catch
-# at commit time instead. $VERSION is section 1's already-validated
-# .claude-plugin/plugin.json version; empty here means section 1 already
-# reported why.
-if [[ -z "$VERSION" || -z "$CODEX_VERSION" || -z "$AGENTS_VERSION" ]]; then
-  error "One or more manifests are missing a version, so agreement cannot be checked" \
+if [[ -z "$VERSION" || -z "$CODEX_VERSION" ]]; then
+  error "One or both manifests are missing a version, so agreement cannot be checked" \
     "" \
     "" \
-    "Set \"version\" in $MANIFEST_REL and $CODEX_MANIFEST_REL, and .plugins[].version in $AGENTS_MANIFEST_REL"
-elif [[ "$VERSION" != "$CODEX_VERSION" ]] || [[ "$VERSION" != "$AGENTS_VERSION" ]]; then
-  error "Manifest versions disagree ($MANIFEST_REL=$VERSION, $CODEX_MANIFEST_REL=$CODEX_VERSION, $AGENTS_MANIFEST_REL=$AGENTS_VERSION)" \
+    "Set \"version\" in $MANIFEST_REL and $CODEX_MANIFEST_REL"
+elif [[ "$VERSION" != "$CODEX_VERSION" ]]; then
+  error "Manifest versions disagree ($MANIFEST_REL=$VERSION, $CODEX_MANIFEST_REL=$CODEX_VERSION)" \
     "" \
     "" \
-    "Bump every manifest to the same version — a second agent installing this repo must see one plugin version, not three"
+    "Bump both manifests to the same version — a second agent installing this repo must see one plugin version, not two"
 else
   pass "manifest versions agree: $VERSION"
 fi
+
+if [[ -n "$CODEX_SKILLS" && "$CODEX_SKILLS" != "./skills/" ]]; then
+  error "Codex manifest's \"skills\" is '$CODEX_SKILLS', not './skills/'" \
+    "$CODEX_MANIFEST_REL" "" "Set \"skills\": \"./skills/\" in $CODEX_MANIFEST_REL"
+fi
+CLAUDE_SKILLS=$(jq -r '.skills // empty' "$MANIFEST" 2>/dev/null)
+if [[ -n "$CLAUDE_SKILLS" && "$CLAUDE_SKILLS" != "./skills/" ]]; then
+  error "Plugin manifest's \"skills\" is '$CLAUDE_SKILLS', not './skills/'" \
+    "$MANIFEST_REL" "" "Set \"skills\": \"./skills/\" in $MANIFEST_REL"
+fi
+
+# `(.plugins // [])[]?` so a manifest whose .plugins is missing, null, or not
+# an array reports zero matching entries instead of aborting the whole
+# script under `set -e` on the first manifest that doesn't have one.
+check_plugins_entry() {  # $1=required(true/false) $2=label $3=file $4=rel_path
+  local required="$1" label="$2" file="$3" rel="$4"
+  if [[ ! -f "$file" ]]; then
+    [[ "$required" == true ]] && error "Missing $label" "$rel" "" \
+      "Create $rel with a .plugins[] entry named \"$NAME\""
+    return
+  fi
+  if ! jq empty "$file" 2>/dev/null; then
+    error "Invalid JSON syntax" "$rel" "" "Run: jq . $rel to see the parse error, then fix the JSON"
+    return
+  fi
+  local count
+  count=$(jq -r --arg name "$NAME" '[(.plugins // [])[]? | select(.name == $name)] | length' "$file")
+  case "$count" in
+    0) error "no .plugins entry named '$NAME' in $label" "$rel" "" \
+         "Add a .plugins[] entry with \"name\": \"$NAME\"" ;;
+    1) pass "$rel: .plugins entry named $NAME" ;;
+    *) error "more than one .plugins entry named '$NAME' in $label" "$rel" "" \
+         "Keep exactly one .plugins[] entry named \"$NAME\"" ;;
+  esac
+}
+check_plugins_entry false "the marketplace manifest" "$MARKETPLACE" "$MARKETPLACE_REL"
+check_plugins_entry true "the .agents manifest" "$AGENTS_MANIFEST" "$AGENTS_MANIFEST_REL"
 
 echo ""
 
@@ -392,59 +416,88 @@ else
 fi
 
 # ── WAYFARE_ROOT: script resolution has exactly one sanctioned line ────────
-# CLAUDE_PLUGIN_ROOT does not exist outside Claude Code (item 8,
-# .plans/items/008-skills-resolve-their-scripts-outside-claude-code.md).
+# CLAUDE_PLUGIN_ROOT does not exist outside Claude Code.
 # Every site that resolves the plugin root must use the identical
 # WAYFARE_ROOT line, so an agent that exports WAYFARE_ROOT itself
 # (references/loading.md's rule) reaches every script, not just the ones a
 # past edit remembered to route through it. A stray CLAUDE_PLUGIN_ROOT
 # default is invisible to that export.
-SANCTIONED_WAYFARE_ROOT_LINE='WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"'
+SANCTIONED_WAYFARE_ROOT_LINE='WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"'
 WAYFARE_ROOT_ERRORS=0
+WAYFARE_ROOT_FILES_SCANNED=0
 while IFS= read -r f; do
+  WAYFARE_ROOT_FILES_SCANNED=$((WAYFARE_ROOT_FILES_SCANNED + 1))
   # Scoped to fenced code, not prose: loading.md and check-preflight's own
   # Step 1 text NAME CLAUDE_PLUGIN_ROOT to explain WAYFARE_ROOT, and that
-  # explanation is the point, not a stray resolver to flag.
-  hits=$(awk '/^```/{infence=!infence; next} infence{print NR":"$0}' "$f" \
-    | grep 'CLAUDE_PLUGIN_ROOT' || true)
+  # explanation is the point, not a stray resolver to flag. The fence toggle
+  # allows leading whitespace and either ``` or ~~~, so an indented or ~~~
+  # fence still hides its prose from the scan.
+  hits=$(awk '
+    /^[[:space:]]*(```|~~~)/ { infence = !infence; next }
+    infence && (/CLAUDE_PLUGIN_ROOT/ || /plugins\/wayfare-skills\/scripts/ || /\.claude\/plugins\/wayfare-skills/) { print NR":"$0 }
+  ' "$f" || true)
   [ -z "$hits" ] && continue
   while IFS= read -r hit; do
     hit_line="${hit%%:*}"
     hit_text="${hit#*:}"
-    if [[ "$hit_text" != *"$SANCTIONED_WAYFARE_ROOT_LINE"* ]]; then
+    trimmed=$(printf '%s' "$hit_text" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    if [[ "$trimmed" != "$SANCTIONED_WAYFARE_ROOT_LINE" ]]; then
       WAYFARE_ROOT_ERRORS=1
-      error "CLAUDE_PLUGIN_ROOT outside the one sanctioned WAYFARE_ROOT line" \
+      error "CLAUDE_PLUGIN_ROOT or a hardcoded plugin path outside the one sanctioned WAYFARE_ROOT line" \
         "${f#"$PLUGIN_ROOT/"}" \
         "$hit_line" \
-        "Resolve the plugin root with: $SANCTIONED_WAYFARE_ROOT_LINE"
+        "Resolve the plugin root with exactly: $SANCTIONED_WAYFARE_ROOT_LINE"
     fi
   done <<< "$hits"
 done < <(find "$SKILLS_DIR" "$PLUGIN_ROOT/references" -type f -name '*.md' 2>/dev/null)
-[[ $WAYFARE_ROOT_ERRORS -eq 0 ]] && pass "every CLAUDE_PLUGIN_ROOT site uses the sanctioned WAYFARE_ROOT line"
+if [[ $WAYFARE_ROOT_FILES_SCANNED -eq 0 ]]; then
+  error "the WAYFARE_ROOT scan of skills/ and references/ found zero files" \
+    "" "" "Something broke the find above (paths moved?) — fix it before trusting this guard's PASS"
+elif [[ $WAYFARE_ROOT_ERRORS -eq 0 ]]; then
+  pass "every CLAUDE_PLUGIN_ROOT site in skills/ and references/ uses the sanctioned WAYFARE_ROOT line"
+fi
 
 # ── '../../' escapes only reach references/ or docs/ ───────────────────────
 # The spec's model is a self-contained skill; references/ and docs/ are the
 # one sanctioned exception, shared roots every manifest installs alongside
-# skills/ (item 8's Approach). A '../../' escape anywhere else reaches
+# skills/. A '../../' escape anywhere else reaches
 # outside the skill into a path with no install-layout guarantee.
 DOTDOT_ERRORS=0
+DOTDOT_FILES_SCANNED=0
 while IFS= read -r f; do
+  DOTDOT_FILES_SCANNED=$((DOTDOT_FILES_SCANNED + 1))
   hits=$(grep -noE '\.\./\.\./[A-Za-z0-9._/-]*' "$f" 2>/dev/null || true)
   [ -z "$hits" ] && continue
   while IFS= read -r hit; do
     hit_line="${hit%%:*}"
     hit_path="${hit#*:}"
     case "$hit_path" in
-      ../../references/*|../../docs/*) continue ;;
+      ../../references/*|../../docs/*)
+        # A prefix match is not enough: a further '..' segment after it
+        # (../../references/../scripts/x) walks right back out of the
+        # sanctioned exception, so it gets the same rejection as never
+        # having the prefix at all.
+        rest="${hit_path#../../}"
+        rest="${rest#*/}"
+        case "$rest" in
+          ../*|*/../*|..) ;;
+          *) continue ;;
+        esac
+        ;;
     esac
     DOTDOT_ERRORS=1
-    error "'../../' escape does not point into references/ or docs/" \
+    error "'../../' escape does not point cleanly into references/ or docs/" \
       "${f#"$PLUGIN_ROOT/"}" \
       "$hit_line" \
-      "Point it at ../../references/NAME or ../../docs/NAME, or bring the content inside the skill"
+      "Point it at ../../references/NAME or ../../docs/NAME with no further '..' segment, or bring the content inside the skill"
   done <<< "$hits"
 done < <(find "$SKILLS_DIR" -type f -name '*.md' 2>/dev/null)
-[[ $DOTDOT_ERRORS -eq 0 ]] && pass "every '../../' escape in skills/ points into references/ or docs/"
+if [[ $DOTDOT_FILES_SCANNED -eq 0 ]]; then
+  error "the '../../' scan of skills/ found zero files" \
+    "" "" "Something broke the find above (paths moved?) — fix it before trusting this guard's PASS"
+elif [[ $DOTDOT_ERRORS -eq 0 ]]; then
+  pass "every '../../' escape in skills/ points into references/ or docs/"
+fi
 
 # ── chained-skill invocability guard ───────────────────────────────
 # wayfare-run-task (skills/wayfare-run-task/SKILL.md) delegates its steps to child skills via

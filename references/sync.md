@@ -276,7 +276,7 @@ engine for this repo alone, as it sits:
 # stdout is JSON only; the engine's summary and any failure go to stderr, so
 # a non-zero exit is recorded in a variable rather than printed into the
 # stream a parser is about to read.
-WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
 "$WAYFARE_ROOT/scripts/audit.py" \
   --repo . --no-snapshot --json > "$SCRATCH/compliance.jsonl" 2> "$SCRATCH/compliance.err"; COMPLIANCE_RC=$?
 [ "$COMPLIANCE_RC" = 0 ] || echo "COMPLIANCE_AUDIT_RC=$COMPLIANCE_RC — read $SCRATCH/compliance.err; rc 2 means a checker raised (its cells are in the JSON with status ERROR), anything else means the engine did not run: render (–) and say why."

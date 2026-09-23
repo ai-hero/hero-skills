@@ -51,7 +51,7 @@ that parsing. When the first token of
 using the table below as the report, and stop.
 
 ```bash
-WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
 "$WAYFARE_ROOT/scripts/hero-fields.sh" wayfare-check-preflight
 ```
 
@@ -75,11 +75,12 @@ If `HERO.md` is missing, mention it but still run `scripts/preflight.sh`. The sc
 
 ### Step 1: Run the Script
 
-Resolve the plugin root through `WAYFARE_ROOT` (`references/loading.md`'s rule): the harness-provided `CLAUDE_PLUGIN_ROOT` when set, else the default install path. An agent with neither must already have `WAYFARE_ROOT` exported per that rule.
+Resolve the plugin root through `WAYFARE_ROOT` (`references/loading.md`'s rule): the harness-provided `CLAUDE_PLUGIN_ROOT` when set, else an exported `WAYFARE_ROOT`, else the default install path. An agent with neither must already have `WAYFARE_ROOT` exported per that rule.
 
 ```bash
-WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
 PREFLIGHT="$WAYFARE_ROOT/scripts/preflight.sh"
+[ -x "$PREFLIGHT" ] || { echo "wayfare: cannot find preflight.sh at $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 2; }
 "$PREFLIGHT" $ARGUMENTS
 ```
 
@@ -92,6 +93,7 @@ Capture the script's exit code. Then:
 - **Exit 0, 0 warnings** → "All preflight checks passed. Safe to run wayfare:wayfare-run-task or any individual hero skill."
 - **Exit 0, N warnings** → "Preflight passed with N warning(s). Safe to proceed; warnings are advisory and may bite later."
 - **Exit 1** → "Preflight found one or more blockers. The wayfare pipeline will fail if you continue. Fix the blockers above, then re-run wayfare:wayfare-check-preflight."
+- **Any other exit code** → preflight did not run to completion (e.g. it could not be found or resolve `WAYFARE_ROOT`). Report the exit code and the message printed above it; do not report it as pass or fail.
 
 For each `[BLOCKER]` line, the script already prints the recommended fix inline. Do not re-explain it. Point the user at the line.
 

@@ -30,7 +30,7 @@ the folder itself plans nothing.
 ### Report
 
 ```bash
-WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
 "$WAYFARE_ROOT/scripts/hero-fields.sh" --all
 ```
 

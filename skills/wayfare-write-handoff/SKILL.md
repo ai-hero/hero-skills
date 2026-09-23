@@ -33,7 +33,7 @@ follow the four phases in
 using the table below as the report, and stop.
 
 ```bash
-WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
 "$WAYFARE_ROOT/scripts/hero-fields.sh" wayfare-write-handoff
 ```
 
@@ -48,18 +48,10 @@ wrong. A row that already holds the right value is not a question.
 **If the first token of `$ARGUMENTS` is exactly `recalibrate`, run the `recalibrate` section above and stop.** The title is free text, so the verb would otherwise become the work-item's title.
 
 ```bash
-WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
 HERO_LIB="$WAYFARE_ROOT/scripts/hero-lib.sh"
-# Fall back to this repo's own copy ONLY when this repo IS the plugin.
-# Unqualified, the fallback sources scripts/hero-lib.sh out of whatever
-# repo the agent happens to be in — which, during a review, is the branch
-# under review. It was near-dead while the default path matched every
-# install; renaming the folder to wayfare-skills made it live for everyone
-# who had not renamed their checkout.
-[ -r "$HERO_LIB" ] || { HL_TOP=$(git rev-parse --show-toplevel 2>/dev/null); \
-  [ -n "$HL_TOP" ] && [ -f "$HL_TOP/.claude-plugin/plugin.json" ] && HERO_LIB="$HL_TOP/scripts/hero-lib.sh"; }
 # shellcheck source=/dev/null
-. "$HERO_LIB"
+. "$HERO_LIB" || { echo "wayfare: cannot load hero-lib.sh from $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 1; }
 
 ROOT=$(hero_root)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"

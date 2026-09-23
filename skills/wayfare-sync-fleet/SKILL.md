@@ -22,7 +22,7 @@ two stacks never fight over one port. The standard is
 # No `git rev-parse` fallback here: this is the one skill built to run outside
 # a repo, where that fallback resolves to /scripts/hero-lib.sh and a failed
 # source would print a plausible NO_FLEET.
-WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
 HERO_LIB="$WAYFARE_ROOT/scripts/hero-lib.sh"
 # shellcheck source=/dev/null
 . "$HERO_LIB" || { echo "fleet: cannot load $HERO_LIB — STOP (reinstall the plugin)"; exit 1; }
@@ -114,7 +114,7 @@ whose `AGENTS.md` (or `CLAUDE.md`) has no `## Fleet` heading (the
 `NOT_FLEET_AWARE` rows from `--review`), propose adding the section:
 
 ```bash
-WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
 SECTION="$WAYFARE_ROOT/assets/fleet/agents-md-fleet-section.md"
 cat "$SECTION"
 ```

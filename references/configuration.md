@@ -192,7 +192,7 @@ Follow the four phases in [docs/RECALIBRATE.md](../docs/RECALIBRATE.md)
 (report, ask, write, commit), using the whole field map as the report.
 
 ```bash
-WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
 "$WAYFARE_ROOT/scripts/hero-fields.sh" --all
 ```
 

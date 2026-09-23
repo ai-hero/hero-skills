@@ -113,7 +113,7 @@ it against the HERO.md template in `wayfare-init-repo`'s reference and against w
 actually read, and report both directions of drift.
 
 ```bash
-WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
 "$WAYFARE_ROOT/scripts/hero-fields.sh" --all
 ```
 

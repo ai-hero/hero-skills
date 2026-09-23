@@ -1158,17 +1158,9 @@ Run wayfare:wayfare-setup-dev to configure your local dev environment
 If the user agreed to install `.github/workflows/auto-approve.yaml` (Group 4 confirmation), copy it into their repo using the bundled installer. The installer's exit code is the contract, so capture it and branch on it explicitly so an existing customized workflow is never silently overwritten or treated as "installed":
 
 ```bash
-# Locate this plugin's installed root. Tries the two standard locations;
-# bails out if neither matches.
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
 PLUGIN_ROOT=""
-for candidate in \
-  "$HOME/.claude/plugins/wayfare-skills" \
-  "$HOME/.config/claude/plugins/wayfare-skills"; do
-  if [ -x "$candidate/scripts/install-auto-approve.sh" ]; then
-    PLUGIN_ROOT="$candidate"
-    break
-  fi
-done
+[ -x "$WAYFARE_ROOT/scripts/install-auto-approve.sh" ] && PLUGIN_ROOT="$WAYFARE_ROOT"
 
 INSTALL_RC=255
 INSTALL_OK=false           # workflow file is in the right state to be staged
@@ -1187,8 +1179,8 @@ for ext in yaml yml; do
 done
 
 if [ -z "$PLUGIN_ROOT" ]; then
-  echo "Could not locate the wayfare plugin root in standard locations."
-  echo "Install the plugin under ~/.claude/plugins/wayfare-skills, or copy"
+  echo "Could not locate scripts/install-auto-approve.sh under WAYFARE_ROOT ($WAYFARE_ROOT)."
+  echo "Export WAYFARE_ROOT as the plugin root, or copy"
   echo ".github/workflows/auto-approve.yaml from the plugin into this repo manually."
 else
   set +e
@@ -1354,7 +1346,7 @@ Three cases, decided by what is already on disk:
    unmigrated store from the nine-kind schema. Run the migrator and say so:
 
    ```bash
-   WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+   WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
    bash "$WAYFARE_ROOT/scripts/migrate-plan.sh" "$(hero_store_path)"
    ```
 

@@ -56,7 +56,7 @@ follow the four phases in
 using the table below as the report, and stop.
 
 ```bash
-WAYFARE_ROOT="${WAYFARE_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
 "$WAYFARE_ROOT/scripts/hero-fields.sh" wayfare-recomponentize-ui
 ```
 
@@ -184,7 +184,8 @@ least reliable for exactly this kind of well-trained task. These layers do not
 depend on that choice, so install both:
 
 ```bash
-"$PLUGIN_ROOT/scripts/install-design-system.sh" "$ROOT"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+"$WAYFARE_ROOT/scripts/install-design-system.sh" "$ROOT"
 ```
 
 It writes, without overwriting customized files (exit 2 on drift, same contract
