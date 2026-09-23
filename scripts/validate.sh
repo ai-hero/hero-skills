@@ -60,6 +60,10 @@ bold "1. Plugin Manifest"
 
 MANIFEST="$PLUGIN_ROOT/.claude-plugin/plugin.json"
 MANIFEST_REL=".claude-plugin/plugin.json"
+# Defaulted so section 2b can read them under `set -u` even when this
+# manifest is missing or invalid (section 1 already reports why).
+NAME=""
+VERSION=""
 
 if [[ ! -f "$MANIFEST" ]]; then
   error "Missing plugin manifest" \
@@ -130,6 +134,78 @@ else
   else
     pass "marketplace.json is valid JSON"
   fi
+fi
+
+echo ""
+
+# ─── Cross-Agent Manifests ────────────────────────────────────────
+
+bold "2b. Cross-Agent Manifests"
+
+CODEX_MANIFEST="$PLUGIN_ROOT/.codex-plugin/plugin.json"
+CODEX_MANIFEST_REL=".codex-plugin/plugin.json"
+AGENTS_MANIFEST="$PLUGIN_ROOT/.agents/plugins/marketplace.json"
+AGENTS_MANIFEST_REL=".agents/plugins/marketplace.json"
+
+# CODEX_VERSION/AGENTS_VERSION are captured here, in the same branch that
+# already proved the file valid JSON, rather than re-running `jq empty`
+# below — a second validation pass is a second place to keep in sync with
+# the first.
+CODEX_VERSION=""
+if [[ ! -f "$CODEX_MANIFEST" ]]; then
+  error "Missing Codex manifest" \
+    "$CODEX_MANIFEST_REL" \
+    "" \
+    "Create .codex-plugin/plugin.json mirroring .claude-plugin/plugin.json's name/description/version/author, plus \"skills\": \"./skills/\""
+elif ! jq empty "$CODEX_MANIFEST" 2>/dev/null; then
+  error "Invalid JSON syntax" \
+    "$CODEX_MANIFEST_REL" \
+    "" \
+    "Run: jq . $CODEX_MANIFEST_REL to see the parse error, then fix the JSON"
+else
+  pass "$CODEX_MANIFEST_REL is valid JSON"
+  CODEX_VERSION=$(jq -r '.version // empty' "$CODEX_MANIFEST")
+fi
+
+# .plugins[] is selected by name, not by position ([0]): a second plugin
+# entry added later, or a reorder, must not silently compare against the
+# wrong one.
+AGENTS_VERSION=""
+if [[ ! -f "$AGENTS_MANIFEST" ]]; then
+  error "Missing .agents manifest" \
+    "$AGENTS_MANIFEST_REL" \
+    "" \
+    "Create .agents/plugins/marketplace.json mirroring .claude-plugin/marketplace.json, plus \"skills\": \"./skills/\" on its plugin entry"
+elif ! jq empty "$AGENTS_MANIFEST" 2>/dev/null; then
+  error "Invalid JSON syntax" \
+    "$AGENTS_MANIFEST_REL" \
+    "" \
+    "Run: jq . $AGENTS_MANIFEST_REL to see the parse error, then fix the JSON"
+else
+  pass "$AGENTS_MANIFEST_REL is valid JSON"
+  AGENTS_VERSION=$(jq -r --arg name "$NAME" \
+    '.plugins[] | select(.name == $name) | .version // empty' "$AGENTS_MANIFEST")
+fi
+
+# Every manifest is a separate install surface an agent reads independently;
+# nothing re-derives one from another. A version bump landed in only one of
+# them is invisible until two agents installing the same repo report two
+# different plugin versions, which is the failure this guard exists to catch
+# at commit time instead. $VERSION is section 1's already-validated
+# .claude-plugin/plugin.json version; empty here means section 1 already
+# reported why.
+if [[ -z "$VERSION" || -z "$CODEX_VERSION" || -z "$AGENTS_VERSION" ]]; then
+  error "One or more manifests are missing a version, so agreement cannot be checked" \
+    "" \
+    "" \
+    "Set \"version\" in $MANIFEST_REL and $CODEX_MANIFEST_REL, and .plugins[].version in $AGENTS_MANIFEST_REL"
+elif [[ "$VERSION" != "$CODEX_VERSION" ]] || [[ "$VERSION" != "$AGENTS_VERSION" ]]; then
+  error "Manifest versions disagree ($MANIFEST_REL=$VERSION, $CODEX_MANIFEST_REL=$CODEX_VERSION, $AGENTS_MANIFEST_REL=$AGENTS_VERSION)" \
+    "" \
+    "" \
+    "Bump every manifest to the same version — a second agent installing this repo must see one plugin version, not three"
+else
+  pass "manifest versions agree: $VERSION"
 fi
 
 echo ""
