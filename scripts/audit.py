@@ -615,6 +615,34 @@ def _(r):
     return (PASS, "") if yml(r / ".github", "dependabot").is_file() else (FAIL, "missing")
 
 
+def _entry_dirs(u):
+    """The directories an entry covers, in Dependabot's own precedence:
+    `directory` wins over `directories` (Dependabot rejects setting both)."""
+    directory = u.get("directory")
+    return [directory] if directory else (u.get("directories") or ["/"])
+
+
+def _entry_label(u):
+    """`ecosystem@directory`, so two entries on the same ecosystem (two npm
+    directories, say) are told apart in the FAIL detail."""
+    return f"{u.get('package-ecosystem', '?')}@{','.join(str(d) for d in _entry_dirs(u))}"
+
+
+def _ignores_semver_major(u):
+    return any(
+        rule.get("dependency-name") == "*"
+        and "version-update:semver-major" in (rule.get("update-types") or [])
+        for rule in u.get("ignore") or []
+    )
+
+
+def _group_batches_majors(g, digest_pinned):
+    types = set(g.get("update-types") or [])
+    if not types:
+        return not digest_pinned
+    return "major" in types or not {"minor", "patch"} <= types
+
+
 @check("CI-14")
 def _(r):
     f = yml(r / ".github", "dependabot")
@@ -624,30 +652,33 @@ def _(r):
     updates = doc.get("updates", []) or []
     if not updates:
         return FAIL, "no update entries"
-    # Dependabot assigns a dependency to the FIRST group whose patterns match
-    # it, so only the first ["*"] group per entry is live — a later ["*"]
-    # group is decorative and receives nothing. Judging "any group passes"
-    # instead of the first lets that decorative group turn the check green
-    # while the real (unfiltered, or major-batching) catch-all stays in
-    # force. Digest-pinned docker is the one case where an unfiltered
-    # catch-all is still safe: a digest bump has no semver delta, so it can
-    # never batch a major.
+    # Every version-update ["*"] group is judged, not just the first:
+    # Dependabot matches update-types as well as patterns, so a major that
+    # misses an earlier [minor, patch] group still lands in a later
+    # unfiltered one. And a tag+digest FROM (node:26-alpine@sha256:…) still
+    # gets tag bumps — only a digest-only ref (no :tag) has no major to batch.
     bad = []
     for u in updates:
-        eco = u.get("package-ecosystem", "?")
-        groups = list((u.get("groups") or {}).values())
-        first = next((g for g in groups if "*" in (g.get("patterns") or [])), None)
-        if first is None:
-            bad.append(f"{eco}: no catch-all group")
+        star_groups = [
+            g for g in (u.get("groups") or {}).values()
+            if g.get("applies-to") != "security-updates" and "*" in (g.get("patterns") or [])
+        ]
+        if not star_groups:
+            bad.append(f"{_entry_label(u)}: no catch-all group")
             continue
-        if {"minor", "patch"} <= set(first.get("update-types") or []):
+        if _ignores_semver_major(u):
             continue
-        if eco == "docker" and _docker_entry_digest_pinned(r, u):
-            continue
-        bad.append(f"{eco}: catch-all batches majors")
+        # Only an unfiltered group can be saved by the digest exemption, so
+        # skip the filesystem walk unless one is actually in play.
+        needs_digest_check = u.get("package-ecosystem") == "docker" and any(
+            not g.get("update-types") for g in star_groups
+        )
+        digest_pinned = needs_digest_check and _docker_entry_digest_pinned(r, u)
+        if any(_group_batches_majors(g, digest_pinned) for g in star_groups):
+            bad.append(f"{_entry_label(u)}: catch-all batches majors")
     if bad:
         return FAIL, "; ".join(bad)
-    return PASS, "each ecosystem's first catch-all group is minor+patch, or docker digest-pinned"
+    return PASS, "every catch-all group is minor+patch, semver-major is ignored, or docker is digest-pinned"
 
 
 @check("CI-15")
@@ -2484,35 +2515,57 @@ def _image_refs(path):
     return out
 
 
-def _docker_entry_digest_pinned(r, entry):
-    """True when every `Dockerfile*` in a dependabot docker entry's
-    directory/directories is pinned to a digest: at least one external FROM
-    carries @sha256:, none is tag-only, and none names a $ARG. _image_refs
-    silently drops $ refs (they're not a tag to flag as stale), which would
-    make a ${BASE} FROM read as digest-pinned by omission here — so the $
-    check is explicit and fails closed instead of inheriting that skip."""
-    dirs = entry.get("directories") or [entry.get("directory") or "/"]
-    dockerfiles = []
-    for d in dirs:
-        base = (r / str(d).lstrip("/")).resolve()
-        dockerfiles += list(base.glob("Dockerfile*"))
-    if not dockerfiles:
+def _is_dockerfile_name(name):
+    """Dependabot's docker ecosystem updates any `*dockerfile*` (any case)
+    plus `Containerfile`, not only files named exactly `Dockerfile*`."""
+    return "dockerfile" in name.lower() or name.lower() == "containerfile"
+
+
+def _ref_is_digest_only(ref):
+    """A digest-only ref is `@sha256:` with no `:` in the last path segment
+    of the name — `node@sha256:…`, not `node:26-alpine@sha256:…` (tag+digest
+    still gets tag bumps) and not `node:26-alpine` (no digest at all)."""
+    if "@sha256:" not in ref:
         return False
+    name = ref.split("@sha256:", 1)[0]
+    return ":" not in name.rsplit("/", 1)[-1]
+
+
+def _docker_entry_digest_pinned(r, entry):
+    """True only when every FROM across the entry's directories is pinned by
+    digest alone (no :tag). A bare `$` check stays ahead of
+    `_ref_is_digest_only`, not folded into it: `${BASE}@sha256:x` has no `:`
+    before its `@sha256:`, so the digest test alone would read it as
+    digest-pinned instead of failing closed on the unresolved variable."""
+    repo_root = r.resolve()
     has_digest = False
-    for df in dockerfiles:
-        if _image_refs(df):
+    for d in _entry_dirs(entry):
+        d = str(d)
+        if any(c in d for c in "*?["):
             return False
-        text = df.read_text()
-        from_lines = list(_FROM_RE.finditer(text))
-        stages = {m.group(2) for m in from_lines if m.group(2)}
-        for m in from_lines:
-            ref = m.group(1)
-            if ref in stages or ref == "scratch":
-                continue
-            if "$" in ref:
+        base = (r / d.lstrip("/")).resolve()
+        try:
+            base.relative_to(repo_root)
+        except ValueError:
+            return False
+        if not base.is_dir():
+            return False
+        dockerfiles = [p for p in base.iterdir() if p.is_file() and _is_dockerfile_name(p.name)]
+        if not dockerfiles:
+            return False
+        for yml_path in list(base.glob("*.yml")) + list(base.glob("*.yaml")):
+            if _IMAGE_RE.search(uncommented(yml_path.read_text())):
                 return False
-            if "@sha256:" in ref:
-                has_digest = True
+        for df in dockerfiles:
+            stages = set()
+            for m in _FROM_RE.finditer(df.read_text()):
+                ref, stage_name = m.groups()
+                if ref != "scratch" and ref not in stages:
+                    if "$" in ref or not _ref_is_digest_only(ref):
+                        return False
+                    has_digest = True
+                if stage_name:
+                    stages.add(stage_name)
     return has_digest
 
 

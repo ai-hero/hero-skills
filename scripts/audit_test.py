@@ -213,9 +213,7 @@ class VersionPins(unittest.TestCase):
 
 
 class CI14(unittest.TestCase):
-    """CI-14 judges the first ["*"] group per updates entry — Dependabot
-    assigns a dependency to the first group it matches, so a later
-    decorative catch-all is dead weight and must not turn the check green."""
+    """See CI-14's own comment in audit.py for the two traps these pin."""
 
     def _dependabot(self, r, updates_yaml):
         write(r, ".github/dependabot.yaml", f"version: 2\nupdates:\n{updates_yaml}")
@@ -251,7 +249,7 @@ class CI14(unittest.TestCase):
             )
             st, detail = audit.CHECKS["CI-14"](r)
             self.assertEqual(st, audit.FAIL)
-            self.assertIn("docker: catch-all batches majors", detail)
+            self.assertIn("docker@/: catch-all batches majors", detail)
 
     def test_docker_with_arg_base_unfiltered_fails(self):
         with tempfile.TemporaryDirectory() as d:
@@ -268,7 +266,7 @@ class CI14(unittest.TestCase):
             )
             st, detail = audit.CHECKS["CI-14"](r)
             self.assertEqual(st, audit.FAIL)
-            self.assertIn("docker: catch-all batches majors", detail)
+            self.assertIn("docker@/: catch-all batches majors", detail)
 
     def test_unfiltered_then_decorative_group_on_npm_fails(self):
         with tempfile.TemporaryDirectory() as d:
@@ -287,7 +285,7 @@ class CI14(unittest.TestCase):
             )
             st, detail = audit.CHECKS["CI-14"](r)
             self.assertEqual(st, audit.FAIL)
-            self.assertIn("npm: catch-all batches majors", detail)
+            self.assertIn("npm@/: catch-all batches majors", detail)
 
     def test_minor_patch_group_first_passes(self):
         with tempfile.TemporaryDirectory() as d:
@@ -321,7 +319,7 @@ class CI14(unittest.TestCase):
             )
             st, detail = audit.CHECKS["CI-14"](r)
             self.assertEqual(st, audit.FAIL)
-            self.assertIn("docker: catch-all batches majors", detail)
+            self.assertIn("docker@/a,/b: catch-all batches majors", detail)
 
     def test_no_catch_all_group_names_missing(self):
         with tempfile.TemporaryDirectory() as d:
@@ -334,7 +332,297 @@ class CI14(unittest.TestCase):
             )
             st, detail = audit.CHECKS["CI-14"](r)
             self.assertEqual(st, audit.FAIL)
-            self.assertIn("gomod: no catch-all group", detail)
+            self.assertIn("gomod@/: no catch-all group", detail)
+
+    def test_tag_digest_docker_unfiltered_fails(self):
+        """A tag+digest FROM still gets tag bumps, so an unfiltered catch-all
+        still batches majors. Only a digest-only ref (no :tag) is exempt."""
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            write(r, "Dockerfile", "FROM node:26-alpine@sha256:abc\n")
+            self._dependabot(
+                r,
+                "- package-ecosystem: docker\n"
+                "  directory: /\n"
+                "  schedule: {interval: weekly}\n"
+                "  groups:\n"
+                "    docker-all:\n"
+                "      patterns: ['*']\n",
+            )
+            st, detail = audit.CHECKS["CI-14"](r)
+            self.assertEqual(st, audit.FAIL)
+            self.assertIn("docker@/: catch-all batches majors", detail)
+
+    def test_tag_digest_docker_ignore_major_passes(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            write(r, "Dockerfile", "FROM node:26-alpine@sha256:abc\n")
+            self._dependabot(
+                r,
+                "- package-ecosystem: docker\n"
+                "  directory: /\n"
+                "  schedule: {interval: weekly}\n"
+                "  ignore:\n"
+                "    - dependency-name: '*'\n"
+                "      update-types: ['version-update:semver-major']\n"
+                "  groups:\n"
+                "    docker-all:\n"
+                "      patterns: ['*']\n",
+            )
+            st, detail = audit.CHECKS["CI-14"](r)
+            self.assertEqual(st, audit.PASS, detail)
+
+    def test_minor_patch_then_later_unfiltered_fails(self):
+        """A major that skips the [minor, patch] group falls through to the
+        later unfiltered one — judging only the first group misses this."""
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            self._dependabot(
+                r,
+                "- package-ecosystem: npm\n"
+                "  directory: /\n"
+                "  schedule: {interval: weekly}\n"
+                "  groups:\n"
+                "    mp:\n"
+                "      patterns: ['*']\n"
+                "      update-types: [minor, patch]\n"
+                "    majors:\n"
+                "      patterns: ['*']\n",
+            )
+            st, detail = audit.CHECKS["CI-14"](r)
+            self.assertEqual(st, audit.FAIL)
+            self.assertIn("npm@/: catch-all batches majors", detail)
+
+    def test_major_minor_patch_fails(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            self._dependabot(
+                r,
+                "- package-ecosystem: npm\n"
+                "  directory: /\n"
+                "  schedule: {interval: weekly}\n"
+                "  groups:\n"
+                "    all:\n"
+                "      patterns: ['*']\n"
+                "      update-types: [major, minor, patch]\n",
+            )
+            st, detail = audit.CHECKS["CI-14"](r)
+            self.assertEqual(st, audit.FAIL)
+            self.assertIn("npm@/: catch-all batches majors", detail)
+
+    def test_security_updates_group_ignored_passes(self):
+        """A first `["*"]` group scoped to security-updates is not a
+        version-update catch-all, so it must not be picked as the judged
+        group and hide the real one that follows it."""
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            self._dependabot(
+                r,
+                "- package-ecosystem: npm\n"
+                "  directory: /\n"
+                "  schedule: {interval: weekly}\n"
+                "  groups:\n"
+                "    sec:\n"
+                "      applies-to: security-updates\n"
+                "      patterns: ['*']\n"
+                "    mp:\n"
+                "      patterns: ['*']\n"
+                "      update-types: [minor, patch]\n",
+            )
+            st, detail = audit.CHECKS["CI-14"](r)
+            self.assertEqual(st, audit.PASS, detail)
+
+    def test_dev_minor_patch_then_unfiltered_prod_fails(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            self._dependabot(
+                r,
+                "- package-ecosystem: npm\n"
+                "  directory: /\n"
+                "  schedule: {interval: weekly}\n"
+                "  groups:\n"
+                "    dev:\n"
+                "      dependency-type: development\n"
+                "      patterns: ['*']\n"
+                "      update-types: [minor, patch]\n"
+                "    prod:\n"
+                "      patterns: ['*']\n",
+            )
+            st, detail = audit.CHECKS["CI-14"](r)
+            self.assertEqual(st, audit.FAIL)
+            self.assertIn("npm@/: catch-all batches majors", detail)
+
+    def test_dollar_ref_after_digest_stage_fails_closed(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            write(r, "Dockerfile", "FROM alpine@sha256:abc AS a\nFROM ${BASE}\n")
+            self._dependabot(
+                r,
+                "- package-ecosystem: docker\n"
+                "  directory: /\n"
+                "  schedule: {interval: weekly}\n"
+                "  groups:\n"
+                "    docker-all:\n"
+                "      patterns: ['*']\n",
+            )
+            st, detail = audit.CHECKS["CI-14"](r)
+            self.assertEqual(st, audit.FAIL)
+            self.assertIn("docker@/: catch-all batches majors", detail)
+
+    def test_digest_pinned_dockerfile_but_npm_entry_fails(self):
+        """The digest exemption is docker-only: a digest-pinned Dockerfile
+        sitting in the repo must not exempt an unrelated npm entry."""
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            write(r, "Dockerfile", "FROM alpine@sha256:abc\n")
+            self._dependabot(
+                r,
+                "- package-ecosystem: npm\n"
+                "  directory: /\n"
+                "  schedule: {interval: weekly}\n"
+                "  groups:\n"
+                "    all:\n"
+                "      patterns: ['*']\n",
+            )
+            st, detail = audit.CHECKS["CI-14"](r)
+            self.assertEqual(st, audit.FAIL)
+            self.assertIn("npm@/: catch-all batches majors", detail)
+
+    def test_missing_directory_fails_closed(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            write(r, "Dockerfile", "FROM alpine@sha256:abc\n")
+            self._dependabot(
+                r,
+                "- package-ecosystem: docker\n"
+                "  directories: ['/', '/gone']\n"
+                "  schedule: {interval: weekly}\n"
+                "  groups:\n"
+                "    docker-all:\n"
+                "      patterns: ['*']\n",
+            )
+            st, detail = audit.CHECKS["CI-14"](r)
+            self.assertEqual(st, audit.FAIL)
+            self.assertIn("catch-all batches majors", detail)
+
+    def test_glob_directory_fails_closed(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            write(r, "Dockerfile", "FROM alpine@sha256:abc\n")
+            self._dependabot(
+                r,
+                "- package-ecosystem: docker\n"
+                "  directories: ['/', '/svc/*']\n"
+                "  schedule: {interval: weekly}\n"
+                "  groups:\n"
+                "    docker-all:\n"
+                "      patterns: ['*']\n",
+            )
+            st, detail = audit.CHECKS["CI-14"](r)
+            self.assertEqual(st, audit.FAIL)
+            self.assertIn("catch-all batches majors", detail)
+
+    def test_alternate_dockerfile_name_with_tag_fails_closed(self):
+        """Dependabot's docker ecosystem also updates `prod.dockerfile`
+        beside a digest-only `Dockerfile`, so a tagged ref in it must not be
+        skipped by name."""
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            write(r, "Dockerfile", "FROM alpine@sha256:abc\n")
+            write(r, "prod.dockerfile", "FROM alpine:3.19\n")
+            self._dependabot(
+                r,
+                "- package-ecosystem: docker\n"
+                "  directory: /\n"
+                "  schedule: {interval: weekly}\n"
+                "  groups:\n"
+                "    docker-all:\n"
+                "      patterns: ['*']\n",
+            )
+            st, detail = audit.CHECKS["CI-14"](r)
+            self.assertEqual(st, audit.FAIL)
+            self.assertIn("docker@/: catch-all batches majors", detail)
+
+    def test_k8s_yaml_image_fails_closed(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            write(r, "Dockerfile", "FROM alpine@sha256:abc\n")
+            write(r, "deploy.yaml", "image: nginx:1.25\n")
+            self._dependabot(
+                r,
+                "- package-ecosystem: docker\n"
+                "  directory: /\n"
+                "  schedule: {interval: weekly}\n"
+                "  groups:\n"
+                "    docker-all:\n"
+                "      patterns: ['*']\n",
+            )
+            st, detail = audit.CHECKS["CI-14"](r)
+            self.assertEqual(st, audit.FAIL)
+            self.assertIn("docker@/: catch-all batches majors", detail)
+
+    def test_stage_name_used_before_defined_fails_closed(self):
+        """A stage name only counts after the FROM … AS name that defines
+        it; recognizing it anywhere in the file would let this Dockerfile's
+        second FROM read as digest-pinned by treating the first FROM's
+        untagged image name as an already-known stage."""
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            write(r, "Dockerfile", "FROM ubuntu\nFROM alpine@sha256:abc AS ubuntu\n")
+            self._dependabot(
+                r,
+                "- package-ecosystem: docker\n"
+                "  directory: /\n"
+                "  schedule: {interval: weekly}\n"
+                "  groups:\n"
+                "    docker-all:\n"
+                "      patterns: ['*']\n",
+            )
+            st, detail = audit.CHECKS["CI-14"](r)
+            self.assertEqual(st, audit.FAIL)
+            self.assertIn("docker@/: catch-all batches majors", detail)
+
+    def test_directory_escapes_repo_fails_closed(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d) / "repo"
+            r.mkdir()
+            write(r, "Dockerfile", "FROM alpine:3.19\n")
+            write(pathlib.Path(d) / "x", "Dockerfile", "FROM alpine@sha256:abc\n")
+            self._dependabot(
+                r,
+                "- package-ecosystem: docker\n"
+                "  directory: /../x\n"
+                "  schedule: {interval: weekly}\n"
+                "  groups:\n"
+                "    docker-all:\n"
+                "      patterns: ['*']\n",
+            )
+            st, detail = audit.CHECKS["CI-14"](r)
+            self.assertEqual(st, audit.FAIL)
+            self.assertIn("catch-all batches majors", detail)
+
+    def test_two_failing_npm_entries_named_apart(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = pathlib.Path(d)
+            self._dependabot(
+                r,
+                "- package-ecosystem: npm\n"
+                "  directory: /a\n"
+                "  schedule: {interval: weekly}\n"
+                "  groups:\n"
+                "    all:\n"
+                "      patterns: ['*']\n"
+                "- package-ecosystem: npm\n"
+                "  directory: /b\n"
+                "  schedule: {interval: weekly}\n"
+                "  groups:\n"
+                "    all:\n"
+                "      patterns: ['*']\n",
+            )
+            st, detail = audit.CHECKS["CI-14"](r)
+            self.assertEqual(st, audit.FAIL)
+            self.assertIn("npm@/a: catch-all batches majors", detail)
+            self.assertIn("npm@/b: catch-all batches majors", detail)
 
 
 class HookSegments(unittest.TestCase):
