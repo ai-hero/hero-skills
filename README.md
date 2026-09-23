@@ -29,12 +29,18 @@
 
 Most dev work follows the same loop: grab a ticket, plan, implement, test, review, commit, push, monitor. But every team does it slightly differently, different PM tools, different CI, different deploy targets.
 
-Wayfare gives you **one route from the product as it is to the product as it should be** that adapt to your stack. Configure once with `HERO.md`, then every skill knows your conventions, your tools, and your preferences.
+Wayfare gives you **one front door**: `wayfare:wayfare-sync-plan` converges
+the roadmap, `wayfare:wayfare-start-goal` runs it. Configure once with
+`HERO.md`, then every skill behind that door knows your conventions, your
+tools, and your preferences, and drives the whole loop for you:
 
 - **Plan and implement from tickets**: fetch from Linear/Jira/GitHub Issues, grill the work into dependency-aware work-items, create branches, then implement on approval
 - **Verify changes**: auto-detect project type (API, frontend, CLI, MCP) and run lint, typecheck, unit tests, and smoke tests
 - **Ship with confidence**: pre-commit checks, conventional commits, draft PRs by default, automated parallel review before requesting human review
 - **Stay informed**: CI/CD status, cluster health, security scans
+
+Each of those is a stage the front door runs for you, and each one is also
+its own skill you can run alone (see [Quick Start](#quick-start)).
 
 ## How it works
 
@@ -235,6 +241,15 @@ and the like. The clone target is `wayfare-skills`, which is what the
 `CLAUDE_PLUGIN_ROOT` fallback in every skill looks for when the environment
 does not set it.
 
+The same skills install into Codex and other agents from the same checkout:
+`.codex-plugin/plugin.json` and `.agents/plugins/marketplace.json` both point
+at `./skills/`, so no separate build or rewrite is needed. `CLAUDE_PLUGIN_ROOT`
+is a Claude Code harness variable and doesn't exist on those agents, so every
+skill resolves its own scripts through one `WAYFARE_ROOT` line instead; an
+agent without `CLAUDE_PLUGIN_ROOT` set exports `WAYFARE_ROOT` as the directory
+two levels above the `SKILL.md` it loaded before running a skill (see
+[references/loading.md](./references/loading.md)).
+
 The repo was called `hero-skills` until 2026-09-21. If you vendored the
 auto-approve caller before then, it says
 `ai-hero/hero-skills/.github/workflows/auto-approve.yaml@main` and **it is
@@ -328,9 +343,10 @@ backports where this repo is ahead of the template.
 `wayfare:wayfare-recalibrate-config` tunes the config every stage reads, and
 `wayfare:wayfare-drop-item ID` abandons a branch and says so on the roadmap.
 
-### Or: one piece at a time
+### The stages, runnable alone when you need to
 
-The build pipeline is still there when you want a single step:
+`wayfare:wayfare-start-goal` runs the build pipeline for you, but each stage
+is its own skill, so you can run a single step by hand:
 
 ```
 /simplify                                   # tidy the dirty diff
@@ -342,9 +358,9 @@ wayfare:wayfare-ship-pr                         # @auto-approve, merge, reset to
 
 Each command reads your `HERO.md` config and adapts to your stack automatically.
 
-### Or: wayfare-run-task the whole thing
-
-For genuinely small, low-risk PRs:
+`wayfare:wayfare-run-task` chains all nine of those stages end to end for a
+single small, low-risk PR, without going through `wayfare:wayfare-sync-plan`
+first:
 
 ```
 wayfare:wayfare-run-task PROJ-123   # start a new ticket (or a plain-text description)
