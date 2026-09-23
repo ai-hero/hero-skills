@@ -3,8 +3,8 @@
 This repo is **wayfare**, the A.I. Hero plugin: the skills agents invoke, the
 assets they install into other repos, and the one workflow the whole fleet
 executes. It ships no product and has no build. The checkout is
-`~/.claude/plugins/wayfare-skills`, which is what the `CLAUDE_PLUGIN_ROOT`
-fallback in every skill points at.
+`~/.claude/plugins/wayfare-skills`, which is the default path in every
+skill's `WAYFARE_ROOT` line.
 
 **Renamed from `hero-skills` on 2026-09-21, and a `uses:` does NOT follow a
 rename redirect.** The content API and the web UI do redirect, which is what

@@ -56,7 +56,8 @@ follow the four phases in
 using the table below as the report, and stop.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-fields.sh" wayfare-ship-pr
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+"$WAYFARE_ROOT/scripts/hero-fields.sh" wayfare-ship-pr
 ```
 
 Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
@@ -213,17 +214,10 @@ Definition of Done.
 Do not even post `@auto-approve` until every reviewer signal has been addressed. The local checks here mirror the workflow's gates so the user gets an immediate, actionable answer instead of waiting on a CI run that will fail anyway.
 
 ```bash
-HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
-# Fall back to this repo's own copy ONLY when this repo IS the plugin.
-# Unqualified, the fallback sources scripts/hero-lib.sh out of whatever
-# repo the agent happens to be in — which, during a review, is the branch
-# under review. It was near-dead while the default path matched every
-# install; renaming the folder to wayfare-skills made it live for everyone
-# who had not renamed their checkout.
-[ -r "$HERO_LIB" ] || { HL_TOP=$(git rev-parse --show-toplevel 2>/dev/null); \
-  [ -n "$HL_TOP" ] && [ -f "$HL_TOP/.claude-plugin/plugin.json" ] && HERO_LIB="$HL_TOP/scripts/hero-lib.sh"; }
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+HERO_LIB="$WAYFARE_ROOT/scripts/hero-lib.sh"
 # shellcheck source=/dev/null
-. "$HERO_LIB" || { echo "ERROR: cannot source hero-lib.sh — reinstall the plugin."; exit 1; }
+. "$HERO_LIB" || { echo "wayfare: cannot load hero-lib.sh from $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 1; }
 OWNER_REPO=$(gh repo view --json owner,name --jq '"\(.owner.login) \(.name)"')
 OWNER=$(echo "$OWNER_REPO" | awk '{print $1}')
 REPO=$(echo "$OWNER_REPO" | awk '{print $2}')
@@ -414,17 +408,10 @@ behind the base, and a review of a stale head reviews code that is not what
 will merge.
 
 ```bash
-HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
-# Fall back to this repo's own copy ONLY when this repo IS the plugin.
-# Unqualified, the fallback sources scripts/hero-lib.sh out of whatever
-# repo the agent happens to be in — which, during a review, is the branch
-# under review. It was near-dead while the default path matched every
-# install; renaming the folder to wayfare-skills made it live for everyone
-# who had not renamed their checkout.
-[ -r "$HERO_LIB" ] || { HL_TOP=$(git rev-parse --show-toplevel 2>/dev/null); \
-  [ -n "$HL_TOP" ] && [ -f "$HL_TOP/.claude-plugin/plugin.json" ] && HERO_LIB="$HL_TOP/scripts/hero-lib.sh"; }
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+HERO_LIB="$WAYFARE_ROOT/scripts/hero-lib.sh"
 # shellcheck source=/dev/null
-. "$HERO_LIB"
+. "$HERO_LIB" || { echo "wayfare: cannot load hero-lib.sh from $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 1; }
 BASE_BRANCH=${BASE_BRANCH:-$(hero_default_branch)}
 hero_rebase_on_base "$BASE_BRANCH"; echo "REBASE_RC=$?"
 ```
@@ -657,7 +644,8 @@ Resolve the merge method from HERO.md (default `squash`), normalize the value (l
 
 ```bash
 # shellcheck source=/dev/null
-. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+. "$WAYFARE_ROOT/scripts/hero-lib.sh" || { echo "wayfare: cannot load hero-lib.sh from $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 1; }
 MERGE_METHOD_RAW=$(hero_field merge-method || true)
 MERGE_METHOD=$(printf '%s' "${MERGE_METHOD_RAW:-squash}" \
   | tr -d '[:space:]' | tr -d '"' | tr -d "'" | tr '[:upper:]' '[:lower:]')
@@ -829,7 +817,8 @@ RESET_OK=true   # cleared if any sync step (checkout/pull/fetch) fails. Gates
                 # stale local view of $BASE_BRANCH.
 
 # shellcheck source=/dev/null
-. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+. "$WAYFARE_ROOT/scripts/hero-lib.sh" || { echo "wayfare: cannot load hero-lib.sh from $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 1; }
 if [ "$MERGED" != "true" ]; then
   echo "Merge not yet recorded — skipping branch reset."
 elif hero_in_worktree; then
@@ -1043,17 +1032,10 @@ Runs only on the APPROVE + merged path, gated on `MERGED == "true"` from Step 7b
 This check is **advisory only**. It surfaces a DEGRADED or unreachable deployment loudly so the user can act, but it never un-merges, reverts, or blocks anything that already landed in Step 7a.
 
 ```bash
-HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
-# Fall back to this repo's own copy ONLY when this repo IS the plugin.
-# Unqualified, the fallback sources scripts/hero-lib.sh out of whatever
-# repo the agent happens to be in — which, during a review, is the branch
-# under review. It was near-dead while the default path matched every
-# install; renaming the folder to wayfare-skills made it live for everyone
-# who had not renamed their checkout.
-[ -r "$HERO_LIB" ] || { HL_TOP=$(git rev-parse --show-toplevel 2>/dev/null); \
-  [ -n "$HL_TOP" ] && [ -f "$HL_TOP/.claude-plugin/plugin.json" ] && HERO_LIB="$HL_TOP/scripts/hero-lib.sh"; }
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+HERO_LIB="$WAYFARE_ROOT/scripts/hero-lib.sh"
 # shellcheck source=/dev/null
-. "$HERO_LIB" || { echo "ERROR: cannot source hero-lib.sh — reinstall the plugin."; exit 1; }
+. "$HERO_LIB" || { echo "wayfare: cannot load hero-lib.sh from $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 1; }
 DEPLOY_CAVEAT=""
 POST_MERGE_CI="not applicable"
 if [ "$MERGED" != "true" ]; then

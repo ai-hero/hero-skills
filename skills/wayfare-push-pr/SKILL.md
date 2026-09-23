@@ -35,7 +35,8 @@ follow the four phases in
 using the table below as the report, and stop.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-fields.sh" wayfare-push-pr
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+"$WAYFARE_ROOT/scripts/hero-fields.sh" wayfare-push-pr
 ```
 
 Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
@@ -47,17 +48,10 @@ wrong. A row that already holds the right value is not a question.
 ### Step 0: Load Hero Configuration
 
 ```bash
-HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
-# Fall back to this repo's own copy ONLY when this repo IS the plugin.
-# Unqualified, the fallback sources scripts/hero-lib.sh out of whatever
-# repo the agent happens to be in — which, during a review, is the branch
-# under review. It was near-dead while the default path matched every
-# install; renaming the folder to wayfare-skills made it live for everyone
-# who had not renamed their checkout.
-[ -r "$HERO_LIB" ] || { HL_TOP=$(git rev-parse --show-toplevel 2>/dev/null); \
-  [ -n "$HL_TOP" ] && [ -f "$HL_TOP/.claude-plugin/plugin.json" ] && HERO_LIB="$HL_TOP/scripts/hero-lib.sh"; }
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+HERO_LIB="$WAYFARE_ROOT/scripts/hero-lib.sh"
 # shellcheck source=/dev/null
-. "$HERO_LIB" || { echo "ERROR: cannot source hero-lib.sh — reinstall the plugin."; exit 1; }
+. "$HERO_LIB" || { echo "wayfare: cannot load hero-lib.sh from $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 1; }
 
 ROOT=$(hero_root)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
@@ -97,7 +91,8 @@ Never commit or push directly to the default branch.
 
 ```bash
 # shellcheck source=/dev/null
-. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+. "$WAYFARE_ROOT/scripts/hero-lib.sh" || { echo "wayfare: cannot load hero-lib.sh from $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 1; }
 BRANCH=$(git branch --show-current)
 # _verbose: this value is branched off and pulled, so a silent fallback to the
 # wrong branch would rebase the work onto an unrelated base.
@@ -125,7 +120,8 @@ Generate `BRANCH_NAME` by applying `hero_branch_policy`, the shared naming rules
 
 ```bash
 # shellcheck source=/dev/null
-. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+. "$WAYFARE_ROOT/scripts/hero-lib.sh" || { echo "wayfare: cannot load hero-lib.sh from $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 1; }
 hero_branch_policy   # apply these rules to the diff to derive BRANCH_NAME
 ```
 
@@ -455,7 +451,8 @@ For each route in order, run the same recipe via Playwright MCP:
 
    ```bash
    # shellcheck source=/dev/null
-   . "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+   WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+   . "$WAYFARE_ROOT/scripts/hero-lib.sh"
    mkdir -p "$ROOT/.test-output/playwright-mcp"
    # Idempotent, and safe whether or not the dev-server block above already ran.
    hero_exclude_add .test-output/
@@ -758,7 +755,8 @@ gh pr list --head $(git branch --show-current) --json number,url,title,state
 
 ```bash
 # shellcheck source=/dev/null
-. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+. "$WAYFARE_ROOT/scripts/hero-lib.sh" || { echo "wayfare: cannot load hero-lib.sh from $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 1; }
 ROOT=$(hero_root)
 # The _verbose variant reports whether the value came from HERO.md or the
 # fallback, so a missing/mistyped default-branch key can't silently open the PR

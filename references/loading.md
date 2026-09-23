@@ -3,18 +3,23 @@
 What every wayfare verb does before it does anything else: the fleet check,
 the config gate, the store read, the snapshot, visual verification.
 
+**`WAYFARE_ROOT` is how a skill finds its own scripts.** `CLAUDE_PLUGIN_ROOT`
+is a Claude Code harness variable, and it is not reliably set in a skill's
+Bash calls (verified: unset in a Claude Code session's own Bash tool).
+Resolution takes it when it is set, else an exported `WAYFARE_ROOT`, else the
+default clone path. An agent with neither needs `WAYFARE_ROOT` exported
+before Step 0 runs, precisely: `WAYFARE_ROOT="$(cd "$(dirname
+"$SKILL_MD")/../.." && pwd)"` — the plugin root, since a skill lives at
+`PLUGIN_ROOT/skills/NAME/SKILL.md`. That export is the other agent's own
+bootstrap, not something this repo runs.
+
 ```bash
-HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
-# Fall back to this repo's own copy ONLY when this repo IS the plugin.
-# Unqualified, the fallback sources scripts/hero-lib.sh out of whatever
-# repo the agent happens to be in — which, during a review, is the branch
-# under review. It was near-dead while the default path matched every
-# install; renaming the folder to wayfare-skills made it live for everyone
-# who had not renamed their checkout.
-[ -r "$HERO_LIB" ] || { HL_TOP=$(git rev-parse --show-toplevel 2>/dev/null); \
-  [ -n "$HL_TOP" ] && [ -f "$HL_TOP/.claude-plugin/plugin.json" ] && HERO_LIB="$HL_TOP/scripts/hero-lib.sh"; }
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+HERO_LIB="$WAYFARE_ROOT/scripts/hero-lib.sh"
+# Never fall back to the checkout's own scripts/: during a review the checkout
+# is the branch under review, and a file in it cannot prove it is the plugin.
 # shellcheck source=/dev/null
-. "$HERO_LIB"
+. "$HERO_LIB" || { echo "wayfare: cannot load hero-lib.sh from $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 1; }
 
 ROOT=$(hero_root)
 hero_at_fleet_root && echo "FLEET_ROOT"

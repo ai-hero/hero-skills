@@ -60,15 +60,31 @@ mkrepo() { # DIR
   git -C "$1" commit -qm init >/dev/null 2>&1
 }
 
+# `env -u WAYFARE_ROOT` before every run: without it, a WAYFARE_ROOT this
+# suite happens to inherit from the invoking shell would silently override
+# the CLAUDE_PLUGIN_ROOT this file sets, and a broken precedence would pass.
 run_step0() { # REPO_DIR -> the summary line
-  ( cd "$1" && CLAUDE_PLUGIN_ROOT="$ROOT_REPO" bash "$STEP0" 2>/dev/null ) \
+  ( cd "$1" && env -u WAYFARE_ROOT CLAUDE_PLUGIN_ROOT="$ROOT_REPO" bash "$STEP0" 2>/dev/null ) \
     | grep '^wayfare: source=' | head -1
 }
 run_step0_err() { # REPO_DIR -> stderr only
   # `{ ...; } 2>&1` with stdout sent to /dev/null inside the group. The
   # `2>&1 >/dev/null` spelling does the same thing, but SC2069 rejects it, and
   # a comment line starting with the linter's own name is read as a directive.
-  ( cd "$1" && { CLAUDE_PLUGIN_ROOT="$ROOT_REPO" bash "$STEP0" >/dev/null; } 2>&1 )
+  ( cd "$1" && { env -u WAYFARE_ROOT CLAUDE_PLUGIN_ROOT="$ROOT_REPO" bash "$STEP0" >/dev/null; } 2>&1 )
+}
+# REPO_DIR CLAUDE_PLUGIN_ROOT_VALUE WAYFARE_ROOT_VALUE -> the summary line.
+# Either value may be the literal "unset" to omit that variable entirely, so
+# a precedence case can test "only WAYFARE_ROOT is set" without a stray empty
+# CLAUDE_PLUGIN_ROOT="" (which is unset-equivalent in the resolver, not the
+# same case as the variable never being exported at all).
+run_step0_with() {
+  local repo="$1" cpr="$2" wr="$3"
+  local -a env_args=(-u WAYFARE_ROOT -u CLAUDE_PLUGIN_ROOT)
+  [ "$cpr" != "unset" ] && env_args+=("CLAUDE_PLUGIN_ROOT=$cpr")
+  [ "$wr" != "unset" ] && env_args+=("WAYFARE_ROOT=$wr")
+  ( cd "$repo" && env "${env_args[@]}" bash "$STEP0" 2>/dev/null ) \
+    | grep '^wayfare: source=' | head -1
 }
 
 UUID=6f1c2e88-0a3d-4c77-9d21-8b5e2f4a1c90
@@ -200,6 +216,29 @@ check "refused type: it is reported as REJECTED" \
 check "refused type: a set ux-flow is not silenced into NONE" \
   "" "$(run_step0 "$TMP/refused" | grep -o 'ux-flow=NONE' || true)"
 
+# ---------- WAYFARE_ROOT resolution precedence ------------------------------
+# Item A's precedence: CLAUDE_PLUGIN_ROOT wins when set (the harness is
+# authoritative over whatever WAYFARE_ROOT an agent happened to export
+# earlier); an exported WAYFARE_ROOT works on its own when CLAUDE_PLUGIN_ROOT
+# is absent (the non-Claude-Code case references/loading.md documents).
+
+mkrepo "$TMP/precedence"
+cat > "$TMP/precedence/HERO.md" <<'EOF'
+# Hero Configuration
+
+## Wayfare
+
+- source-repo: .
+EOF
+
+OUT=$(run_step0_with "$TMP/precedence" "$ROOT_REPO" "/nonexistent/not-a-plugin")
+check "precedence: CLAUDE_PLUGIN_ROOT wins over a bogus WAYFARE_ROOT" \
+  "yes" "$([ -n "$OUT" ] && echo yes || echo no)"
+
+OUT=$(run_step0_with "$TMP/precedence" "unset" "$ROOT_REPO")
+check "precedence: WAYFARE_ROOT alone resolves the plugin root" \
+  "yes" "$([ -n "$OUT" ] && echo yes || echo no)"
+
 if [ "$FAIL" -gt 0 ]; then
   echo "loading: $PASS passed, $FAIL FAILED"
   exit 1
@@ -207,7 +246,7 @@ fi
 # Floor on the case count, for the reason the sibling suites carry one: this
 # suite greps a summary line, and a block that stops being extracted produces
 # no line and no failures either.
-MIN_CASES=15
+MIN_CASES=17
 if [ "$PASS" -lt "$MIN_CASES" ]; then
   echo "loading: only $PASS cases ran, expected >= $MIN_CASES — a block stopped executing" >&2
   exit 1

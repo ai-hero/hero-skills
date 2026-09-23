@@ -110,7 +110,8 @@ follow the four phases in
 using the table below as the report, and stop.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-fields.sh" wayfare-run-task
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+"$WAYFARE_ROOT/scripts/hero-fields.sh" wayfare-run-task
 ```
 
 Ask only about rows whose CURRENT is parenthesised: `(unset)`, `(no-section)`,
@@ -126,17 +127,10 @@ wrong. A row that already holds the right value is not a question.
 Source the shared helper library once, at the top of the run. Every later step assumes these functions are available:
 
 ```bash
-HERO_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
-# Fall back to this repo's own copy ONLY when this repo IS the plugin.
-# Unqualified, the fallback sources scripts/hero-lib.sh out of whatever
-# repo the agent happens to be in — which, during a review, is the branch
-# under review. It was near-dead while the default path matched every
-# install; renaming the folder to wayfare-skills made it live for everyone
-# who had not renamed their checkout.
-[ -r "$HERO_LIB" ] || { HL_TOP=$(git rev-parse --show-toplevel 2>/dev/null); \
-  [ -n "$HL_TOP" ] && [ -f "$HL_TOP/.claude-plugin/plugin.json" ] && HERO_LIB="$HL_TOP/scripts/hero-lib.sh"; }
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+HERO_LIB="$WAYFARE_ROOT/scripts/hero-lib.sh"
 # shellcheck source=/dev/null
-. "$HERO_LIB" || { echo "ERROR: cannot source hero-lib.sh — reinstall the plugin."; exit 1; }
+. "$HERO_LIB" || { echo "wayfare: cannot load hero-lib.sh from $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 1; }
 
 ROOT=$(hero_root)
 cat "$ROOT/HERO.md" 2>/dev/null || echo "NO_HERO_CONFIG"
@@ -165,8 +159,9 @@ Before auto-branching or any other destructive work, run the full pre-flight to 
 `preflight.sh --auto-scope` derives its own project scope from the diff and skips the runtime bucket on a fresh start. Deciding which checks apply is preflight's job, not wayfare-run-task's:
 
 ```bash
-PREFLIGHT="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/preflight.sh"
-[ -x "$PREFLIGHT" ] || PREFLIGHT="$(git rev-parse --show-toplevel)/scripts/preflight.sh"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+PREFLIGHT="$WAYFARE_ROOT/scripts/preflight.sh"
+[ -x "$PREFLIGHT" ] || { echo "wayfare: cannot find preflight.sh at $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 1; }
 
 "$PREFLIGHT" --bucket all --auto-scope
 PREFLIGHT_RC=$?
@@ -186,7 +181,8 @@ First, **derive `SUGGESTED_BRANCH` as a reasoning step.** This is a model task, 
 
 ```bash
 # shellcheck source=/dev/null
-. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+. "$WAYFARE_ROOT/scripts/hero-lib.sh" || { echo "wayfare: cannot load hero-lib.sh from $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 1; }
 hero_branch_policy   # apply these rules to derive SUGGESTED_BRANCH
 
 DEFAULT_BRANCH=$(hero_default_branch)
@@ -250,10 +246,10 @@ Do NOT silently reset `$DEFAULT_BRANCH` after the branch. That is destructive an
 Before doing anything destructive, read the current git/PR state and figure out where in the pipeline this invocation should pick up. Users often hit `wayfare:wayfare-run-task` after they have already done some of the work, possibly in a previous session, and the orchestrator should never silently re-do completed steps.
 
 ```bash
-PLUGIN="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}"
-[ -x "$PLUGIN/scripts/resume-state.sh" ] || PLUGIN="$(git rev-parse --show-toplevel 2>/dev/null)"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+PLUGIN="$WAYFARE_ROOT"
 if [ ! -x "$PLUGIN/scripts/resume-state.sh" ]; then
-  echo "ERROR: cannot find scripts/resume-state.sh — reinstall the plugin."
+  echo "wayfare: cannot find scripts/resume-state.sh at $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"
   exit 1
 fi
 eval "$("$PLUGIN/scripts/resume-state.sh")"
@@ -368,7 +364,8 @@ Read both stores before considering a grill. `wayfare-grill-idea`, `wayfare-writ
 
 ```bash
 # shellcheck source=/dev/null
-. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+. "$WAYFARE_ROOT/scripts/hero-lib.sh" || { echo "wayfare: cannot load hero-lib.sh from $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 1; }
 hero_ready_items
 
 # Tracker issues, when the `issues` connection is configured in HERO.md.
@@ -670,7 +667,8 @@ Advance to Step 8 **only if this step's own poll found a comment**, meaning `BOT
 
 ```bash
 # shellcheck source=/dev/null
-. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+. "$WAYFARE_ROOT/scripts/hero-lib.sh" || { echo "wayfare: cannot load hero-lib.sh from $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 1; }
 BOT_USER=$(hero_field bot-username || true)
 # PR_NUMBER comes from Step 4's wayfare-push-pr output. Re-derive owner/repo from gh
 # in case earlier steps did not export them.

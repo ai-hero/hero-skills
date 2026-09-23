@@ -29,12 +29,18 @@
 
 Most dev work follows the same loop: grab a ticket, plan, implement, test, review, commit, push, monitor. But every team does it slightly differently, different PM tools, different CI, different deploy targets.
 
-Wayfare gives you **one route from the product as it is to the product as it should be** that adapt to your stack. Configure once with `HERO.md`, then every skill knows your conventions, your tools, and your preferences.
+Wayfare gives you **one front door**: `wayfare:wayfare-sync-plan` converges
+the roadmap, `wayfare:wayfare-start-goal` runs it. Configure once with
+`HERO.md`, then every skill behind that door knows your conventions, your
+tools, and your preferences, and drives the whole loop for you:
 
 - **Plan and implement from tickets**: fetch from Linear/Jira/GitHub Issues, grill the work into dependency-aware work-items, create branches, then implement on approval
 - **Verify changes**: auto-detect project type (API, frontend, CLI, MCP) and run lint, typecheck, unit tests, and smoke tests
 - **Ship with confidence**: pre-commit checks, conventional commits, draft PRs by default, automated parallel review before requesting human review
 - **Stay informed**: CI/CD status, cluster health, security scans
+
+Each of those is a stage the front door runs for you, and each one is also
+its own skill you can run alone (see [Quick Start](#quick-start)).
 
 ## How it works
 
@@ -231,9 +237,19 @@ git clone https://github.com/ai-hero/wayfare-skills.git ~/.claude/plugins/wayfar
 Skills are immediately available in any Claude Code session. No restart needed.
 
 The plugin is **wayfare**, so its skills are invoked as `wayfare:wayfare-sync-plan`
-and the like. The clone target is `wayfare-skills`, which is what the
-`CLAUDE_PLUGIN_ROOT` fallback in every skill looks for when the environment
-does not set it.
+and the like. The clone target is `wayfare-skills`, which is the default path
+in every skill's `WAYFARE_ROOT` line (`$HOME/.claude/plugins/wayfare-skills`).
+
+The same skills install into Codex and other agents from the same checkout:
+`.codex-plugin/plugin.json` and `.agents/plugins/marketplace.json` both point
+at `./skills/`, so no separate build or rewrite is needed. `CLAUDE_PLUGIN_ROOT`
+is a Claude Code harness variable, and it is not reliably set in a skill's
+Bash calls, so every skill resolves its plugin root through one `WAYFARE_ROOT`
+line: `CLAUDE_PLUGIN_ROOT` when set, else an exported `WAYFARE_ROOT`, else the
+default clone path. An agent with neither exports `WAYFARE_ROOT` as
+`$(cd "$(dirname "$SKILL_MD")/../.." && pwd)` — the directory two levels above
+the `SKILL.md` it loaded — before running a skill (see
+[references/loading.md](./references/loading.md)).
 
 The repo was called `hero-skills` until 2026-09-21. If you vendored the
 auto-approve caller before then, it says
@@ -328,9 +344,10 @@ backports where this repo is ahead of the template.
 `wayfare:wayfare-recalibrate-config` tunes the config every stage reads, and
 `wayfare:wayfare-drop-item ID` abandons a branch and says so on the roadmap.
 
-### Or: one piece at a time
+### The stages, runnable alone when you need to
 
-The build pipeline is still there when you want a single step:
+`wayfare:wayfare-start-goal` runs the build pipeline for you, but each stage
+is its own skill, so you can run a single step by hand:
 
 ```
 /simplify                                   # tidy the dirty diff
@@ -342,16 +359,15 @@ wayfare:wayfare-ship-pr                         # @auto-approve, merge, reset to
 
 Each command reads your `HERO.md` config and adapts to your stack automatically.
 
-### Or: wayfare-run-task the whole thing
-
-For genuinely small, low-risk PRs:
+`wayfare:wayfare-run-task` chains those stages end to end for a single small,
+low-risk PR, without going through `wayfare:wayfare-sync-plan` first:
 
 ```
 wayfare:wayfare-run-task PROJ-123   # start a new ticket (or a plain-text description)
 wayfare:wayfare-run-task            # resume the current goal to merged + reset branch
 ```
 
-This chains all nine steps end to end: `plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship`, with explicit user gates at plan-approval, mark-ready, and merge. `plan` resolves what you asked for against your `.plans/` store and this repo's tracker before it plans anything new, delegating to `wayfare:wayfare-grill-idea` only when nothing matches, and it re-checks a matched item against the codebase first, so already-finished work is reported rather than rebuilt. `simplify` runs the `/simplify` skill on the dirty diff so the commit lands clean. `push` tests first (lint/typecheck/unit tests plus a UI smoke check via Playwright MCP for routes affected by the diff, skipped automatically on backend-only PRs), then commits and opens the draft PR. `self-review` runs the review agents plus a security pass. `mark-ready` is the explicit draft → ready gate; `await-review` polls for your configured Code Review Agent (Copilot, CodeRabbit, Greptile, …) before `respond` addresses its feedback.
+It chains `plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship` end to end, with explicit user gates at plan-approval, mark-ready, and merge. `plan` resolves what you asked for against your `.plans/` store and this repo's tracker before it plans anything new, delegating to `wayfare:wayfare-grill-idea` only when nothing matches, and it re-checks a matched item against the codebase first, so already-finished work is reported rather than rebuilt. `simplify` runs the `/simplify` skill on the dirty diff so the commit lands clean. `push` tests first (lint/typecheck/unit tests plus a UI smoke check via Playwright MCP for routes affected by the diff, skipped automatically on backend-only PRs), then commits and opens the draft PR. `self-review` runs the review agents plus a security pass. `mark-ready` is the explicit draft → ready gate; `await-review` polls for your configured Code Review Agent (Copilot, CodeRabbit, Greptile, …) before `respond` addresses its feedback.
 
 At each step transition, wayfare-run-task prints a progress line so you always know where you are:
 

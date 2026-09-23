@@ -92,7 +92,8 @@ Note: this does NOT auto-pop the stash since the purpose is to switch away from 
 
 ```bash
 # shellcheck source=/dev/null
-. "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/wayfare-skills}/scripts/hero-lib.sh"
+WAYFARE_ROOT="${CLAUDE_PLUGIN_ROOT:-${WAYFARE_ROOT:-$HOME/.claude/plugins/wayfare-skills}}"
+. "$WAYFARE_ROOT/scripts/hero-lib.sh" || { echo "wayfare: cannot load hero-lib.sh from $WAYFARE_ROOT — export WAYFARE_ROOT as the plugin root"; exit 1; }
 # _verbose, not the silent variant: this value gates a force-delete. On a repo
 # whose real default is `master`, a silent fallback to `main` makes
 # `gh pr list --base main` return 0, the branch reads as never-merged, and
