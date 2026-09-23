@@ -674,12 +674,11 @@ check "prior-review: a past auto-approve run does not bootstrap it" "false" \
   "$(gate_passed_of '[]' '[{"user":{"login":"github-actions[bot]"},"state":"APPROVED"}]')"
 
 # --- tree-guard ---------------------------------------------------------
-# The tree fetch used to pipe straight into `head -c`, so a `gh api`
-# failure under `bash -e` (no pipefail) left an empty repo_tree.txt and the
-# step kept going; the CI gate then saw has_workflows=0 and, absent a
-# registered check-run yet, passed with "No CI in this repo". `gh` is
-# stubbed so both the fetch failure and a truncated response are under
-# test, not just the happy path.
+# Under `bash -e` with no pipefail, a `gh api | head -c` failure here would
+# leave an empty repo_tree.txt while the step kept going; the CI gate would
+# then see has_workflows=0 and, absent a registered check-run, pass with
+# "No CI in this repo". `gh` is stubbed so both the fetch failure and a
+# truncated response are under test, not just the happy path.
 tree_guard() { # TREE_JSON [GH_RC] -> "rc|has_workflows|lane_error_present"
   printf '%s' "$1" > "$WORK/tree_stub.json"
   mkdir -p "$WORK/bin"
@@ -740,7 +739,7 @@ check "contents-fetch: 404 on a modified file counts as unreadable, not deleted"
   "$(contents_case src/app.go modified 404)"
 # A `removed` file never reaches the contents fetch at all (the loop
 # `continue`s on it before the URL is built), so "404" here never applies;
-# this guards that short-circuit stays in place now the fetch around it changed.
+# this guards that short-circuit stays in place.
 check "contents-fetch: a removed file is reported deleted with no fetch at all" \
   "0|(file deleted in this PR)" \
   "$(contents_case src/app.go removed 404)"
@@ -748,13 +747,11 @@ check "contents-fetch: a non-200/404 status is unreadable" "1|(file unreadable â
   "$(contents_case src/app.go modified 500)"
 
 # --- threads-paginate -------------------------------------------------------
-# The reviewThreads read was the one GraphQL call left on a single first(100)
-# page while every REST read in the file already paginates; a PR with an
-# unresolved thread past page 1 read as "all resolved". The fix hands
-# pagination to `gh api graphql --paginate --jq '....nodes[]'` instead of a
-# hand-rolled cursor loop, so `gh` is stubbed to print exactly what that
-# invocation prints: every node from every page, already jq-filtered, one
-# JSON object per line, in one call. A two-page fixture (the unresolved
+# reviewThreads pages at 100 per request; without pagination, a PR with an
+# unresolved thread past page 1 would read as "all resolved". `gh` is
+# stubbed to print exactly what `gh api graphql --paginate --jq
+# '....nodes[]'` prints: every node from every page, already jq-filtered,
+# one JSON object per line, in one call. A two-page fixture (the unresolved
 # thread only on the second) proves the merge under test picks it up.
 threads_stub() { # PAGE1_NODES_JSON PAGE2_NODES_JSON_OR_EMPTY [GH_RC]
   mkdir -p "$WORK/bin"

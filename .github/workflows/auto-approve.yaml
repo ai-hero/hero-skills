@@ -253,16 +253,12 @@ jobs:
           jq -r '.previous_filename // empty' files.jsonl > previous_files.txt
           # test: end files-list
 
-          # This file ships to every consumer the moment it merges here, with
-          # no per-repo PR and no staging step (AGENTS.md, "The one thing to
-          # understand first"). Neither the model nor the scripted lanes get
-          # to approve a change to it — a human always reviews this one file.
-          # Guarded by $REPO (already a plain bash variable, set above,
-          # rather than a bare `${{ github.repository }}` in this marked
-          # block) so a consumer running its own copy of this workflow, whose
-          # `github.repository` is never `ai-hero/wayfare-skills`, is
-          # unaffected, and so the test suite can exercise this block with
-          # `env REPO=... bash`, same as the bot-lane block above.
+          # Neither the model nor the scripted lanes may approve a change to
+          # this file — a human always reviews it. Guarded by $REPO so a
+          # consumer running its own copy, whose github.repository is never
+          # ai-hero/wayfare-skills, is unaffected, and so the test suite can
+          # exercise this block with `env REPO=... bash`, same as the
+          # bot-lane block above.
           # test: begin fleet-workflow
           if [ "$REPO" = "ai-hero/wayfare-skills" ] && { grep -qxF ".github/workflows/auto-approve.yaml" changed_files.txt || grep -qxF ".github/workflows/auto-approve.yaml" previous_files.txt; }; then
             echo "fleet_workflow=true" >> "$GITHUB_OUTPUT"
@@ -277,13 +273,11 @@ jobs:
           # CI gate below reads has_workflows from it rather than grepping
           # the capped text.
           #
-          # Fails CLOSED, unlike the fetch this replaced: that one piped
-          # straight into `head -c`, so a `gh api` failure under `bash -e`
-          # with no pipefail left an EMPTY repo_tree.txt and the step kept
-          # going. The CI gate then saw HAS_WORKFLOWS=0 and, if no check-run
-          # had registered yet, took the "no CI in this repo" branch and
-          # passed — the exact fail-open the zero-checks-but-workflows-exist
-          # branch exists to prevent.
+          # `bash -e` has no pipefail, so piping this fetch straight into
+          # `head -c` would swallow a `gh api` failure and leave an empty
+          # repo_tree.txt; the CI gate would then read HAS_WORKFLOWS=0 and,
+          # absent a registered check-run, take the "no CI in this repo"
+          # branch and pass. Check the exit status directly instead.
           # test: begin tree-guard
           if ! gh api "/repos/$REPO/git/trees/$HEAD_SHA?recursive=1" > tree.json; then
             printf '%s\n' "could not read the repo tree at $HEAD_SHA, so the CI and missing-file checks cannot run." > lane_error.txt
@@ -412,10 +406,10 @@ jobs:
                 # `status` here is files.tsv's changed-file status
                 # (added/modified/removed), not the HTTP status just
                 # matched. A 404 on anything but `removed` is a file the
-                # diff says still exists — most often the unencoded-path
-                # misfetch this replaced — so it counts as unreadable
-                # instead of being reported as deleted, and the model is
-                # never asked to approve a file it never saw.
+                # diff says still exists — an unencoded-path misfetch is the
+                # usual cause — so it counts as unreadable instead of being
+                # reported as deleted, and the model is never asked to
+                # approve a file it never saw.
                 if [ "$status" = "removed" ]; then
                   printf '(file deleted in this PR — 404)\n' >> full_files.txt
                 else
@@ -568,17 +562,16 @@ jobs:
           # maintainer a review had happened.
           PR_AUTHOR=$(jq -r '.user.login' pr.json)
 
-          # The fixes comment carries its own hidden marker. The heading it
-          # used to be recognised by is humanized before posting
-          # (docs/HUMANIZING.md forbids em dashes and rewrites heading case),
-          # so matching prose meant a finished review could fail the gate,
-          # while the bare word "improvements" appears freely in the FINDINGS
-          # comment's own suggestions and made one comment satisfy both halves.
-          # The legacy heading match stays as a fallback for repos whose
-          # plugin predates the marker; drop it once the fleet has upgraded.
-          # A heading, not the words.
-          # A review OF this gate quotes the strings the gate matches on, so an unanchored pattern read this PR's own findings comment as the fixes comment and collapsed findings to zero.
-          # Prose is unreliable exactly where it discusses the mechanism.
+          # FIXES_RE matches a HEADING, never bare words: docs/HUMANIZING.md
+          # rewrites heading case and forbids em dashes before posting, so
+          # matching the old heading text would miss a real fixes comment,
+          # while the bare word "improvements" appears in ordinary
+          # suggestion prose and would wrongly satisfy this half from a
+          # findings comment alone. Anchored to `(^|\n)#+`, not unanchored,
+          # so a comment (like this one's own review) that quotes the
+          # pattern in prose does not match as the fixes comment itself.
+          # The legacy heading alternative is a fallback for repos whose
+          # vendored plugin predates the ai-hero:self-review-fixes marker.
           FIXES_RE="ai-hero:self-review-fixes|(^|\\n)#+[ \t]*self-review[^\\n]*improvements"
           SELF_RE="ai-hero:self-review|Hero Self-Review"
 
@@ -672,16 +665,13 @@ jobs:
           REPO=$(echo "${{ github.repository }}" | cut -d/ -f2)
 
           # test: begin threads-paginate
-          # GraphQL's reviewThreads connection pages at 100 per request, same
-          # as every REST read above; this was the one read left on a single
-          # first(100) page, so an unresolved thread past page 1 was invisible.
-          # `--paginate` already walks every REST read in this file; it does
-          # the same for GraphQL as long as the query accepts `$endCursor`
-          # and selects `pageInfo { hasNextPage endCursor }` (gh's own
-          # pagination convention, not this file's), which it now does. No
-          # page cap: none of the other `--paginate` calls in this file needs
-          # one either, because a stuck `hasNextPage` is gh's failure to
-          # detect, not this script's cursor bookkeeping to get wrong.
+          # reviewThreads pages at 100 per request. `gh api graphql
+          # --paginate` walks a GraphQL connection only if the query accepts
+          # `$endCursor` and selects `pageInfo { hasNextPage endCursor }`
+          # (gh's pagination convention); omit either and only page 1 is
+          # ever read, silently. No page cap: a stuck `hasNextPage` is gh's
+          # failure to detect, not this script's cursor bookkeeping to get
+          # wrong.
           THREADS_ERROR=
           if ! gh api graphql --paginate \
                -f query='
@@ -948,22 +938,13 @@ jobs:
           UNVERIFIED_CLAIMS=$(cat unverified_claims.txt)
           GO_PKGS_WITHOUT_TESTS=$(cat go_pkgs_without_tests.txt)
 
-          # Build the prompt with --rawfile so the diff, repo tree, and
-          # full file bundle can be larger than argv would normally allow.
-          #
-          # The gatekeeper instructions live in `system`; everything the PR
-          # author controls — not just the diff and file contents, but also
-          # filenames (changed_files, omitted_files) and identifiers lifted
-          # from the description (unverified_claims) — is wrapped in its own
-          # <tag>...</tag> block in `messages[0].content` and never mixed
-          # into the instruction text. Every one of those ten values has its
-          # own closing tag stripped inside jq (never via a bash argv —
-          # --rawfile exists precisely because the diff and full file bundle
-          # can run past what argv holds), so a filename or file body
-          # containing a literal `</changed_files>` or `</diff>` cannot close
-          # its block early and start writing what looks like the next
-          # section. The strip is whitespace- and case-tolerant
-          # (`</ DIFF >`) for the same reason: the author chooses this text.
+          # --rawfile lets the diff and full-file bundle exceed argv limits.
+          # Everything the PR author controls is wrapped in its own
+          # <tag>...</tag> block in messages[0].content, never mixed into
+          # the gatekeeper instructions in `system`, with its closing tag
+          # stripped first (whitespace- and case-tolerant) so an
+          # attacker-supplied `</diff>` or `</ DIFF >` cannot close a block
+          # early and forge a later section.
           # test: begin untag
           # A single gsub strips only the innermost pair: `a</di</diff>ff>b`
           # becomes `a</diff>b`, one layer of nesting still live to close a
@@ -1091,10 +1072,6 @@ jobs:
           fi
 
           # test: begin model-write
-          # "Resolve final verdict" parses this file, not review.md, so a
-          # quoted "## Verdict" inside a gate's own report (an
-          # unresolved-thread comment, say) is never in the same file as the
-          # count it validates.
           printf '%s' "$REVIEW" > model.md
 
           # Prepend the gate results so the comment shows the full pass list,
@@ -1117,25 +1094,26 @@ jobs:
           PR_NUMBER: ${{ steps.pr.outputs.number }}
           HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
         run: |
-          # review.md is the ONE source of the verdict; every lane writes it
-          # and only this step turns it into a decision. Anchored on the
-          # literal "## Verdict" header so the word REQUEST_CHANGES quoted
-          # inside an explanation cannot flip the result. The first non-blank
-          # line after the header is the token; markup and punctuation around
-          # it are stripped, because "**APPROVE**" or "APPROVE." posting as
-          # request_changes under a body that visibly says APPROVE is the bug
-          # this parser had once already.
+          # model.md, when it exists, is the verdict source, not review.md:
+          # "Claude verification" writes it only on a complete model
+          # response, and parsing it instead of review.md keeps a quoted
+          # "## Verdict" inside a gate's own report (an unresolved-thread
+          # comment, say) out of the file this step validates. Anchored on
+          # the literal "## Verdict" header so the word REQUEST_CHANGES
+          # quoted inside an explanation cannot flip the result; the first
+          # non-blank line after the header is the token, with markup and
+          # punctuation stripped, because "**APPROVE**" or "APPROVE."
+          # posting as request_changes under a body that visibly says
+          # APPROVE is the bug this parser had once already.
           #
-          # model.md exists only when "Claude verification" got a complete
-          # model response (the scripted lanes — gate failure, dependency-bot
-          # — never write it, because that verdict is our own trusted text,
-          # not something to parse defensively). Only a real model response
-          # is held to the strict shape below: exactly one Verdict header and
-          # one each of the three check headers, and never APPROVE beside a
-          # ❌ on one of them. A model that opens a second "## Verdict" (its
-          # own, or one echoed out of the untrusted input) or drops a check
-          # fails closed rather than being read as whichever header happened
-          # first.
+          # Only a real model response is held to the strict shape below:
+          # exactly one Verdict header and one each of the three check
+          # headers, and never APPROVE beside a ❌ on one of them. The
+          # scripted lanes never write model.md, because that verdict is
+          # our own trusted text, not something to parse defensively. A
+          # model that opens a second "## Verdict" (its own, or one echoed
+          # out of the untrusted input) or drops a check fails closed
+          # rather than being read as whichever header happened first.
           # test: begin verdict-parse
           parse_loose_verdict() {
             awk '
