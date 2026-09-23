@@ -1384,11 +1384,18 @@ hero_path_within() { # PATH SCOPE [SCOPE...]
 #
 # Returns 0 when PATH is forbidden, so `if hero_path_forbidden "$p"` reads as
 # "refuse it".
+#
+# A path this cannot judge is forbidden too: `..`, a bare `.`, an absolute
+# path or a glob could each name one of these without spelling it. Matching is
+# case-insensitive because macOS resolves `hero.md` and `.GitHub/` to the real
+# files.
 hero_path_forbidden() { # PATH
-  local p="${1#./}"
+  local p
+  p=$(printf '%s' "${1#./}" | tr '[:upper:]' '[:lower:]')
   case "$p" in
-    .github|.github/*|.claude|.claude/*|HERO.md|FLEET.md) return 0 ;;
-    */.github/*|*/.claude/*|*/HERO.md|*/FLEET.md) return 0 ;;
+    ''|.|/*|*..*|*'*'*|*'?'*|*'['*) return 0 ;;
+    .github|.github/*|.claude|.claude/*|hero.md|fleet.md) return 0 ;;
+    */.github|*/.github/*|*/.claude|*/.claude/*|*/hero.md|*/fleet.md) return 0 ;;
   esac
   return 1
 }
@@ -1788,7 +1795,11 @@ hero_ready_items() (
         parent=$(hero_norm_id "$(hero_item_field "$f" parent)")
         case "$open_goals" in
           *" ${parent:-__none__} "*) ;;
-          *) echo "hero_ready_items: $f is $state and no open goal has it as a member; wayfare-sync-plan groups it into a goal" >&2 ;;
+          *) if [ "$state" = ready ]; then
+               echo "hero_ready_items: $f is $state and no open goal has it as a member; a goal gate may adopt it (hero_goal_candidates), else wayfare-sync-plan groups it" >&2
+             else
+               echo "hero_ready_items: $f is $state and no open goal has it as a member; wayfare-sync-plan groups it into a goal" >&2
+             fi ;;
         esac ;;
     esac
 
@@ -1917,6 +1928,178 @@ EOF
       echo "blocked $f — $title${missing:+ [missing dep:$missing]}${committed:+ [committed dep:$committed]}"
     fi
   done
+)
+
+# Tasks no open goal holds that `wayfare-start-goal`'s gate may adopt into
+# GOAL_ID (references/goals.md, *Adopting ungrouped work*). Stdout is
+# `ID STATUS` per candidate, in id order; each ungrouped task at `accepted` or
+# `ready` that is left out goes to stderr as `ID skipped: REASON`. Fit to the
+# goal's DoD is the gate's judgment; the rest is checked here.
+#
+# A task with no `source` paths is skipped, not offered: the forbidden-path
+# guard cannot run on it, and reading that as "touches nothing" lets exactly
+# the undeclared tasks through. An `accepted` task must also sit inside the
+# members' paths, as an admission must: nobody has read its plan, because the
+# goal writes it after the gate. Deps are settled to a fixed point, so a
+# candidate whose dep was dropped is dropped too, and a cycle is dropped whole.
+hero_goal_candidates() ( # GOAL_ID [STORE]
+  local goal store f id itype state parent pinfo index gstate members mpaths
+  local paths p bad deps dep dstate cands next changed out
+  [ -n "$1" ] || { echo "hero_goal_candidates: empty GOAL_ID" >&2; return 2; }
+  goal=$(hero_norm_id "$1")
+  store="${2:-$(hero_work_store)}" || return 1
+  cd "$store/items" 2>/dev/null || { echo "hero_goal_candidates: no item directory at $store/items" >&2; return 1; }
+  setopt localoptions nullglob 2>/dev/null || true
+
+  # `id type status` per item. An item with no id cannot be depended on or
+  # adopted; left in, its empty first field shifts every later read.
+  index=
+  for f in *.md; do
+    id=$(hero_norm_id "$(hero_item_field "$f" id)")
+    itype=$(hero_item_type "$f")
+    state=$(hero_item_status "$f")
+    if [ -z "$id" ]; then
+      case "$state" in accepted|ready) echo "hero_goal_candidates: $f skipped: no id, a store defect" >&2 ;; esac
+      continue
+    fi
+    index="$index$id ${itype:-none} $state
+"
+  done
+
+  gstate=$(printf '%s' "$index" | awk -v i="$goal" '$1 == i { print $2, $3; exit }')
+  case "$gstate" in
+    "goal accepted"|"goal active") ;;
+    *) echo "hero_goal_candidates: $goal is not an open goal (${gstate:-no such item})" >&2; return 2 ;;
+  esac
+  members=$(hero_goal_members "$goal" "$store") || { echo "hero_goal_candidates: cannot read the members of goal $goal" >&2; return 1; }
+  mpaths=
+  while IFS= read -r id; do
+    [ -n "$id" ] || continue
+    for f in *.md; do
+      [ "$(hero_norm_id "$(hero_item_field "$f" id)")" = "$id" ] || continue
+      mpaths="$mpaths$(hero_item_list_field "$f" source)
+"
+      break
+    done
+  done <<MEMBERS
+$members
+MEMBERS
+  members=" $(printf '%s' "$members" | tr '\n' ' ') "
+
+  # `ID STATUS DEP,DEP` per task that passes every check but the deps.
+  cands=
+  for f in *.md; do
+    id=$(hero_norm_id "$(hero_item_field "$f" id)")
+    [ -n "$id" ] || continue
+    itype=$(hero_item_type "$f")
+    state=$(hero_item_status "$f")
+    case "$state" in accepted|ready) ;; *) continue ;; esac
+    if [ -z "$itype" ]; then
+      echo "hero_goal_candidates: $id skipped: no type, a store defect" >&2; continue
+    fi
+    [ "$itype" = task ] || continue
+    parent=$(hero_norm_id "$(hero_item_field "$f" parent)")
+    if [ -n "$parent" ]; then
+      pinfo=$(printf '%s' "$index" | awk -v i="$parent" '$1 == i { print $2, $3; exit }')
+      case "$pinfo" in
+        "goal accepted"|"goal active") continue ;;
+        "goal done"|"goal dropped") ;;
+        *) echo "hero_goal_candidates: $id skipped: parent $parent is not a goal (${pinfo:-no such item}), a store defect" >&2; continue ;;
+      esac
+    fi
+    if [ -n "$(hero_item_list_field "$f" awaiting)" ]; then
+      echo "hero_goal_candidates: $id skipped: suspended, awaiting a message" >&2; continue
+    fi
+    if [ -n "$(hero_item_field "$f" bot)" ]; then
+      echo "hero_goal_candidates: $id skipped: a bot's PR, carried on its own" >&2; continue
+    fi
+    paths=$(hero_item_list_field "$f" source)
+    if [ -z "$paths" ]; then
+      echo "hero_goal_candidates: $id skipped: no source paths to check" >&2; continue
+    fi
+    bad=
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      # One scope per member path, so the split is wanted; noglob keeps a
+      # declared `src/*` from expanding against the items directory.
+      # shellcheck disable=SC2046
+      if hero_path_forbidden "$p"; then
+        bad="$bad $p"
+      elif [ "$state" = accepted ] && ! (set -f; hero_path_within "$p" $(printf '%s' "$mpaths")); then
+        echo "hero_goal_candidates: $id skipped: unplanned, and $p is outside the goal's paths" >&2; bad=-; break
+      fi
+    done <<PATHS
+$paths
+PATHS
+    [ "$bad" = - ] && continue
+    if [ -n "$bad" ]; then
+      echo "hero_goal_candidates: $id skipped: touches$bad, which needs its own goal" >&2; continue
+    fi
+    deps=$(hero_item_deps "$f" </dev/null | while IFS= read -r dep; do hero_norm_id "$dep"; done | tr '\n' ',')
+    cands="$cands$id $state ${deps:-,}
+"
+  done
+
+  # Drop, until nothing changes, every candidate with a dep that is not done,
+  # not a member, and not a surviving candidate.
+  changed=1
+  while [ "$changed" = 1 ]; do
+    changed=0; next=
+    while read -r id state deps; do
+      [ -n "$id" ] || continue
+      bad=
+      for dep in $(printf '%s' "$deps" | tr ',' ' '); do
+        case "$members" in *" $dep "*) continue ;; esac
+        printf '%s' "$cands" | awk -v i="$dep" '$1 == i { f = 1 } END { exit !f }' && continue
+        dstate=$(printf '%s' "$index" | awk -v i="$dep" '$1 == i { print $3; exit }')
+        case "$dstate" in
+          done) ;;
+          "") bad="$bad $dep (which no item has)" ;;
+          *) bad="$bad $dep (not done, not in this goal)" ;;
+        esac
+      done
+      if [ -n "$bad" ]; then
+        echo "hero_goal_candidates: $id skipped: depends on$bad" >&2; changed=1
+      else
+        next="$next$id $state $deps
+"
+      fi
+    done <<CANDS
+$cands
+CANDS
+    cands=$next
+  done
+
+  # Only a cycle among the candidates can block what remains. Place each one
+  # whose in-pool deps are placed; what never places is the cycle.
+  out=; changed=1
+  while [ "$changed" = 1 ]; do
+    changed=0; next=
+    while read -r id state deps; do
+      [ -n "$id" ] || continue
+      bad=
+      for dep in $(printf '%s' "$deps" | tr ',' ' '); do
+        printf '%s' "$cands" | awk -v i="$dep" '$1 == i { f = 1 } END { exit !f }' || continue
+        printf '%s' "$out" | awk -v i="$dep" '$1 == i { f = 1 } END { exit !f }' || bad=1
+      done
+      if [ -n "$bad" ]; then
+        next="$next$id $state $deps
+"
+      else
+        out="$out$id $state
+"; changed=1
+      fi
+    done <<CANDS
+$cands
+CANDS
+    cands=$next
+  done
+  while read -r id state deps; do
+    [ -n "$id" ] && echo "hero_goal_candidates: $id skipped: in a dependency cycle, a store defect" >&2
+  done <<CANDS
+$cands
+CANDS
+  printf '%s' "$out" | sort -n -k1,1
 )
 
 # ---------- branch naming ---------------------------------------------------

@@ -55,10 +55,11 @@ Progress:
 
 - [ ] 1. Step 0 above
 - [ ] 2. Select the goal — dependencies met, members planned
-- [ ] 3. Read the goal aloud: its DoD, its members, its `source` paths
-- [ ] 4. Read `## Permissions` aloud and take the grant, in-session
-- [ ] 5. Cut the branch, run turn 1 (`../../references/goals.md`, *One turn*)
-- [ ] 6. Append the turn to `## Log`; stop on any stop condition
+- [ ] 3. Adopt ungrouped work that fits — `hero_goal_candidates`, judged against the DoD
+- [ ] 4. Read the goal aloud: its DoD, its members, the adoptions, its `source` paths
+- [ ] 5. Read `## Permissions` aloud and take the grant, in-session; the typed id writes the adoptions
+- [ ] 6. Cut the branch, run turn 1 (`../../references/goals.md`, *One turn*)
+- [ ] 7. Append the turn to `## Log`; stop on any stop condition
 
 ## Next steps
 

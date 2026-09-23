@@ -8,11 +8,12 @@ never stored.
 
 `next` takes no argument. It picks the next goal, gets its permissions
 authorized in-session, and runs one turn of it in this session. It never
-plans, except what a turn admits under `absorb: yes`. On a clean run that one turn is the whole goal: every task
-committed, the PR shipped, the deploy verified. What it does not do is loop:
-a turn that ends on a stop line hands back to the person, who fixes what
-stopped it and runs `next` again, or sets the `/goal` line the report
-prints to have Claude Code re-run turns on its own.
+plans, except what a turn admits or its gate adopts under `absorb: yes`. On a
+clean run that one turn is the whole goal: every task committed, the PR
+shipped, the deploy verified. What it does not do is loop: a turn that ends on
+a stop line hands back to the person, who fixes what stopped it and runs
+`next` again, or sets the `/goal` line the report prints to have Claude Code
+re-run turns on its own.
 
 **Selection is deterministic, from the store.** Run `hero_ready_items` and
 walk the goals:
@@ -148,20 +149,30 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
    turn of this same goal wrote, whose `discovered_from` is a member and
    whose entry the goal's `## Log` names, under `absorb: yes`: that goal plans
    it in its own turn (*Admitting discovered work*). Under `absorb: no` it is
-   the ordinary STOP, and the goal resumes after `sync` plans it. A
+   the ordinary STOP, and the goal resumes after `sync` plans it. An
+   `accepted` item this goal's gate **adopted** (*Adopting ungrouped work*)
+   is the same exception, on the same terms. A
    goal whose `depends_on` goals are not all `done` is a STOP naming them;
    a `depends_on` entry that is not a goal is a store defect, same STOP. A
    missing or malformed `## Permissions` (see *Permissions*), or a `budget`
    or `budget_max` that is not a positive integer, is a STOP with
    `Next step: wayfare-sync-plan`, because the gate reads the item aloud and cannot read
    what is not there.
-2. **Get the approval, and show the whole run.** Read `## Permissions`
-   aloud; the approval grants exactly those, for every member:
+2. **Adopt the ungrouped work that fits.** Before reading anything aloud,
+   run *Adopting ungrouped work* below. It proposes the tasks that no open
+   goal holds and that fit this one, and the gate shows them alongside the
+   members. Nothing is written until the id is typed.
+3. **Get the approval, and show the whole run.** Read `## Permissions`
+   aloud; the approval grants exactly those, for every member and every
+   adopted task:
 
    ```
    Goal 7: A user can sign in with Google and land on their dashboard
 
      Tasks:    12, 13, 15, 18   (all planned)
+     Adopting:    24 (ready), 26 (to plan): not in any goal, and each
+                  serves a DoD line below; quoted per task
+                  Not adopted: 25 (no DoD line it serves), 27 (touches .github/)
      After:       goal 5 (done)
      Permissions: mark-ready yes · respond yes · auto-approve yes ·
                   merge yes (squash, HERO.md merge-method) · deploy verify ·
@@ -176,13 +187,17 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
                   one; it withholds only the ready-mark, and the loop hands
                   that item back to you;
                   a `no` above is where the loop hands back to you
-     Budget:      about 4 commits, hard stop at 8. The 4 is what the plan
-                  looks like, not a limit: a task that needs two commits
-                  or a fix after a failed test just goes over, and the report
-                  says so. The 8 is yours: at it the goal stops and comes
-                  back to you. Work found inside these tasks that serves a
-                  line of the DoD above is absorbed into this goal; anything
-                  else is left for you to authorize as its own goal later
+     Budget:      about 6 commits, checkpoint at 12, ceiling 24
+                  (was 4 and 8; +2 adopted). The 6 is what the plan looks
+                  like, not a limit: a task that needs two commits or a fix
+                  after a failed test just goes over, and the report says
+                  so. The 12 is a checkpoint: at it the goal raises it and
+                  logs why on the item if the rest still ships in this PR.
+                  The 24 is the ceiling: no raise passes it, and at it the
+                  goal stops and comes back to you. Work found inside
+                  these tasks that serves a line of the DoD above is
+                  absorbed into this goal; anything else is left for you
+                  to authorize as its own goal later
      Ships as:    one branch, one PR. Tasks are built one after another
                   and committed separately, one commit per task, tested
                   locally after each. Nothing is pushed until they are all
@@ -190,23 +205,30 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
      Stops on:    the goal item's ## Stop conditions
 
    Type the goal id to authorize these permissions and run the goal now,
-   or anything else to cancel (edit the item's ## Permissions first to
-   change them):
+   `7 only` to authorize it without the adopted tasks, or anything else to
+   cancel (edit the item's ## Permissions first to change them):
    ```
 
-   **On a resume, show what the goal admitted since you last saw it.** A goal
-   the user is re-authorizing may have grown: every member whose
-   `## Log` line marks it an admission is listed separately, with its
-   parent and the DoD line it was admitted against, under a line saying these
-   were not in the set authorized at the original gate. Without that, the one
-   surface an admission has is a turn report in a transcript of a headless
-   run, which is to say none. Same for `budget`: show the number now in
-   force beside the one first authorized.
+   `7` and `7 only` both authorize the goal; only `7` writes the
+   adoptions, in *Adopting ungrouped work*'s order, before the turn starts.
+   `7 only` authorizes the members as they stand and writes nothing, and a
+   cancel writes nothing either. What was not adopted stays for the next
+   gate or for `sync`.
+
+   **On a resume, show how the goal grew since the first gate.** A goal the
+   user is re-authorizing may have grown by admissions, adoptions and
+   checkpoint raises. List every member whose `## Log` line marks it
+   `admitted` or `adopted`, with the DoD line it serves, under a line saying
+   these were not in the set first authorized, and list every
+   `budget_max A → B` line with its reason. Show `budget` and `budget_max`
+   now in force beside the values on the goal's `cut` line (*sync*'s goals
+   stage writes it). Without that, the one surface growth has is a turn
+   report in a transcript of a headless run, which is to say none.
 
    The user types the id. It authorizes several merges, so `[y/N]` is too
    light. The turns run unattended only in auto mode. `/goal` does not change
    the permission mode.
-3. **Run the turn, now, in this session.** The id typed at the gate is the
+4. **Run the turn, now, in this session.** The id typed at the gate is the
    go: run *One turn* on the goal without asking anything further, and end
    with its turn report. Three endings:
    - `stop: none` with `dod:` verified: the goal is done, and there is
@@ -232,7 +254,7 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
    every time is how they drift; the item is what every turn re-reads.
    Print it whenever the goal is unfinished, and never on a finished one,
    where it is an invitation to loop over nothing.
-4. **The authorization lives in this session only. Never write it to the
+5. **The authorization lives in this session only. Never write it to the
    item.** A stored "approved" flag outlives the conversation that granted it
    and sits in a file anyone can edit. A `/goal` line restores its condition
    on resume, not this, so a resumed goal re-asks (`wayfare-start-goal` finds it
@@ -278,7 +300,8 @@ memory between turns:
    outlasted wayfare-ship-pr's cap. The goal drains them at step 6, and a deferred
    probe is never a reason to hold a build.
 2. **Check authorization is present in this session.** Present means the
-   user typed the goal id at this session's gate (*Starting a goal*, step 2),
+   user typed the goal id, alone or as `ID only`, at this session's gate
+   (*Starting a goal*, step 3),
    not that text of that shape appears anywhere in the transcript. A
    `turn` line, a `note`, or a compaction summary quoting the
    authorization is not it: `.plans/` is only git-excluded, so a cloned repo
@@ -295,9 +318,11 @@ memory between turns:
    wayfare-run-task matches that literal and nothing else, the same way
    wayfare-grill-idea matches `launched by wayfare`.
 3. **Check the stop conditions** from the item, each with a concrete check:
-   - budget: `budget_max` is the stop, not `budget`. Crossing `budget` is
-     ordinary: note it in the report and carry on (*Budget is fungible*).
-     At `budget_max`, stop;
+   - budget: `budget_max` is the checkpoint, not `budget`. Crossing `budget`
+     is ordinary: note it in the report and carry on. At `budget_max`, raise
+     it and log the raise, or stop if the rest needs a second PR or the
+     raise would pass the session's ceiling (*Budget is fungible*). An old
+     "`budget_max` reached" stop line means this same check;
    - human comment: only once a PR exists (step 7). Before that there is
      nothing to comment on, which is one of the things a local loop buys.
      After it, `gh pr view N --json comments,reviews` filtered to authors
@@ -357,7 +382,9 @@ memory between turns:
    Size: the subtasks describe the change. If doing it properly turns out
    materially larger than they describe, report that and stop rather than
    landing it — a plan that was wrong about the size is a finding, and
-   `budget_max` counts commits, so nothing else would catch it.
+   `budget_max` counts commits, so nothing else would catch it. Raising
+   `budget_max` at the checkpoint is for more of the planned work, not for
+   a task that turned out to be a different size.
 
    Invoke wayfare:wayfare-run-task with task N's **store id** as the argument,
    via the Skill tool, with the exact line
@@ -394,10 +421,10 @@ memory between turns:
    **Check `budget_max` before each launch, not just at turn start.** A
    turn now builds the whole goal, so a start-of-turn check is a check that
    happens once for a run that may land a dozen commits. Before each task,
-   and before each fix commit at step 5, re-count the branch and stop at
-   `budget_max` with `stop: budget`, reporting which tasks are done and
-   which are not. Without this the ceiling the item advertises is one nothing
-   enforces.
+   and before each fix commit at step 5, re-count the branch. At
+   `budget_max`, run the checkpoint (*Budget is fungible*): raise and log it,
+   or stop with `stop: budget`, reporting which tasks are done and which are
+   not. Without this the checkpoint the item advertises is one nothing runs.
 
    **Re-check the premise for each task, not just the first.** Step 3
    checks the next task's `source` paths at the current head; under a
@@ -516,7 +543,7 @@ memory between turns:
    its commits from the goal's `commits:` instead.
 
    ```
-   Goal 164 — turn 2. 4 commits (expected 5, hard stop 10).
+   Goal 164 — turn 2. 4 commits (expected 5, checkpoint 10).
    Branch feat/goal-164-every-shipped-surface-renders-as-drawn, local, unpushed, no PR.
 
    | Item | Status | Commit | What was done | Verified by | Diff |
@@ -703,7 +730,7 @@ memory between turns:
      verified:  after 12: npm test exit 0
                 after 13: npm test exit 0; UI smoke 3/3 routes
                 fix b7c8d9e after 13: shared fixture reset between suites
-     commits:   3 of about 4 expected, hard stop at 8
+     commits:   3 of about 5 expected (4 + 1 admitted), checkpoint at 8
      mistakes:  12 → 2 recorded; 13 → 1 recorded (+1 from fix b7c8d9e)
      admitted:  21 (from 13) → admitted, serves DoD line 2 "session survives a refresh"
                 22 (from 13) → not admitted, follow-up ground: unrelated log-format refactor
@@ -722,8 +749,9 @@ memory between turns:
    The `admitted:` line appears only on a turn whose runs wrote items, and
    then it lists **every** one of them with its verdict. A carved item
    missing from it is an item nobody will group. The `commits:` line names
-   the count so far, the expectation, and the hard stop, so an overrun is
-   visible without being an alarm. `pr:` is `not opened` until step 7 runs,
+   the count so far, the expectation, and the checkpoint, so an overrun is
+   visible without being an alarm; a raise this turn is shown on it as
+   `checkpoint 8 → 12`. `pr:` is `not opened` until step 7 runs,
    then the URL.
 
    The `stop:` line is the one the evaluator keys on, and it takes one of:
@@ -745,6 +773,79 @@ the checks happened. That does not get past a reviewer later; it just ends
 the loop with the work unfinished and the record saying otherwise. Name what
 was checked. If something was not checked, say `not checked`. The evaluator
 treats that as not yet met, which is the correct answer.
+
+### Adopting ungrouped work: the gate fills the goal
+
+Planning outruns building. Every goal's turns carve follow-up ground, `sync`
+plans ideas into tasks, and a person marks things ready, all faster than one
+goal at a time consumes them. A task no open goal holds is invisible to
+`wayfare-start-goal`, which walks goals and never items, so it waits for a
+`sync` to mint a goal around it, and that goal's turns carve more. So a goal
+takes that work in at its gate, while a person is watching and about to type
+the id, not later. Waiting for a separate goal is what let it pile up.
+
+**Candidates are computed:** `hero_goal_candidates GOAL_ID`. It lists every
+task at `accepted` or `ready` whose `parent` is no open goal, and names each
+one it leaves out, with the reason, on stderr. It leaves out:
+
+- a suspended task, a bot's dependency PR, and a store defect (no id, no
+  type, a `parent` that is not a goal);
+- a task with no `source` paths, since nothing can be checked on it;
+- a task with any `source` path on the never-admissible list, or one the
+  check cannot judge (`..`, `.`, an absolute path, a glob);
+- an `accepted` task with a path outside the members' `source` paths. It is
+  planned after the gate, so nobody reads its plan before it builds, and
+  the path containment that holds an admission holds it too;
+- a task with a dependency that is not `done`, not a member, and not a
+  surviving candidate, settled until nothing more drops, and every task in
+  a dependency cycle.
+
+The gate shows every one of those under `Not adopted:`. **A non-zero exit
+is not an empty list.** The gate prints `Adopting: could not be computed`
+with the helper's message, and adopts nothing. Printing no `Adopting:` line
+would read as "nothing fits", which is a different claim.
+
+**Fit is judged, per candidate, and the gate shows the judgment.** A
+candidate is adopted when it serves a line of this goal's
+`## Definition of Done`, quoted, just as criterion 2 of an admission asks.
+Being in the same repo, or being next in line, does not count. Neither does
+being a small thing the branch could carry anyway. A goal that takes in
+whatever is lying around stops being an outcome and becomes a queue, and
+its DoD can no longer say when it is done. The one never-admissible clause
+the helper cannot check, a file governing authentication, authorization or
+secrets, is judged here too, and a candidate that touches one is not
+adopted. A candidate whose dependency was not adopted is not adopted
+either.
+
+**Adopting `accepted` work needs `absorb: yes`.** An adopted task at
+`accepted` is unplanned, and the goal plans it exactly as it plans an
+admitted item: `wayfare:wayfare-grill-idea ID` with the `launched by
+wayfare` line, narrowed to the DoD line it serves, then `ready`. Under
+`absorb: no`, only `ready` candidates are adopted, and the `accepted` ones
+are listed as not adopted, `needs planning`.
+
+**Typing the id writes the adoptions, log lines first.** In the goal's
+`## Log`, one `note` line per adopted task, `adopted 24 (ungrouped, at
+gate)` and the quoted DoD line, and then one line for the numbers, `budget
+4 → 6, budget_max 8 → 12: adopted 24, 26`. Only then the fields: `parent:
+GOAL_ID` and a `rank` in dependency order on each task (an existing member
+that depends on an adopted task goes after it), then `budget` up by one per
+adopted task, then `budget_max` set to the larger of its current value and
+`2 * budget`. An adoption never lowers `budget_max`: a checkpoint raise
+already in force stays in force. The gate showed both new numbers beside
+the old ones, so the person authorized them.
+
+If a write fails partway, the turn does not start. The gate names what
+landed and re-offers the rest on the next run. A partial batch can leave a
+task adopted without its dependency, and a turn that built it would build
+against a missing piece.
+
+**It runs at every gate, including a resume.** A resumed goal re-reads the
+store and re-asks. A task that became ready while the goal was stopped
+gets its chance then, instead of waiting for the goal to finish. This is
+the one way an `active` goal's member set grows from outside its own
+turns, and it is sound for the same reason the freeze exists: the set a
+person authorizes is exactly the set that runs.
 
 ### Admitting discovered work: the goal absorbs what it finds
 
@@ -851,6 +952,9 @@ order, and the order is the whole of the safety:
   earlier member depends on a later one (a carve-out that an unbuilt
   member task depends on has to precede it, and `rank` contradicting
   `depends_on` is a store defect).
+- then `budget` up by one, so the expectation keeps pace with the member
+  set it describes. `budget_max` moves only at its checkpoint and at a
+  gate's adoptions, each with its own log line (*Budget is fungible*).
 - then the `admitted:` line in the turn report.
 
 Reversed, a crash between the two wedges the goal permanently: `next`'s
@@ -896,7 +1000,9 @@ being too small, it is a commit that mixes unrelated work, or three tasks
 squashed into one blob a reviewer cannot take apart.
 
 **`budget` is an expectation, not a gate.** `sync` writes the member count
-because that is the size of the plan it can see, and plans are estimates. A
+because that is the size of the plan it can see, and plans are estimates.
+It grows by one with each admission and each adoption, so it stays the
+size of the plan as it now stands. A
 task that turns out to need two commits, a fix commit after a failed branch
 test, an admitted item: each of those is ordinary, and each pushes the goal
 over. Going over is not an event. The turn notes the new count in its report
@@ -907,21 +1013,58 @@ padded until it means nothing; a budget you are expected to land near stays an
 honest estimate, and a goal that ends at nine commits against an expected four
 is telling you the plan was wrong in a way you can act on.
 
-**`budget_max` is the "not too much" line, and it is the only hard one.** It
-is the number a person authorized at the gate, and a turn never moves it. At
-`budget_max` the goal reports `stop: budget` and hands back, whatever it could
-say for the next commit.
+**`budget_max` is a checkpoint, not a wall.** At `budget_max` the turn does
+not simply keep going, and it does not simply stop. It stops to check, then
+either raises the number, logs why, and builds on, or hands back. Stopping a
+goal that is two commits from done, only to have a person type the same id
+again, slows the work and buys no safety.
 
-Without that second number there is no bound at all: each admitted item may
-carve another admissible one, so a goal that only had to justify itself
-commit by commit could run indefinitely on individually reasonable steps.
-`budget_max` does not care about the justification, which is the point. It
-catches the case where every local decision looked fine and the total did not.
+**Raise it when the rest still ships in this PR.** Everything left is
+already a member, it goes on this same branch, it ships in the PR this goal
+is already building, and the raise stays under the ceiling below. Then:
 
-`sync` sets it to twice `budget`, which is the "type of fungible" range: a
-goal that needs half again as much as planned just gets on with it, and one
-that needs triple stops and asks. Raising `budget_max` is not a turn's to do;
-that is `wayfare-start-goal`, a person, and a fresh gate.
+1. Write the `## Log` `note` line first, dated, with a fixed prefix so it
+   can be summed like an admission: `budget_max 8 → 14: 15, 18, 21 remain,
+   same PR; 13 took three commits against one planned`. It names what is
+   left and why the plan ran over.
+2. Then write the new `budget_max`: the current count plus two per
+   remaining member, and never less than the current count plus one. At
+   8 commits with three members left, that is 14.
+3. Then carry on, and show the raise on the turn report's `commits:` line.
+
+Both writes are checked. If the log line cannot be written, the number
+stays where it was and the turn stops with `stop: budget`: an unlogged
+raise leaves no record, and `.plans/` is git-excluded, so the log line is
+the only one a later reader has. If the log line lands and the
+`budget_max` write fails, the turn stops the same way, and its report says
+the logged raise was not applied, so the next reader does not count it.
+
+**The ceiling is the bound, and a turn cannot move it.** It is twice the
+`budget_max` in force when the id was typed, held in this session beside
+the grant and never written to the item, for the same reason the grant is
+not. A raise that would pass it is not made: the turn stops with
+`stop: budget`, and the person decides at a fresh gate. Without it there
+is no bound at all. Each admitted item becomes a member, each member earns
+two more commits at the next raise, and admit-then-raise repeats with a
+dated line at every step and no end. The log is the record of the run; the
+ceiling is what ends it.
+
+**Stop with `stop: budget` when the rest would not ship in this PR:** a
+remainder that is a *different changeset* needing a second PR (*One turn*,
+step 8), or work that is not yet a member. A second PR is a second merge the
+person saw no plan for, and that is the point where the goal hands back. A
+task that turned out to be a different size than its plan is a stop too
+(*One turn*, step 4): the raise is for more of the planned work, not for
+work the plan never described.
+
+**A goal written before the checkpoint still says "`budget_max` reached"**
+under `## Stop conditions`. The turn reads that line as the checkpoint
+above, not as a wall, and `sync` rewrites it on an `accepted` goal to the
+current default. An `active` goal keeps its text until its next gate.
+
+`sync` sets `budget_max` to twice `budget`: a goal that needs half again as
+much as planned just gets on with it, and one that needs more gets a
+checkpoint.
 
 The spend itself is a set, not a count. Each commit appends its SHA to
 `commits` as it lands, with the task it served. That set is a record for a

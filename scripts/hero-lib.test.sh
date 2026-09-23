@@ -1214,6 +1214,88 @@ OUTC="$(hero_ready_items "$C" 2>/dev/null)"
 check "members: uncovered task still lists READY" "READY" "$(state_of 002-out.md "$OUTC")"
 check "members: uncovered active task still lists active" "active" "$(state_of 006-impl.md "$OUTC")"
 
+# ---------- goal candidates: ungrouped work a goal's gate may adopt -----------
+
+mkdir -p "$TMP/cand/.plans/items"; G="$TMP/cand/.plans"; plan "$G"
+mkcand() { # file id status [source] [deps] [parent] [extra-line]
+  {
+    printf -- '---\nid: %s\ntype: task\nshape: story\ntitle: item %s\nstatus: %s\n' "$2" "$2" "$3"
+    printf 'depends_on: [%s]\n' "${5:-}"
+    [ -n "${4:-}" ] && printf 'source: [%s]\n' "$4"
+    [ -n "${6:-}" ] && printf 'parent: %s\n' "$6"
+    [ -n "${7:-}" ] && printf '%s\n' "$7"
+    printf -- '---\n'
+  } > "$G/items/$1"
+}
+mkgoal() { printf -- '---\nid: %s\ntype: goal\ntitle: g\nstatus: %s\ndepends_on: []\n---\n' "$2" "$3" > "$G/items/$1"; }
+mkgoal 050-goal.md    50 accepted
+mkgoal 051-other.md   51 accepted
+mkgoal 052-old.md     52 "done"
+mkgoal 053-running.md 53 active
+mkcand 001-member.md    1 ready    src/a     ""   50
+mkcand 002-free.md      2 ready    src/x
+mkcand 003-inside.md    3 accepted src/a/sub
+mkcand 004-other.md     4 ready    src/d     ""   51
+mkcand 005-oldgoal.md   5 ready    src/e     ""   52
+mkcand 006-nosrc.md     6 ready
+mkcand 007-ci.md        7 ready    ".github/workflows/x.yaml"
+mkcand 008-bot.md       8 ready    package.json "" "" "bot: dependabot"
+mkcand 009-onmember.md  9 accepted src/a/f   1
+mkcand 010-onpool.md   10 accepted src/a/g   3
+mkcand 011-onopen.md   11 ready    src/h     4
+mkcand 012-waiting.md  12 ready    src/i     ""   ""  "awaiting: [m-1]"
+mkcand 013-new.md      13 new      src/j
+mkcand 014-active.md   14 active   src/k
+mkcand 015-second.md   15 ready    "src/ok, .github/workflows/x.yaml"
+mkcand 016-outside.md  16 accepted src/zzz
+mkcand 017-missing.md  17 ready    src/m     99
+mkcand 018-chain.md    18 ready    src/n     17
+mkcand 019-chain2.md   19 ready    src/o     18
+mkcand 020-cycle.md    20 ready    src/p     21
+mkcand 021-cycle.md    21 ready    src/q     20
+mkcand 022-dangling.md 22 ready    src/r     ""   77
+mkcand 023-running.md  23 ready    src/s     ""   53
+mkcand 024-nested.md   24 ready    apps/web/.claude
+mkcand 025-onnew.md    25 ready    src/t     13
+printf -- '---\ntype: task\nshape: story\ntitle: no id\nstatus: ready\ndepends_on: []\nsource: [src/u]\n---\n' > "$G/items/026-noid.md"
+
+OUTG="$(hero_goal_candidates 50 "$G" 2>/dev/null)"
+ERRG="$(hero_goal_candidates 50 "$G" 2>&1 >/dev/null)"
+# Silent exclusions ride on this exact match: a member (1), another open goal's
+# task (4, and 23 under an active one), and statuses that are not candidates.
+check "candidates: ungrouped ready, contained accepted, deps settled" "2 ready
+3 accepted
+5 ready
+9 accepted
+10 accepted" "$OUTG"
+skipped() { printf '%s' "$ERRG" | grep -q "$1" && echo yes || echo no; }
+check "candidates: no source paths is skipped, not assumed safe" "yes" "$(skipped '6 skipped: no source paths')"
+check "candidates: a forbidden path is skipped"           "yes" "$(skipped '7 skipped: touches .github/workflows/x.yaml')"
+check "candidates: a forbidden SECOND path is skipped"    "yes" "$(skipped '15 skipped: touches .github/workflows/x.yaml')"
+check "candidates: a nested bare .claude is skipped"      "yes" "$(skipped '24 skipped: touches apps/web/.claude')"
+check "candidates: a bot's PR is skipped"                 "yes" "$(skipped "8 skipped: a bot's PR")"
+check "candidates: a suspended task says so"              "yes" "$(skipped '12 skipped: suspended')"
+check "candidates: unplanned outside the goal's paths"    "yes" "$(skipped '16 skipped: unplanned, and src/zzz')"
+check "candidates: a dep held by another open goal"       "yes" "$(skipped '11 skipped: depends on 4 (not done')"
+check "candidates: a dep no item has is named as missing" "yes" "$(skipped '17 skipped: depends on 99 (which no item has)')"
+check "candidates: a dropped dep drops its dependent"     "yes" "$(skipped '18 skipped: depends on 17')"
+check "candidates: and its dependent's dependent"         "yes" "$(skipped '19 skipped: depends on 18')"
+check "candidates: a cycle is dropped whole"              "yes" "$(skipped '20 skipped: in a dependency cycle')"
+check "candidates: a dep outside the pool is not credited" "yes" "$(skipped '25 skipped: depends on 13')"
+check "candidates: a dangling parent is a store defect"   "yes" "$(skipped '22 skipped: parent 77 is not a goal')"
+check "candidates: an item with no id is a store defect"  "yes" "$(skipped '026-noid.md skipped: no id')"
+check "candidates: an empty GOAL_ID is refused"   "2" "$(hero_goal_candidates "" "$G" >/dev/null 2>&1; echo $?)"
+check "candidates: no such goal is refused"       "2" "$(hero_goal_candidates 999 "$G" >/dev/null 2>&1; echo $?)"
+check "candidates: a done goal is refused"        "2" "$(hero_goal_candidates 52 "$G" >/dev/null 2>&1; echo $?)"
+check "candidates: a task id is refused"          "2" "$(hero_goal_candidates 2 "$G" >/dev/null 2>&1; echo $?)"
+check "candidates: an active goal is accepted"    "0" "$(hero_goal_candidates 53 "$G" >/dev/null 2>&1; echo $?)"
+check "candidates: a missing store is an error"   "1" "$(hero_goal_candidates 50 "$TMP/definitely-not-a-store" >/dev/null 2>&1; echo $?)"
+# zsh does not word-split an unquoted list, so a guard written as
+# `for p in $paths` checks only the first path there and passes 15.
+if command -v zsh >/dev/null 2>&1; then
+  check "candidates: same list under zsh" "$OUTG" "$(zsh -c ". '$LIB'; hero_goal_candidates 50 '$G'" 2>/dev/null)"
+fi
+
 
 # ---------- hero_work_store migration ---------------------------------------
 #
@@ -1630,6 +1712,14 @@ check "forbidden: ./ prefixed"              "yes" "$(hero_path_forbidden ./.gith
 check "forbidden: ordinary source is not"   "no"  "$(hero_path_forbidden src/app/api.ts && echo yes || echo no)"
 # A file merely NAMED like one of them is ordinary source.
 check "forbidden: HERO.md.bak is not"       "no"  "$(hero_path_forbidden docs/HERO.md.bak && echo yes || echo no)"
+# Each of these could name a forbidden path without spelling it.
+check "forbidden: nested dir, no trailing /" "yes" "$(hero_path_forbidden apps/web/.github && echo yes || echo no)"
+check "forbidden: case-folded HERO.md"       "yes" "$(hero_path_forbidden hero.md && echo yes || echo no)"
+check "forbidden: case-folded .GitHub"       "yes" "$(hero_path_forbidden .GitHub/workflows/x.yaml && echo yes || echo no)"
+check "forbidden: a .. segment"              "yes" "$(hero_path_forbidden src/../.claude && echo yes || echo no)"
+check "forbidden: a bare ."                  "yes" "$(hero_path_forbidden . && echo yes || echo no)"
+check "forbidden: an absolute path"          "yes" "$(hero_path_forbidden /etc/x && echo yes || echo no)"
+check "forbidden: a glob"                    "yes" "$(hero_path_forbidden 'src/**' && echo yes || echo no)"
 if command -v zsh >/dev/null 2>&1; then
   check "within: segment rule holds under zsh" "no" "$(zsh -c ". '$LIB'; hero_path_within src/application/x.ts src/app" >/dev/null 2>&1 && echo yes || echo no)"
   check "forbidden: holds under zsh"           "yes" "$(zsh -c ". '$LIB'; hero_path_forbidden .github/workflows/x.yaml" >/dev/null 2>&1 && echo yes || echo no)"
