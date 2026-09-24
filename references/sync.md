@@ -320,7 +320,7 @@ carry, without the plugin learning either.
 
 **The `deps` stage: the bots' open PRs.** A dependency bot opens PRs nobody
 planned; each is a bump already implemented on a branch that is not ours.
-This stage turns each into a `shape: dependency` task with `bot:` so that `do ID`
+This stage turns each into a `shape: dependency` task with `bot:` so that `wayfare-advance-item ID`
 can carry it and a goal can cover it:
 
 ```bash
@@ -649,7 +649,7 @@ follows):
   repaired by `sync`, because only an out-of-band `done` may leave an `active`
   goal, so report it with its one exit: the user re-authorizes, which drops
   the goal to `accepted`, lets the next `sync` re-cut it, and sends it back
-  through `next`'s gate. Also a `accepted` item sitting in an `active` goal
+  through `wayfare-start-goal`'s gate. Also a `accepted` item sitting in an `active` goal
   under `absorb: no`, which is waiting on a person and shows here on every
   sync until someone plans it; a task at `ready` or further, not `done`, that
   no `accepted` or `active` goal has as a member (the listing warns on stderr;
@@ -697,7 +697,7 @@ the task's plan is already locked:
 are written (bootstrap step 6; the last thing update-mode does once its
 findings are written), `sync` runs one planning pass over every `accepted`
 task that needs one, doing the grilling, the questions and the decisions, so a
-task leaves `sync` planned and marked, and `do` only ever builds.
+task leaves `sync` planned and marked, and `wayfare-advance-item` only ever builds.
 This is the *postflight* of plan, not a preflight of building: planning used
 to happen lazily, one task at a time, at the moment each was about to be
 built, and that is exactly the shape being retired.
@@ -751,11 +751,11 @@ So the pass runs across the roadmap:
    they name; the user's yes flips it `ready`. Wayfare never self-flips
    either. A no leaves the item where it was, named in the report.
 3. **Report what is left.** The user can stop the pass at any task. What
-   was not planned stays `accepted` and is named in the report; `do` refuses it
+   was not planned stays `accepted` and is named in the report; `wayfare-advance-item` refuses it
    until the next `sync` plans it. Nothing is silently deferred.
 
 4. **Goals: cover every planned item, bottom-up, and re-cut what is
-   already there.** A goal is the unit `next` authorizes and runs, and
+   already there.** A goal is the unit `wayfare-start-goal` authorizes and runs, and
    every member must already be `ready` (*Starting a goal*,
    step 1), so the end of this pass is the one moment in the workflow
    where a goal can be formed *from* the set instead of reassembled by
@@ -765,8 +765,8 @@ So the pass runs across the roadmap:
    without the reasoning that produced it.
 
    **This stage always runs, and it ends with no planned item outside a
-   goal.** `next` walks goals and never items, so a `ready` task no
-   goal has as a member is never handed out: it sits READY until someone types `do N`
+   goal.** `wayfare-start-goal` walks goals and never items, so a `ready` task no
+   goal has as a member is never handed out: it sits READY until someone runs `wayfare-advance-item N`
    by hand, and nothing in the loop ever reaches it. That is the orphan this
    stage exists to prevent. The invariant at the end of the pass: **every
    task at `ready` or further and not `done` is in exactly one open
@@ -786,7 +786,7 @@ So the pass runs across the roadmap:
    until every `ready` task is in a goal. A goal's own `depends_on`
    names the **goals** its tasks' dependencies fall in, derived and never
    authored: if any task in goal B `depends_on` a task in goal A, then
-   B `depends_on: [A]`. That derived order is what `next` walks, so a goal
+   B `depends_on: [A]`. That derived order is what `wayfare-start-goal` walks, so a goal
    whose dependencies are not `done` is never handed out, and two goals with
    no edge between them are independent and may run in either order. A
    cycle between goals means the grouping is wrong. Say so and re-cut
@@ -818,7 +818,7 @@ So the pass runs across the roadmap:
    input, not fixed points. Re-derive the grouping over the current `ready`
    set from scratch, as if no goal existed, then diff the result against
    every goal in the store. Goals written under an earlier rule (a
-   task left to `do`, a round of bugs never grouped) get no exemption:
+   task left to `wayfare-advance-item`, a round of bugs never grouped) get no exemption:
    the diff is what brings them under this one. **The diff has a
    direction.** Goals are outcomes, and a round that planned no new ground
    should end with no more open goals than it started with: work found
@@ -843,7 +843,7 @@ So the pass runs across the roadmap:
      why. Each proposed change is a row in the same confirm flow as a new
      goal, and a declined row leaves that goal exactly as it was.
    - **`active` goals are frozen, and `sync` never re-cuts one.** Their
-     member set and `## Permissions` were shown at `next`'s gate and
+     member set and `## Permissions` were shown at `wayfare-start-goal`'s gate and
      authorized as a set; changing either from outside changes what was
      authorized. Three edits an active goal takes, none of them sync's: a
      dropped task that went `done` out-of-band (that shrinks what was
@@ -874,7 +874,7 @@ So the pass runs across the roadmap:
    writes defects it had the values to prevent. `## Stop conditions` gets
    the documented defaults; it is the one per-goal brake on a loop that
    pre-authorizes merges, and a turn reads it every time. `## Permissions`
-   gets the documented defaults too. It is what `next`'s gate reads aloud
+   gets the documented defaults too. It is what `wayfare-start-goal`'s gate reads aloud
    and the user authorizes, and a goal with none is a goal whose gate cannot
    say what it is asking for. The `## Definition of Done` spans the group.
    Concatenating the tasks' own DoDs is not that: it asserts only what
@@ -887,14 +887,14 @@ So the pass runs across the roadmap:
    plan that carried it would put into a file exactly the flag *Starting a
    goal* step 4 forbids. A user may decline a proposed goal; the item it
    would have covered is then named in the report as uncovered, with the
-   `do N` line that builds it by hand, and the next sync proposes it again.
+   `wayfare-advance-item N` line that builds it by hand, and the next sync proposes it again.
    End the run with the roadmap view; when a goal is runnable, the last line
    is `Next step: wayfare:wayfare-start-goal`.
 
 **This is not a gate on building.** The roadmap does not have to be fully
 planned before the first task ships. That would be waterfall, and it
 contradicts slicing the work so each piece stands alone. Plan the set as far
-as it is understood, build with `do`, and the next `sync` re-runs the pass
+as it is understood, build with `wayfare-advance-item`, and the next `sync` re-runs the pass
 over what it adds. What is being avoided is *deferring the thinking to
 implementation time*, not batching the work.
 

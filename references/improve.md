@@ -1,8 +1,8 @@
-# `improve`: the compliance audit and the backports
+# `wayfare-audit-compliance`: the compliance audit and the backports
 
 The compliance audit on its own, for this repo or the whole fleet.
 
-`improve` takes no argument. In a repo it runs the `compliance` stage
+`wayfare-audit-compliance` takes no argument. In a repo it runs the `compliance` stage
 exactly as `sync` does, with the same engine call, the same items and the same confirm flow, and then does the one thing `sync` never does: **the backport half**. Run
 the engine once more for the fleet's template (`--repo TEMPLATE`, the
 `template:` row in FLEET.md) and, for every check the template fails where
@@ -14,7 +14,7 @@ this repo the messages standard allows, and it is confirmed like any
 outward-facing act: show the drafts, write on the user's word. Outside a
 fleet there is no template and no backport; say so.
 
-**At a fleet root** (Step 0 printed `FLEET_ROOT`), `improve` is the family
+**At a fleet root** (Step 0 printed `FLEET_ROOT`), `wayfare-audit-compliance` is the family
 audit:
 
 1. Run the engine for the whole family, at merged state:

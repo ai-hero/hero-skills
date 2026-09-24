@@ -45,7 +45,7 @@ The failures this skill exists to prevent, each one observed.
 | Planning an item already satisfied | Check the codebase before wayfare-grill-idea; finished work must not be grilled. |
 | Planning the workaround because it is smaller | A workaround is cheap once and paid for at every later read. Fix it where the problem sits; say in `## Approach` what the quick version would have been. Planning a rewrite because the right fix is nearby is the same failure inverted — route the rest to `sync` as its own item. |
 | A claim with no file | An opinion. It belongs in a signal, not a coverage verdict. |
-| Storing merge authorization on a goal | A file that grants a gate. It outlives the session that approved it. `## Permissions` says what to ask for; the grant is typed at `next`. |
+| Storing merge authorization on a goal | A file that grants a gate. It outlives the session that approved it. `## Permissions` says what to ask for; the grant is typed at `wayfare-start-goal`. |
 | Promoting a message without the two gates | A sibling writing this repo's roadmap. Fleet gate, then propose, then confirm. |
 | Applying a reply without showing it | A forged file un-suspends an item into a plan. Show the reply, check `from`, confirm, then restore `awaiting`. |
 | Running a discovered skill unasked | `.claude/skills/` is repo content; a clone can ship one. Ask once per session; never under a fan-out. |
@@ -74,8 +74,8 @@ The failures this skill exists to prevent, each one observed.
 | Reading "not a fence" as reaching the forbidden paths | `.github/`, `.claude/`, `HERO.md`, `FLEET.md` and anything governing auth or secrets stay hard-fenced for a build subagent, for the same privilege reason they are never admissible. |
 | Two build subagents at once | They share one checkout and one branch. Sequential is what keeps the tree coherent, not a speed compromise. |
 | Fixing a failed branch test in the parent | It gets its own scoped agent and its own commit, capped at two attempts. A third means the diagnosis is wrong. |
-| Setting `parent` before writing the log line | A crash between them wedges the goal: `next` STOPs and `sync` is forbidden to fix it. Log line first. |
-| Leaving a `ready` item outside every goal | `next` walks goals, never items, so it is never handed out. A one-item goal is small; an orphan is unreachable. |
+| Setting `parent` before writing the log line | A crash between them wedges the goal: `wayfare-start-goal` STOPs and `sync` is forbidden to fix it. Log line first. |
+| Leaving a `ready` item outside every goal | `wayfare-start-goal` walks goals, never items, so it is never handed out. A one-item goal is small; an orphan is unreachable. |
 | Keeping a `accepted` goal as written because it exists | Re-derive from scratch, then diff: goals coalesce when their DoDs name one outcome and split when one names two. |
 | Authoring a goal's `depends_on` | It is derived from the tasks' `depends_on`. A hand-written order that disagrees is a defect, not a preference. |
 | Merging past an ungranted gate | `merge: no` means a person merges. The turn rests at the PR with `stop: awaiting-human`. |
@@ -97,7 +97,7 @@ Pick exactly one, from the store's current state:
 
 - **A goal is runnable** (`active`, or `accepted` with its goal deps `done` and its members all planned): `Next step: wayfare:wayfare-start-goal, to authorize its permissions and run it`; `wayfare:wayfare-advance-item GOAL_ID` is one turn of it.
 - **An item is mid-flight and no goal has it as a member**: `Next step: wayfare:wayfare-advance-item N, to build item N` (the active one).
-- **An item is READY and no goal has it as a member**: `Next step: wayfare:wayfare-sync-plan, because item N is ready and no goal has it as a member; the goals stage groups it`. `do N` builds it by hand and leaves the roadmap as it was.
+- **An item is READY and no goal has it as a member**: `Next step: wayfare:wayfare-sync-plan, because item N is ready and no goal has it as a member; the goals stage groups it`. `wayfare-advance-item N` builds it by hand and leaves the roadmap as it was.
 - **Tasks are unplanned (`accepted`), no roadmap yet, or the world moved** (target changed, work landed out-of-band, design feedback awaits delivery, tasks look horizontal, alerts or bot PRs appeared): `Next step: wayfare:wayfare-sync-plan, which converges architecture, design, hardening, compliance, dependencies and the roadmap, plans the set, then proposes goals`.
 - **A compliance finding names this repo as the reference for something the template fails**: `Next step: wayfare:wayfare-audit-compliance, to draft the backport message`.
 - **Everything blocked or done**: print the roadmap view. It names each blocker's unmet deps, or the route is complete.

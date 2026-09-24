@@ -511,9 +511,10 @@ fi
 # ways: wayfare-sync-plan runs its review/sync in both modes, and
 # wayfare-grill-idea's `arch` dispatch
 # delegates to it. `wayfare-write-handoff` is deliberately NOT here: wayfare's
-# design-feedback delivery files its issue directly rather than routing
-# through handoff, because handoff distills the *current conversation* and
-# would carry this repo's session state into a third party's tracker.
+# design-feedback delivery deposits a message directly into the sibling's
+# `.plans/inbox/` rather than routing through handoff, because handoff
+# distills the *current conversation* and would carry this session's state
+# into the sibling's inbox.
 # `wayfare-audit-security` is here because re-adding `disable-model-invocation: true` would
 # break every sync at its harden stage.
 # `wayfare-check-preflight` is intentionally absent, wayfare-build-task runs

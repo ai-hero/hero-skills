@@ -157,7 +157,7 @@ stated as one user-visible outcome is a filter over the roadmap, not a goal,
 and it will report `done` without anything shipping that a person notices.
 
 The stage holds one invariant: **every item at `ready` or further and not
-`done` is in exactly one open goal.** `next` walks goals and never items, so
+`done` is in exactly one open goal.** `wayfare-start-goal` walks goals and never items, so
 a `ready` task in no goal is an orphan nothing in the loop reaches. A task
 that adds up to nothing larger becomes a one-item goal — small, but
 reachable.
@@ -165,7 +165,7 @@ reachable.
 Each round **re-cuts** the open goals rather than appending to them: tasks
 join and leave, two goals naming one outcome coalesce, a goal whose DoD
 became two outcomes splits. An `active` goal is frozen, because its members
-and permissions were authorized as a set at `next`'s gate.
+and permissions were authorized as a set at `wayfare-start-goal`'s gate.
 
 `sync` writes the goal. It never authorizes it — that is typed by a person at
 `wayfare-start-goal`, in-session, and is never stored in the file.
@@ -314,11 +314,12 @@ Three commands. Everything else is run by them.
 # 1. Configure your project (run once per repo)
 wayfare:wayfare-init-repo
 
-# 2. Converge the world into a plan. One round, eleven stages:
-#    config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals
+# 2. Converge the world into a plan. One round, twelve stages:
+#    config → inbox → architecture → harden → comments → compliance → local → deps → design → reconcile → plan → goals
 #    Reads the mailbox from sibling repos (bug reports become bug items),
 #    reviews DESIGN.md (offers to converge it), audits dependency/container/
-#    code hardening, checks the repo against the compliance register (generic
+#    code hardening, flags comments and docs the code now contradicts,
+#    checks the repo against the compliance register (generic
 #    baseline + your fleet's overlay), runs the repo's own `wayfare: sync`
 #    skills, gathers the bots' open PRs, refreshes the design snapshot,
 #    reconciles source against design, plans every feature with you, then
@@ -407,7 +408,7 @@ the map; there is no skill whose job is to hold it.
 | Command | What it does |
 | --- | --- |
 | `wayfare:wayfare-init-repo` | Investigate the repo, write `HERO.md`, create the plan object `.plans/PLAN.md`, migrating an older store on sight. Scaffolds first in an empty directory |
-| `wayfare:wayfare-sync-plan` | One round of convergence (`config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals`), writing every `.plans/` item and proposing goals bottom-up over what was planned. Writes only what you confirm |
+| `wayfare:wayfare-sync-plan` | One round of convergence (`config → inbox → architecture → harden → comments → compliance → local → deps → design → reconcile → plan → goals`), writing every `.plans/` item and proposing goals bottom-up over what was planned. Writes only what you confirm |
 | `wayfare:wayfare-start-goal` | Pick the next runnable goal, read its `## Permissions` aloud (mark-ready, respond, auto-approve, merge, deploy, absorb) for your in-session authorization, and run its first turn |
 | `wayfare:wayfare-advance-item` | Advance one item as far as its gates allow: a ready task, a Dependabot PR to merged, or one goal turn. Never plans |
 | `wayfare:wayfare-drop-item` | Abandon work on an unmerged branch and write `status: dropped`, so the roadmap stops claiming it |

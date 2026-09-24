@@ -1,30 +1,30 @@
-# `do`: advance one item
+# `wayfare-advance-item`: advance one item
 
 Dispatch on the item's type, then either advance one task or carry a
 dependency bot's PR to merged and deployed.
 
-## `do ID`: advance one item, or run one goal turn
+## `wayfare-advance-item ID`: advance one item, or run one goal turn
 
-`do` takes exactly one id and dispatches on the item's type:
+`wayfare-advance-item` takes exactly one id and dispatches on the item's type:
 
 - **A task** (any `shape`, unless it is a `dependency` with `bot:`) runs *Advancing one item* below on it, with the item
   given rather than selected: one item, as far as the gates allow, then
   stop. It never plans. An item that is not `ready` (or further along) is
   refused with `Next step: wayfare-sync-plan`, whose postflight plans the set; an
-  item with unmet deps is refused naming them. `do` on a task is
+  item with unmet deps is refused naming them. `wayfare-advance-item` on a task is
   unaffected by an active `/goal`.
 - **A `shape: dependency` task with `bot:`** runs *Carrying a bot's PR* below,
   there is nothing to build, only a bot's PR to carry to merged and
   deployed.
-- **A goal** runs *One turn* of it. This is what `next` runs once its gate
+- **A goal** runs *One turn* of it. This is what `wayfare-start-goal` runs once its gate
   is passed, and what an optional `/goal` line re-invokes after a stop. A
   `accepted` goal that has not been authorized in this session routes to
   *Starting a goal*, the gate that reads its permissions aloud, exactly as
-  `next` would; no turn runs until the id is typed there.
+  `wayfare-start-goal` would; no turn runs until the id is typed there.
 
 ## Advancing one item
 
-One procedure, one caller: `do ID` names the item. It takes a **planned**
+One procedure, one caller: `wayfare-advance-item ID` names the item. It takes a **planned**
 task as far as the gates allow in a single run (wayfare-build-task). It never plans,
 because planning is `sync`'s postflight, and the ready-mark was given there.
 
@@ -47,7 +47,7 @@ the next task.
    report the goal that id's `parent` names instead of building.
    `wayfare-start-goal` is already safe (the goal stays `active` until its PR
    merges, and a goal's derived `depends_on` holds the order), so this is
-   the gap `do ID` has to cover.
+   the gap `wayfare-advance-item ID` has to cover.
 
    1. `active` task, mid-build: check out its branch if one exists (its
       `branch:` field names it, which is what `resume-state.sh` matches on;
@@ -84,7 +84,7 @@ the next task.
       unmet deps, `invalid` rows (store defects, routed to `sync`), or a
       truly empty roadmap → `Next step: wayfare-sync-plan`.
 2. **The ready-mark is the permission, and it was already given.** A READY
-   task carries the user's mark from `sync`'s postflight; `do` goes
+   task carries the user's mark from `sync`'s postflight; `wayfare-advance-item` goes
    straight into `wayfare:wayfare-build-task` on it, with one line:
 
    ```
@@ -104,7 +104,7 @@ the next task.
    starts a *second* task. Single-step mode chains launches but never skips gates,
    so it also halts wherever a gate halts, rendering what stopped it. When
    the task reaches a resting state, print the roadmap view and stop; the
-   user runs `do` on the next task, or the goal's next turn does. Resting states: merged and closed out, PR open
+   user runs `wayfare-advance-item` on the next task, or the goal's next turn does. Resting states: merged and closed out, PR open
    awaiting review, a declined gate, or, on a multi-PR task, a partial
    merge that returned it to `active`. That last one is a resting state
    too: the next PR is the next run, not a continuation of this one.
@@ -114,7 +114,7 @@ the next task.
 A dependency bot opens PRs nobody planned. Each is a bump already implemented,
 on a branch that is not ours, waiting for a review, a merge, and a deploy.
 `sync`'s `deps` stage wrote the item and its postflight ready-marked it; this
-procedure, whether `do ID` on the item or a goal turn that owns it, takes it the
+procedure, whether `wayfare-advance-item ID` on the item or a goal turn that owns it, takes it the
 rest of the way and stops. It is the one procedure that ends past the merge:
 the item's Definition of Done names the deployment, and a merged bump whose
 deploy is degraded stays open.
@@ -188,7 +188,7 @@ own branch for that reason and closes the bots' PRs after its own merge.
    verdict, the merge confirmation, merge, reset, verify-deploy. Under a
    goal the permissions line travels in the invocation and waives
    `auto-approve`, `merge` and `deploy` exactly as it does for wayfare-build-task;
-   standalone `do` asks at each, as wayfare-ship-pr always has. Its Step 3a rebase
+   standalone `wayfare-advance-item` asks at each, as wayfare-ship-pr always has. Its Step 3a rebase
    is a no-op when step 1 held (if the base moved in between and it pushed a
    rebase, say so; see the rule above). Read back the verdict, the merge
    SHA, and the `Deployment:` line.

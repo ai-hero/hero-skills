@@ -376,8 +376,8 @@ settled. Two rules that are easy to get backwards:
 
 ## Expiry
 
-`expires:` is evaluated **lazily**, by the sending repo's next `wayfare
-sync` (its **stale waits** finding, proposed for confirmation). There is no
+`expires:` is evaluated **lazily**, by the sending repo's next
+`wayfare:wayfare-sync-plan` (its **stale waits** finding, proposed for confirmation). There is no
 timer and nothing sweeps the fleet; Step 0 only prints the count. Because
 the sender keeps no copy of the message, the item carries its own
 `expires:` beside `awaiting:`.

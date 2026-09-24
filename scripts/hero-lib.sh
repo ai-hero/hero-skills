@@ -1579,8 +1579,8 @@ hero_norm_id() {
 #            landed upstream. Never READY, because a signal is DELIVERED and
 #            never built, so handing one to wayfare-build-task is wrong
 #   goal     a goal at accepted: approved, waiting to run. Never READY: a goal
-#            is a container for tasks, and wayfare-build-task builds tasks. `wayfare
-#            next` selects goals by type instead
+#            is a container for tasks, and wayfare-build-task builds tasks.
+#            `wayfare-start-goal` selects goals by type instead
 #   idea     an idea at new or accepted: parked, never work until promoted
 #   new      status is new (or absent): created, not yet triaged. Never READY,
 #            because nobody has decided this should be worked on
@@ -1782,7 +1782,7 @@ hero_ready_items() (
 
     # A planned task outside every open goal is invisible to `wayfare-start-goal`,
     # which walks goals and never items, so it sits READY forever unless
-    # someone runs `do N` by hand. A committed one is worse: it is the residue
+    # someone runs `wayfare-advance-item N` by hand. A committed one is worse: it is the residue
     # of an abandoned goal branch, claiming work the repo does not have. Warn
     # on stderr only; the row itself is still correct. Sits ABOVE the status
     # table because the mid-flight arms `continue`.
@@ -1830,7 +1830,8 @@ hero_ready_items() (
       task:review) echo "review  $f — $title"; continue ;;
       # A goal is a container, never a unit of work: READY means "hand this to
       # wayfare-build-task", and wayfare-build-task builds tasks. `wayfare-start-goal` selects goals by
-      # type and `do GOAL_ID` takes one by id, never off the READY tier.
+      # type and `wayfare-advance-item GOAL_ID` takes one by id, never off the
+      # READY tier.
       goal:accepted) echo "goal    $f — $title"; continue ;;
       # A signal is delivered, not built, so it never reaches READY either.
       # Its own row word so the open-feedback count is a scan rather than a

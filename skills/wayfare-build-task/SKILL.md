@@ -624,7 +624,7 @@ gh pr view "$PR_NUMBER" --json isDraft --jq '.isDraft'
 
 `true` continues. `false` means the PR was opened ready-for-review, which only happens when wayfare-push-pr was passed `ready` or bypassed with a bare `gh pr create`. Do not carry on into Step 5 with it: run `gh pr ready --undo`, render `push` with `(✓) push (opened ready; reverted to draft)`, and continue. Ready-for-review is Step 6's decision, made after the self-review has posted and its fixes have landed. A PR that is ready before that pulls the review bot in against code Step 5 is about to change, re-triggers it on every fix pushed afterwards, and fails auto-approve's prior-review gate, which costs a workflow run and a Claude call to learn what this one line would have said.
 
-Then, if the work-item is a task, flip it to `status: review` and append a dated `note:` line with the PR URL to its `## Log`. Wayfare's roadmap shows it as in review from here, and wayfare (`do`, or a goal turn) uses that recorded URL to find its way back to the branch.
+Then, if the work-item is a task, flip it to `status: review` and append a dated `note:` line with the PR URL to its `## Log`. Wayfare's roadmap shows it as in review from here, and wayfare (`wayfare-advance-item`, or a goal turn) uses that recorded URL to find its way back to the branch.
 
 Test-phase failure semantics (owned by wayfare-push-pr, surfaced here):
 
@@ -733,7 +733,7 @@ When invoked from a goal turn and the authorization is *not* in the invocation, 
 
 This is where an ordinary one-item run marks the store `done`, and skipping it is what makes a later run re-resolve finished work (Step 1c catches it, but catching it late wastes the resolution).
 
-**Under a goal, there is nothing to close out here.** Recognise that run by its invocation: **no item argument, and a `gates pre-authorized in-session for goal GOAL_ID:` line**. Every member task sits at `committed`, and the goal flips them to `done` at its step 7 once this run reports the merge. Render `(–) close-out (the goal owns it)` and return the merged SHA. Do **not** go looking for something to close: the only open item left is the goal itself, and writing `done` on it here would land before wayfare's admission pass (*One turn*, step 8) and strand any admitted work in a goal `next` will never hand out again. The goal is wayfare's to close, at its step 7.
+**Under a goal, there is nothing to close out here.** Recognise that run by its invocation: **no item argument, and a `gates pre-authorized in-session for goal GOAL_ID:` line**. Every member task sits at `committed`, and the goal flips them to `done` at its step 7 once this run reports the merge. Render `(–) close-out (the goal owns it)` and return the merged SHA. Do **not** go looking for something to close: the only open item left is the goal itself, and writing `done` on it here would land before wayfare's admission pass (*One turn*, step 8) and strand any admitted work in a goal `wayfare-start-goal` will never hand out again. The goal is wayfare's to close, at its step 7.
 
 **Do not key this on `ITEM_FILE`.** `resume-state.sh` sets it at Step 0.5 from `active` items only, and nothing recomputes it afterwards, so an ordinary run that started from a `ready` item has it empty for all nine steps even though Step 2 marked that item `active`. Keying the skip on emptiness would skip the close-out on this skill's most common path.
 
