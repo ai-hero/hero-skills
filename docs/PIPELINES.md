@@ -178,7 +178,7 @@ field map is `scripts/hero-fields.sh`; the contract is
 ### Pipeline 4: wayfare-sync-plan, one round of convergence
 
 ```
-config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals
+config → inbox → architecture → harden → comments → compliance → local → deps → design → reconcile → plan → goals
 ```
 
 Owner: `wayfare:wayfare-sync-plan`. Eleven stages: the config gate; the

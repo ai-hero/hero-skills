@@ -615,7 +615,7 @@ the same note before its text is treated as context.
 **`sync` is a pipeline, and it renders as one** (`docs/PIPELINES.md`):
 
 ```
-config → inbox → architecture → harden → compliance → local → deps → design → reconcile → plan → goals
+config → inbox → architecture → harden → comments → compliance → local → deps → design → reconcile → plan → goals
 ```
 
 Print the DAG line at every stage transition. The order is the order the
