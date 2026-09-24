@@ -112,7 +112,8 @@ outside the goal: auto-approve still has to pass, branch protection still
 applies, a REQUEST_CHANGES or a red workflow still stops the task, and a
 human comment on the PR still cancels the waiver on that PR.
 
-The permissions travel to wayfare-build-task in its invocation, as one literal line:
+The permissions travel as one literal line, and only in an invocation that
+can reach a gate (*One turn*, step 2):
 `gates pre-authorized in-session for goal 7: mark-ready, respond,
 auto-approve, merge, deploy=verify`, carrying the goal id, the granted names, and
 `deploy=` always present (`deploy=none` is the skip; omitting it would read
@@ -324,7 +325,7 @@ memory between turns:
    writer of that transition. Then every launch below that can reach a gate
    carries the permissions line from *Permissions*. Those are step 7's
    hand-off and a bot item's *Carrying a bot's PR*. Build, fix and simplify
-   agents commit only and reach no gate, so they never get the line: a grant
+   agents only commit and reach no gate, so they never get the line: a grant
    pasted into a prompt that cannot use it is one more copy of merge
    authority for an agent to misread. The line is `gates pre-authorized
    in-session for goal 7: mark-ready, respond, auto-approve, merge,
@@ -422,11 +423,11 @@ memory between turns:
    title of every item its Step 2a wrote, each with the one goal-G DoD line
    it serves or `serves no DoD line`.
 
-   Report your mistakes too, exhaustively and in the words you wrote them in
-   — the `mistake` lines in `## Log` already hold them, and "verbatim" binds whoever copies
-   them onward, not you: every approach you took and undid, every fix you redid differently, every
-   assumption that turned out false mid-build, every test written against
-   the wrong behavior. A wrong turn you recovered from still counts. On a
+   Report every mistake too, stated plainly and specifically — the
+   `mistake` lines in `## Log` already hold them: every approach you took
+   and undid, every fix you redid differently, every assumption that
+   turned out false mid-build, every test written against the wrong
+   behavior. A wrong turn you recovered from still counts. On a
    stop, report the reason and the step it stopped at.
    ```
 
@@ -508,7 +509,7 @@ memory between turns:
    the run reported.** The run writes those lines itself, as the wrong turns happen
    (wayfare-build-task's *plan file is the state file* rules), so this is a read-back,
    not a second copy: an append-only section written twice is written twice.
-   Append only what the report names and the file lacks, verbatim. A report
+   Append only what the report names and the file lacks. A report
    with wrong turns and no `mistake` line means the run died before writing
    them — say so on the `mistakes:` line rather than reconstructing them
    from the transcript, which is gone next session anyway.
@@ -735,7 +736,7 @@ memory between turns:
    A fix commit spends budget like any other; that is the honest accounting,
    and it is why `budget` is commits rather than tasks. Print the goal
    table after it, and after the branch run above. Its reported wrong
-   turns are copied verbatim as `mistake` lines into `## Log` on the task the failure
+   turns are copied as `mistake` lines into `## Log` on the task the failure
    surfaced under, same as a build run's.
 6. **When every task is committed, drain the deferred deploy checks, then
    verify the goal's DoD directly.** The goal's own merge is usually already

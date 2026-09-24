@@ -263,8 +263,9 @@ run once over the branch to push, review, and ship it. That is one review pass,
 one auto-approve and one merge for the goal, instead of one of each per
 task, and the commits still separate the work for whoever reads the PR.
 
-Every wayfare-build-task invocation carries the granted permissions as one
-literal line. A gate the goal was not granted rests the goal at its PR and
+Only an invocation that can reach a gate carries the granted permissions,
+as one literal line: step 7's hand-off and a bot PR's carry. Build, fix and
+simplify agents never get it. A gate the goal was not granted rests the goal at its PR and
 ends the loop with `stop: awaiting-human`. Work a turn finds inside a member
 task does not become a new goal: if it serves a line of this goal's Definition
 of Done it is **admitted** into the goal (its `parent` is set), planned and
