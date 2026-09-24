@@ -503,7 +503,7 @@ follows):
   refactor is exactly the moment a pre-existing source-side rendering bug
   gets looked at again and noticed for the first time.
 - **covered**: Source now satisfies a task's target paths (work landed
-  out-of-band or via wayfare-run-task): propose marking it `done`, citing its
+  out-of-band or via wayfare-build-task): propose marking it `done`, citing its
   `## Definition of Done` lines as the evidence, or, for a task never
   planned (empty DoD), the source-vs-target diff of its paths. For a task
   whose `target` paths render a page, "satisfies" means rendered, not merely

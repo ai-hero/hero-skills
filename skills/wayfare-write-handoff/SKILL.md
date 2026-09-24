@@ -7,7 +7,7 @@ argument-hint: "[TITLE_OR_FOCUS] [--issue] [--repo OWNER/NAME] | recalibrate"
 
 # Handoff: package this conversation for a downstream agent
 
-Turn whatever this conversation has established (the goal, the decisions made and why, the work already done, the work still open) into a single work-item in the `.plans/` store that a downstream agent (a fresh session, a cheaper model, `wayfare:wayfare-run-task`, or a teammate) can execute **without asking anything this conversation already answered**.
+Turn whatever this conversation has established (the goal, the decisions made and why, the work already done, the work still open) into a single work-item in the `.plans/` store that a downstream agent (a fresh session, a cheaper model, `wayfare:wayfare-build-task`, or a teammate) can execute **without asking anything this conversation already answered**.
 
 The receiving agent has zero context from this session. That is the quality bar: if the item would make its reader scroll back through this chat, it is not a handoff yet.
 
@@ -123,7 +123,7 @@ Hard-won session knowledge: failed approaches, environment quirks, gate/hook beh
 
 ## Subtasks
 
-1. The remaining work above, as an ordered checklist wayfare-run-task can tick.
+1. The remaining work above, as an ordered checklist wayfare-build-task can tick.
 
 ## Definition of Done
 
@@ -193,7 +193,7 @@ Status: plan — awaiting your ready-mark
 Tracker: #123 filed (or: not filed)
 
 Downstream pickup (after the ready-mark):
-  wayfare:wayfare-run-task         # execute it ticket-to-merge in a fresh session
+  wayfare:wayfare-build-task         # execute it ticket-to-merge in a fresh session
   # or point any agent at the .plans/ file — it is self-contained by design
 ```
 
@@ -211,7 +211,7 @@ Local stub:    .plans/items/010-await-rate-limit-support.md
 Status:        plan (waiting on acme/api-service#88 — mark ready when it lands)
 
 Nothing in this repo picks that issue up — the receiving team runs
-wayfare:wayfare-run-task (or anything else) against their own tracker.
+wayfare:wayfare-build-task (or anything else) against their own tracker.
 ```
 
 ## Notes
@@ -220,5 +220,5 @@ wayfare:wayfare-run-task (or anything else) against their own tracker.
 - **One item per handoff.** If the conversation holds several independent threads, hand off the named one and list the rest as candidates, or run `wayfare:wayfare-grill-idea` to decompose properly.
 - **The store is private.** `.plans/` is git-ignored; never commit or push it. The `--issue` and `--repo` paths are the deliberate ways to make a handoff shared. The store itself is not a transport, and never becomes one. A sibling's `.plans/inbox/` is a mailbox, not a store slot (`docs/MESSAGES.md`); depositing a message there is not a handoff and never carries one.
 - **A cross-repo handoff is a request, not an assignment.** Filing an issue on someone else's repo does not schedule their work. Say what you need and by when in the item; do not assume it will be picked up.
-- **Pickup is per-repo.** `wayfare:wayfare-run-task` Step 1 resolves against the local `.plans/` store and this repo's tracker only. A `--repo` handoff is picked up by whoever runs their own tooling in the target repo.
+- **Pickup is per-repo.** `wayfare:wayfare-build-task` Step 1 resolves against the local `.plans/` store and this repo's tracker only. A `--repo` handoff is picked up by whoever runs their own tooling in the target repo.
 - **Update, don't duplicate.** Re-running handoff on the same thread updates the existing item and bumps its sections, keeping the id stable.

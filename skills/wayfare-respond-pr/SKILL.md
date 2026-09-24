@@ -226,7 +226,7 @@ Already resolved: K threads
 ```
 
 Ask the user to confirm the plan before proceeding, unless the invocation
-that ran this skill (wayfare-run-task's Step 8 under a goal turn) carries the exact
+that ran this skill (wayfare-build-task's Step 8 under a goal turn) carries the exact
 line `gates pre-authorized in-session for goal GOAL_ID: NAMES` with
 `respond` among the names, in which case the actionable items proceed as
 listed and the plan is printed, not asked. A goal line without `respond`

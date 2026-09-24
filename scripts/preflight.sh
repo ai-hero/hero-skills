@@ -4,7 +4,7 @@
 
 # Pre-flight checks for the wayfare pipeline.
 #
-# Runs the union of every downstream skill's blocking check so a `wayfare-run-task`
+# Runs the union of every downstream skill's blocking check so a `wayfare-build-task`
 # (or any individual skill) can fail fast, before code is edited, before a
 # branch is created, before a PR is pushed.
 #
@@ -102,7 +102,7 @@ esac
 # skips the runtime bucket entirely rather than checking every project in the
 # repo for a diff that does not exist.
 #
-# Callers previously reimplemented this inline; wayfare-run-task's copy was ~40 lines.
+# Callers previously reimplemented this inline; wayfare-build-task's copy was ~40 lines.
 
 if [ "$AUTO_SCOPE" = "true" ]; then
   if [ -n "$PROJECT_SCOPE" ]; then
@@ -365,7 +365,7 @@ check_repo() {
   # GH_AUTH_OK flag set by check_tooling instead of re-shelling gh auth.
   #
   # Both spellings, and this one is a BLOCKER: probing only .yml stopped
-  # wayfare-run-task at Step 0.3, before any work started, against a repo whose
+  # wayfare-build-task at Step 0.3, before any work started, against a repo whose
   # workflow was present and active under .yaml, with fix advice telling the
   # user to install a file they already had.
   if [ "${GH_AUTH_OK:-false}" = "true" ]; then
@@ -645,7 +645,7 @@ esac
 
 echo ""
 if [ "$BLOCKERS" -gt 0 ]; then
-  echo "preflight: $BLOCKERS blocker(s), $WARNINGS warning(s); pipeline will fail. Fix blockers above before running wayfare:wayfare-run-task."
+  echo "preflight: $BLOCKERS blocker(s), $WARNINGS warning(s); pipeline will fail. Fix blockers above before running wayfare:wayfare-build-task."
   exit 1
 elif [ "$WARNINGS" -gt 0 ]; then
   echo "preflight: 0 blockers, $WARNINGS warning(s): safe to proceed, warnings are advisory."

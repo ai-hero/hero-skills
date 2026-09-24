@@ -56,7 +56,7 @@ flowchart TB
   STORE[("<b>.plans/</b><br/>PLAN.md + items/")]
   NEXT["<b>wayfare-start-goal</b><br/>authorize a goal"]
   DO["<b>wayfare-advance-item ID</b><br/>advance one item"]
-  BUILD["wayfare-run-task → wayfare-push-pr<br/>→ wayfare-review-pr → wayfare-ship-pr"]
+  BUILD["wayfare-build-task → wayfare-push-pr<br/>→ wayfare-review-pr → wayfare-ship-pr"]
 
   SRC -- read --> PLAN
   TGT -- read --> PLAN
@@ -109,7 +109,7 @@ stateDiagram-v2
   new --> accepted: plan accepts it
   accepted --> planning: wayfare-grill-idea
   planning --> ready: your ready-mark
-  ready --> active: wayfare-run-task starts
+  ready --> active: wayfare-build-task starts
   active --> committed: on a goal branch
   active --> review: PR opens
   committed --> review: goal's PR opens
@@ -262,7 +262,7 @@ as soon as it lands on your default branch.
 
 ### Companion installs (for full pipeline coverage)
 
-Three pieces ride along with wayfare-run-task, install them so Steps 4 (`push`, tests included), 5 (`self-review`), 8 (`respond`), and 9 (`ship`) work out of the box:
+Three pieces ride along with wayfare-build-task, install them so Steps 4 (`push`, tests included), 5 (`self-review`), 8 (`respond`), and 9 (`ship`) work out of the box:
 
 **1. GitHub CLI (`gh`)**: required by `wayfare-push-pr`, `wayfare-review-pr`, `wayfare-respond-pr` and `wayfare-ship-pr` for every PR / comment / workflow operation. Without it, every step from `push` onward fails immediately.
 
@@ -359,17 +359,17 @@ wayfare:wayfare-ship-pr                         # @auto-approve, merge, reset to
 
 Each command reads your `HERO.md` config and adapts to your stack automatically.
 
-`wayfare:wayfare-run-task` chains those stages end to end for a single small,
+`wayfare:wayfare-build-task` chains those stages end to end for a single small,
 low-risk PR, without going through `wayfare:wayfare-sync-plan` first:
 
 ```
-wayfare:wayfare-run-task PROJ-123   # start a new ticket (or a plain-text description)
-wayfare:wayfare-run-task            # resume the current goal to merged + reset branch
+wayfare:wayfare-build-task PROJ-123   # start a new ticket (or a plain-text description)
+wayfare:wayfare-build-task            # resume the current goal to merged + reset branch
 ```
 
 It chains `plan → implement → simplify → push → self-review → mark-ready → await-review → respond → ship` end to end, with explicit user gates at plan-approval, mark-ready, and merge. `plan` resolves what you asked for against your `.plans/` store and this repo's tracker before it plans anything new, delegating to `wayfare:wayfare-grill-idea` only when nothing matches, and it re-checks a matched item against the codebase first, so already-finished work is reported rather than rebuilt. `simplify` runs the `/simplify` skill on the dirty diff so the commit lands clean. `push` tests first (lint/typecheck/unit tests plus a UI smoke check via Playwright MCP for routes affected by the diff, skipped automatically on backend-only PRs), then commits and opens the draft PR. `self-review` runs the review agents plus a security pass. `mark-ready` is the explicit draft → ready gate; `await-review` polls for your configured Code Review Agent (Copilot, CodeRabbit, Greptile, …) before `respond` addresses its feedback.
 
-At each step transition, wayfare-run-task prints a progress line so you always know where you are:
+At each step transition, wayfare-build-task prints a progress line so you always know where you are:
 
 ```
 [5/9] (✓) plan → (✓) implement → (✓) simplify → (✓) push → (▶) self-review → ( ) mark-ready → ( ) await-review → ( ) respond → ( ) ship
@@ -391,7 +391,7 @@ Each step maps to a skill you can run on its own when you don't want the whole p
 | 8 | `respond` | `wayfare:wayfare-respond-pr` |
 | 9 | `ship` | `wayfare:wayfare-ship-pr` |
 
-Re-running `wayfare:wayfare-run-task` mid-flow is safe: it inspects git + the open PR for that branch and resumes from the inferred step deterministically, no confirmation prompt. With no arguments, that resume behavior is the whole point. On the default branch with work to preserve, wayfare-run-task auto-branches off (no prompt) before resuming. It exits cleanly with a hand-off hint only when there's nothing left to do (e.g., after the PR has merged) or when state can't be inferred safely (e.g., a failed `git fetch`).
+Re-running `wayfare:wayfare-build-task` mid-flow is safe: it inspects git + the open PR for that branch and resumes from the inferred step deterministically, no confirmation prompt. With no arguments, that resume behavior is the whole point. On the default branch with work to preserve, wayfare-build-task auto-branches off (no prompt) before resuming. It exits cleanly with a hand-off hint only when there's nothing left to do (e.g., after the PR has merged) or when state can't be inferred safely (e.g., a failed `git fetch`).
 
 See [`PIPELINES.md`](./docs/PIPELINES.md) for the full DAG and stop conditions.
 
@@ -455,7 +455,7 @@ Three skills are stages of `sync` and hidden from the slash menu (`user-invocabl
 
 | Command | What it does |
 | --- | --- |
-| `wayfare:wayfare-run-task` | Drives a small task end-to-end: plan → implement → simplify → push (tests included) → self-review → mark-ready → await-review → respond → ship. Detects a resume point on re-invocation; with no arguments, drives the current goal to merged + reset branch. Explicit user gates at each destructive step. |
+| `wayfare:wayfare-build-task` | Drives a small task end-to-end: plan → implement → simplify → push (tests included) → self-review → mark-ready → await-review → respond → ship. Detects a resume point on re-invocation; with no arguments, drives the current goal to merged + reset branch. Explicit user gates at each destructive step. |
 | `wayfare:wayfare-init-repo` | Scaffolds a new project, then chains into wayfare-setup-dev → config → first-commit. |
 
 ### Operations

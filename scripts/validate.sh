@@ -334,15 +334,15 @@ else
 
     # 6/7. Size budget, per skill.
     #
-    # The wayfare-run-task pipeline's skills are executable specs, not prose guides:
+    # The wayfare-build-task pipeline's skills are executable specs, not prose guides:
     # the procedure IS the content, and every guard sits inline with the step
     # it constrains. Splitting one across files is how a step comes to be
-    # executed without its STOP. The list is the wayfare verbs plus run-task and the
+    # executed without its STOP. The list is the wayfare verbs plus build-task and the
     # skills its DAG nodes delegate to. `wayfare-init-repo` writes the config
     # they all read. Everything else keeps the 500/5000 guideline, where a
     # breach really does mean reference material has leaked into the
     # instructions: an oversized reference warns today and should.
-    PIPELINE_SKILLS=" wayfare-sync-plan wayfare-start-goal wayfare-init-repo wayfare-run-task wayfare-ship-pr wayfare-push-pr wayfare-review-pr wayfare-respond-pr "
+    PIPELINE_SKILLS=" wayfare-sync-plan wayfare-start-goal wayfare-init-repo wayfare-build-task wayfare-ship-pr wayfare-push-pr wayfare-review-pr wayfare-respond-pr "
     LIMIT_LINES=500; LIMIT_WORDS=5000
     case "$PIPELINE_SKILLS" in
       *" $SKILL_NAME "*) LIMIT_LINES=3500; LIMIT_WORDS=35000 ;;
@@ -500,13 +500,13 @@ elif [[ $DOTDOT_ERRORS -eq 0 ]]; then
 fi
 
 # ── chained-skill invocability guard ───────────────────────────────
-# wayfare-run-task (skills/wayfare-run-task/SKILL.md) delegates its steps to child skills via
+# wayfare-build-task (skills/wayfare-build-task/SKILL.md) delegates its steps to child skills via
 # the Skill tool, and a wayfare goal turn chains into wayfare-grill-idea and
-# wayfare-run-task the same way. A chained skill carrying
+# wayfare-build-task the same way. A chained skill carrying
 # `disable-model-invocation: true` cannot be invoked by the model, so the
 # calling pipeline breaks at that step (there is no per-caller allowlist).
-# Keep this list in sync with wayfare-run-task's step→skill mapping AND
-# a goal turn's tiers. `wayfare-run-task` is here because re-adding its flag
+# Keep this list in sync with wayfare-build-task's step→skill mapping AND
+# a goal turn's tiers. `wayfare-build-task` is here because re-adding its flag
 # would silently break every goal turn. `architecture` is chained three
 # ways: wayfare-sync-plan runs its review/sync in both modes, and
 # wayfare-grill-idea's `arch` dispatch
@@ -516,9 +516,9 @@ fi
 # would carry this repo's session state into a third party's tracker.
 # `wayfare-audit-security` is here because re-adding `disable-model-invocation: true` would
 # break every sync at its harden stage.
-# `wayfare-check-preflight` is intentionally absent, wayfare-run-task runs
+# `wayfare-check-preflight` is intentionally absent, wayfare-build-task runs
 # it via scripts/preflight.sh, not the Skill tool, so it may stay user-only.
-CHAINED_SKILLS="wayfare-grill-idea wayfare-push-pr wayfare-review-pr wayfare-respond-pr wayfare-ship-pr wayfare-run-task wayfare-review-architecture wayfare-sync-architecture wayfare-audit-security"
+CHAINED_SKILLS="wayfare-grill-idea wayfare-push-pr wayfare-review-pr wayfare-respond-pr wayfare-ship-pr wayfare-build-task wayfare-review-architecture wayfare-sync-architecture wayfare-audit-security"
 for chained in $CHAINED_SKILLS; do
   chained_file="$SKILLS_DIR/$chained/SKILL.md"
   # A missing chained skill silently breaks the calling pipeline at that step, so error
@@ -625,7 +625,7 @@ fi
 DANGLING_REFS=0
 for ref in $REF_NAMES; do
   [[ -f "$SKILLS_DIR/$ref/SKILL.md" ]] && continue
-  # Trailing-boundary match so `wayfare-run-task` never swallows a hit on `one-shots`.
+  # Trailing-boundary match so `wayfare-build-task` never swallows a hit on `one-shots`.
   # The SAME file set the names were extracted from. Narrowing it here (this
   # line read docs/PIPELINES.md alone) makes the guard silently pass: a ref
   # that lives only in another docs file is extracted, fails to resolve, then
@@ -749,16 +749,16 @@ done
 
 # ── work-item store: producers must have a consumer ────────────────
 # wayfare-grill-idea, handoff, and harden all WRITE work-items into .plans/
-# (and read the plate back to build on it). wayfare-run-task is the only skill that
+# (and read the plate back to build on it). wayfare-build-task is the only skill that
 # CONSUMES an item, resolving it to execute and marking it done. (It also
 # authors Step 2a carve-outs, but it never plans one from scratch.) If that delegation
 # is ever edited away, the store silently becomes write-only: items pile up,
-# nothing marks them done, and wayfare-run-task goes back to planning from scratch
+# nothing marks them done, and wayfare-build-task goes back to planning from scratch
 # while ignoring the plate. Nothing else in this repo would catch that.
-ONE_SHOT="$SKILLS_DIR/wayfare-run-task/SKILL.md"
+ONE_SHOT="$SKILLS_DIR/wayfare-build-task/SKILL.md"
 if [[ ! -f "$ONE_SHOT" ]]; then
-  error "skills/wayfare-run-task/SKILL.md is missing" "skills/wayfare-run-task/SKILL.md" "" \
-    "wayfare-run-task owns Pipeline 2; restore it or update this guard"
+  error "skills/wayfare-build-task/SKILL.md is missing" "skills/wayfare-build-task/SKILL.md" "" \
+    "wayfare-build-task owns Pipeline 2; restore it or update this guard"
 else
   # Strip HTML comments and fenced blocks before matching, and require the
   # reference in an ACTIVE position (an Invoke instruction or a table row).
@@ -774,27 +774,27 @@ else
   ' "$ONE_SHOT")
   # Here-string rather than `printf | grep -q`, see the pipefail/SIGPIPE note
   # on the chained-skill guard above. This site is the one that actually bit:
-  # the match sits near the top of wayfare-run-task's Step->skill table, so grep -q
+  # the match sits near the top of wayfare-build-task's Step->skill table, so grep -q
   # exited early and killed printf mid-write, and the guard reported drift that
   # had not happened.
   if grep -qE '(Invoke|Skill tool|^\|).*wayfare:wayfare-grill-idea' <<< "$ONE_SHOT_ACTIVE"; then
-    pass "wayfare-run-task's plan step delegates to wayfare-grill-idea"
+    pass "wayfare-build-task's plan step delegates to wayfare-grill-idea"
   else
-    error "wayfare-run-task no longer references wayfare-grill-idea — the plan step has drifted back to planning from scratch" \
-      "skills/wayfare-run-task/SKILL.md" \
+    error "wayfare-build-task no longer references wayfare-grill-idea — the plan step has drifted back to planning from scratch" \
+      "skills/wayfare-build-task/SKILL.md" \
       "" \
-      "wayfare-grill-idea is the planning skill; wayfare-run-task's Step 1 must resolve against .plans/ and delegate to it. See PIPELINES.md Pipeline 2"
+      "wayfare-grill-idea is the planning skill; wayfare-build-task's Step 1 must resolve against .plans/ and delegate to it. See PIPELINES.md Pipeline 2"
   fi
   # Require several real references, not one incidental mention. "plans" is
   # a word that appears in ordinary prose, so match the literal `.plans` token.
   STORE_HITS=$(printf '%s\n' "$ONE_SHOT_ACTIVE" | grep -cF '.plans' || true)
   if [[ "${STORE_HITS:-0}" -ge 3 ]]; then
-    pass "wayfare-run-task reads the .plans/ store ($STORE_HITS references)"
+    pass "wayfare-build-task reads the .plans/ store ($STORE_HITS references)"
   else
-    error "wayfare-run-task does not read .plans/ — the work-item store has no consumer" \
-      "skills/wayfare-run-task/SKILL.md" \
+    error "wayfare-build-task does not read .plans/ — the work-item store has no consumer" \
+      "skills/wayfare-build-task/SKILL.md" \
       "" \
-      "wayfare-grill-idea, handoff, and harden all emit into .plans/; wayfare-run-task Step 1 must resolve against it and Step 9 must mark the merged item done"
+      "wayfare-grill-idea, handoff, and harden all emit into .plans/; wayfare-build-task Step 1 must resolve against it and Step 9 must mark the merged item done"
   fi
 fi
 

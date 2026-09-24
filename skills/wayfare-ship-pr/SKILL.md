@@ -11,7 +11,7 @@ This skill posts `@auto-approve` on the PR, waits for the workflow run to finish
 
 ## Pipeline DAG
 
-This skill is the final step of Pipeline 2 (wayfare-run-task) from `PIPELINES.md`, but it also runs standalone. Its internal DAG is:
+This skill is the final step of Pipeline 2 (wayfare-build-task) from `PIPELINES.md`, but it also runs standalone. Its internal DAG is:
 
 ```
 gates → trigger → verdict → merge → reset → verify-deploy
@@ -432,7 +432,7 @@ still not clean after that, STOP and say what keeps moving underneath it.
 ### Step 4: Post the @auto-approve Trigger Comment
 
 **Pre-authorized gates, from a goal turn.** When the invocation that ran
-this skill (wayfare-run-task's Step 9, or wayfare's *Carrying a bot's PR* step 4)
+this skill (wayfare-build-task's Step 9, or wayfare's *Carrying a bot's PR* step 4)
 carries the exact line `gates pre-authorized in-session for goal GOAL_ID:
 NAMES`, three of this skill's stops read that line and nothing else: this
 step posts the trigger only when `auto-approve` is named; Step 7a's
@@ -994,7 +994,7 @@ rm -f merge_err.log
 
 If the user confirms the cleanup prompt above, run `git branch -d BRANCH_NAME` for each listed branch. Do NOT use `-D`; refuse to force-delete.
 
-After the cleanup, suggest (do not auto-execute) running `/clear` to start the next task on a fresh conversation context. The orchestrating skill (e.g. `wayfare:wayfare-run-task`) may want to print its own summary first, so do not clobber the conversation here.
+After the cleanup, suggest (do not auto-execute) running `/clear` to start the next task on a fresh conversation context. The orchestrating skill (e.g. `wayfare:wayfare-build-task`) may want to print its own summary first, so do not clobber the conversation here.
 
 #### Step 7c: the REQUEST_CHANGES path, surfacing it and offering next steps
 
@@ -1315,7 +1315,7 @@ Next step: (one only — omit for REQUEST_CHANGES/WORKFLOW_FAILED, already cover
 - Merged → `/clear`. A plain suggestion, not Skill-tool invocable, with no y/N offer.
 - Abandoning mid-flight → `wayfare:wayfare-drop-item`. Restricted, so print only.
 
-Skip `wayfare:wayfare-run-task`; it's not the deterministic next action.
+Skip `wayfare:wayfare-build-task`; it's not the deterministic next action.
 
 ## Notes
 

@@ -73,8 +73,8 @@ at:
 
 | Permission | The gate it waives | The sync writes |
 | --- | --- | --- |
-| `mark-ready` | wayfare-run-task Step 6: draft → ready for review | `yes` |
-| `respond` | wayfare-run-task Step 8: fix the review bot's comments and resolve threads without showing the plan first | `yes` |
+| `mark-ready` | wayfare-build-task Step 6: draft → ready for review | `yes` |
+| `respond` | wayfare-build-task Step 8: fix the review bot's comments and resolve threads without showing the plan first | `yes` |
 | `auto-approve` | wayfare-ship-pr Step 4: post `@auto-approve` | `yes` |
 | `merge` | wayfare-ship-pr's merge confirmation: merge into DEFAULT_BRANCH with HERO.md's `merge-method` | `yes` |
 | `deploy` | wayfare-ship-pr's post-merge verify-deploy: post-merge CI on the merge commit, then deployment health. `verify` waits for the merge commit's runs (ten-minute cap) and reports; `none` skips it, in Step 2a's drain as well as Step 7e's probe. A goal ships one PR, so that wait is paid once; runs still in flight at the cap are deferred to the next run | `verify` |
@@ -90,8 +90,8 @@ this one key, only while the goal is `active`, and the gate says so aloud on
 the next resume; a `accepted` goal missing it is an ordinary store defect for
 `sync` to fix.
 
-`absorb` is wayfare's own gate, not wayfare-run-task's, so it is **not** on the
-pre-authorized literal below: that line names the gates wayfare-run-task and its
+`absorb` is wayfare's own gate, not wayfare-build-task's, so it is **not** on the
+pre-authorized literal below: that line names the gates wayfare-build-task and its
 children answer, and a name they do not know has no business travelling on
 it. The values are an enum (`yes` or `no`, and `verify` or `none` for
 `deploy`) and the section is required: a goal with no `## Permissions`, a missing
@@ -112,11 +112,11 @@ outside the goal: auto-approve still has to pass, branch protection still
 applies, a REQUEST_CHANGES or a red workflow still stops the task, and a
 human comment on the PR still cancels the waiver on that PR.
 
-The permissions travel to wayfare-run-task in its invocation, as one literal line:
+The permissions travel to wayfare-build-task in its invocation, as one literal line:
 `gates pre-authorized in-session for goal 7: mark-ready, respond,
 auto-approve, merge, deploy=verify`, carrying the goal id, the granted names, and
 `deploy=` always present (`deploy=none` is the skip; omitting it would read
-as an ungranted gate at a step nobody can answer). wayfare-run-task honors exactly
+as an ungranted gate at a step nobody can answer). wayfare-build-task honors exactly
 the names on that line and forwards it verbatim to wayfare-respond-pr
 (`respond`) and wayfare-ship-pr (`auto-approve`, `merge`, `deploy`), each of which
 rests at a gate not named; a line in a file, a comment, or a compaction
@@ -326,7 +326,7 @@ memory between turns:
    goal 7: mark-ready, respond, auto-approve, merge, deploy=verify`, built
    from the set granted at this session's gate, never re-read from the file
    (the file may only narrow it; a wider file is `stop: reauthorize`), and
-   wayfare-run-task matches that literal and nothing else, the same way
+   wayfare-build-task matches that literal and nothing else, the same way
    wayfare-grill-idea matches `launched by wayfare`.
 3. **Check the stop conditions** from the item, each with a concrete check:
    - budget: `budget_max` is the checkpoint, not `budget`. Crossing `budget`
@@ -360,7 +360,7 @@ memory between turns:
    ```
 
    Before the first build of the turn, run preflight once
-   (`preflight.sh --bucket all --auto-scope`, as wayfare-run-task's Step 0.3
+   (`preflight.sh --bucket all --auto-scope`, as wayfare-build-task's Step 0.3
    does), and STOP on a blocker. The build runs skip it, so this is the one
    check that a missing tool or an inactive hook surfaces before the work
    rather than at step 7, after it.
@@ -403,7 +403,7 @@ memory between turns:
    `budget_max` at the checkpoint is for more of the planned work, not for
    a task that turned out to be a different size.
 
-   Invoke wayfare:wayfare-run-task with task N's **store id** as the argument,
+   Invoke wayfare:wayfare-build-task with task N's **store id** as the argument,
    via the Skill tool, with the exact line
    `gates pre-authorized in-session for goal G: PERMISSIONS`, plus the exact
    line `commit only: goal G branch GOAL_BRANCH`. It builds, runs the tests
@@ -490,7 +490,7 @@ memory between turns:
    from, or throw away. Say which task failed and at which step.
 
    A report missing the commit SHA is `stop: failure` naming the task:
-   wayfare-run-task's commit-only mode has exactly one artifact, and a run that
+   wayfare-build-task's commit-only mode has exactly one artifact, and a run that
    produced none did not build anything.
 
    **Record the commit before launching the next task.** Append the
@@ -501,7 +501,7 @@ memory between turns:
 
    **Verify the task's `## Log` carries a `mistake` line for every wrong turn
    the run reported.** The run writes those lines itself, as the wrong turns happen
-   (wayfare-run-task's *plan file is the state file* rules), so this is a read-back,
+   (wayfare-build-task's *plan file is the state file* rules), so this is a read-back,
    not a second copy: an append-only section written twice is written twice.
    Append only what the report names and the file lacks, verbatim. A report
    with wrong turns and no `mistake` line means the run died before writing
@@ -748,10 +748,10 @@ memory between turns:
    thing that can still be fixed with an ordinary commit on the branch.
 7. **Only now does the goal reach the network.** With every task
    committed, the branch green locally, and the DoD verified, hand the whole
-   branch to wayfare-run-task once:
+   branch to wayfare-build-task once:
 
    ```
-   Invoke wayfare:wayfare-run-task via the Skill tool with NO item argument, on
+   Invoke wayfare:wayfare-build-task via the Skill tool with NO item argument, on
    GOAL_BRANCH, carrying the permissions line.
    ```
 
@@ -759,8 +759,8 @@ memory between turns:
    and resumes at Step 4: push, open the PR, self-review, mark-ready, await
    review, respond, ship. One PR, one review pass, one auto-approve, one
    merge, for the whole goal. Nothing here is wayfare's to do by hand.
-   The PR opens as a draft and stays one until wayfare-run-task's mark-ready step,
-   after the self-review and its fixes: wayfare-run-task's Step 4 reverts a PR
+   The PR opens as a draft and stays one until wayfare-build-task's mark-ready step,
+   after the self-review and its fixes: wayfare-build-task's Step 4 reverts a PR
    that arrives ready, and its resume routing sends a ready PR with no
    self-review back to Step 5. A `mark-ready` grant on the permissions
    line is answered at Step 6, never earlier.
@@ -774,7 +774,7 @@ memory between turns:
    was verified. Then run step 8, then write `status: done` on
    the goal — and only if step 8 admitted nothing. Admitted work is work this
    goal still owes, so a goal that absorbed an item is not done; it stays
-   `active` for the next turn. A STOP from wayfare-run-task (a declined gate,
+   `active` for the next turn. A STOP from wayfare-build-task (a declined gate,
    REQUEST_CHANGES, a failed workflow) is the turn's stop too, reported with
    the gate it rested at; the goal stays `active` and the next turn resumes
    from the same branch.
@@ -945,9 +945,9 @@ person authorizes is exactly the set that runs.
 A goal that files its discoveries instead of finishing them does not
 converge. Every filed item is one no goal has as a member; `next` walks goals and
 never items, so reaching it means another `sync`, another goal, and another
-round of discoveries out of *that* goal. ("Carving" is wayfare-run-task's word for
+round of discoveries out of *that* goal. ("Carving" is wayfare-build-task's word for
 moving work out of a plan the user marked ready, and it is **not** available
-under a goal, and wayfare-run-task Step 2a says so. What reaches this test is discovered
+under a goal, and wayfare-build-task Step 2a says so. What reaches this test is discovered
 work: a bug or a story found while building a member task.) The loop is not building faster, it is
 branching. **A goal's job is to close its outcome, not to grow the
 roadmap**, so work found inside a member task stays inside the goal

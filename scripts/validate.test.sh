@@ -10,7 +10,7 @@
 # docs/, assets/ and manifests (known-clean, since `bash scripts/validate.sh`
 # passes on the real tree) plus a copy of validate.sh itself, with exactly
 # one thing perturbed per case. A truly minimal tree would trip validate.sh's
-# own hardcoded skill lists (CHAINED_SKILLS, the wayfare-run-task
+# own hardcoded skill lists (CHAINED_SKILLS, the wayfare-build-task
 # work-item-store guard) with unrelated errors that have nothing to do with
 # the case under test.
 #

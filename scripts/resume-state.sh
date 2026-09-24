@@ -2,10 +2,10 @@
 # Copyright (c) 2026 A.I. Hero, Inc.
 # All Rights Reserved.
 
-# resume-state.sh: gather the git/PR state wayfare-run-task needs to pick a resume point.
+# resume-state.sh: gather the git/PR state wayfare-build-task needs to pick a resume point.
 #
 # Prints shell-eval-able KEY=VALUE lines describing where the current branch
-# sits in the pipeline. wayfare-run-task's Step 0.5 maps these onto a resume step; this
+# sits in the pipeline. wayfare-build-task's Step 0.5 maps these onto a resume step; this
 # script makes no routing decision itself, so the decision table stays in
 # SKILL.md where a reader can see it.
 #
@@ -160,7 +160,7 @@ BOT_REPLIED=unknown
 if [ "$JQ_OK" = true ] && [ -n "$CURRENT_BRANCH" ]; then
   # --state all is required: the default is `open`, so a merged or closed PR
   # returns [] and reads as "no PR", which made every MERGED/CLOSED row in
-  # wayfare-run-task's decision table unreachable, including the one that stops a
+  # wayfare-build-task's decision table unreachable, including the one that stops a
   # merged branch from being pushed again as a duplicate.
   if PR_LIST=$(gh pr list --state all --head "$CURRENT_BRANCH" \
       --json number,url,isDraft,reviewDecision,state 2>/dev/null); then
@@ -208,7 +208,7 @@ elif [ "$PR_EXISTS" = "true" ]; then
     # reply yet" and await-review waits forever for a reply already posted.
     # `agent: none` is a first-class supported setting (`wayfare-init-repo` writes it when
     # no review bot is detected), and such a repo has no bot-username. Treating
-    # that as a failed source made STATE_OK=false on every resume, so wayfare-run-task
+    # that as a failed source made STATE_OK=false on every resume, so wayfare-build-task
     # stopped with a diagnostic on a perfectly valid configuration.
     REVIEW_AGENT=$(hero_field agent 2>/dev/null | tr '[:upper:]' '[:lower:]')
     if [ "$REVIEW_AGENT" = "none" ]; then
@@ -234,12 +234,12 @@ fi
 
 # ---------- work-item state ------------------------------------------------
 
-# The in-flight item's checklists are the only record of where wayfare-run-task's
+# The in-flight item's checklists are the only record of where wayfare-build-task's
 # Step 2 stopped: `.plans/` is git-ignored, so the diff says what changed but
 # not which subtask was mid-way. hero_store_path, not hero_work_store: this
 # script is read-only.
 #
-# Which active item is THIS branch's: the one whose `branch:` matches (wayfare-run-task
+# Which active item is THIS branch's: the one whose `branch:` matches (wayfare-build-task
 # Step 2 writes it at the first edit). "The single active item" is not a rule
 # that holds: a goal's features all sit in the shared store, so several can be
 # active at once. What keeps this unambiguous is that a goal's features share
@@ -272,11 +272,11 @@ invalid"*) fail_source "store-invalid-item" ;; esac
     MATCHED=""; LEGACY=""; LEGACY_N=0
     while read -r state f _; do
       [ "$state" = active ] || continue
-      # hero_ready_items owns the status enum; `active` is wayfare-run-task's mark
+      # hero_ready_items owns the status enum; `active` is wayfare-build-task's mark
       # before its first edit. Only a task can be the item on this branch: a
       # goal at active is a set of tasks, and a signal at active is being
       # delivered, not built. A `bot:` task is a dependency bot's PR that
-      # wayfare's bot-PR procedure carries, never wayfare-run-task's.
+      # wayfare's bot-PR procedure carries, never wayfare-build-task's.
       [ "$(hero_item_type "$ITEMS/$f")" = task ] || continue
       [ -n "$(hero_item_field "$ITEMS/$f" bot)" ] && continue
       ITEM_INFLIGHT=$((ITEM_INFLIGHT + 1))

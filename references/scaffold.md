@@ -265,7 +265,7 @@ Run first: cd PROJECT_NAME
 Next step: wayfare:wayfare-check-preflight — Step 0.3, sanity-check tooling, .env, ports (print only — model-invocation-restricted, cannot auto-run)
 ```
 
-Don't also print `wayfare:wayfare-run-task`; `wayfare-check-preflight`'s own next-steps lead there once it passes.
+Don't also print `wayfare:wayfare-build-task`; `wayfare-check-preflight`'s own next-steps lead there once it passes.
 
 ## Notes
 
