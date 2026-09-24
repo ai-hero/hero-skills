@@ -101,8 +101,6 @@ esac
 # committed-but-unpushed) and, on a truly fresh start with nothing changed yet,
 # skips the runtime bucket entirely rather than checking every project in the
 # repo for a diff that does not exist.
-#
-# Callers previously reimplemented this inline; wayfare-build-task's copy was ~40 lines.
 
 if [ "$AUTO_SCOPE" = "true" ]; then
   if [ -n "$PROJECT_SCOPE" ]; then
