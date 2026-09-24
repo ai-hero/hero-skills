@@ -163,6 +163,89 @@ mkdir -p "$d/skills"
 run_validate "$d"
 check_contains "'../../' scan, zero files: reported" "$OUT" "'../../' scan of skills/ found zero files"
 
+# ---------- goal-turn build launch: no stray permissions grant --------------
+
+d=$(fixture goals-launch-carries-grant)
+# Insert a line into the SAME paragraph as the commit-only literal (no blank
+# line before it), the shape the guard exists to catch: a later edit putting
+# the permissions literal back into step 4's per-task build invocation.
+awk '
+  { print }
+  /commit only: goal G branch GOAL_BRANCH/ {
+    print "   Also carries `gates pre-authorized in-session` right here."
+  }
+' "$d/references/goals.md" > "$d/references/goals.md.tmp" && mv "$d/references/goals.md.tmp" "$d/references/goals.md"
+run_validate "$d"
+check "goals.md launch paragraph carries grant: rc" "1" "$RC"
+check_contains "goals.md launch paragraph carries grant: reported" "$OUT" "carries both the commit-only line and the permissions grant"
+
+d=$(fixture goals-grant-different-paragraph)
+# Same two literals, but the grant lands in its own paragraph (a blank line
+# on each side) rather than merged into the build-launch one — must pass,
+# since it's the paragraph, not the file, that's guarded.
+awk '
+  { print }
+  /commit only: goal G branch GOAL_BRANCH/ {
+    print ""
+    print "   A separate paragraph naming `gates pre-authorized in-session`."
+  }
+' "$d/references/goals.md" > "$d/references/goals.md.tmp" && mv "$d/references/goals.md.tmp" "$d/references/goals.md"
+run_validate "$d"
+check "goals.md grant in its own paragraph: rc" "0" "$RC"
+
+d=$(fixture goals-launch-literal-missing)
+sed 's/commit only: goal G branch GOAL_BRANCH/commit-only mode/' "$d/references/goals.md" > "$d/references/goals.md.tmp" && mv "$d/references/goals.md.tmp" "$d/references/goals.md"
+run_validate "$d"
+check "goals.md missing commit-only literal: rc" "1" "$RC"
+check_contains "goals.md missing commit-only literal: reported" "$OUT" "no longer carries the commit-only build-launch literal"
+
+d=$(fixture goals-launch-indented-fence-example)
+# The guard does NOT strip fenced content (the real launch paragraph is
+# itself inside one), so a fenced counter-example quoting both literals is
+# read as live and fails loud — the documented, safe-by-design behavior.
+awk '
+  /^   ```$/ && !done {
+    print "   ```"
+    print "   Bad example: `commit only: goal G branch GOAL_BRANCH` and"
+    print "   `gates pre-authorized in-session` together."
+    print "   ```"
+    print ""
+    done = 1
+  }
+  { print }
+' "$d/references/goals.md" > "$d/references/goals.md.tmp" && mv "$d/references/goals.md.tmp" "$d/references/goals.md"
+run_validate "$d"
+check "goals.md fenced counter-example fails loud: rc" "1" "$RC"
+check_contains "goals.md fenced counter-example fails loud: reported" "$OUT" "carries both the commit-only line and the permissions grant"
+
+d=$(fixture goals-launch-grant-in-later-match)
+# The commit-only literal appears in TWO paragraphs: an earlier, clean one
+# (a cross-reference inserted BEFORE the real launch paragraph), and the real
+# step-4 launch paragraph after it, which carries the grant. A guard that
+# stopped at the first matching paragraph (the old `exit`-on-first-match
+# behavior) would read only the clean cross-reference and miss this.
+awk '
+  /commit only: goal G branch GOAL_BRANCH/ && !seen {
+    print "   A cross-reference: `commit only: goal G branch GOAL_BRANCH` is"
+    print "   the exact line step 4 uses."
+    print ""
+    seen = 1
+  }
+  { print }
+' "$d/references/goals.md" > "$d/references/goals.md.tmp" && mv "$d/references/goals.md.tmp" "$d/references/goals.md"
+# Merge the grant into the SAME paragraph as the real (second) occurrence,
+# skipping the first (the cross-reference just inserted above it).
+awk '
+  { print }
+  /commit only: goal G branch GOAL_BRANCH/ { n++ }
+  /commit only: goal G branch GOAL_BRANCH/ && n == 2 {
+    print "   Also carries `gates pre-authorized in-session` right here."
+  }
+' "$d/references/goals.md" > "$d/references/goals.md.tmp" && mv "$d/references/goals.md.tmp" "$d/references/goals.md"
+run_validate "$d"
+check "goals.md grant hidden behind an earlier clean match: rc" "1" "$RC"
+check_contains "goals.md grant hidden behind an earlier clean match: reported" "$OUT" "carries both the commit-only line and the permissions grant"
+
 # ---------- cross-agent manifest agreement ----------------------------------
 
 d=$(fixture codex-version-mismatch)
