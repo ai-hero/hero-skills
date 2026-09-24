@@ -203,7 +203,7 @@ Sweep the codebase for robustness gaps that scanning tools can't see. Audit angl
 - **Missing timeouts and retries**: outbound calls that can hang forever, retry loops without backoff or caps
 - **Injection surfaces**: string-built SQL, shell or HTML where a parameterized or escaped form exists
 
-High signal only: every finding needs a concrete failure or exploit scenario and a specific fix. Skip theoretical issues, DoS/rate-limiting noise, and anything the repo's linters already enforce. For a large codebase, fan the angles out as parallel read-only agents, never forks (see *A fan-out subagent is never a fork* in `docs/PIPELINES.md`), and aggregate.
+High signal only: every finding needs a concrete failure or exploit scenario and a specific fix. Skip theoretical issues, DoS/rate-limiting noise, and anything the repo's linters already enforce. For a large codebase, fan the angles out as parallel read-only agents, never forks (see *A fan-out subagent is never a fork* in `docs/PIPELINES.md`), and aggregate only once every angle has reported (*A fan-out waits for every agent, then one writer commits once*).
 
 ---
 
