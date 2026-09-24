@@ -163,6 +163,42 @@ mkdir -p "$d/skills"
 run_validate "$d"
 check_contains "'../../' scan, zero files: reported" "$OUT" "'../../' scan of skills/ found zero files"
 
+# ---------- goal-turn build launch: no stray permissions grant --------------
+
+d=$(fixture goals-launch-carries-grant)
+# Insert a line into the SAME paragraph as the commit-only literal (no blank
+# line before it), the shape the guard exists to catch: a later edit putting
+# the permissions literal back into step 4's per-task build invocation.
+awk '
+  { print }
+  /commit only: goal G branch GOAL_BRANCH/ {
+    print "   Also carries `gates pre-authorized in-session` right here."
+  }
+' "$d/references/goals.md" > "$d/references/goals.md.tmp" && mv "$d/references/goals.md.tmp" "$d/references/goals.md"
+run_validate "$d"
+check "goals.md launch paragraph carries grant: rc" "1" "$RC"
+check_contains "goals.md launch paragraph carries grant: reported" "$OUT" "carries both the commit-only line and the permissions grant"
+
+d=$(fixture goals-grant-different-paragraph)
+# Same two literals, but the grant lands in its own paragraph (a blank line
+# on each side) rather than merged into the build-launch one — must pass,
+# since it's the paragraph, not the file, that's guarded.
+awk '
+  { print }
+  /commit only: goal G branch GOAL_BRANCH/ {
+    print ""
+    print "   A separate paragraph naming `gates pre-authorized in-session`."
+  }
+' "$d/references/goals.md" > "$d/references/goals.md.tmp" && mv "$d/references/goals.md.tmp" "$d/references/goals.md"
+run_validate "$d"
+check "goals.md grant in its own paragraph: rc" "0" "$RC"
+
+d=$(fixture goals-launch-literal-missing)
+sed 's/commit only: goal G branch GOAL_BRANCH/commit-only mode/' "$d/references/goals.md" > "$d/references/goals.md.tmp" && mv "$d/references/goals.md.tmp" "$d/references/goals.md"
+run_validate "$d"
+check "goals.md missing commit-only literal: rc" "1" "$RC"
+check_contains "goals.md missing commit-only literal: reported" "$OUT" "no longer carries the commit-only build-launch literal"
+
 # ---------- cross-agent manifest agreement ----------------------------------
 
 d=$(fixture codex-version-mismatch)

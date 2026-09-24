@@ -799,6 +799,46 @@ else
   fi
 fi
 
+# ── goal turn: the per-task build launch never carries the grant ──
+# references/goals.md step 4 hands each task's build a `commit only: goal G
+# branch GOAL_BRANCH` line and nothing else; commit-only mode never reaches
+# a gate, so a stray `gates pre-authorized in-session` line on that same
+# launch would sit unused today but re-arm the moment build-task's Step 0.5
+# routing changes. A plain whole-file substring check can't tell that launch
+# paragraph apart from the prose elsewhere in this file that legitimately
+# names both literals (the permissions-travel rules a few sections up), so
+# this narrows to the one paragraph that contains the commit-only literal.
+GOALS_MD="$PLUGIN_ROOT/references/goals.md"
+if [[ ! -f "$GOALS_MD" ]]; then
+  error "references/goals.md is missing" "references/goals.md" "" \
+    "goals.md documents a goal turn's build-launch invocation; restore it or update this guard"
+else
+  # Same stripping style as the wayfare-grill-idea delegation guard above:
+  # skip fenced-block content and any line mentioning an HTML comment before
+  # matching, so a quoted counter-example inside a fence or a comment can't
+  # be mistaken for the real, active build-launch paragraph.
+  GOALS_STRIPPED=$(awk '
+    /^```/           { fence = !fence; next }
+    fence            { next }
+    /<!--/           { next }
+    { print }
+  ' "$GOALS_MD")
+  # Paragraph mode: a record is one blank-line-delimited block, which is
+  # exactly the "same paragraph" the DoD asks about.
+  LAUNCH_PARAGRAPH=$(awk -v RS='' '/commit only: goal G branch GOAL_BRANCH/ { print; exit }' <<< "$GOALS_STRIPPED")
+  if [[ -z "$LAUNCH_PARAGRAPH" ]]; then
+    error "references/goals.md no longer carries the commit-only build-launch literal — this guard has nothing to check" \
+      "references/goals.md" "" \
+      "Keep the exact line \`commit only: goal G branch GOAL_BRANCH\` in step 4's per-task build invocation, or update this guard alongside its removal"
+  elif grep -qF 'gates pre-authorized in-session' <<< "$LAUNCH_PARAGRAPH"; then
+    error "references/goals.md's per-task build-launch paragraph carries both the commit-only line and the permissions grant" \
+      "references/goals.md" "" \
+      "Commit-only mode never reaches a gate; keep \`gates pre-authorized in-session\` out of step 4's per-task build invocation — it belongs only at step 7's hand-off"
+  else
+    pass "references/goals.md's commit-only build-launch paragraph carries no permissions grant"
+  fi
+fi
+
 echo ""
 echo "────────────────────────────"
 
