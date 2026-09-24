@@ -181,7 +181,7 @@ field map is `scripts/hero-fields.sh`; the contract is
 config → inbox → architecture → harden → comments → compliance → local → deps → design → reconcile → plan → goals
 ```
 
-Owner: `wayfare:wayfare-sync-plan`. Eleven stages: the config gate; the
+Owner: `wayfare:wayfare-sync-plan`. Twelve stages: the config gate; the
 mailbox (`docs/MESSAGES.md`, every unread message through the fleet gate
 and the promotion gate, a `type: bug` message becoming a proposed `shape: defect` task);
 `wayfare:wayfare-review-architecture` (offering its `sync`);

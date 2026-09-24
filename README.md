@@ -314,7 +314,7 @@ Three commands. Everything else is run by them.
 # 1. Configure your project (run once per repo)
 wayfare:wayfare-init-repo
 
-# 2. Converge the world into a plan. One round, eleven stages:
+# 2. Converge the world into a plan. One round, twelve stages:
 #    config → inbox → architecture → harden → comments → compliance → local → deps → design → reconcile → plan → goals
 #    Reads the mailbox from sibling repos (bug reports become bug items),
 #    reviews DESIGN.md (offers to converge it), audits dependency/container/

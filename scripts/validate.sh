@@ -514,7 +514,7 @@ fi
 # design-feedback delivery deposits a message directly into the sibling's
 # `.plans/inbox/` rather than routing through handoff, because handoff
 # distills the *current conversation* and would carry this session's state
-# across.
+# into the sibling's inbox.
 # `wayfare-audit-security` is here because re-adding `disable-model-invocation: true` would
 # break every sync at its harden stage.
 # `wayfare-check-preflight` is intentionally absent, wayfare-build-task runs
