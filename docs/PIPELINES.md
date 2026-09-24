@@ -109,10 +109,10 @@ agent it launched has reported, or has gone silent and been stopped by the
 parent. A parent waits only on the agents it launched itself, and each of
 those waits on its own agents before it reports, so the wait passes down
 level by level and no one has to stop an agent they did not launch. Then
-the parent applies the combined fixes in one pass and commits once. Goal 19's simplify pass broke all three at once: one
-review agent committed while two sibling agents were still running, one
-re-staged the same edits, and one ran `git reset --soft HEAD~1` under the
-others. `wayfare-review-pr`'s Step 2 already works this way. The same holds
+the parent applies the combined fixes in one pass and commits once. Goal
+19's simplify pass broke all three at once: one review agent committed
+while two sibling agents were still running, one re-staged the same edits,
+and one ran `git reset --soft HEAD~1` under the others. `wayfare-review-pr`'s Step 2 already works this way. The same holds
 one level up: a parent never reads, records or tests a branch while an agent
 it delegated to is still out, because until that agent reports, the tree is
 not final.
