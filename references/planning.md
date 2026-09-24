@@ -59,6 +59,6 @@ roadmap, and wayfare owns only the contract it fills:
   is wayfare-build-task's call, per its Step 2).
 - The ready-mark is the user's (wayfare-grill-idea's Step 5): a confirmed
   task flips to `ready`, which is what `wayfare-advance-item ID` builds next. One
-  exception, granted by a person at `next`'s gate and nowhere else: a goal
-  with `absorb: yes` marks an **admitted** item ready inside its own run
-  (*Admitting discovered work*).
+  exception, granted by a person at `wayfare-start-goal`'s gate and nowhere
+  else: a goal with `absorb: yes` marks an **admitted** item ready inside its
+  own run (*Admitting discovered work*).
