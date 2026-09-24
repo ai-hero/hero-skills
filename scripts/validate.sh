@@ -811,30 +811,38 @@ fi
 # routing changes. A plain whole-file substring check can't tell that launch
 # paragraph apart from the prose elsewhere in this file that legitimately
 # names both literals (the permissions-travel rules a few sections up), so
-# this narrows to the one paragraph that contains the commit-only literal.
+# this narrows to the paragraph(s) that contain the commit-only literal.
+#
+# Deliberately NOT run through strip_fences_and_comments: the real step-4
+# invocation is itself inside an indented ``` fence (it's the literal prompt
+# text a build agent copies), so stripping fences here would strip away the
+# one paragraph this guard exists to check. A fenced counter-example placed
+# elsewhere in the file would still be read as live and could raise a false
+# error — safe, since it fails loud and points at the file, unlike a stripped
+# real paragraph, which would fail silently.
 GOALS_MD="$PLUGIN_ROOT/references/goals.md"
 if [[ ! -f "$GOALS_MD" ]]; then
   error "references/goals.md is missing" "references/goals.md" "" \
     "goals.md documents a goal turn's build-launch invocation; restore it or update this guard"
 else
-  # Same stripping helper as the wayfare-grill-idea delegation guard above:
-  # skip fenced-block content and any line mentioning an HTML comment before
-  # matching, so a quoted counter-example inside a fence or a comment can't
-  # be mistaken for the real, active build-launch paragraph.
-  GOALS_STRIPPED=$(strip_fences_and_comments "$GOALS_MD")
   # Paragraph mode: a record is one blank-line-delimited block, which is
-  # exactly the "same paragraph" the DoD asks about.
-  LAUNCH_PARAGRAPH=$(awk -v RS='' '/commit only: goal G branch GOAL_BRANCH/ { print; exit }' <<< "$GOALS_STRIPPED")
-  if [[ -z "$LAUNCH_PARAGRAPH" ]]; then
+  # exactly the "same paragraph" the DoD asks about. Count every matching
+  # paragraph rather than taking the first (`exit`): a clean paragraph
+  # mentioning the commit-only literal earlier in the file — a glossary
+  # entry, a cross-reference — would otherwise satisfy the check and leave a
+  # real regression in a later paragraph unread.
+  LAUNCH_COUNT=$(awk -v RS='' '/commit only: goal G branch GOAL_BRANCH/ { c++ } END { print c+0 }' "$GOALS_MD")
+  BAD_COUNT=$(awk -v RS='' '/commit only: goal G branch GOAL_BRANCH/ && /gates pre-authorized in-session/ { c++ } END { print c+0 }' "$GOALS_MD")
+  if [[ "$LAUNCH_COUNT" -eq 0 ]]; then
     error "references/goals.md no longer carries the commit-only build-launch literal — this guard has nothing to check" \
       "references/goals.md" "" \
       "Keep the exact line \`commit only: goal G branch GOAL_BRANCH\` in step 4's per-task build invocation, or update this guard alongside its removal"
-  elif grep -qF 'gates pre-authorized in-session' <<< "$LAUNCH_PARAGRAPH"; then
-    error "references/goals.md's per-task build-launch paragraph carries both the commit-only line and the permissions grant" \
+  elif [[ "$BAD_COUNT" -gt 0 ]]; then
+    error "references/goals.md's per-task build-launch paragraph carries both the commit-only line and the permissions grant ($BAD_COUNT of $LAUNCH_COUNT matching paragraph(s))" \
       "references/goals.md" "" \
       "Commit-only mode never reaches a gate; keep \`gates pre-authorized in-session\` out of step 4's per-task build invocation — it belongs only at step 7's hand-off"
   else
-    pass "references/goals.md's commit-only build-launch paragraph carries no permissions grant"
+    pass "references/goals.md's commit-only build-launch paragraph carries no permissions grant ($LAUNCH_COUNT matching paragraph(s) checked)"
   fi
 fi
 
