@@ -321,9 +321,14 @@ memory between turns:
    a headless run that hangs. Stop with `stop: reauthorize`, and say to run
    `wayfare-start-goal` again: it re-authorizes and runs the turn. When present,
    and the goal is still `accepted`, write `status: active`. This is the one
-   writer of that transition. Then every launch below carries the
-   permissions line from *Permissions*, `gates pre-authorized in-session for
-   goal 7: mark-ready, respond, auto-approve, merge, deploy=verify`, built
+   writer of that transition. Then every launch below that can reach a gate
+   carries the permissions line from *Permissions*. Those are step 7's
+   hand-off and a bot item's *Carrying a bot's PR*. Build, fix and simplify
+   agents commit only and reach no gate, so they never get the line: a grant
+   pasted into a prompt that cannot use it is one more copy of merge
+   authority for an agent to misread. The line is `gates pre-authorized
+   in-session for goal 7: mark-ready, respond, auto-approve, merge,
+   deploy=verify`, built
    from the set granted at this session's gate, never re-read from the file
    (the file may only narrow it; a wider file is `stop: reauthorize`), and
    wayfare-build-task matches that literal and nothing else, the same way
@@ -405,11 +410,10 @@ memory between turns:
 
    Invoke wayfare:wayfare-build-task with task N's **store id** as the argument,
    via the Skill tool, with the exact line
-   `gates pre-authorized in-session for goal G: PERMISSIONS`, plus the exact
-   line `commit only: goal G branch GOAL_BRANCH`. It builds, runs the tests
-   that cover this change, and commits one changeset. It does not run the
-   full suite, simplify, push, open a PR, review, or ship: the goal does
-   those once, over the whole branch.
+   `commit only: goal G branch GOAL_BRANCH` and no permissions line. It
+   builds, runs the tests that cover this change, and commits one
+   changeset. It does not run the full suite, simplify, push, open a PR,
+   review, or ship: the goal does those once, over the whole branch.
 
    Report: the commit SHA, the subtask and DoD lines it ticked, **the
    verification you ran and what it produced** — a count, a named
@@ -434,8 +438,8 @@ memory between turns:
    states why it exists — those paths widen what the NEXT goal may do
    without touching `## Permissions` — and that argument is about privilege,
    not about item bookkeeping, so it binds a build subagent's edits exactly
-   as it binds an admission. A cheaper model building under pre-authorized
-   `merge` is the last place to relax it.
+   as it binds an admission. A cheaper model building for a goal that will
+   merge without asking again is the last place to relax it.
 
    **Check `budget_max` before each launch, not just at turn start.** A
    turn now builds the whole goal, so a start-of-turn check is a check that
@@ -467,9 +471,8 @@ memory between turns:
    honest: one task, its own `source` paths, one commit. The parent keeps
    what needs the larger model, which is deciding what to build next, reading
    the reports, and judging whether the goal is done. The parent also keeps
-   the authorization: a subagent cannot ask the user anything, which is
-   exactly why the permissions literal travels in the invocation and why step
-   2 of *Starting a goal* is what makes that acceptable.
+   the authorization: no permissions line reaches a build agent (step 2
+   above).
 
    A bot item among the members never joins the goal's branch: its PR is the bot's
    and must stay bot-authored, so it runs *Carrying a bot's PR* on its own,

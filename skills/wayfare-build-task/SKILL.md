@@ -517,8 +517,9 @@ Three cases, gated by what each one actually costs:
   → continuing with subtasks 4–5
 ```
 
-**Under a goal turn, finish before you file.** A run carrying `gates
-pre-authorized in-session for goal G` is one task of an outcome someone
+**Under a goal turn, finish before you file.** A run carrying `commit only:
+goal G branch GOAL_BRANCH` or `gates pre-authorized in-session for goal G`
+is one task of an outcome someone
 authorized, and every item written here needs a goal to reach it later. So
 the bar moves: work that a line of **this item's own** `## Definition of
 Done` needs, and that fits inside a reviewable PR, is part of this item. Do
