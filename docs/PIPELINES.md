@@ -232,10 +232,14 @@ wayfare cannot set `/goal` itself.
 
 **A goal is one branch, one PR, and one commit per task.** The turn builds
 its member tasks one after another on the goal's branch, in member
-order, running the test phase after each commit. Each build is handed to one
-subagent on a cheaper model, scoped to that task's `source` paths, one at a
-time because they share the checkout; a failing branch test gets its own
-scoped fix agent and its own commit rather than being repaired in the parent. Nothing is pushed until every
+order. Each build is handed to one subagent on a cheaper model, scoped to
+that task's `source` paths, one at a time because they share the checkout,
+and it implements, runs the tests covering its own change, and commits one
+changeset. The expensive checks run once, after the last task: one simplify
+pass and one full test run over the whole branch. A failure there is bisected
+across the task commits to find the task that caused it, and gets its own
+scoped fix agent and its own commit rather than being repaired in the parent.
+Nothing is pushed until every
 task is in and the whole branch has passed locally; only then does wayfare-run-task
 run once over the branch to push, review, and ship it. That is one review pass,
 one auto-approve and one merge for the goal, instead of one of each per

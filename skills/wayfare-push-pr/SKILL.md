@@ -16,8 +16,8 @@ The test phase (Step 2) absorbed the former `test-changes` skill. Run `wayfare:w
 - `$ARGUMENTS` - Optional mode keyword or target branch. Only the **first** whitespace-separated token is matched against the keywords below, and it must match exactly rather than by prefix. A branch literally named `test`, `commit` or `ready` cannot be targeted this way, and needs a rename or a manual `git merge` instead:
   - `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before every other form.
   - (none, default) - Test, commit if dirty, push, and create a **draft** PR
-  - `test [MODIFIER...]` - Run only Step 2 (verification plus smoke tests) and stop. No commit, no push. Optional trailing tokens narrow the run: `verify` (static checks + unit tests only), `smoke` (skip verification), `backend`, `frontend [routes...]` (routes must start with `/`), `cli`, `mcp`, or free text (a test description to focus on)
-  - `commit` - Run Step 2, then Step 3 (smart commit), and stop. No push, no PR. This is what a wayfare goal turn calls per feature: the goal lands one commit per feature on its own branch and opens a single PR at the end.
+  - `test [MODIFIER...]` - Run only Step 2 (verification plus smoke tests) and stop. No commit, no push. Optional trailing tokens narrow the run: `verify` (static checks + unit tests only), `smoke` (skip verification), `backend`, `frontend [routes...]` (routes must start with `/`), `cli`, `mcp`, `branch BASE` (the whole branch against `origin/BASE` rather than the last commit: see 2b; a wayfare goal runs this once after its last task), or free text (a test description to focus on)
+  - `commit` - Test only what the uncommitted change touches, commit it as one changeset (Step 3, smart commit), and stop. No push, no PR, no full suite, no smoke, no simplify. This is what a wayfare goal turn calls per task: the goal lands one commit per task on its own branch, then runs the full test phase and simplify once over the whole branch and opens a single PR at the end.
   - `ready` - Test, commit if dirty, push, and create a non-draft PR (ready for review immediately). Only use this when you have already self-reviewed, or for trivial changes
   - Any other first token - Treated as a target branch name (e.g., `main`, `develop`): test, commit if dirty, push, then merge into that branch (no PR). A branch literally named `recalibrate`, `test`, `commit`, or `ready` cannot be targeted this way and needs a rename or a manual `git merge`
 
@@ -188,6 +188,10 @@ mapfile -t CHANGED_FILES < <(printf "%s\n" "${CHANGED_FILES[@]}" | sort -u)
 
 If `CHANGED_FILES` is empty, run the checks on the whole project (replace `"${CHANGED_FILES[@]}"` with `.` or the project root).
 
+**With the `branch BASE` modifier the set is the whole branch, and so are the checks.** Build it from `git diff --name-only origin/BASE...HEAD`, never `HEAD~1`: a goal branch carries one commit per task, and the last commit alone leaves every earlier task unchecked. Run the task runner's full `test` target (not only the mapped tests), `pre-commit run --all-files` in place of the scoped dry-run below, and `pre-commit run --hook-stage pre-push --all-files`, which is where security scans such as semgrep run and which a clean-tree push would otherwise skip. 2c derives its smoke routes from this same set. This is the only full run a goal makes before its push, so it must be the whole branch.
+
+**In `commit` mode the set is the uncommitted change only, and the checks stay on it.** Build it from `git diff --name-only HEAD` plus `git ls-files --others --exclude-standard`, never from `HEAD~1`: on a goal branch the last commit is the previous task's, and folding it in re-tests work that was already checked. Run lint and typecheck on that set, and only the tests that cover it (the test files that map to those sources, or the narrowest runner target that exercises them), not the task runner's full `test` target. An empty set is a STOP: there is nothing to commit. The full suite runs once over the goal's branch after its last task (wayfare's *One turn*, step 5), which is where two tasks that each passed alone are checked together.
+
 If `HERO.md`'s **Repository** section sets `task-runner` (e.g. `just`, `make`), prefer that tool's targets (`just lint`, `just test`, and so on) over the per-project commands below when both exist. The task runner is what CI itself calls, so it is the copy that cannot drift from CI's actual gate.
 
 Use commands from `HERO.md` **Code Quality** and **Projects** sections when available. Otherwise auto-detect:
@@ -221,7 +225,7 @@ If any check fails, apply the failure semantics above: mechanical fixes get fixe
 
 #### 2c: Run Smoke Tests by Type
 
-Skip entirely in `verify` mode.
+Skip entirely in `verify` mode, and in `commit` mode: the goal smoke-tests once, over the branch.
 
 **CLI or library**: find entry points in `pyproject.toml` (`[project.scripts]`) or `__main__.py` and run with `--help` or a basic invocation (`uv run SCRIPT_NAME --help`); for libraries with no CLI, `uv run python -c "import PACKAGE; print('OK')"`.
 
@@ -576,6 +580,8 @@ git status --porcelain
 
 #### 3a: Run Pre-commit (if available)
 
+In `commit` mode, skip this step: 2b's scoped dry-run already covered the changed files, and the hooks run on them again at `git commit`.
+
 ```bash
 if command -v pre-commit > /dev/null 2>&1; then
   pre-commit run --all-files
@@ -598,6 +604,8 @@ git diff --stat
 For each changed file: read the diff, understand its purpose, assess quality.
 
 #### 3c: Simplify Code
+
+In `commit` mode, skip `simplify` and go to the humanizer pass below: the goal simplifies once, over the whole branch diff.
 
 Invoke the `simplify` skill via the Skill tool. `simplify` is **not** part of this plugin. It ships separately (see the user-invocable skills list in the current session). It reviews the current diff for reuse, quality, and efficiency and fixes any issues found before the commit lands. Step 3g below handles the post-fix pre-push dry-run.
 
@@ -682,6 +690,8 @@ A commit body, when written, is humanized (3c) before the commit.
 **If issue ID in branch name:** Add `Fixes: PROJ-123` or `Relates to: PROJ-123`.
 
 #### 3g: Post-Commit Pre-Push Dry-Run
+
+In `commit` mode, skip this step: nothing is pushed, and the goal runs the pre-push stage once over the whole branch (`test branch BASE`, 2b). Do not count on the push to run it: a goal pushes a clean tree, which skips Step 3 entirely.
 
 Dry-run any pre-push hooks now so failures surface before the actual push (Workflow A1 / B1):
 

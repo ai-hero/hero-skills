@@ -599,7 +599,7 @@ The humanizer pass on the diff's prose belongs to wayfare-push-pr's Step 3c and 
 
 Render DAG with `push` active. Run `wayfare:wayfare-push-pr` with no arguments. It runs its test phase first: verification plus smoke tests, including UI smoke via Playwright MCP when a UI project is detected; then commits any outstanding work with a smart conventional commit, branches off the default branch first if needed, pushes, and opens a draft PR. Trust its grouping and commit logic, and do not skip pre-commit hooks. Capture the PR number from its output for downstream steps.
 
-Under a goal turn's commit-only mode this step is `wayfare:wayfare-push-pr commit` instead: same test phase, same smart commit, no push and no PR.
+Under a goal turn's commit-only mode this step is `wayfare:wayfare-push-pr commit` instead: the tests covering this change, the same smart commit, no push and no PR. The full test phase runs once over the goal's branch, not here.
 
 **Step 4 is wayfare-push-pr. Do not commit or push by hand.** `git commit`, `git push`, and `gh pr create` are wayfare-push-pr's calls to make, not this step's. Running them directly "because the change is small" or "because wayfare-push-pr is doing a lot" looks like it produces the same result and does not. It silently skips:
 
@@ -699,13 +699,15 @@ Render DAG with `ship` active. Run `wayfare:wayfare-ship-pr` via the Skill tool,
 
 **Step 9 is wayfare-ship-pr. Do not post `@auto-approve` or merge by hand.** Those are wayfare-ship-pr's calls, as `git commit` is wayfare-push-pr's. Posting the trigger directly skips wayfare-ship-pr's local gates, so the workflow answers REQUEST_CHANGES for something checkable here. **Artifact (contract item 5):** the auto-approve run URL and the merged SHA from wayfare-ship-pr's summary.
 
-**Commit-only mode, from a goal turn.** When the invocation carries the exact line `commit only: goal GOAL_ID branch GOAL_BRANCH`, this run **stops after Step 3 (simplify) plus wayfare-push-pr's test-and-commit phases, and returns the commit SHA.** It does not push, open a PR, self-review, mark ready, await review, respond, or ship. A goal is one branch and one PR: those steps belong to the goal, run once, after every feature is committed and the branch has passed locally (wayfare's *One turn*, step 7).
+**Commit-only mode, from a goal turn.** When the invocation carries the exact line `commit only: goal GOAL_ID branch GOAL_BRANCH`, this run **builds the item, runs the tests that cover its change, commits one changeset, and returns the commit SHA.** It does not run the full suite, simplify, push, open a PR, self-review, mark ready, await review, respond, or ship. A goal is one branch and one PR: the full suite and the simplify pass run once over the whole branch after the last task (wayfare's *One turn*, step 5), and the rest runs once at step 7. Running them per task paid for the same checks once per task.
 
 Concretely, in commit-only mode:
 
+- **Step 0.3 (preflight) does not run.** The goal turn runs it once before its first build (wayfare's *One turn*, step 4), and again, in full, when step 7 hands the branch to this skill without the literal.
 - **Step 0.5 routes on the literal, not on branch state.** Its table has a row for this, above every branch-state row. The branch already carries the earlier tasks' commits, so reading it would route past the build.
-- Steps 1 to 3 run as written: resolve the item, build it, simplify.
-- Step 4 becomes **`wayfare:wayfare-push-pr commit`**, which runs the test phase and the smart-commit phase and stops before any push. The branch is already checked out by the goal turn; do not create one, and do not switch.
+- Steps 1 and 2 run as written: resolve the item and build it, including 2c's read of its own diff.
+- Step 3 (simplify) renders `(–)` with `deferred to the goal`.
+- Step 4 becomes **`wayfare:wayfare-push-pr commit`**, which runs the tests covering this change and the smart-commit phase and stops before any push. The branch is already checked out by the goal turn; do not create one, and do not switch.
 - Steps 5 to 9 render `(–)` with `deferred to the goal` and do not run.
 - The DAG's last live node is `push`, rendered `(✓) push (committed SHA, not pushed)`.
 - **Artifact (contract item 5):** the commit SHA. `git rev-parse HEAD` must differ from the value at the start of the run. No new commit means the run built nothing, whatever else it reported.

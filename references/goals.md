@@ -198,10 +198,10 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
                   these tasks that serves a line of the DoD above is
                   absorbed into this goal; anything else is left for you
                   to authorize as its own goal later
-     Ships as:    one branch, one PR. Tasks are built one after another
-                  and committed separately, one commit per task, tested
-                  locally after each. Nothing is pushed until they are all
-                  in and the branch passes
+     Ships as:    one branch, one PR. Tasks are built one after another,
+                  one commit per task, each checked by its own tests. After
+                  the last one the whole branch is simplified and fully
+                  tested once. Nothing is pushed until the branch passes
      Stops on:    the goal item's ## Stop conditions
 
    Type the goal id to authorize these permissions and run the goal now,
@@ -264,10 +264,21 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
 ### One turn: what `next` runs after its gate, and what `do GOAL_ID` re-runs
 
 **A goal is one branch, one PR, and one commit per task.** The turn builds
-its tasks one after another, in member order (`hero_goal_members`), committing each to the
-goal's own branch and testing locally as it goes. Nothing is pushed and no PR
-is opened until every task is done and the whole branch has passed a local
-run. Only then does the goal reach the network at all.
+its tasks one after another, in member order (`hero_goal_members`), each
+implemented, checked by the tests that cover its own change, and committed as
+its own changeset on the goal's branch. The expensive checks run once, over
+the whole branch, after the last task: one simplify pass and one full test
+run. Nothing is pushed and no PR is opened until that branch run has passed.
+Only then does the goal reach the network at all.
+
+**Build everything first, then verify once.** Running the full suite and a
+simplify pass after every task paid for the same checks once per task, and
+the second task's run re-checked code the first run had already passed. What
+the per-task run bought was attribution: a failure named the task that caused
+it. One commit per task keeps that without the cost, because a failure in the
+single branch run is attributed afterwards by bisecting those commits (step
+5). So per task: implement, the task's own tests, commit. Per goal: simplify,
+full suite, DoD, review, ship.
 
 **The turn delegates every build and every fix, one subagent at a time, on a
 cheaper model.** The parent decides what to build next, reads the reports, and
@@ -348,6 +359,12 @@ memory between turns:
    git checkout -b "$GOAL_BRANCH" "origin/$BASE"
    ```
 
+   Before the first build of the turn, run preflight once
+   (`preflight.sh --bucket all --auto-scope`, as wayfare-run-task's Step 0.3
+   does), and STOP on a blocker. The build runs skip it, so this is the one
+   check that a missing tool or an inactive hook surfaces before the work
+   rather than at step 7, after it.
+
    On a later turn, check it out. There are no worktrees here and no
    parallel launches: tasks land in member order on this one branch, so
    each is built against the tree the previous one left. That is what makes
@@ -389,8 +406,10 @@ memory between turns:
    Invoke wayfare:wayfare-run-task with task N's **store id** as the argument,
    via the Skill tool, with the exact line
    `gates pre-authorized in-session for goal G: PERMISSIONS`, plus the exact
-   line `commit only: goal G branch GOAL_BRANCH`. It builds, simplifies,
-   tests and commits. It does not push, open a PR, review, or ship.
+   line `commit only: goal G branch GOAL_BRANCH`. It builds, runs the tests
+   that cover this change, and commits one changeset. It does not run the
+   full suite, simplify, push, open a PR, review, or ship: the goal does
+   those once, over the whole branch.
 
    Report: the commit SHA, the subtask and DoD lines it ticked, **the
    verification you ran and what it produced** — a count, a named
@@ -421,7 +440,8 @@ memory between turns:
    **Check `budget_max` before each launch, not just at turn start.** A
    turn now builds the whole goal, so a start-of-turn check is a check that
    happens once for a run that may land a dozen commits. Before each task,
-   and before each fix commit at step 5, re-count the branch. At
+   and before the simplify commit and each fix commit at step 5, re-count
+   the branch. At
    `budget_max`, run the checkpoint (*Budget is fungible*): raise and log it,
    or stop with `stop: budget`, reporting which tasks are done and which are
    not. Without this the checkpoint the item advertises is one nothing runs.
@@ -516,14 +536,14 @@ memory between turns:
    7 when the PR merges: a task is not done while the default branch
    lacks it.
 
-   **Print the goal table after each task's branch test, before
-   launching the next.** A turn builds a whole goal, so without it the run
-   goes quiet for a dozen commits and the only status anyone sees is the
-   report at the end, by which time nothing can be redirected. The print
-   point is after step 5's test of that task, not at its close-out:
-   that is the first moment both halves of a row exist, the commit and the
-   evidence it was checked against. Print it again after each fix commit at
-   step 5, and after each admission at step 8.
+   **Print the goal table after each task's commit, before launching the
+   next.** A turn builds a whole goal, so without it the run goes quiet for
+   a dozen commits and the only status anyone sees is the report at the end,
+   by which time nothing can be redirected. The print point is the read-back
+   of the task's `committed` status: that is the first moment both halves of
+   a row exist, the commit and the task-scoped tests it was checked against.
+   Print it again after step 5's branch run, after each fix commit, and
+   after each admission at step 8.
 
    It is transcript-only — the durable records are the item's fields and
    its `turn` lines in `## Log`, and a table written to the store would be a third copy of
@@ -548,7 +568,7 @@ memory between turns:
 
    | Item | Status | Commit | What was done | Verified by | Diff |
    | ---- | ------ | ------ | ------------- | ----------- | ---- |
-   | 149 | committed | 7179f53 | Deleted all 11 `-chromium-darwin` baselines + both `toHaveScreenshot` sites; removed `--grep-invert` from `ci.yaml:467`. Un-hid 3 component-page tests that had never run on CI | Full suite 197 passed; axe/structural assertions all kept | 13 files, +8/-55 |
+   | 149 | committed | 7179f53 | Deleted all 11 `-chromium-darwin` baselines + both `toHaveScreenshot` sites; removed `--grep-invert` from `ci.yaml:467`. Un-hid 3 component-page tests that had never run on CI | `visual/` 11 removed, 3 un-hidden now run and pass (task-scoped) | 13 files, +8/-55 |
    | 143 | committed | 1bacaa3, fix 9c02a1e | Hover assertion now polls for the expected colour with `expect.poll` instead of waiting for stability, which a rest colour satisfies. Fixed the "grep-inverted out of CI" comment 149 falsified | Mutation → timeout-fail, not instant pass; 440/440 at `--repeat-each=20` | 4 files, +46/-26 |
    | 201 | committed | 67560e7 | Split the one `evaluate` that read `fill` before the click into two | Mutated `ink-note` → failed in 405ms | 2 files, +14/-3 |
    | 15 | next | – | – | – | – |
@@ -556,7 +576,8 @@ memory between turns:
    | 21 | admitted | – | – | serves DoD line 2 "session survives a refresh" | – |
 
    mistakes  149 → 2 recorded; 143 → 1 recorded (+1 from fix 9c02a1e); 201 → 0 recorded
-   dod       0 of 3 — checked at step 6, once every task is committed
+   branch    not run — step 5, once the last task is committed
+   dod       0 of 3 — checked at step 6, after the branch run
    stop      none
    ```
 
@@ -569,8 +590,9 @@ memory between turns:
 
    **`Verified by` is evidence, not a claim.** The command and its result: a
    count, a mutation that failed the way it should, a route that loaded. It
-   comes from the run's own report (the contract above asks for it) and the
-   branch test this print follows, never from inference. "Tests pass" with
+   comes from the run's own report (the contract above asks for it) and,
+   once step 5 has run, the branch run, never from inference. Until then a
+   row's evidence is its task-scoped tests, and says so. "Tests pass" with
    no number is not evidence, and a row nothing was run against says `not
    checked` — which the reader is entitled to see, and which step 6 will
    have to answer for. On an admitted row it carries the DoD line the
@@ -587,21 +609,88 @@ memory between turns:
    `0 of N` until step 6 runs, because ticking DoD lines from committed
    tasks is the inference this skill refuses everywhere else.
 
-5. **Test the whole branch, not just the last task.** After each commit,
-   run the repo's verification over the branch as it now stands (wayfare-push-pr's
-   Step 2, invoked as `wayfare:wayfare-push-pr test`). Two tasks that each
-   passed alone can still fail together, and the point of committing them to
-   one branch before any push is that this is where that surfaces: locally,
-   for free, with no PR open and no CI minutes spent.
+5. **When the last task is committed, simplify once and test the whole
+   branch once.** Not after each task: the per-task runs checked only what
+   each task changed, and this is the run that checks them together.
+
+   First **simplify**, once, over the branch's whole diff, **delegated
+   like every other edit**. The parent does not write code at this step
+   either. One subagent (Agent tool, `general-purpose`, `model: sonnet`):
+
+   ```
+   cd REPO_PATH, on branch GOAL_BRANCH, clean tree. Run the `simplify`
+   skill over the goal's changes: the diff is `git diff origin/BASE...HEAD`
+   (it is committed, so review that range, not the working tree). Apply
+   only reuse, quality and efficiency fixes to what that diff added or
+   changed. Do not change behavior, and do not reach into code the diff
+   did not touch. The never-admissible paths are a hard stop, whatever a
+   cleanup suggests: anything under `.github/` or `.claude/` (nested
+   copies included), `HERO.md`, `FLEET.md`, and any file governing
+   authentication, authorization or secrets. A reuse that would need one
+   is reported, never made. If nothing needs changing, change nothing.
+   Otherwise commit through `wayfare:wayfare-push-pr commit` with the
+   subject `refactor: simplify goal G`. Report the SHA (or `no change`),
+   the files touched, the task-scoped tests you ran, and every wrong turn.
+   ```
+
+   Before recording it, check each path the commit touched with
+   `hero_path_forbidden`, and on a hit revert the commit and stop with
+   `stop: failure`: the prompt is the fence, and this is what holds when
+   the prompt was not followed. The commit spends budget (it is counted in
+   the pre-launch `budget_max` check like a task), goes in `commits:` as
+   `SHA (simplify)`, and gets its own `simplify` row in the goal table. No
+   change, no commit and no row. Simplify runs before the test so the test
+   covers the code that will ship.
+
+   Then **test**: the repo's full verification over the whole branch,
+   `wayfare:wayfare-push-pr test branch BASE`. The `branch` modifier is not
+   optional: without it the test phase scopes itself to the last commit,
+   and every earlier task goes unchecked. It runs the full test target,
+   `pre-commit run --all-files`, the pre-push hook stage (where security
+   scans such as semgrep run), and smoke over the routes the whole branch
+   touched. Two tasks that each passed their own tests can still fail
+   together, and the point of committing them to one branch before any push
+   is that this is where that surfaces: locally, for free, with no PR open
+   and no CI minutes spent.
+
+   **A tree the test run left dirty is committed before anything else.**
+   The test phase applies mechanical fixes itself (lint, import order), and
+   `test` mode never commits them. Commit them through
+   `wayfare:wayfare-push-pr commit` as a fix commit, attributed as below,
+   then re-run the branch test. Bisect and the base check both need a clean
+   tree.
+
+   **Attribute a failure before fixing it.** The branch run names what
+   failed, not which task broke it. Narrow it to the smallest command that
+   reproduces it (one test file, not the suite).
+
+   - **A test file the goal added** (`git cat-file -e origin/$BASE:PATH`
+     fails) is attributed to the commit that added it (`git log
+     --diff-filter=A --format=%H origin/$BASE..GOAL_BRANCH -- PATH`), or to
+     a later task by bisecting from that commit. Never from the base: every
+     commit before the file existed would fail it and read as bad.
+   - **A test that exists at the base** is run there first (`git checkout
+     --detach origin/$BASE`, then back to `GOAL_BRANCH`). A failure there is
+     not this goal's: `stop: failure` naming it, no fix agent. Otherwise
+     `git bisect start GOAL_BRANCH origin/$BASE`, `git bisect run` the
+     command, `git bisect reset`.
+
+   The first bad commit is the one the fix is attributed to, and its row
+   carries the fix commit. A first bad commit that is the simplify commit
+   is fixed there (the fix agent is told the simplify commit caused it,
+   and a revert is an acceptable fix). When the command cannot be
+   narrowed, or bisect cannot finish, attribute to the last task and say
+   `attributed by default`.
 
    **A failure here gets its own subagent, scoped to the defect.** Do not
-   fix it in the parent, and do not fold the fix into the next task's
-   build. Launch one fix agent (Agent tool, `general-purpose`,
-   `model: sonnet`) with the failing output and nothing else to do:
+   fix it in the parent. Launch one fix agent (Agent tool,
+   `general-purpose`, `model: sonnet`) with the failing output and nothing
+   else to do:
 
    ```
    cd REPO_PATH, on branch GOAL_BRANCH. `wayfare:wayfare-push-pr test` failed
-   after task N landed. Here is the failing output: FAILURE_TEXT.
+   on the branch; bisect attributes it to task N (commit SHA). Here is the
+   failing output: FAILURE_TEXT.
 
    Diagnose and fix exactly that failure, at the level the cause sits at:
    if a shared fixture leaks state, reset the fixture rather than reordering
@@ -627,9 +716,13 @@ memory between turns:
    on a wrong diagnosis is how a branch fills with commits that each looked
    reasonable. Report `stop: failure` naming both tasks and what was tried.
 
+   When several tests fail, bisect each distinct failure, group the ones
+   that share a first bad commit, and launch one fix agent per group, one
+   at a time, re-running the branch test after each.
+
    A fix commit spends budget like any other; that is the honest accounting,
    and it is why `budget` is commits rather than tasks. Print the goal
-   table after it, and after each task's branch test above. Its reported wrong
+   table after it, and after the branch run above. Its reported wrong
    turns are copied verbatim as `mistake` lines into `## Log` on the task the failure
    surfaced under, same as a build run's.
 6. **When every task is committed, drain the deferred deploy checks, then
@@ -727,11 +820,11 @@ memory between turns:
      did:       task 12 → committed a1b2c3d
                 task 13 → committed d4e5f6a
                 task 15 → building
-     verified:  after 12: npm test exit 0
-                after 13: npm test exit 0; UI smoke 3/3 routes
-                fix b7c8d9e after 13: shared fixture reset between suites
-     commits:   3 of about 5 expected (4 + 1 admitted), checkpoint at 8
-     mistakes:  12 → 2 recorded; 13 → 1 recorded (+1 from fix b7c8d9e)
+     verified:  12: auth/ tests 14/14 (task-scoped)
+                13: session/ tests 9/9 (task-scoped)
+                branch: not run, tasks remain
+     commits:   2 of about 5 expected (4 + 1 admitted), checkpoint at 8
+     mistakes:  12 → 2 recorded; 13 → 1 recorded
      admitted:  21 (from 13) → admitted, serves DoD line 2 "session survives a refresh"
                 22 (from 13) → not admitted, follow-up ground: unrelated log-format refactor
      remaining: 15, 18, 21
