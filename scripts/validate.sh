@@ -49,6 +49,15 @@ pass() {
   fi
 }
 
+strip_fences_and_comments() { # FILE -> prints it with fenced ``` blocks and lines mentioning <!-- removed
+  awk '
+    /^```/           { fence = !fence; next }
+    fence            { next }
+    /<!--/           { next }
+    { print }
+  ' "$1"
+}
+
 echo ""
 bold "Hero Skills Plugin Validator"
 echo "────────────────────────────"
@@ -767,12 +776,7 @@ else
   # "this pipeline used to call wayfare:wayfare-grill-idea" passed while
   # every real delegation had been deleted, which is exactly the drift this
   # guard exists to catch.
-  ONE_SHOT_ACTIVE=$(awk '
-    /^```/           { fence = !fence; next }
-    fence            { next }
-    /<!--/           { next }
-    { print }
-  ' "$ONE_SHOT")
+  ONE_SHOT_ACTIVE=$(strip_fences_and_comments "$ONE_SHOT")
   # Here-string rather than `printf | grep -q`, see the pipefail/SIGPIPE note
   # on the chained-skill guard above. This site is the one that actually bit:
   # the match sits near the top of wayfare-build-task's Step->skill table, so grep -q
@@ -813,16 +817,11 @@ if [[ ! -f "$GOALS_MD" ]]; then
   error "references/goals.md is missing" "references/goals.md" "" \
     "goals.md documents a goal turn's build-launch invocation; restore it or update this guard"
 else
-  # Same stripping style as the wayfare-grill-idea delegation guard above:
+  # Same stripping helper as the wayfare-grill-idea delegation guard above:
   # skip fenced-block content and any line mentioning an HTML comment before
   # matching, so a quoted counter-example inside a fence or a comment can't
   # be mistaken for the real, active build-launch paragraph.
-  GOALS_STRIPPED=$(awk '
-    /^```/           { fence = !fence; next }
-    fence            { next }
-    /<!--/           { next }
-    { print }
-  ' "$GOALS_MD")
+  GOALS_STRIPPED=$(strip_fences_and_comments "$GOALS_MD")
   # Paragraph mode: a record is one blank-line-delimited block, which is
   # exactly the "same paragraph" the DoD asks about.
   LAUNCH_PARAGRAPH=$(awk -v RS='' '/commit only: goal G branch GOAL_BRANCH/ { print; exit }' <<< "$GOALS_STRIPPED")
