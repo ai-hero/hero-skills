@@ -185,7 +185,8 @@ Owner: `wayfare:wayfare-sync-plan`. Twelve stages: the config gate; the
 mailbox (`docs/MESSAGES.md`, every unread message through the fleet gate
 and the promotion gate, a `type: bug` message becoming a proposed `shape: defect` task);
 `wayfare:wayfare-review-architecture` (offering its `sync`);
-`wayfare:wayfare-audit-security all`; the compliance audit
+`wayfare:wayfare-audit-security all`; the `comments` stage (prose gone false
+about the code, references/sync.md *The `comments` stage*); the compliance audit
 (`scripts/audit.py --repo THIS`, baseline plus the fleet's register overlay)
 with each failing check proposed as an item; the repo's own `wayfare: sync`
 skills (discovered in `.claude/skills/`, run with the harden contract); the

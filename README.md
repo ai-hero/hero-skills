@@ -318,7 +318,8 @@ wayfare:wayfare-init-repo
 #    config → inbox → architecture → harden → comments → compliance → local → deps → design → reconcile → plan → goals
 #    Reads the mailbox from sibling repos (bug reports become bug items),
 #    reviews DESIGN.md (offers to converge it), audits dependency/container/
-#    code hardening, checks the repo against the compliance register (generic
+#    code hardening, flags comments and docs the code now contradicts,
+#    checks the repo against the compliance register (generic
 #    baseline + your fleet's overlay), runs the repo's own `wayfare: sync`
 #    skills, gathers the bots' open PRs, refreshes the design snapshot,
 #    reconciles source against design, plans every feature with you, then
