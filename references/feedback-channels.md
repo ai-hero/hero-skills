@@ -21,7 +21,7 @@ destination answers it once, wrongly, for every lane and every future
 signal.
 
 **Nothing in this flow may change the thing it is about.** Wayfare reads the
-target and the design system and never writes either; wayfare-run-task works inside the
+target and the design system and never writes either; wayfare-build-task works inside the
 source. So a divergence is *logged where it happened*, *promoted to an item*,
 and *delivered separately, on the user's word*.
 
@@ -36,9 +36,9 @@ one channel is how the architectural ones get triaged as visual nitpicks.
 Feedback is written twice on purpose, and exactly one of the two forms owns its
 state at any moment.
 
-1. **Capture, during the build.** wayfare-run-task appends a `signal` line to the
+1. **Capture, during the build.** wayfare-build-task appends a `signal` line to the
    task's `## Log`. Mid-build is the wrong time to allocate a store id and
-   author a full item, and those lines are what wayfare-run-task's close-out gate
+   author a full item, and those lines are what wayfare-build-task's close-out gate
    reads when a Definition-of-Done line legitimately fails.
 2. **Promote, at `sync`.** Each undelivered entry becomes a `type: signal`
    item on the right `channel` (`origin: wayfare`, `discovered_from` = the
@@ -60,9 +60,9 @@ position, followed by indented continuation lines:
 ```markdown
 ## Log
 
-- 2026-07-24 (wayfare-run-task) signal: DF-12-2026-07-24-1 [item: 61] design/auth/flow.md
+- 2026-07-24 (wayfare-build-task) signal: DF-12-2026-07-24-1 [item: 61] design/auth/flow.md
   has no post-logout state; the code returns to the marketing page.
-- 2026-07-25 (wayfare-run-task) signal: DF-12-2026-07-25-1 [undelivered] design/auth/sign-in.md
+- 2026-07-25 (wayfare-build-task) signal: DF-12-2026-07-25-1 [undelivered] design/auth/sign-in.md
   orders consent before account linking; the code links first, because
   consent cannot be scoped until the account is known.
 ```
@@ -73,7 +73,7 @@ position, followed by indented continuation lines:
 for each entry written on the same task on the same day. It is assigned at
 write time and never changes.
 
-The ordinal is not decoration: wayfare-run-task appends one entry per divergence found
+The ordinal is not decoration: wayfare-build-task appends one entry per divergence found
 during a build, and two divergences on one task in one day is ordinary.
 Without it, two entries share a key, and the delivery check below cannot tell
 them apart — it would skip one as already-covered and that entry would never
@@ -247,7 +247,7 @@ Four things about that listing, each of which changes the answer:
 a file in another checkout's `.plans/inbox/` — and requires the recipient to
 promote it before it becomes work. Writing a ready item into the sibling's
 `items/` instead, which this lane used to do, is a sibling writing that
-repo's roadmap: its wayfare-run-task builds it, and its `sync` reads it as existing
+repo's roadmap: its wayfare-build-task builds it, and its `sync` reads it as existing
 coverage and suppresses the `uncovered` finding that would have caught it.
 So the deposit follows the standard's send half in full: the fleet gate, the
 `(from, about)` dedupe probe, the temp-name-then-`mv`. Ids for the message

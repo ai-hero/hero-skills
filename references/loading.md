@@ -363,7 +363,7 @@ takeover to the claim.
 `.claude/skills/` whose frontmatter says `wayfare: sync` runs as the `local`
 stage of `sync`; `wayfare: verify` is called wherever a Definition-of-Done
 line needs a repo-specific check; `wayfare: recipe` is a way to build that
-planning may name in an item's `## Approach` and wayfare-run-task then invokes. The
+planning may name in an item's `## Approach` and wayfare-build-task then invokes. The
 plugin stays generic. It never learns Terraform or a product's test rig,
 and each repo brings its own. Step 0 prints them; the stages below use them.
 
@@ -604,7 +604,8 @@ roadmap view: `goal GOAL` is now `wayfare:wayfare-start-goal` (to start or
 resume) and `wayfare:wayfare-advance-item GOAL_ID` (one turn); `deps [N]` is
 now `wayfare:wayfare-sync-plan` (which gathers the bots' PRs into
 `shape: dependency` tasks) and `wayfare:wayfare-advance-item ID` on the item;
-`improve` is `wayfare:wayfare-audit-compliance`.
+`improve` is `wayfare:wayfare-audit-compliance`; `wayfare-run-task` is
+`wayfare:wayfare-build-task`.
 `wayfare:wayfare-audit-security` and `wayfare:wayfare-review-architecture`
 run inside `wayfare:wayfare-sync-plan`; typing either by hand still works,
 but nothing in the workflow needs them named. A former verb name (`status`,

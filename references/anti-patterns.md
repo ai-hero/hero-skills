@@ -4,7 +4,7 @@ The failures this skill exists to prevent, each one observed.
 
 | Smell | Why it's wrong |
 | --- | ------------------------------------------------------------------ |
-| Building a task yourself | Wayfare plans; `wayfare-run-task` builds. |
+| Building a task yourself | Wayfare plans; `wayfare-build-task` builds. |
 | A task named for a layer | Tasks are slices: SLC user stories. Layers are subtask lines. |
 | A slice nobody can use yet | Complete means it works every time, end to end, not "everything". |
 | "Matches the design" verified by reading code | Composition bugs (crops, overflow, broken breakpoints) are invisible in source. Render both and look. |

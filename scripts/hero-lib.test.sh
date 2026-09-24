@@ -824,7 +824,7 @@ check "ready: dangling discovered_from never blocks" "READY" "$(state_of 020-dis
 #
 # `type` is the discriminator schema 1 dispatches on, so an item without one,
 # in a store that IS migrated, must be loud rather than guessed. Guessing
-# `task` is how a goal gets handed to wayfare-run-task to build.
+# `task` is how a goal gets handed to wayfare-build-task to build.
 
 printf -- '---\nid: 26\ntitle: No type line\nstatus: ready\ndepends_on: []\n---\n' > "$W/items/026-notype.md"
 printf -- '---\nid: 27\ntype: widget\ntitle: Unknown type\nstatus: ready\ndepends_on: []\n---\n' > "$W/items/027-badtype.md"
@@ -877,7 +877,7 @@ check "planning: unknown status warns on stderr" "0" "$?"
 #
 # new|accepted|planning|ready|active|committed|review|done|dropped. Each case
 # pins a way the mapping could silently regress: an `accepted` task handed to
-# wayfare-run-task unplanned (backlog must never be READY), or a terminal state
+# wayfare-build-task unplanned (backlog must never be READY), or a terminal state
 # wrongly satisfying a dependency.
 
 item 030-backlog.md 30 "Unplanned task" "accepted" "[]"
@@ -955,7 +955,7 @@ check "task: backlog dangling dep warns on stderr" "0" "$?"
 # ---------- signals and goals ------------------------------------------------
 #
 # A signal is DELIVERED, never built, so it must never reach READY: handing
-# one to wayfare-run-task is always wrong. A goal is a container, so the same holds
+# one to wayfare-build-task is always wrong. A goal is a container, so the same holds
 # for the opposite reason. `resolution` is what lets both end at `done`
 # without the listing knowing either type's vocabulary.
 

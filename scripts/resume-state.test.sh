@@ -7,7 +7,7 @@
 # Scoped to the two things that broke and could break again silently:
 #   1. Emitted values that must never be a plausible number when their source
 #      failed (the unknown sentinel), and must always set STATE_OK=false.
-#   2. Agreement with wayfare-run-task's decision table, two fields were emitted in a
+#   2. Agreement with wayfare-build-task's decision table, two fields were emitted in a
 #      shape no table row could ever match, which made six of twelve rows dead
 #      with no error anywhere.
 #
@@ -175,7 +175,7 @@ check "invalid branch name sets STATE_OK=false" "false" "$(val STATE_OK)"
 
 # `agent: none` is a supported setting with no bot-username. Treating the
 # missing key as a failed source made STATE_OK=false on every resume, so
-# wayfare-run-task stopped with a diagnostic on a valid configuration.
+# wayfare-build-task stopped with a diagnostic on a valid configuration.
 printf '# H\n\n- default-branch: main\n\n## Code Review Agent\n\n- agent: none\n' > "$REPO/HERO.md"
 make_gh '[{"number":42,"url":"u","isDraft":true,"reviewDecision":null,"state":"OPEN"}]' '[]'
 OUT="$(run)"

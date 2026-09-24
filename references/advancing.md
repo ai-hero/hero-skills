@@ -25,7 +25,7 @@ dependency bot's PR to merged and deployed.
 ## Advancing one item
 
 One procedure, one caller: `do ID` names the item. It takes a **planned**
-task as far as the gates allow in a single run (wayfare-run-task). It never plans,
+task as far as the gates allow in a single run (wayfare-build-task). It never plans,
 because planning is `sync`'s postflight, and the ready-mark was given there.
 
 **A goal turn does not route through here.** *One turn* step 4 owns its own
@@ -52,11 +52,11 @@ the next task.
    1. `active` task, mid-build: check out its branch if one exists (its
       `branch:` field names it, which is what `resume-state.sh` matches on;
       `## Log` records the PR from previous runs), then invoke
-      `wayfare:wayfare-run-task` (via the Skill tool); resume detection takes
+      `wayfare:wayfare-build-task` (via the Skill tool); resume detection takes
       over.
-   2. `review` task: its PR is recorded in `## Log` (wayfare-run-task
+   2. `review` task: its PR is recorded in `## Log` (wayfare-build-task
       appends the URL at PR-open). **Check the PR's state first**: open →
-      `gh pr checkout` its branch, then invoke wayfare-run-task to resume; merged →
+      `gh pr checkout` its branch, then invoke wayfare-build-task to resume; merged →
       check `## Log` for a `[close-out: …]` marker **before** assuming an
       oversight. A close-out the user *declined* leaves exactly the same
       `review` + merged state as one that was simply missed, and re-running
@@ -66,9 +66,9 @@ the next task.
       stuck one. Report it as such with its date, skip it, and continue to
       tier 3. Never re-ask, and never leave it rendering as blocked.
       **No marker** (or `[close-out: accepted …]` with work still open) →
-      verify Subtasks/DoD per wayfare-run-task Step 9a and flip to `done` (or back to
+      verify Subtasks/DoD per wayfare-build-task Step 9a and flip to `done` (or back to
       `active` if the merge covered part of the checklist); no PR found → treat as `active` (tier 1).
-   3. `READY` task, planned, marked and unblocked: invoke wayfare-run-task on it.
+   3. `READY` task, planned, marked and unblocked: invoke wayfare-build-task on it.
       A `committed` task is not a tier: its work is on the goal branch
       its `branch:` names, and the goal it belongs to owns the merge.
       Report that goal and suggest `wayfare-advance-item GOAL_ID`.
@@ -85,15 +85,15 @@ the next task.
       truly empty roadmap → `Next step: wayfare-sync-plan`.
 2. **The ready-mark is the permission, and it was already given.** A READY
    task carries the user's mark from `sync`'s postflight; `do` goes
-   straight into `wayfare:wayfare-run-task` on it, with one line:
+   straight into `wayfare:wayfare-build-task` on it, with one line:
 
    ```
-   [task 12] ready → building (wayfare-run-task)
+   [task 12] ready → building (wayfare-build-task)
    ```
 
    No second permission prompt belongs here: the ready-mark *is* the
-   go-ahead, and wayfare-run-task still stops on its own at every gate (mark-ready,
-   respond, auto-approve, merge) before anything merges. wayfare-run-task
+   go-ahead, and wayfare-build-task still stops on its own at every gate (mark-ready,
+   respond, auto-approve, merge) before anything merges. wayfare-build-task
    writes its `mistake` lines to `## Log` itself on this path as it builds;
    before the run rests, confirm they are there or that the run reported no
    wrong turns. Do not write them on the run's behalf. Under a goal, the
@@ -187,14 +187,14 @@ own branch for that reason and closes the bots' PRs after its own merge.
    `note` line to `## Log`, and invoke `wayfare:wayfare-ship-pr N`: gates, `@auto-approve`,
    verdict, the merge confirmation, merge, reset, verify-deploy. Under a
    goal the permissions line travels in the invocation and waives
-   `auto-approve`, `merge` and `deploy` exactly as it does for wayfare-run-task;
+   `auto-approve`, `merge` and `deploy` exactly as it does for wayfare-build-task;
    standalone `do` asks at each, as wayfare-ship-pr always has. Its Step 3a rebase
    is a no-op when step 1 held (if the base moved in between and it pushed a
    rebase, say so; see the rule above). Read back the verdict, the merge
    SHA, and the `Deployment:` line.
 5. **Close out.** Verify each `## Definition of Done` line of the item (the
    format below is the single spelling of what they are) and tick it with a
-   `note` line in `## Log` naming the evidence (wayfare-run-task Step 2's rule). Two
+   `note` line in `## Log` naming the evidence (wayfare-build-task Step 2's rule). Two
    lines can only be ticked on evidence that exists: the alert line's
    re-query returning `UNAVAILABLE` is `not checked`, and a deployment line
    that reads `DEGRADED`, `UNKNOWN`, or `skipped by goal` (the goal set

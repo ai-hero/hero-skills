@@ -87,15 +87,15 @@ wayfare-ship-pr|CI/CD|auto-approve-gates|the gates the approval verdict is expec
 wayfare-ship-pr|Deployment|platform|whether there is a deploy to verify after the merge
 wayfare-ship-pr|Deployment|registry|where the built image is expected to land
 wayfare-ship-pr|Deployment|argocd|whether the deploy is GitOps-synced rather than pushed
-wayfare-run-task|Repository|default-branch|the base for every step of the pipeline
-wayfare-run-task|Repository|branch-convention|the branch the goal's work lands on
-wayfare-run-task|Connections::issues|type|the tracker a ticket is fetched from and closed out in
-wayfare-run-task|Connections::issues|at|the repo or workspace the ticket lives in
-wayfare-run-task|Connections::issues|issue-prefix|how a plain-text argument is recognized as a ticket ID
-wayfare-run-task|Code Review Agent|agent|which bot's review the await-review step waits for
-wayfare-run-task|Code Review Agent|bot-username|whose comments count as the bot's, and whose do not
-wayfare-run-task|CI/CD|auto-approve-installed|whether the ship step can complete
-wayfare-run-task|Projects|*|per project: test and dev commands the build and verify steps use
+wayfare-build-task|Repository|default-branch|the base for every step of the pipeline
+wayfare-build-task|Repository|branch-convention|the branch the goal's work lands on
+wayfare-build-task|Connections::issues|type|the tracker a ticket is fetched from and closed out in
+wayfare-build-task|Connections::issues|at|the repo or workspace the ticket lives in
+wayfare-build-task|Connections::issues|issue-prefix|how a plain-text argument is recognized as a ticket ID
+wayfare-build-task|Code Review Agent|agent|which bot's review the await-review step waits for
+wayfare-build-task|Code Review Agent|bot-username|whose comments count as the bot's, and whose do not
+wayfare-build-task|CI/CD|auto-approve-installed|whether the ship step can complete
+wayfare-build-task|Projects|*|per project: test and dev commands the build and verify steps use
 wayfare-review-pr|Repository|default-branch|the base the diff under review is taken against
 wayfare-review-pr|Code Quality|linters|the checks a finding must not simply restate
 wayfare-review-pr|Coding Conventions|*|the conventions a review judges the code against, instead of inventing house style

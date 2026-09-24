@@ -319,7 +319,7 @@ CR2="$(cd "$TMP" && pwd -P)/connrepo2"
 mkdir -p "$CR2"
 printf '# Hero\n\n## Connections\n\n### issues\n\n- type: github\n- at: ghe.attacker.example/owner/repo\n' > "$CR2/HERO.md"
 check "a guarded value the readers refuse reports (refused)" \
-  "(refused)" "$("$FIELDS" wayfare-run-task "$CR2" | awk -F'\t' '$1 == "Connections::issues" && $2 == "at" { print $3 }')"
+  "(refused)" "$("$FIELDS" wayfare-build-task "$CR2" | awk -F'\t' '$1 == "Connections::issues" && $2 == "at" { print $3 }')"
 printf '# Hero\n\n## Connections\n\n### design\n\n- type: -none\n- at: x\n' > "$CR2/HERO.md"
 check "a refused discriminator blocks its block's other rows" \
   "(n/a: type=refused)" "$("$FIELDS" wayfare-sync-plan "$CR2" | awk -F'\t' '$1 == "Connections::design" && $2 == "at" { print $3 }')"

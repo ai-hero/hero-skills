@@ -15,7 +15,7 @@ roadmap, and wayfare owns only the contract it fills:
   source*), the target design, the UX flow (`ux-flow`) for the steps this
   task's story covers, the source repo's configured component registry
   (when one exists; see sync's Investigate), the repo's `wayfare: recipe`
-  skills (a recipe that fits is named in `## Approach`, and wayfare-run-task invokes
+  skills (a recipe that fits is named in `## Approach`, and wayfare-build-task invokes
   it instead of hand-rolling the procedure), and the task's own
   `## Log`.
 - **The slice is grilled first.** Before planning how, confirm the task
@@ -55,8 +55,8 @@ roadmap, and wayfare owns only the contract it fills:
   `anchors.target` is refreshed to the head planned against. In self-review
   mode there is no target head to refresh it to, so it stays absent.
 - The task is the unit of work, with no separate work-items. Subtasks are
-  checklist lines, and wayfare-run-task works through them in order (PR granularity
-  is wayfare-run-task's call, per its Step 2).
+  checklist lines, and wayfare-build-task works through them in order (PR granularity
+  is wayfare-build-task's call, per its Step 2).
 - The ready-mark is the user's (wayfare-grill-idea's Step 5): a confirmed
   task flips to `ready`, which is what `wayfare-advance-item ID` builds next. One
   exception, granted by a person at `next`'s gate and nowhere else: a goal

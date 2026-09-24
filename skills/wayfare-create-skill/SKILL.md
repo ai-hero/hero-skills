@@ -46,7 +46,7 @@ name: verb-object
 # prettier-ignore
 description: What it does AND when to use it. Imperative, keyword-rich, pushy.
 argument-hint: [args]
-# Omit for skills an orchestrator like wayfare-run-task needs to chain. Setting it
+# Omit for skills an orchestrator like wayfare-build-task needs to chain. Setting it
 # makes the skill user-only, so nothing can call it automatically.
 disable-model-invocation: true
 # Omit unless this skill plugs into wayfare:wayfare-sync-plan. If it does, say

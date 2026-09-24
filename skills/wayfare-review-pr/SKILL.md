@@ -15,7 +15,7 @@ Context-aware PR review. Auto-detects whether you're reviewing your own draft or
   - `recalibrate` - Tune the `HERO.md` fields this skill reads, then stop (see below). Matched before every other form.
   - (none) - Auto-detect from the current branch, to your draft PR, to self-review mode
   - `#123` or URL - Your PR: self-review mode. Someone else's PR: review mode (no edits).
-  - `--no-mark-ready` - Self-review mode only: run Steps 1 to 8 (post review, apply fixes, push, post improvements summary, update PR description) but skip Step 9 (the mark-ready prompt and `gh pr ready`). Used by `wayfare:wayfare-run-task` so its DAG can render `self-review` (Step 5) and `mark-ready` (Step 6) as distinct nodes without double-prompting. Combine with a PR number/URL as needed (`#42 --no-mark-ready`).
+  - `--no-mark-ready` - Self-review mode only: run Steps 1 to 8 (post review, apply fixes, push, post improvements summary, update PR description) but skip Step 9 (the mark-ready prompt and `gh pr ready`). Used by `wayfare:wayfare-build-task` so its DAG can render `self-review` (Step 5) and `mark-ready` (Step 6) as distinct nodes without double-prompting. Combine with a PR number/URL as needed (`#42 --no-mark-ready`).
 
 Parse `$ARGUMENTS` for the flag once at the top of Step 0:
 
@@ -396,7 +396,7 @@ Substitute `DRAFTED_FULL_BODY_HERE` with actual Markdown before running. The dra
 
 ### Step 9: Ask to Mark Ready
 
-**Skip this step entirely when `$NO_MARK_READY` is `true`** (caller passed `--no-mark-ready`, typically `wayfare:wayfare-run-task` whose own Step 6 owns the mark-ready gate). In that case, jump straight to Step 10. The summary will show `PR state: Draft (mark-ready deferred to caller)`.
+**Skip this step entirely when `$NO_MARK_READY` is `true`** (caller passed `--no-mark-ready`, typically `wayfare:wayfare-build-task` whose own Step 6 owns the mark-ready gate). In that case, jump straight to Step 10. The summary will show `PR state: Draft (mark-ready deferred to caller)`.
 
 Otherwise, ask the user:
 
@@ -435,7 +435,7 @@ URL: {pr-url}
 Next step: (pick exactly one, based on what actually happened above)
 ```
 
-- **`$NO_MARK_READY` is `true`** (deferred to caller, e.g. `wayfare-run-task`): no next-step line. The caller owns what happens next (wayfare-run-task's own Step 7 mark-ready gate).
+- **`$NO_MARK_READY` is `true`** (deferred to caller, e.g. `wayfare-build-task`): no next-step line. The caller owns what happens next (wayfare-build-task's own Step 7 mark-ready gate).
 - **Marked ready, agent configured**: print `Waiting on {agent}'s first review, then run wayfare:wayfare-respond-pr.` (no prompt, nothing to invoke yet).
 - **Marked ready, `agent: none`**: `Next step: wayfare:wayfare-ship-pr, which posts @auto-approve, merges, and resets` (offer to auto-run: ask "Run it now? [y/N]", invoke via Skill tool on yes).
 - **Declined mark-ready**: `Next step: address the findings above, then re-run wayfare:wayfare-review-pr.` (print only, because re-invoking the same skill right after it finishes is not auto-chained).

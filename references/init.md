@@ -654,7 +654,7 @@ Based on your investigation, present findings grouped by **what the hero skills 
 [NEEDS CONFIRMATION] SETTING: BEST_GUESS
   Evidence: EVIDENCE (and why ambiguous)
   Question: QUESTION
-  Used by: wayfare:wayfare-run-task
+  Used by: wayfare:wayfare-build-task
 
 [NOT DETECTED] SETTING
   Looked for: WHAT_WAS_CHECKED
@@ -683,7 +683,7 @@ Do NOT offer to install a pre-commit hook for `wayfare:wayfare-init-repo recalib
 - Linters, formatters
 - Task runner (if Makefile/justfile provides commit/push/lint targets)
 
-### Group 2: "For planning and tracking work" (`wayfare:wayfare-run-task`)
+### Group 2: "For planning and tracking work" (`wayfare:wayfare-build-task`)
 
 - PM tool (evidence from templates, commit messages, integrations)
 - Issue ID prefix (evidence from commit/branch patterns)
@@ -759,7 +759,7 @@ FOR COMMITTING & PUSHING (wayfare:wayfare-push-pr)
        - PROJ-45-update-deps (ticket-first pattern)
      → Which pattern do you prefer?
 
-FOR PLANNING & TRACKING (wayfare:wayfare-run-task)
+FOR PLANNING & TRACKING (wayfare:wayfare-build-task)
 ─────────────────────────────────────
 [??] PM tool: likely Linear
      Evidence: Found "linear" in .github/workflows/sync.yml,
@@ -804,7 +804,7 @@ FOR CI/CD & DEPLOYMENT (wayfare:wayfare-push-pr, wayfare:wayfare-ship-pr)
 [--] Namespaces: not detected
      → What k8s namespaces do you deploy to?
 
-CODING CONVENTIONS (wayfare:wayfare-run-task, wayfare:wayfare-push-pr)
+CODING CONVENTIONS (wayfare:wayfare-build-task, wayfare:wayfare-push-pr)
 ──────────────────────────────────────────────
 [OK] Naming: snake_case functions, PascalCase classes
      Evidence: 40+ function defs follow snake_case, all classes PascalCase
@@ -1017,7 +1017,7 @@ After the user responds, merge confirmed findings + user answers and write `HERO
 ### MCP Servers
 <!-- MCP servers that hero skills or Claude need to interact with external tools -->
 <!-- Examples:
-  - linear (mcp__linear) — for wayfare:wayfare-run-task issue planning
+  - linear (mcp__linear) — for wayfare:wayfare-build-task issue planning
 - slack (mcp__slack) — for notifications
 -->
 
@@ -1136,7 +1136,7 @@ How your hero skills will use this:
   wayfare:wayfare-push-pr       → conventional commits, pre-commit runs ruff + black + mypy,
                                PRs via gh against main, link LIN-### issues,
                                check GitHub Actions: ci, build, deploy
-  wayfare:wayfare-run-task      → fetch from Linear (mcp__linear), branch as feature/LIN-###-DESC
+  wayfare:wayfare-build-task      → fetch from Linear (mcp__linear), branch as feature/LIN-###-DESC
   wayfare:wayfare-push-pr (test)    → uv sync, then ruff check + mypy + pytest, smoke at :8000
   wayfare:wayfare-ship-pr       → k8s namespaces: staging, production
   wayfare:wayfare-sync-plan  → architecture (single repo, Python + FastAPI, k8s), harden (pyproject.toml deps, ghcr.io registry), roadmap, goals

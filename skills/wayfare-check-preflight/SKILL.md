@@ -1,14 +1,14 @@
 ---
 name: wayfare-check-preflight
 # prettier-ignore
-description: Run pre-flight checks for the wayfare pipeline. Catches missing tooling, stale HERO.md, .env mismatches and busy ports before any step does destructive work. Use before wayfare-push-pr, wayfare-ship-pr or wayfare-run-task, or when a pipeline step fails on setup.
+description: Run pre-flight checks for the wayfare pipeline. Catches missing tooling, stale HERO.md, .env mismatches and busy ports before any step does destructive work. Use before wayfare-push-pr, wayfare-ship-pr or wayfare-build-task, or when a pipeline step fails on setup.
 argument-hint: "[--bucket tooling|repo|runtime|pipeline|all] [--projects p1,p2] | recalibrate"
 disable-model-invocation: true
 ---
 
 # Preflight: fail fast before the pipeline does damage
 
-Runs the union of every downstream skill's blocking check so a `wayfare-run-task` (or any individual hero skill) fails fast: before code is edited, before a branch is created, before a PR is pushed.
+Runs the union of every downstream skill's blocking check so a `wayfare-build-task` (or any individual hero skill) fails fast: before code is edited, before a branch is created, before a PR is pushed.
 
 The actual checks live in `scripts/preflight.sh`. This skill is a thin wrapper: it invokes the script, renders the result for the user, and tells them what to fix next.
 
@@ -90,7 +90,7 @@ Stream the output to the user verbatim. Do NOT filter or summarize lines. The st
 
 Capture the script's exit code. Then:
 
-- **Exit 0, 0 warnings** → "All preflight checks passed. Safe to run wayfare:wayfare-run-task or any individual hero skill."
+- **Exit 0, 0 warnings** → "All preflight checks passed. Safe to run wayfare:wayfare-build-task or any individual hero skill."
 - **Exit 0, N warnings** → "Preflight passed with N warning(s). Safe to proceed; warnings are advisory and may bite later."
 - **Exit 1** → "Preflight found one or more blockers. The wayfare pipeline will fail if you continue. Fix the blockers above, then re-run wayfare:wayfare-check-preflight."
 - **Any other exit code** → preflight did not run to completion (e.g. it could not be found or resolve `WAYFARE_ROOT`). Report the exit code and the message printed above it; do not report it as pass or fail.
@@ -113,15 +113,15 @@ Skipped:    K
 
 Result:     PASSED | BLOCKED
 
-Next step: wayfare:wayfare-run-task $ARGUMENTS, which runs Steps 1-10 in one go.
+Next step: wayfare:wayfare-build-task $ARGUMENTS, which runs Steps 1-10 in one go.
 Print this line only. Launch it on the user's word, never on your own.
 ```
 
-If `Result: BLOCKED`, do not print the `wayfare-run-task` next step at all. List the recommended fix commands from the script output instead, then suggest re-running a single bucket after fixing (`wayfare:wayfare-check-preflight --bucket repo`, or `tooling|runtime|pipeline` as applicable) as that block's next step.
+If `Result: BLOCKED`, do not print the `wayfare-build-task` next step at all. List the recommended fix commands from the script output instead, then suggest re-running a single bucket after fixing (`wayfare:wayfare-check-preflight --bucket repo`, or `tooling|runtime|pipeline` as applicable) as that block's next step.
 
 ## When This Skill Runs Automatically
 
-`wayfare:wayfare-run-task` calls `scripts/preflight.sh --bucket all` (with `--projects` scoped to the projects the diff touches) at **Step 0.3**, before auto-branching and resume detection. If any blocker fires, wayfare-run-task halts before any branch is created.
+`wayfare:wayfare-build-task` calls `scripts/preflight.sh --bucket all` (with `--projects` scoped to the projects the diff touches) at **Step 0.3**, before auto-branching and resume detection. If any blocker fires, wayfare-build-task halts before any branch is created.
 
 You can also call it standalone any time: after adding a new project to HERO.md, after editing a project's `.env`, or when something in the pipeline looks wrong and you want a single command to see the whole environmental state.
 
