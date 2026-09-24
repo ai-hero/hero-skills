@@ -589,7 +589,7 @@ Render DAG with `simplify` active. Invoke the `simplify` skill via the Skill too
 
 `simplify` is **not** part of this plugin. It ships separately (see the user-invocable skills list). `wayfare:wayfare-push-pr` also invokes it internally when it commits, so running it here makes simplification visible as its own DAG step *and* the second invocation inside wayfare-push-pr is a fast no-op once nothing is left to simplify.
 
-Launch its review agents as fresh subagents scoped to the diff and their angle, never forks: see *A fan-out subagent is never a fork* in `PIPELINES.md`.
+Launch its review agents as fresh subagents scoped to the diff and their angle, never forks: see *A fan-out subagent is never a fork* in `PIPELINES.md`. They report findings only. Apply nothing until every one of them has reported, then apply the fixes in one pass: see *A fan-out waits for every agent, then one writer commits once*.
 
 If the `simplify` skill is unavailable in this environment, render `(–) simplify` and continue, since wayfare-push-pr's own commit step will catch anything we missed via its inline fallback checklist.
 

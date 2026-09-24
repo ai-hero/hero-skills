@@ -456,7 +456,9 @@ memory between turns:
    checkout on this one branch, so two at once would collide in the working
    tree. Sequential is not a performance compromise here; it is what makes
    the branch a coherent thing at every step, and each task builds against
-   the tree the previous one left.
+   the tree the previous one left. The same wait binds the parent (*A
+   fan-out waits for every agent, then one writer commits once* in
+   `docs/PIPELINES.md`).
 
    **Why a subagent at all, and why a cheaper one.** The plan is already
    written and ready-marked, so the build is execution against a settled
@@ -628,10 +630,17 @@ memory between turns:
    copies included), `HERO.md`, `FLEET.md`, and any file governing
    authentication, authorization or secrets. A reuse that would need one
    is reported, never made. If nothing needs changing, change nothing.
-   Otherwise commit through `wayfare:wayfare-push-pr commit` with the
-   subject `refactor: simplify goal G`. Report the SHA (or `no change`),
-   the files touched, the task-scoped tests you ran, and every wrong turn.
+   Launch the review angles as fresh read-only subagents, never forks.
+   They report findings and do not edit or commit. Wait until every one
+   has reported, then apply the fixes yourself in one pass and commit once
+   through `wayfare:wayfare-push-pr commit`, with the subject
+   `refactor: simplify goal G`. Report the SHA (or `no change`), the files
+   touched, the task-scoped tests you ran, and every wrong turn.
    ```
+
+   **Wait for that agent's report before reading the branch.** It runs
+   agents of its own, so until it reports, a commit on the branch may be
+   one it is about to undo.
 
    Before recording it, check each path the commit touched with
    `hero_path_forbidden`, and on a hit revert the commit and stop with
