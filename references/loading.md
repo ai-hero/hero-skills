@@ -344,7 +344,7 @@ case "$DS_REPO_STATE" in
 esac
 echo "wayfare: source=$SOURCE_REPO@${SOURCE_HEAD} design=$DP_SHOW reach=$DESIGN_TRANSPORT ux-flow=$UX_FLOW ds-project=$DS_SHOW ds-repo=$DS_REPO_SHOW reconciliation=$RECON"
 # The mailbox and this repo's own plug-ins. Printed on every verb, not only
-# sync's: a `do` or `next` run that built over a reply already sitting in the
+# sync's: a `wayfare-advance-item` or `wayfare-start-goal` run that built over a reply already sitting in the
 # inbox would act on a plan the answer changed. Local skills are DISCOVERED,
 # never listed in HERO.md.
 [ "$STORE" = REJECTED ] || echo "wayfare: inbox unread=$(hero_inbox_count "$STORE") claimed=$(hero_inbox_count "$STORE" claimed)"
@@ -381,7 +381,7 @@ since a verifier that says "verified" to every line lets a goal write
 `done`. Its contract is one line, last on stdout: `verdict: PASS | FAIL |
 UNVERIFIED — reason`; anything else is `UNVERIFIED`.
 
-If `FLEET_ROOT` printed, this folder is a fleet, not a repo: for every verb but `improve`, stop and follow **At the fleet root** in `docs/FLEET-MD.md`; `improve` has a fleet-root form of its own (below).
+If `FLEET_ROOT` printed, this folder is a fleet, not a repo: for every skill but `wayfare-audit-compliance`, stop and follow **At the fleet root** in `docs/FLEET-MD.md`; `wayfare-audit-compliance` has a fleet-root form of its own (`references/improve.md`).
 
 **If any variable above was set to REJECTED** (`STORE`, `SOURCE_REPO`,
 `SOURCE_HEAD`, `UX_FLOW`, `DS_REPO`, or `RECON`) **STOP**, on every verb, not just plan. Those sentinels must never
@@ -653,15 +653,15 @@ then goal, then feedback, then one line for the idea count
   (see `references/feedback-channels.md`). Count the markers and the rows, not
   the prose: this is the return channel's only backlog surface, so a miscount
   of zero is indistinguishable from "no feedback exists",
-- the single next action: `wayfare-start-goal` when a goal is runnable (see
-  `next`: an `active` goal, else the first `accepted` goal in bottom-up order
+- the single next action: `wayfare-start-goal` when a goal is runnable (an
+  `active` goal, else the first `accepted` goal in bottom-up order
   whose members are all planned), `wayfare-advance-item N` for a mid-flight item,
   `wayfare-sync-plan` for unplanned tasks, READY items no goal has as a member, stale
   rows, defects, and undelivered design feedback.
 
 Print the `hero_ready_items` "no open goal has it as a member" warnings as their own
-line under the READY group, one per item. They are the orphans `next` can
-never reach, and `sync` is what groups them. `do N` builds one by hand; it is
+line under the READY group, one per item. They are the orphans `wayfare-start-goal` can
+never reach, and `sync` is what groups them. `wayfare-advance-item N` builds one by hand; it is
 not the fix.
 
 Print one banner line above the groups when `UX_FLOW` is `UNSET`, or when it

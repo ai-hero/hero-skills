@@ -157,7 +157,7 @@ stated as one user-visible outcome is a filter over the roadmap, not a goal,
 and it will report `done` without anything shipping that a person notices.
 
 The stage holds one invariant: **every item at `ready` or further and not
-`done` is in exactly one open goal.** `next` walks goals and never items, so
+`done` is in exactly one open goal.** `wayfare-start-goal` walks goals and never items, so
 a `ready` task in no goal is an orphan nothing in the loop reaches. A task
 that adds up to nothing larger becomes a one-item goal — small, but
 reachable.
@@ -165,7 +165,7 @@ reachable.
 Each round **re-cuts** the open goals rather than appending to them: tasks
 join and leave, two goals naming one outcome coalesce, a goal whose DoD
 became two outcomes splits. An `active` goal is frozen, because its members
-and permissions were authorized as a set at `next`'s gate.
+and permissions were authorized as a set at `wayfare-start-goal`'s gate.
 
 `sync` writes the goal. It never authorizes it — that is typed by a person at
 `wayfare-start-goal`, in-session, and is never stored in the file.

@@ -1,18 +1,18 @@
-# `next` and a goal's turns
+# `wayfare-start-goal` and a goal's turns
 
-Authorizing a goal and running its turns. The gate in `next` is the only
+Authorizing a goal and running its turns. The gate in `wayfare-start-goal` is the only
 place a person grants a goal's permissions, and it is granted in-session,
 never stored.
 
-## `next`: authorize the next goal and run it
+## `wayfare-start-goal`: authorize the next goal and run it
 
-`next` takes no argument. It picks the next goal, gets its permissions
+`wayfare-start-goal` takes no argument. It picks the next goal, gets its permissions
 authorized in-session, and runs one turn of it in this session. It never
 plans, except what a turn admits or its gate adopts under `absorb: yes`. On a
 clean run that one turn is the whole goal: every task committed, the PR
 shipped, the deploy verified. What it does not do is loop: a turn that ends on
 a stop line hands back to the person, who fixes what stopped it and runs
-`next` again, or sets the `/goal` line the report prints to have Claude Code
+`wayfare-start-goal` again, or sets the `/goal` line the report prints to have Claude Code
 re-run turns on its own.
 
 **Selection is deterministic, from the store.** Run `hero_ready_items` and
@@ -30,12 +30,12 @@ walk the goals:
    them; that stage was skipped or cut short); every goal blocked on another
    (name the chain); every goal `done` (the route is complete).
 
-Then run *Starting a goal* on the pick. `next` is how a goal starts and
-resumes; `do GOAL_ID` is one turn of it, the same turn `next` runs.
+Then run *Starting a goal* on the pick. `wayfare-start-goal` is how a goal starts and
+resumes; `wayfare-advance-item GOAL_ID` is one turn of it, the same turn `wayfare-start-goal` runs.
 
-## A goal's turns: the first from `next`, more only if asked for
+## A goal's turns: the first from `wayfare-start-goal`, more only if asked for
 
-`next` runs the first turn itself, right after its gate, and a turn builds
+`wayfare-start-goal` runs the first turn itself, right after its gate, and a turn builds
 the whole goal, so on a clean run there is no second turn. Looping only
 matters when a turn ends short, on a stop line or with items remaining,
 and for that wayfare implements no loop of its own:
@@ -44,7 +44,7 @@ condition, and after each turn a small fast model judges it met, not yet, or
 impossible, and starts another turn if not. Wayfare cannot set `/goal`
 itself: nothing but a person typing it at the prompt does, so the turn
 report prints the line and the person decides whether to loop or to run
-`next` again by hand.
+`wayfare-start-goal` again by hand.
 
 | | Owns |
 | --- | --- |
@@ -68,7 +68,7 @@ Three facts about `/goal` shape everything below:
 A goal runs unattended, so what it is allowed to do on its own has to be
 said before it starts, in one place, and granted by a person. That place is
 the item's `## Permissions` section (*Item formats*); the grant is typed at
-`next`'s gate. Six permissions, each a gate the loop would otherwise stop
+`wayfare-start-goal`'s gate. Six permissions, each a gate the loop would otherwise stop
 at:
 
 | Permission | The gate it waives | The sync writes |
@@ -82,7 +82,7 @@ at:
 
 **A goal that was already `active` when `absorb` arrived reads as
 `absorb: no`.** A required key plus a frozen section is otherwise a deadlock
-with no exit: `next` STOPs demanding the missing key, and `sync` cannot add it
+with no exit: `wayfare-start-goal` STOPs demanding the missing key, and `sync` cannot add it
 without committing the other defect, which is changing `## Permissions` while
 `active`. `no` is the conservative reading and the pre-`absorb` behaviour, so
 grandfathering it changes nothing about what that goal may do. It applies to
@@ -96,7 +96,7 @@ children answer, and a name they do not know has no business travelling on
 it. The values are an enum (`yes` or `no`, and `verify` or `none` for
 `deploy`) and the section is required: a goal with no `## Permissions`, a missing
 key, or a value outside its enum is a **store defect** (`sync` reports it),
-and `next` STOPs on it with `Next step: wayfare-sync-plan` rather than reading
+and `wayfare-start-goal` STOPs on it with `Next step: wayfare-sync-plan` rather than reading
 anything aloud. "The sync writes" is what `sync` puts on a new goal; it is never
 what an absent line means.
 
@@ -104,8 +104,8 @@ what an absent line means.
 task that reaches a waived gate proceeds; one that reaches a gate the goal
 was not granted **rests there**, with the PR open and awaiting a person, and the turn
 reports it as `stop: awaiting-human` naming the gate and the PR. The loop
-ends; the person does the thing (marks ready, merges), then runs `wayfare
-next` to resume. So a goal with `merge: no` builds and reviews every task
+ends; the person does the thing (marks ready, merges), then runs
+`wayfare-start-goal` to resume. So a goal with `merge: no` builds and reviews every task
 up to a mergeable PR and merges nothing, which is the right setting for a repo whose
 default branch a person wants to watch. Nothing here overrides what is
 outside the goal: auto-approve still has to pass, branch protection still
@@ -134,12 +134,12 @@ this session, and compares it against the file: a file wider than the grant
 is a store defect that stops the goal with `stop: reauthorize`; a narrower
 file narrows the line (narrowing is always safe). `## Permissions` on an
 `active` goal is frozen for the same reason its member set is: change it and
-`next` re-asks.
+`wayfare-start-goal` re-asks.
 
-### Starting a goal: `wayfare-start-goal`, or `do GOAL_ID` on an unauthorized goal
+### Starting a goal: `wayfare-start-goal`, or `wayfare-advance-item GOAL_ID` on an unauthorized goal
 
-1. **Resolve the goal item.** `next` picked it (or the user named one by
-   asking `do GOAL_ID` on a `accepted` goal, which routes here). It arrives
+1. **Resolve the goal item.** `wayfare-start-goal` picked it (or the user named one by
+   asking `wayfare-advance-item GOAL_ID` on a `accepted` goal, which routes here). It arrives
    `accepted` with its members (`parent` on each), `depends_on`, `budget`,
    `## Permissions` and a DoD already written by `sync`, needing only the
    authorization below. Every member must already be planned (`ready` or further along): an
@@ -238,7 +238,7 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
      below, since this is the state it exists for;
    - any other stop line: hand back, and print the same line, for the
      person to paste if they would rather have Claude Code re-run turns
-     unattended than fix the stop and run `next` again.
+     unattended than fix the stop and run `wayfare-start-goal` again.
 
    Keep the condition short and point it at the item:
 
@@ -261,7 +261,7 @@ file narrows the line (narrowing is always safe). `## Permissions` on an
    `active` and runs this gate again before its turn). That re-ask is what
    keeps the authorization attached to a person who is present.
 
-### One turn: what `next` runs after its gate, and what `do GOAL_ID` re-runs
+### One turn: what `wayfare-start-goal` runs after its gate, and what `wayfare-advance-item GOAL_ID` re-runs
 
 **A goal is one branch, one PR, and one commit per task.** The turn builds
 its tasks one after another, in member order (`hero_goal_members`), each
@@ -943,7 +943,7 @@ person authorizes is exactly the set that runs.
 ### Admitting discovered work: the goal absorbs what it finds
 
 A goal that files its discoveries instead of finishing them does not
-converge. Every filed item is one no goal has as a member; `next` walks goals and
+converge. Every filed item is one no goal has as a member; `wayfare-start-goal` walks goals and
 never items, so reaching it means another `sync`, another goal, and another
 round of discoveries out of *that* goal. ("Carving" is wayfare-build-task's word for
 moving work out of a plan the user marked ready, and it is **not** available
@@ -1050,7 +1050,7 @@ order, and the order is the whole of the safety:
   gate's adoptions, each with its own log line (*Budget is fungible*).
 - then the `admitted:` line in the turn report.
 
-Reversed, a crash between the two wedges the goal permanently: `next`'s
+Reversed, a crash between the two wedges the goal permanently: `wayfare-start-goal`'s
 unplanned-item exception requires the log line, so it STOPs; `sync` sees a
 member set grown beyond what its log accounts for and is told to report and
 never adopt; and only an out-of-band `done` may leave the goal. Written in
