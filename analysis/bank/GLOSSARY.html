@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Generic roles and how our fleet fills them</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@300;400&display=swap">
+<style>
+:root{--ground:#fff;--panel:#f6f7f9;--ink:#0b0d14;--body:#383d49;--muted:#666d7b;--rule:#dfe2e7;--accent:#e93a61;
+--sans:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--ground:#0e1016;--panel:#161922;--ink:#eef0f4;--body:#c3c8d2;--muted:#8d94a3;--rule:#2a2f3b;--accent:#f06584}}
+:root[data-theme="dark"]{color-scheme:dark;--ground:#0e1016;--panel:#161922;--ink:#eef0f4;--body:#c3c8d2;--muted:#8d94a3;--rule:#2a2f3b;--accent:#f06584}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--body);font-family:var(--sans);font-weight:300;font-size:16px;line-height:1.65;margin:0}
+.wrap{max-width:920px;margin:0 auto;padding:40px 16px 80px}
+@media (min-width:700px){.wrap{padding:56px 40px 96px}}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+h1,h2,h3,h4{color:var(--ink);font-weight:400;line-height:1.25;text-wrap:balance}
+h1{font-size:clamp(28px,5vw,40px);font-weight:300;margin:0 0 24px}
+h2{font-size:24px;margin:48px 0 12px;padding-top:16px;border-top:1px solid var(--rule)}
+h3{font-size:18px;margin:32px 0 8px}
+a{color:var(--accent)}
+strong{color:var(--ink);font-weight:500}
+code{font-family:var(--mono);font-size:.88em;background:var(--panel);padding:.1em .35em;border-radius:4px;overflow-wrap:anywhere}
+pre{background:var(--panel);padding:14px 16px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.5}
+pre code{background:none;padding:0}
+blockquote{margin:16px 0;padding:10px 16px;background:var(--panel);border-radius:8px;color:var(--ink)}
+.table{overflow-x:auto;margin:16px 0}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{font-family:var(--mono);font-weight:400;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);text-align:left;border-bottom:1px solid var(--ink);padding:8px 10px 8px 0}
+td{border-bottom:1px solid var(--rule);padding:8px 10px 8px 0;vertical-align:top}
+li{margin:4px 0}
+hr{border:0;border-top:1px solid var(--rule);margin:40px 0}
+.foot{margin-top:56px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+</style></head>
+<body><main class="wrap"><div class="eyebrow">Software factory research plan</div>
+<h1 id="generic-roles-and-how-our-fleet-fills-them">Generic roles and how our fleet fills them</h1>
+<p>A research question is written in the <strong>generic role</strong> (left column), so it can be asked of any software factory. Its <strong>grounding</strong> names how this fleet fills that role (right column) and which records answer it here.</p>
+<div class="table"><table>
+<thead>
+<tr>
+<th>generic role</th>
+<th>what it is in any factory</th>
+<th>our instance (the fleet at <code>~/workspaces/aihero</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>factory</td>
+<td>people, agents, harness and repos run as one production system</td>
+<td>this fleet, run by one person</td>
+</tr>
+<tr>
+<td>factory owner</td>
+<td>the person who sets the factory's rules and starts its work</td>
+<td>you</td>
+</tr>
+<tr>
+<td>fleet</td>
+<td>the set of repos the factory is responsible for</td>
+<td><code>FLEET.md</code> groups template, apps, infra</td>
+</tr>
+<tr>
+<td>fleet map</td>
+<td>the record of which repos are in the fleet and how they relate</td>
+<td><code>FLEET.md</code></td>
+</tr>
+<tr>
+<td>template repo</td>
+<td>the repo new products are cloned from</td>
+<td>hero-template</td>
+</tr>
+<tr>
+<td>clone</td>
+<td>a product repo started from the template</td>
+<td>elevate-commons, ah-cozy, aihero-wayfare, aihero-mehr, aihero-dokyu, aihero-steadfast</td>
+</tr>
+<tr>
+<td>shared service</td>
+<td>a repo other products depend on at runtime</td>
+<td>auth (the identity provider)</td>
+</tr>
+<tr>
+<td>design system</td>
+<td>the shared UI component source and its registry</td>
+<td>design-system</td>
+</tr>
+<tr>
+<td>design source</td>
+<td>where product design is authored before code</td>
+<td>the claude.ai Design projects and <code>aihero-*-design</code> exports</td>
+</tr>
+<tr>
+<td>infrastructure repos</td>
+<td>code that provisions and deploys the fleet</td>
+<td>infrastructure-root, infrastructure-environments</td>
+</tr>
+<tr>
+<td>process plugin</td>
+<td>the packaged instructions and scripts the agents follow</td>
+<td>the wayfare-skills plugin (formerly hero-skills)</td>
+</tr>
+<tr>
+<td>skill</td>
+<td>one packaged procedure in the process plugin</td>
+<td><code>wayfare:wayfare-*</code></td>
+</tr>
+<tr>
+<td>vendored asset</td>
+<td>a file copied from the process plugin into each repo</td>
+<td>hooks, rules, the auto-approve caller workflow</td>
+</tr>
+<tr>
+<td>harness</td>
+<td>the agent runtime</td>
+<td>Claude Code, its models, limits and settings</td>
+</tr>
+<tr>
+<td>agent session</td>
+<td>one run of the harness</td>
+<td>a Claude Code session transcript</td>
+</tr>
+<tr>
+<td>subagent</td>
+<td>an agent a session delegates to</td>
+<td>Claude Code subagents</td>
+</tr>
+<tr>
+<td>work-item store</td>
+<td>where work is planned and tracked, per repo</td>
+<td><code>.plans/</code> (goals, items, logs)</td>
+</tr>
+<tr>
+<td>work item</td>
+<td>one planned unit of work</td>
+<td>a <code>.plans</code> item</td>
+</tr>
+<tr>
+<td>found work</td>
+<td>work an agent discovered while doing other work</td>
+<td>items with a <code>discovered_from</code></td>
+</tr>
+<tr>
+<td>cross-repo message</td>
+<td>a request one repo's agent leaves for another's</td>
+<td><code>.plans</code> outbox / inbox signals</td>
+</tr>
+<tr>
+<td>design record</td>
+<td>the repo's statement of its architecture and decisions</td>
+<td><code>DESIGN.md</code></td>
+</tr>
+<tr>
+<td>agent instructions</td>
+<td>the standing instructions agents load</td>
+<td><code>AGENTS.md</code> / <code>CLAUDE.md</code>, <code>.claude/rules/</code></td>
+</tr>
+<tr>
+<td>agent memory</td>
+<td>facts an agent saves across sessions</td>
+<td>Claude Code memory files</td>
+</tr>
+<tr>
+<td>control register</td>
+<td>the fleet-wide list of controls and checks</td>
+<td><code>.fleet/CONTROLS.yaml</code>, <code>CHECKS.yaml</code>, <code>CONSISTENCY.md</code></td>
+</tr>
+<tr>
+<td>gate</td>
+<td>a point where work stops until something passes</td>
+<td>CI checks, self-review, ready-mark, "go", auto-approve</td>
+</tr>
+<tr>
+<td>judge</td>
+<td>an automated reviewer that approves or rejects</td>
+<td>the auto-approve workflow</td>
+</tr>
+<tr>
+<td>human gates</td>
+<td>the points where the owner must act</td>
+<td>marking a plan ready, saying "go"</td>
+</tr>
+<tr>
+<td>sweep</td>
+<td>one change applied across many repos</td>
+<td>a fleet sweep via <code>wayfare-sync-*</code></td>
+</tr>
+<tr>
+<td>upkeep</td>
+<td>work that keeps the fleet current rather than adding features</td>
+<td>dependency bumps, re-vendoring, compliance fixes</td>
+</tr>
+<tr>
+<td>spend</td>
+<td>what running the agents costs</td>
+<td>Claude Code cost (API-equivalent), plan and limits, CI minutes</td>
+</tr>
+</tbody>
+</table></div>
+<p>Rules for writing a generic question:
+- No repo, PR, item, file, skill or model name in <code>generic_question</code>. Those go in <code>grounding</code>.
+- Use the generic role names above. If a question needs a role that isn't here, add a row rather than using our name.
+- A question that only makes sense for this fleet (e.g. about one repo's rename) is kept only as an instance under a generic question it illustrates.</p>
+<p class="foot">Converted from GLOSSARY.md on 2026-09-23. This HTML file is now the source.</p>
+</main></body></html>

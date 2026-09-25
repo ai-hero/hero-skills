@@ -72,6 +72,11 @@ repos:
     hooks:
       - id: codespell
         args: [--skip, '*.lock']
+        exclude: ^analysis/
+      - id: codespell
+        name: codespell (analysis)
+        args: [--skip, '*.lock', --ignore-words-list, "ans,ser,alls,fo,cler,secur,pres,froms,supersed,accreting"]
+        files: ^analysis/
 
   # ===========================================================================
   # Shell script linting

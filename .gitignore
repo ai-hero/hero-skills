@@ -222,3 +222,7 @@ __marimo__/
 
 # Playwright MCP session artifacts (snapshots, console logs, screenshots)
 .playwright-mcp/
+
+# Software-factory research data: ingested sqlite DBs, caches, transcripts.
+# Personal, and rebuildable from analysis/ingest/* against live sources.
+.analysis/
