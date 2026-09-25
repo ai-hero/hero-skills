@@ -1,0 +1,34 @@
+date,kind,label,detail,source
+2025-09-29,model,Sonnet 4.5,"claude-sonnet-4-5; 200K context; 'best model for complex agents and coding'",https://platform.claude.com/docs/en/release-notes/overview
+2025-10-09,claude-code,Plugins (v2.0.12),"Plugin system: commands, agents, hooks, MCP servers from marketplaces",CHANGELOG 2.0.12 + npm publish date
+2025-10-15,model,Haiku 4.5,"Near-frontier Haiku; Claude Code uses Sonnet to plan, Haiku to execute",platform release notes; CHANGELOG 2.0.17
+2025-10-15,claude-code,Explore subagent (v2.0.17),"Built-in Haiku-powered Explore subagent to save main-context",CHANGELOG 2.0.17 + npm
+2025-10-16,claude-code,Skills (v2.0.20),"Claude Skills supported in Claude Code",CHANGELOG 2.0.20 + npm
+2025-11-24,model,Opus 4.5,"Most intelligent model at the time; CC usage limits raised",platform release notes; CHANGELOG 2.0.51
+2026-01-07,claude-code,v2.1.0 skill fork, hot-reload,"Skills run in forked sub-agent (context: fork), agent: field, skill hot-reload, prompt/agent hooks from plugins, /teleport",CHANGELOG 2.1.0 + npm
+2026-01-13,claude-code,MCP tool search on (2.1.7),"MCP tools deferred and discovered via tool search when >10% of context",CHANGELOG 2.1.7 + npm
+2026-02-05,model,Opus 4.6,"Top Terminal-Bench 2.0; 1M context (beta, API); $5/$25",https://www.anthropic.com/news/claude-opus-4-6
+2026-02-05,claude-code,Agent teams preview (2.1.32),"Research-preview agent teams for multi-agent collaboration (env flag)",CHANGELOG 2.1.32 + npm
+2026-02-07,claude-code,Fast mode (2.1.36),"Fast mode for Opus 4.6",CHANGELOG 2.1.36 + npm
+2026-02-17,model,Sonnet 4.6,"SWE-bench Verified 80.2%; 1M context (beta); $3/$15",https://www.anthropic.com/news/claude-sonnet-4-6
+2026-02-19,claude-code,Worktrees (2.1.49),"--worktree flag; subagents isolation: worktree; WorktreeCreate/Remove hooks in 2.1.50",CHANGELOG 2.1.49/2.1.50 + npm
+2026-03-06,claude-code,/loop (2.1.71),"Run a prompt or slash command on a recurring interval",CHANGELOG 2.1.71 + npm
+2026-03-13,claude-code,Opus 1M default (2.1.75),"1M context for Opus 4.6 by default on Max/Team/Enterprise",CHANGELOG 2.1.75 + npm
+2026-03-24,claude-code,Auto mode preview,"Classifier-gated permissions research preview; Sonnet/Opus 4.6; Enterprise+API first",https://techcrunch.com/2026/03/24/anthropic-hands-claude-code-more-control-but-keeps-it-on-a-leash/
+2026-04-09,claude-code,Monitor tool (2.1.98),"Stream events from background scripts into the session",CHANGELOG 2.1.98 + npm
+2026-04-16,model,Opus 4.7,"CursorBench >70% vs 58% for 4.6 (customer quote); $5/$25; xhigh effort",https://www.anthropic.com/news/claude-opus-4-7
+2026-04-16,claude-code,Auto mode Max, /ultrareview,"Auto mode for Max on Opus 4.7; cloud multi-agent /ultrareview (2.1.111)",CHANGELOG 2.1.111 + npm
+2026-05-11,claude-code,/goal + agent view (2.1.139),"/goal completion condition across turns; claude agents session list (preview)",CHANGELOG 2.1.139 + npm
+2026-05-28,model,Opus 4.8,"$5/$25; fast mode 2x price for 2.5x speed; default effort high",https://www.anthropic.com/news/claude-opus-4-8
+2026-05-28,claude-code,Dynamic workflows (2.1.154),"Workflow orchestrates tens to hundreds of background agents; /workflows",CHANGELOG 2.1.154 + npm
+2026-06-09,model,Fable 5 (+Mythos 5),"Mythos-class, public; 1M; $10/$50; Mythos 5 restricted",https://www.anthropic.com/news/claude-fable-5-mythos-5
+2026-06-18,claude-code,Artifacts in Claude Code,"Publish session output as live claude.ai pages; beta Team/Enterprise",https://claude.com/blog/artifacts-in-claude-code
+2026-06-30,model,Sonnet 5,"New CC default; native 1M; $2/$10 (promo, made list price 2026-08-24)",https://www.anthropic.com/news/claude-sonnet-5 ; CHANGELOG 2.1.197/2.1.243
+2026-07-24,model,Opus 5,"Within 0.5% of Fable 5 on CursorBench 3.2 at half cost; $5/$25; 1M",https://www.anthropic.com/news/claude-opus-5
+2026-08-13,claude-code,Fork subagents on (2.1.232),"subagent_type fork inherits full conversation + prompt cache; on by default",CHANGELOG 2.1.232 + npm
+2026-08-14,claude-code,Auto mode default,"New Pro/Max/Team sessions start in auto mode",https://claude.com/blog/auto-mode-default-in-claude-code
+2026-08-14,claude-code,Todo tools dropped (2.1.233),"TaskCreate/TodoWrite no longer offered on Opus 4.8+, Sonnet 5, Fable 5",CHANGELOG 2.1.233 + npm
+2026-09-01,model,Fable 5.1 (+Mythos 5.1),"Same $10/$50; cache reads $0.25 (-75%); long-running agentic coding",https://platform.claude.com/docs/en/release-notes/overview ; CHANGELOG 2.1.257
+2026-09-04,claude-code,/skill-doctor (2.1.261),"Shows unused loaded skills and their context cost",CHANGELOG 2.1.261 + npm
+2026-09-22,model,Opus 5.5,"Fable 5.1-level at 40% less than Opus 5; $4/$20; Terminal-Bench 4.0 66.4%",https://www.anthropic.com/claude-opus-5-5
+2026-09-22,claude-code,Opus 5.5 default (2.1.280),"Opus 5.5 default Opus; Pro/Team default Sonnet->Opus",CHANGELOG 2.1.280 + npm

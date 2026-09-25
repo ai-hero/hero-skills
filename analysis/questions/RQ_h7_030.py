@@ -1,0 +1,38 @@
+"""Q19.xx / RQ-h7-030 -- When two independent passes count the same
+history, where do totals disagree, and does the chosen fleet-wide
+number hide that disagreement? sql half: compare the two passes this
+repo actually has over the same events -- raw git commits vs D1's
+Haiku-reclustered change sets -- per repo. The second pass is SUM(n_sets):
+changesets holds one row per commit text, so counting its rows just
+recounts commits and reads 1.00 everywhere.
+"""
+RQ_ID = "RQ-h7-030"
+QUESTION = "When two independent passes count the same history, where do totals disagree, and does the chosen number hide that?"
+
+
+def answer(con):
+    commits = {r["repo"]: r["n"] for r in con.execute(
+        "SELECT repo, COUNT(*) AS n FROM git.commits GROUP BY repo"
+    ).fetchall()}
+    sets_by_repo = {r["repo"]: r["n"] for r in con.execute(
+        "SELECT bc.repo AS repo, SUM(cs.n_sets) AS n "
+        "FROM detectors.changesets_by_commit bc "
+        "JOIN detectors.changesets cs ON cs.content_hash = bc.content_hash "
+        "GROUP BY bc.repo"
+    ).fetchall()}
+    out = []
+    for repo, n_commits in commits.items():
+        n_sets = sets_by_repo.get(repo)
+        out.append({"repo": repo, "raw_commit_count": n_commits, "change_set_count": n_sets,
+                    "commits_per_change_set": round(n_commits / n_sets, 2) if n_sets else None})
+    out.append({"answerable_by_code": "partial",
+                "reason": "totals per pass are computable per repo above; whether the fleet-wide "
+                          "single number (either pass) hides a repo that skews the average is a "
+                          "human read of this table, not a further computation"})
+    return out
+
+
+if __name__ == "__main__":
+    from cube.db import connect
+    for row in answer(connect()):
+        print(row)

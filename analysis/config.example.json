@@ -1,0 +1,24 @@
+{
+  "_comment": "Copy to <repo root>/.analysis/config.json (gitignored) and fill in for your fleet. Every key is optional -- unset means the corresponding questions report 'not configured' rather than guessing.",
+
+  "_baseline_cutoff": "The before/after-the-factory boundary date (ISO, YYYY-MM-DD). Used by questions that compare a repo's manual-era baseline against its factory-era numbers. Pick a date early in your fleet's history, before agents were doing most of the work.",
+  "baseline_cutoff": null,
+
+  "_no_roadmap_yet": "Repo names with no stated feature roadmap yet -- their work is exploratory/maintenance-only, so pooling them into a fleet-wide 'feature vs hardening' ratio compares different kinds of work. List names exactly as they appear in FLEET.md.",
+  "no_roadmap_yet": [],
+
+  "_design_system_repo": "If one repo in your fleet IS the shared design system (its registry, tokens, components), name it here. FLEET.md's group field can't distinguish 'the design system' from an ordinary app in group: apps.",
+  "design_system_repo": null,
+
+  "_role_overrides": "Per-repo role labels finer than FLEET.md's group (e.g. which group:apps repo is a shared service everyone depends on, vs which is a product, vs which is a plain clone). Keys are repo names, values are free-text role labels.",
+  "role_overrides": {},
+
+  "_repo_aliases": "Old name -> current name, for a repo or the plugin itself that got renamed. Lets ingest/harness.py still recognize a historical transcript's project-directory name (e.g. ~/.claude/projects/*hero-skills*) as today's repo.",
+  "repo_aliases": {},
+
+  "_extra_repos": "Checkouts beside the fleet that FLEET.md doesn't list but that belong in the study: a retired product, or a repo that left FLEET.md while still using the factory (a .plans/ folder makes it a fleet repo de facto). Names of sibling folders in the fleet root.",
+  "extra_repos": [],
+
+  "_out_of_scope_repos": "Repos ingested for history but left out of every analysis (e.g. an experiment the fleet abandoned). category_of() returns 'out of scope' for them.",
+  "out_of_scope_repos": []
+}
