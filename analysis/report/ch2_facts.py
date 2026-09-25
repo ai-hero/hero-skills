@@ -74,12 +74,21 @@ def merged_via(con):
 
 
 @lru_cache(maxsize=None)
+def merge_day(con):
+    """(repo, PR) -> the day its merge commit landed. A merge-commit PR's own commits keep their
+    authored day on main, so that day says nothing about when the PR landed."""
+    return {(r["repo"], r["pr_number"]): r["d"] for r in rows(con, """
+        SELECT repo, pr_number, MIN(day) d FROM git.commits
+        WHERE is_merge = 1 AND pr_number IS NOT NULL GROUP BY repo, pr_number""")}
+
+
+@lru_cache(maxsize=None)
 def commit_facts(con):
     """Original commits, each (repo, sha) once: a squash-merged PR's own commits, the commits a
     merge-commit PR brought onto main, and direct pushes. A squash commit is never work: a PR whose
     own commits weren't recovered is left out rather than counted by its squash."""
     ad = adoption(con)
-    via = merged_via(con)
+    via, landed = merged_via(con), merge_day(con)
     main = rows(con, "SELECT repo, sha, day, subject, body_redacted, claude_trailer, is_bot, pr_number, "
                      "insertions + deletions churn FROM git.commits WHERE is_merge = 0 ORDER BY day")
     pr_commits = defaultdict(list)
@@ -106,7 +115,8 @@ def commit_facts(con):
             bot = bool(m["is_bot"]) or "dependabot" in (c.get("author") or "").lower()
             out.append({
                 "repo": m["repo"], "sha": c["sha"], "day": day, "week": week_of(day), "month": day[:7],
-                "pr": pr, "merged_day": m["day"], "subject": c["subject"],
+                "pr": pr, "subject": c["subject"],
+                "merged_day": m["day"] if m["pr_number"] else landed.get((m["repo"], pr), m["day"]),
                 "body": c["body_redacted"] or "", "churn": c["churn"] or 0,
                 "actor": "bot" if bot else "agent" if c["claude_trailer"] else "human",
                 "conventional": bool(CONV_RE.match(c["subject"])),
@@ -120,7 +130,7 @@ def commit_facts(con):
 def changeset_facts(con):
     """Change sets, dated by the day their PR (or pushed commit) landed on main."""
     ad = adoption(con)
-    via = merged_via(con)
+    via, landed = merged_via(con), merge_day(con)
     # A change set grouped from a squash (its PR's own commits weren't recovered) lists the squash
     # sha, which commit_facts no longer carries; its lines come from main.
     churn = {(r["repo"], r["sha"]): r["churn"] or 0 for r in rows(
@@ -142,10 +152,13 @@ def changeset_facts(con):
         if not day:
             continue
         shas = json.loads(s["shas_json"])
+        pr = int(s["unit_id"]) if s["unit_kind"] in ("pr", "pr-squash") else via.get((s["repo"], shas[0]))
+        if pr and s["unit_kind"] not in ("pr", "pr-squash"):
+            day = landed.get((s["repo"], pr), day)
         out.append({
             "repo": s["repo"], "unit_kind": s["unit_kind"], "unit_id": s["unit_id"], "set_idx": s["set_idx"],
             "label": s["label"], "shas": shas, "n_commits": len(shas), "method": u["method"],
-            "pr": int(s["unit_id"]) if s["unit_kind"] in ("pr", "pr-squash") else via.get((s["repo"], shas[0])),
+            "pr": pr,
             "day": day, "week": week_of(day), "month": day[:7],
             "lines": round(sum(churn.get((s["repo"], sha), 0) / member[(s["repo"], sha)] for sha in shas)),
             "category": ad[s["repo"]]["category"], "stage": stage_of(con, s["repo"], day),
