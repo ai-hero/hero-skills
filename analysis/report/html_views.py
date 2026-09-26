@@ -17,11 +17,10 @@ import json
 import os
 from datetime import date
 
-from deck_lib import MILESTONES, MONTHS, REPO_COLORS, mlabel, month_frac, week_frac, wlabel
+from deck_lib import MILESTONES, MONTHS, PINK, REPO_COLORS, mlabel, month_frac, week_frac, wlabel
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 VIEWS_DIR = os.path.join(ROOT, ".analysis", "data", "views")
-PINK = "E93A61"
 
 
 def _hex(c):

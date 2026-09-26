@@ -133,11 +133,11 @@ def changeset_facts(con):
     via, landed = merged_via(con), merge_day(con)
     # A change set grouped from a squash (its PR's own commits weren't recovered) lists the squash
     # sha, which commit_facts no longer carries; its lines come from main.
-    churn = {(r["repo"], r["sha"]): r["churn"] or 0 for r in rows(
-        con, "SELECT repo, sha, insertions + deletions churn FROM git.commits")}
+    churn, main_day = {}, {}
+    for r in rows(con, "SELECT repo, sha, day, insertions + deletions churn FROM git.commits"):
+        churn[(r["repo"], r["sha"])], main_day[(r["repo"], r["sha"])] = r["churn"] or 0, r["day"]
     churn.update({(c["repo"], c["sha"]): c["churn"] for c in commit_facts(con)})
     units = {(r["repo"], r["unit_kind"], r["unit_id"]): r for r in rows(con, "SELECT * FROM detectors.cs_units")}
-    main_day = {(r["repo"], r["sha"]): r["day"] for r in rows(con, "SELECT repo, sha, day FROM git.commits")}
     sets = rows(con, "SELECT * FROM detectors.cs_sets")
     member = defaultdict(int)
     for s in sets:
@@ -152,9 +152,11 @@ def changeset_facts(con):
         if not day:
             continue
         shas = json.loads(s["shas_json"])
-        pr = int(s["unit_id"]) if s["unit_kind"] in ("pr", "pr-squash") else via.get((s["repo"], shas[0]))
-        if pr and s["unit_kind"] not in ("pr", "pr-squash"):
-            day = landed.get((s["repo"], pr), day)
+        if s["unit_kind"] in ("pr", "pr-squash"):
+            pr = int(s["unit_id"])
+        else:
+            pr = via.get((s["repo"], shas[0]))
+            day = landed.get((s["repo"], pr), day) if pr else day
         out.append({
             "repo": s["repo"], "unit_kind": s["unit_kind"], "unit_id": s["unit_id"], "set_idx": s["set_idx"],
             "label": s["label"], "shas": shas, "n_commits": len(shas), "method": u["method"],
