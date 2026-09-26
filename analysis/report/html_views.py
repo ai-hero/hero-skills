@@ -15,7 +15,6 @@ Views hold findings, so they are written under the gitignored .analysis/, never 
 """
 import json
 import os
-from datetime import date
 
 from deck_lib import MILESTONES, MONTHS, PINK, REPO_COLORS, mlabel, month_frac, week_frac, wlabel
 
@@ -33,7 +32,7 @@ def _fmt(pct, fmt):
 
 def _series(series, colors):
     colors = list(colors or REPO_COLORS)
-    return [{"name": name, "values": [None if v is None else float(v) for v in vals],
+    return [{"name": name, "values": [None if v is None or v != v else float(v) for v in vals],
              "color": _hex(colors[i % len(colors)]), "pointColors": None}
             for i, (name, vals) in enumerate(series.items())]
 
@@ -71,7 +70,7 @@ class Views:
     def save(self):
         os.makedirs(VIEWS_DIR, exist_ok=True)
         path = os.path.join(VIEWS_DIR, f"{self.chapter}.json")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(self.views, f, indent=1)
         return path
 
@@ -108,10 +107,9 @@ def load(chapter):
     path = os.path.join(VIEWS_DIR, f"{chapter}.json")
     if not os.path.exists(path):
         return {}
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
 if __name__ == "__main__":
-    print(VIEWS_DIR, sorted(os.listdir(VIEWS_DIR)) if os.path.isdir(VIEWS_DIR) else "(none yet)",
-          date.today().isoformat())
+    print(VIEWS_DIR, sorted(os.listdir(VIEWS_DIR)) if os.path.isdir(VIEWS_DIR) else "(none yet)")

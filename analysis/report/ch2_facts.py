@@ -90,7 +90,7 @@ def commit_facts(con):
     ad = adoption(con)
     via, landed = merged_via(con), merge_day(con)
     main = rows(con, "SELECT repo, sha, day, subject, body_redacted, claude_trailer, is_bot, pr_number, "
-                     "insertions + deletions churn FROM git.commits WHERE is_merge = 0 ORDER BY day")
+                     "insertions + deletions churn FROM git.commits WHERE is_merge = 0 ORDER BY day, committed_ts, sha")
     pr_commits = defaultdict(list)
     for r in rows(con, "SELECT repo, pr_number, sha, ts, subject, body_redacted, claude_trailer, author, "
                        "insertions + deletions churn FROM pr_commits.pr_commits WHERE is_merge = 0"):
@@ -132,7 +132,7 @@ def changeset_facts(con):
     ad = adoption(con)
     via, landed = merged_via(con), merge_day(con)
     # A change set grouped from a squash (its PR's own commits weren't recovered) lists the squash
-    # sha, which commit_facts no longer carries; its lines come from main.
+    # sha, which commit_facts omits; its lines come from main.
     churn, main_day = {}, {}
     for r in rows(con, "SELECT repo, sha, day, insertions + deletions churn FROM git.commits"):
         churn[(r["repo"], r["sha"])], main_day[(r["repo"], r["sha"])] = r["churn"] or 0, r["day"]

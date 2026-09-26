@@ -99,7 +99,7 @@ def series_name(tx):
 
 
 def _weekly_labels(cats):
-    """Timelines label every 4th week and blank the rest; put the week back on every one."""
+    """Long timelines label every 4th week and blank the rest; put the week back on every one."""
     known = [(i, c) for i, c in enumerate(cats) if re.fullmatch(r"\d{1,2} [A-Z][a-z]{2}", c or "")]
     if not known or all((c or "").strip() for c in cats):
         return cats
@@ -110,13 +110,15 @@ def _weekly_labels(cats):
     return [(base + timedelta(days=7 * i)).strftime("%-d %b") for i in range(len(cats))]
 
 
-def read_chart(shape):
+def read_chart(shape, where=""):
     cs = shape.chart._chartSpace
     plot_area = cs.find(f"{C}chart/{C}plotArea")
     ml = plot_area.find(f"{C}layout/{C}manualLayout")
     inner = {k: float(ml.find(C + k).get("val")) for k in ("x", "y", "w", "h")} if ml is not None else \
         {"x": 0.09, "y": 0.16, "w": 0.88, "h": 0.68}
-    plot = next(el for el in plot_area if el.tag in (C + "barChart", C + "lineChart"))
+    plot = next((el for el in plot_area if el.tag in (C + "barChart", C + "lineChart")), None)
+    if plot is None:
+        raise ValueError(f"{where}: only bar and line charts can be rendered, not {plot_area[-1].tag.split('}')[-1]}")
     kind = "line" if plot.tag == C + "lineChart" else "bar"
     horizontal = kind == "bar" and plot.find(C + "barDir").get("val") == "bar"
     grouping = plot.find(C + "grouping")
@@ -200,13 +202,13 @@ def read_table(shape):
     return [[cell.text.strip() for cell in row.cells] for row in shape.table.rows]
 
 
-def read_slide(slide):
+def read_slide(slide, where=""):
     s = {"layout": slide.slide_layout.name, "charts": [], "tables": [], "images": [], "texts": [], "notes": ""}
     lines, rotated, rects = [], [], []
     for sh in slide.shapes:
         x, y, w, h = inch(sh.left), inch(sh.top), inch(sh.width), inch(sh.height)
         if sh.has_chart:
-            s["charts"].append(read_chart(sh))
+            s["charts"].append(read_chart(sh, where))
         elif sh.shape_type == MSO_SHAPE_TYPE.TABLE:
             s["tables"].append(read_table(sh))
         elif sh.shape_type == MSO_SHAPE_TYPE.PICTURE:
@@ -402,7 +404,10 @@ def slim(sections):
 
 
 def fill(template, title, payload):
-    data = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).replace("</", "<\\/")
+    missing = [m for m in ("__DECK_TITLE__", "__DECK_DATA__") if m not in template]
+    if missing:
+        sys.exit(f"the viewer build has no {', '.join(missing)} marker: rebuild it with `npm run build`")
+    data = json.dumps(payload, separators=(",", ":"), ensure_ascii=False, allow_nan=False).replace("</", "<\\/")
     # str.replace, not format(): the bundled script is full of braces.
     return template.replace("__DECK_TITLE__", esc(title), 1).replace("__DECK_DATA__", data, 1)
 
@@ -425,9 +430,17 @@ BOOK_DIR = os.path.dirname(os.path.abspath(__file__))
 FIG_RE = re.compile(r"^\[\[(.+?)\]\]$")
 NUM_RE = re.compile(r"\$?\d[\d,]*(?:\.\d+)?%?")
 # Numbers a reader can check without the data: question and chapter numbers, dates, years, URLs.
-FREE_RE = re.compile(r"https?://\S+|\bQ\s?\d{1,2}\.\d{2}\b|\b(?:Chapters?|Ch|Part|Figure|Figures)\s+[\d.,– and]+"
+FREE_RE = re.compile(r"https?://\S+|\bQ\s?\d{1,2}\.\d{2}\b|\b(?:Chapters?|Ch|Part|Figures?)\s+\d+(?:\.\d+)?(?!,\d)(?:\s*(?:,|and|to|–|-)\s*\d+(?:\.\d+)?(?!,?\d))*"
                      r"|\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b"
                      r"|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}\b|\b20\d\d\b")
+
+
+WARNINGS = []
+
+
+def warn(msg):
+    WARNINGS.append(msg)
+    print(msg, file=sys.stderr)
 
 
 def parse_book(text):
@@ -514,14 +527,15 @@ def build_book(book, sections, chapter):
             if blk["kind"] == "figure":
                 b, v = find_view(sections, blk["ref"])
                 if v is None:
-                    print(f"{chapter}: book figure [[{blk['ref']}]] matches no view on the page", file=sys.stderr)
+                    warn(f"{chapter}: book figure [[{blk['ref']}]] matches no view on the page")
                     continue
                 fig += 1
                 blk.update({"number": f"{n}.{fig}", "key": b["key"], "view": v, "caption": blk["caption"] or v["title"]})
             t = blk.get("text") or blk.get("caption", "")
             for num in NUM_RE.findall(FREE_RE.sub(" ", t)):
+                # Counts up to ten are ordinary prose ("two reasons", "3 repos"), not findings.
                 if bare(num) not in known and not (bare(num).isdigit() and int(bare(num)) <= 10):
-                    print(f"{chapter}: book number {num!r} is not in the chapter's data: {t[:80]}…", file=sys.stderr)
+                    warn(f"{chapter}: book number {num!r} is not in the chapter's data: {t[:80]}…")
             blocks.append(blk)
         if blocks or s["title"]:
             out.append({**s, "blocks": blocks})
@@ -540,7 +554,8 @@ def evidence(sections):
 
 def render(path, template, index_href=None, lessons=None, out_dir=None):
     prs = Presentation(path)
-    head, sections = group([classify(read_slide(s)) for s in prs.slides])
+    head, sections = group([classify(read_slide(s, f"{os.path.basename(path)}, slide {i}"))
+                            for i, s in enumerate(prs.slides, 1)])
     m = re.match(r"Ch (\d+)", os.path.basename(path))
     book = None
     if m:
@@ -548,14 +563,14 @@ def render(path, template, index_href=None, lessons=None, out_dir=None):
         attach_views(sections, html_views.load(chapter), chapter)
         src = os.path.join(BOOK_DIR, chapter, "book.md")
         if os.path.exists(src):
-            with open(src) as f:
+            with open(src, encoding="utf-8") as f:
                 book = build_book(parse_book(f.read()), sections, chapter)
             sections = evidence(sections)
     if lessons:
         attach_lessons(sections, lessons)
     out = os.path.join(out_dir or os.path.dirname(path), os.path.splitext(os.path.basename(path))[0] + ".html")
     payload = {"head": head, "sections": slim(sections), "index": index_href, "book": book}
-    with open(out, "w") as f:
+    with open(out, "w", encoding="utf-8") as f:
         f.write(fill(template, head["title"], payload))
     return out, head
 
@@ -567,7 +582,7 @@ def render_index(folder, entries, template):
     payload = {"head": {"title": "Architecting a Software Factory", "subtitle": "One page per chapter: the argument first, then the evidence behind it."},
                "sections": [{"kicker": "Research findings", "title": "Chapters", "notes": "", "blocks": chapters}],
                "index": None}
-    with open(os.path.join(folder, "index.html"), "w") as f:
+    with open(os.path.join(folder, "index.html"), "w", encoding="utf-8") as f:
         f.write(fill(template, "Research findings", payload))
 
 
@@ -578,9 +593,11 @@ def main(argv):
     ap.add_argument("--lessons", metavar="TALK", help="talk deck whose insights and verdicts pin to questions")
     ap.add_argument("--out", metavar="FOLDER", help="write the pages there instead of beside the decks")
     args = ap.parse_args(argv)
+    if args.index and args.decks:
+        ap.error("pass --index FOLDER or deck files, not both")
     if not os.path.exists(VIEWER):
         sys.exit(f"no viewer build at {VIEWER}: run `npm run build` in its folder first")
-    with open(VIEWER) as f:
+    with open(VIEWER, encoding="utf-8") as f:
         template = f.read()
     lessons = read_lessons(args.lessons) if args.lessons else None
     if args.index:
@@ -589,9 +606,10 @@ def main(argv):
         render_index(args.out or args.index, entries, template)
         for out, _ in entries:
             print(out)
-        return
     for p in args.decks:
         print(render(p, template, lessons=lessons, out_dir=args.out)[0])
+    if WARNINGS:
+        print(f"{len(WARNINGS)} book warning(s) above: fix each before sharing the pages", file=sys.stderr)
 
 
 if __name__ == "__main__":
