@@ -10,3 +10,4 @@ report/CHAPTER_BRIEF.md
 report/ch21/data.py
 report/*/*_hand.py
 bank/groundings.csv
+report/*/book.md

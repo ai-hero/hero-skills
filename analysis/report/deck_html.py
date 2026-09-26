@@ -6,12 +6,19 @@ with the deck's content injected as JSON; building the viewer is the only step t
     /tmp/pptxenv/bin/python3 report/deck_html.py <deck.pptx> [...]   # writes <deck>.html beside each
     /tmp/pptxenv/bin/python3 report/deck_html.py --index <folder>     # every deck in it, plus index.html
     ... --lessons <talk.pptx>   # pin the talk deck's insights and hypothesis verdicts to their questions
+    ... --out <folder>          # write the pages (and index.html) there instead of beside the decks
 
 The deck is the source: native chart data, the side text, milestone lines and speaker notes
 are read back out of the .pptx, so no chapter's deck.py changes to get a page. Slides that
 share a tag prefix ("Q 2.01 · Answer", "Q 2.01 · By repo", "Q 2.01 · Change sets") become
 tabs of one question, so a deck adds a view by adding a slide with the same prefix.
+
+A chapter with a `chNN/book.md` reads as a book: its prose, with the charts it cites placed
+inline as figures, then every question as an evidence appendix. The deck's own prose slides
+are left out of that page, since the book replaces them.
 """
+import argparse
+import base64
 import glob
 import html
 import json
@@ -194,7 +201,7 @@ def read_table(shape):
 
 
 def read_slide(slide):
-    s = {"layout": slide.slide_layout.name, "charts": [], "tables": [], "texts": [], "notes": ""}
+    s = {"layout": slide.slide_layout.name, "charts": [], "tables": [], "images": [], "texts": [], "notes": ""}
     lines, rotated, rects = [], [], []
     for sh in slide.shapes:
         x, y, w, h = inch(sh.left), inch(sh.top), inch(sh.width), inch(sh.height)
@@ -202,6 +209,10 @@ def read_slide(slide):
             s["charts"].append(read_chart(sh))
         elif sh.shape_type == MSO_SHAPE_TYPE.TABLE:
             s["tables"].append(read_table(sh))
+        elif sh.shape_type == MSO_SHAPE_TYPE.PICTURE:
+            img = sh.image
+            s["images"].append({"src": f"data:{img.content_type};base64,{base64.b64encode(img.blob).decode()}",
+                                "alt": sh.name})
         elif sh.shape_type == MSO_SHAPE_TYPE.LINE:
             try:
                 col = str(sh.line.color.rgb)
@@ -237,7 +248,7 @@ def classify(s):
     if s["layout"] == "Section divider":
         return {"kind": "section", "kicker": " ".join(t[0]["paras"]) if t else "",
                 "title": " ".join(t[1]["paras"]) if len(t) > 1 else "", "notes": s["notes"]}
-    if s["charts"] or s["tables"]:
+    if s["charts"] or s["tables"] or s["images"]:
         side = [x for x in t if x["x"] >= SIDE_X]
         rest = [x for x in t if x["x"] < SIDE_X]
         tag = side[0]["paras"][0] if side else ""
@@ -247,7 +258,7 @@ def classify(s):
                 "points": [p for x in body[1:] for p in x["paras"]],
                 "source": re.sub(r"^SOURCE\s*", "", source, flags=re.I),
                 "extra": [p for x in rest for p in x["paras"]],
-                "charts": s["charts"], "tables": s["tables"], "notes": s["notes"]}
+                "charts": s["charts"], "tables": s["tables"], "images": s["images"], "notes": s["notes"]}
     tag = t[0]["paras"][0] if t else ""
     if tag.upper().endswith("· QUESTION"):
         how, originally, cur = [], [], None
@@ -408,18 +419,144 @@ def attach_views(sections, views, chapter):
         b["views"] += [v for v in extra if v["label"].lower() not in have]
 
 
-def render(path, template, index_href=None, lessons=None):
+# ------------------------------------------------------------------ book
+
+BOOK_DIR = os.path.dirname(os.path.abspath(__file__))
+FIG_RE = re.compile(r"^\[\[(.+?)\]\]$")
+NUM_RE = re.compile(r"\$?\d[\d,]*(?:\.\d+)?%?")
+# Numbers a reader can check without the data: question and chapter numbers, dates, years, URLs.
+FREE_RE = re.compile(r"https?://\S+|\bQ\s?\d{1,2}\.\d{2}\b|\b(?:Chapters?|Ch|Part|Figure|Figures)\s+[\d.,– and]+"
+                     r"|\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b"
+                     r"|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}\b|\b20\d\d\b")
+
+
+def parse_book(text):
+    """book.md: `## ` sections, `### ` subheads, `> ` callouts, `[[Q 9.04 · By repo | caption]]` figures."""
+    sections, para = [{"title": "", "blocks": []}], []
+
+    def flush():
+        if para:
+            sections[-1]["blocks"].append({"kind": "p", "text": " ".join(para)})
+            para.clear()
+
+    for line in re.sub(r"<!--.*?-->", "", text, flags=re.S).splitlines():
+        line = line.strip()
+        fig = FIG_RE.match(line)
+        if line.startswith("# "):
+            continue
+        if line.startswith("## "):
+            flush()
+            sections.append({"title": line[3:].strip(), "blocks": []})
+        elif not line:
+            flush()
+        elif line.startswith("### "):
+            flush()
+            sections[-1]["blocks"].append({"kind": "h3", "text": line[4:].strip()})
+        elif line.startswith(">"):
+            flush()
+            quote = line.lstrip("> ").strip()
+            blocks = sections[-1]["blocks"]
+            if blocks and blocks[-1]["kind"] == "quote" and line != ">":
+                blocks[-1]["text"] += " " + quote
+            elif quote:
+                blocks.append({"kind": "quote", "text": quote})
+        elif fig:
+            flush()
+            ref, _, caption = fig.group(1).partition("|")
+            sections[-1]["blocks"].append({"kind": "figure", "ref": ref.strip(), "caption": caption.strip()})
+        else:
+            para.append(line)
+    flush()
+    return sections
+
+
+def find_view(sections, ref):
+    """`Q 9.04` is its first view; `Q 9.04 · By repo` the view with that label; a diagram by its tag or label."""
+    key, label = split_tag(ref)
+    want = ref.upper()
+    for s in sections:
+        for b in s["blocks"]:
+            for v in b["views"]:
+                vlabel = (v.get("label") or "").upper()
+                if qkey(ref):
+                    hit = qkey(b["key"]) == qkey(key) and (not label or vlabel == label.upper())
+                else:
+                    hit = want in (vlabel, f"{b['key']} · {vlabel}".upper(), b["key"].upper())
+                if hit:
+                    return b, v
+    return None, None
+
+
+def bare(num):
+    return num.strip("$%").replace(",", "")
+
+
+def haystack(sections):
+    parts = []
+    for s in sections:
+        for b in s["blocks"]:
+            q = b.get("question") or {}
+            parts += [q.get("question", ""), q.get("how", ""), q.get("notes", "")]
+            for v in b["views"]:
+                parts += [v["title"], v["source"], v["notes"], *v["points"], *v["extra"]]
+                parts += [" ".join(r) for t in v["tables"] for r in t]
+            for st in b["statements"]:
+                parts += [st["headline"], st["notes"], *st["body"]]
+    return {bare(n) for n in NUM_RE.findall(" ".join(parts))}
+
+
+def build_book(book, sections, chapter):
+    """Resolve each figure to its view and warn on anything the chapter's own data doesn't carry."""
+    known, n, fig, out = haystack(sections), int(chapter[2:]), 0, []
+    for s in book:
+        blocks = []
+        for blk in s["blocks"]:
+            if blk["kind"] == "figure":
+                b, v = find_view(sections, blk["ref"])
+                if v is None:
+                    print(f"{chapter}: book figure [[{blk['ref']}]] matches no view on the page", file=sys.stderr)
+                    continue
+                fig += 1
+                blk.update({"number": f"{n}.{fig}", "key": b["key"], "view": v, "caption": blk["caption"] or v["title"]})
+            t = blk.get("text") or blk.get("caption", "")
+            for num in NUM_RE.findall(FREE_RE.sub(" ", t)):
+                if bare(num) not in known and not (bare(num).isdigit() and int(bare(num)) <= 10):
+                    print(f"{chapter}: book number {num!r} is not in the chapter's data: {t[:80]}…", file=sys.stderr)
+            blocks.append(blk)
+        if blocks or s["title"]:
+            out.append({**s, "blocks": blocks})
+    return out
+
+
+def evidence(sections):
+    """The appendix: every question, without the deck's prose and diagrams, which the book replaces."""
+    out = []
+    for s in sections:
+        blocks = [b for b in s["blocks"] if qkey(b["key"])]
+        if blocks:
+            out.append({**s, "blocks": blocks})
+    return out
+
+
+def render(path, template, index_href=None, lessons=None, out_dir=None):
     prs = Presentation(path)
     head, sections = group([classify(read_slide(s)) for s in prs.slides])
     m = re.match(r"Ch (\d+)", os.path.basename(path))
+    book = None
     if m:
         chapter = f"ch{int(m.group(1)):02d}"
         attach_views(sections, html_views.load(chapter), chapter)
+        src = os.path.join(BOOK_DIR, chapter, "book.md")
+        if os.path.exists(src):
+            with open(src) as f:
+                book = build_book(parse_book(f.read()), sections, chapter)
+            sections = evidence(sections)
     if lessons:
         attach_lessons(sections, lessons)
-    out = os.path.splitext(path)[0] + ".html"
+    out = os.path.join(out_dir or os.path.dirname(path), os.path.splitext(os.path.basename(path))[0] + ".html")
+    payload = {"head": head, "sections": slim(sections), "index": index_href, "book": book}
     with open(out, "w") as f:
-        f.write(fill(template, head["title"], {"head": head, "sections": slim(sections), "index": index_href}))
+        f.write(fill(template, head["title"], payload))
     return out, head
 
 
@@ -427,7 +564,7 @@ def render_index(folder, entries, template):
     chapters = [{"key": os.path.basename(h)[:5], "question": {"question": t["title"], "how": t["subtitle"],
                                                               "originally": "", "notes": ""},
                  "views": [], "statements": [], "href": os.path.basename(h)} for h, t in entries]
-    payload = {"head": {"title": "Architecting a Software Factory", "subtitle": "One page per chapter, built from its deck."},
+    payload = {"head": {"title": "Architecting a Software Factory", "subtitle": "One page per chapter: the argument first, then the evidence behind it."},
                "sections": [{"kicker": "Research findings", "title": "Chapters", "notes": "", "blocks": chapters}],
                "index": None}
     with open(os.path.join(folder, "index.html"), "w") as f:
@@ -435,25 +572,26 @@ def render_index(folder, entries, template):
 
 
 def main(argv):
+    ap = argparse.ArgumentParser(description="Render findings decks as HTML pages.")
+    ap.add_argument("decks", nargs="*", help="deck .pptx files to render")
+    ap.add_argument("--index", metavar="FOLDER", help="render every 'Ch *.pptx' in FOLDER, plus index.html")
+    ap.add_argument("--lessons", metavar="TALK", help="talk deck whose insights and verdicts pin to questions")
+    ap.add_argument("--out", metavar="FOLDER", help="write the pages there instead of beside the decks")
+    args = ap.parse_args(argv)
     if not os.path.exists(VIEWER):
         sys.exit(f"no viewer build at {VIEWER}: run `npm run build` in its folder first")
     with open(VIEWER) as f:
         template = f.read()
-    lessons = None
-    if "--lessons" in argv:
-        i = argv.index("--lessons")
-        lessons = read_lessons(argv[i + 1])
-        argv = argv[:i] + argv[i + 2:]
-    if argv and argv[0] == "--index":
-        folder = argv[1]
-        entries = [render(p, template, "index.html", lessons)
-                   for p in sorted(glob.glob(os.path.join(folder, "Ch *.pptx")))]
-        render_index(folder, entries, template)
+    lessons = read_lessons(args.lessons) if args.lessons else None
+    if args.index:
+        entries = [render(p, template, "index.html", lessons, args.out)
+                   for p in sorted(glob.glob(os.path.join(args.index, "Ch *.pptx")))]
+        render_index(args.out or args.index, entries, template)
         for out, _ in entries:
             print(out)
         return
-    for p in argv:
-        print(render(p, template, lessons=lessons)[0])
+    for p in args.decks:
+        print(render(p, template, lessons=lessons, out_dir=args.out)[0])
 
 
 if __name__ == "__main__":
