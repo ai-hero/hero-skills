@@ -63,33 +63,65 @@ def stage_of(con, repo, day):
 
 
 @lru_cache(maxsize=None)
+def merged_via(con):
+    """(repo, sha) -> PR for the commits a merge-commit PR brought onto main. On main only the merge
+    commit carries the PR number, so without this those commits read as direct pushes."""
+    return {(r["repo"], r["sha"]): r["pr_number"] for r in rows(con, """
+        SELECT c.repo, c.sha, MIN(p.pr_number) pr_number FROM git.commits c
+        JOIN pr_commits.pr_commits p ON p.repo = c.repo AND p.sha = c.sha
+        JOIN git.commits m ON m.repo = p.repo AND m.pr_number = p.pr_number AND m.is_merge = 1
+        WHERE c.is_merge = 0 AND c.pr_number IS NULL GROUP BY c.repo, c.sha""")}
+
+
+@lru_cache(maxsize=None)
+def merge_day(con):
+    """(repo, PR) -> the day its merge commit landed. A merge-commit PR's own commits keep their
+    authored day on main, so that day says nothing about when the PR landed."""
+    return {(r["repo"], r["pr_number"]): r["d"] for r in rows(con, """
+        SELECT repo, pr_number, MIN(day) d FROM git.commits
+        WHERE is_merge = 1 AND pr_number IS NOT NULL GROUP BY repo, pr_number""")}
+
+
+@lru_cache(maxsize=None)
 def commit_facts(con):
-    """Original commits: a merged PR's own commits where recovered, else the commit on main."""
+    """Original commits, each (repo, sha) once: a squash-merged PR's own commits, the commits a
+    merge-commit PR brought onto main, and direct pushes. A squash commit is never work: a PR whose
+    own commits weren't recovered is left out rather than counted by its squash."""
     ad = adoption(con)
-    units = {(r["repo"], r["main_sha"]): r for r in rows(con, "SELECT * FROM detectors.cs_units")}
-    out = []
+    via, landed = merged_via(con), merge_day(con)
     main = rows(con, "SELECT repo, sha, day, subject, body_redacted, claude_trailer, is_bot, pr_number, "
-                     "insertions + deletions churn FROM git.commits WHERE is_merge = 0")
+                     "insertions + deletions churn FROM git.commits WHERE is_merge = 0 ORDER BY day, committed_ts, sha")
     pr_commits = defaultdict(list)
     for r in rows(con, "SELECT repo, pr_number, sha, ts, subject, body_redacted, claude_trailer, author, "
                        "insertions + deletions churn FROM pr_commits.pr_commits WHERE is_merge = 0"):
         pr_commits[(r["repo"], r["pr_number"])].append(r)
+    seen, out = set(), []
     for m in main:
         if m["repo"] not in ad:
             continue
-        u = units.get((m["repo"], m["sha"]))
-        src = pr_commits.get((m["repo"], m["pr_number"])) if u and u["unit_kind"] == "pr" else None
-        for c in src or [m]:
+        pr = m["pr_number"] or via.get((m["repo"], m["sha"]))
+        if m["pr_number"]:
+            src = pr_commits.get((m["repo"], pr))
+            if not src:
+                continue
+        else:
+            src = [m]
+        for c in src:
+            # Stacked PRs list a commit under each PR that carried it; it counts in the first to land.
+            if (m["repo"], c["sha"]) in seen:
+                continue
+            seen.add((m["repo"], c["sha"]))
             day = (c.get("ts") or c.get("day"))[:10]
             bot = bool(m["is_bot"]) or "dependabot" in (c.get("author") or "").lower()
             out.append({
                 "repo": m["repo"], "sha": c["sha"], "day": day, "week": week_of(day), "month": day[:7],
-                "pr": m["pr_number"], "merged_day": m["day"], "subject": c["subject"],
+                "pr": pr, "subject": c["subject"],
+                "merged_day": m["day"] if m["pr_number"] else landed.get((m["repo"], pr), m["day"]),
                 "body": c["body_redacted"] or "", "churn": c["churn"] or 0,
                 "actor": "bot" if bot else "agent" if c["claude_trailer"] else "human",
                 "conventional": bool(CONV_RE.match(c["subject"])),
                 "category": ad[m["repo"]]["category"], "stage": stage_of(con, m["repo"], day),
-                "original": src is not None,
+                "original": True,
             })
     return out
 
@@ -98,9 +130,14 @@ def commit_facts(con):
 def changeset_facts(con):
     """Change sets, dated by the day their PR (or pushed commit) landed on main."""
     ad = adoption(con)
-    churn = {(c["repo"], c["sha"]): c["churn"] for c in commit_facts(con)}
+    via, landed = merged_via(con), merge_day(con)
+    # A change set grouped from a squash (its PR's own commits weren't recovered) lists the squash
+    # sha, which commit_facts omits; its lines come from main.
+    churn, main_day = {}, {}
+    for r in rows(con, "SELECT repo, sha, day, insertions + deletions churn FROM git.commits"):
+        churn[(r["repo"], r["sha"])], main_day[(r["repo"], r["sha"])] = r["churn"] or 0, r["day"]
+    churn.update({(c["repo"], c["sha"]): c["churn"] for c in commit_facts(con)})
     units = {(r["repo"], r["unit_kind"], r["unit_id"]): r for r in rows(con, "SELECT * FROM detectors.cs_units")}
-    main_day = {(r["repo"], r["sha"]): r["day"] for r in rows(con, "SELECT repo, sha, day FROM git.commits")}
     sets = rows(con, "SELECT * FROM detectors.cs_sets")
     member = defaultdict(int)
     for s in sets:
@@ -115,10 +152,15 @@ def changeset_facts(con):
         if not day:
             continue
         shas = json.loads(s["shas_json"])
+        if s["unit_kind"] in ("pr", "pr-squash"):
+            pr = int(s["unit_id"])
+        else:
+            pr = via.get((s["repo"], shas[0]))
+            day = landed.get((s["repo"], pr), day) if pr else day
         out.append({
             "repo": s["repo"], "unit_kind": s["unit_kind"], "unit_id": s["unit_id"], "set_idx": s["set_idx"],
             "label": s["label"], "shas": shas, "n_commits": len(shas), "method": u["method"],
-            "pr": int(s["unit_id"]) if s["unit_kind"] in ("pr", "pr-squash") else None,
+            "pr": pr,
             "day": day, "week": week_of(day), "month": day[:7],
             "lines": round(sum(churn.get((s["repo"], sha), 0) / member[(s["repo"], sha)] for sha in shas)),
             "category": ad[s["repo"]]["category"], "stage": stage_of(con, s["repo"], day),

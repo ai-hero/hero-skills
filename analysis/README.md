@@ -46,7 +46,13 @@ analysis/
   cube/views.sql            shared views over the attached sources
   detectors/d*.py          the ten shared detectors (D1-D10 from the plan); output -> detectors.sqlite
   questions/RQ_*.py        one file per answered question; questions/runner.py runs them
+  report/deck_html.py      a chapter deck (.pptx) -> one interactive HTML page beside it
+  report/html_views.py     extra HTML-only tabs a chapter saves to .analysis/data/views/
 ```
+
+`deck_html.py` injects the deck into a prebuilt viewer (`.analysis/viewer/dist/index.html`,
+built with `npm run build` there). The viewer uses the private design system's components,
+so it stays in the gitignored `.analysis/` with the data; this repo holds only the Python half.
 
 ## Running it
 
@@ -114,6 +120,16 @@ auto-invalidate the cache; delete rows to force relabeling.
   control, though the parse raised no error. This blocked the
   whole controls/checks/compliance family of questions (title-less, kind-
   less, unlinked to any control). Fixed to allow leading whitespace.
+- `report/ch2_facts.py`'s `commit_facts` had three faults, and every chapter
+  that counts work in commits inherited them. It listed a commit once per PR
+  that carried it (stacked PRs), so those commits counted twice. It only read
+  a PR's own commits for `pr` change-set units, so `pr-squash` PRs (Dependabot
+  among them) were counted by their squash commit, and a squash is never work.
+  And it gave no PR to the commits a merge-commit PR brought onto main, since
+  on main only the merge commit carries the PR number; `changeset_facts` read
+  those PRs' change sets as direct pushes the same way. Now each commit counts
+  once, a PR with no recovered commits is left out rather than counted by its
+  squash, and `merged_via` gives those commits and change sets their PR back.
 
 ## Known caveats baked into the code
 
